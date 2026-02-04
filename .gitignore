@@ -1,6 +1,7 @@
-# Research (local only)
+# Research (local only, except POC-LEARNINGS.md)
 .research/
-research/
+research/*
+!research/POC-LEARNINGS.md
 
 # Dependencies
 node_modules/
