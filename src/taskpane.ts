@@ -185,7 +185,7 @@ async function init(): Promise<void> {
                   class="empty-hint"
                   @click=${() => {
                     const iface = document.querySelector("agent-interface") as any;
-                    if (iface?.setInput) iface.setInput(hint);
+                    if (iface?.sendMessage) iface.sendMessage(hint);
                     document.getElementById("empty-state")?.classList.add("hidden");
                   }}
                 >${hint}</button>
