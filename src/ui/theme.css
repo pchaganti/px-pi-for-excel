@@ -87,6 +87,23 @@ agent-interface .shrink-0 > .mx-auto {
   padding-bottom: 6px !important;
 }
 
+/* Textarea — more internal padding, ensure auto-grow works */
+message-editor textarea {
+  padding: 14px 16px !important;
+  min-height: 44px !important;
+  max-height: 200px !important;
+  field-sizing: content;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+}
+
+/* Toolbar below input — a bit more breathing room */
+message-editor .px-2.pb-2 {
+  padding-bottom: 8px !important;
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
 /* User message pill — soft green tint */
 .user-message-container {
   background: linear-gradient(
