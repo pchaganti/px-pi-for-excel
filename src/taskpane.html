@@ -102,6 +102,7 @@
       align-items: center;
       gap: 8px;
       padding: 10px 14px;
+      padding-right: 44px;            /* Clear Excel's (i) overlay button */
       border-bottom: 1px solid var(--border);
       background: var(--background);
       flex-shrink: 0;
@@ -189,6 +190,12 @@
     agent-interface {
       font-family: var(--font-sans) !important;
       font-size: 13px !important;
+    }
+
+    /* Add side padding to the input area (pi-web-ui uses px-2 = 8px, too tight) */
+    agent-interface .shrink-0 > .mx-auto {
+      padding-left: 12px !important;
+      padding-right: 12px !important;
     }
 
     /* User message pill — warm amber tint instead of orange */

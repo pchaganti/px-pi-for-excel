@@ -125,7 +125,7 @@ async function init(): Promise<void> {
   const agent = new Agent({
     initialState: {
       systemPrompt,
-      model: getModel("anthropic", "claude-sonnet-4-5-20250929"),
+      model: getModel("anthropic", "claude-opus-4-5"),
       thinkingLevel: "off",
       messages: [],
       tools: [],
