@@ -1,11 +1,11 @@
 /**
  * Pi for Excel — Light theme
  *
- * Designed to sit alongside a white Excel sheet.
- * Warm off-white background with green accent (spreadsheet-native).
+ * Designed to sit alongside a white Excel sheet in a narrow sidebar.
+ * Warm off-white background with teal-green accent.
  *
- * Override pi-web-ui's default theme CSS variables.
- * This file must be imported AFTER pi-web-ui/app.css.
+ * Overrides pi-web-ui's CSS variables and refines component styles.
+ * Imported AFTER pi-web-ui/app.css in boot.ts.
  */
 
 /* ── Google Fonts ─────────────────────────────────────────── */
@@ -13,133 +13,514 @@
 
 /* ── Light theme palette ──────────────────────────────────── */
 :root {
-  --background: oklch(0.985 0.002 90);       /* warm off-white, slight warmth */
+  --background: oklch(0.985 0.002 90);
   --foreground: oklch(0.18 0 0);
-  --card: oklch(0.97 0.002 90);
+  --card: oklch(1 0 0 / 0.75);
   --card-foreground: oklch(0.18 0 0);
-  --popover: oklch(0.99 0 0);
+  --popover: oklch(1 0 0 / 0.85);
   --popover-foreground: oklch(0.18 0 0);
-  --primary: oklch(0.50 0.14 155);            /* deep teal-green — spreadsheet accent */
+  --primary: oklch(0.45 0.12 160);            /* teal-green */
   --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.955 0.005 90);
+  --secondary: oklch(0.96 0.004 90);
   --secondary-foreground: oklch(0.25 0 0);
-  --muted: oklch(0.955 0.003 90);
-  --muted-foreground: oklch(0.48 0 0);
-  --accent: oklch(0.96 0.008 90);
-  --accent-foreground: oklch(0.35 0.08 155);
+  --muted: oklch(0.96 0.003 90);
+  --muted-foreground: oklch(0.50 0 0);
+  --accent: oklch(0.97 0.006 90);
+  --accent-foreground: oklch(0.30 0.08 160);
   --destructive: oklch(0.55 0.22 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.90 0.005 90);
-  --input: oklch(0.94 0.003 90);
-  --ring: oklch(0.55 0.12 155);
+  --border: oklch(0.92 0.004 90);
+  --input: oklch(0.95 0.003 90);
+  --ring: oklch(0.50 0.10 160);
 
-  /* Sidebar-specific */
-  --sidebar: oklch(0.975 0.002 90);
+  --sidebar: oklch(0.98 0.002 90);
   --sidebar-foreground: oklch(0.18 0 0);
-  --sidebar-border: oklch(0.90 0.005 90);
+  --sidebar-border: oklch(0.92 0.004 90);
 
-  /* Typography */
   --font-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  --radius: 0.5rem;
+  --radius: 0.625rem;
+
+  /* Our custom tokens */
+  --pi-green: oklch(0.45 0.12 160);
+  --pi-green-light: oklch(0.45 0.12 160 / 0.08);
+  --pi-green-lighter: oklch(0.45 0.12 160 / 0.04);
+  --pi-surface: oklch(0.98 0.002 90);
 }
 
-/* Force light — override .dark class that pi-web-ui might set */
+/* Force light mode everywhere */
 .dark {
   --background: oklch(0.985 0.002 90);
   --foreground: oklch(0.18 0 0);
-  --card: oklch(0.97 0.002 90);
+  --card: oklch(1 0 0 / 0.75);
   --card-foreground: oklch(0.18 0 0);
-  --popover: oklch(0.99 0 0);
+  --popover: oklch(1 0 0 / 0.85);
   --popover-foreground: oklch(0.18 0 0);
-  --primary: oklch(0.50 0.14 155);
+  --primary: oklch(0.45 0.12 160);
   --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.955 0.005 90);
+  --secondary: oklch(0.96 0.004 90);
   --secondary-foreground: oklch(0.25 0 0);
-  --muted: oklch(0.955 0.003 90);
-  --muted-foreground: oklch(0.48 0 0);
-  --accent: oklch(0.96 0.008 90);
-  --accent-foreground: oklch(0.35 0.08 155);
+  --muted: oklch(0.96 0.003 90);
+  --muted-foreground: oklch(0.50 0 0);
+  --accent: oklch(0.97 0.006 90);
+  --accent-foreground: oklch(0.30 0.08 160);
   --destructive: oklch(0.55 0.22 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.90 0.005 90);
-  --input: oklch(0.94 0.003 90);
-  --ring: oklch(0.55 0.12 155);
-  --sidebar: oklch(0.975 0.002 90);
+  --border: oklch(0.92 0.004 90);
+  --input: oklch(0.95 0.003 90);
+  --ring: oklch(0.50 0.10 160);
+  --sidebar: oklch(0.98 0.002 90);
   --sidebar-foreground: oklch(0.18 0 0);
-  --sidebar-border: oklch(0.90 0.005 90);
+  --sidebar-border: oklch(0.92 0.004 90);
   --font-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  --radius: 0.5rem;
+  --radius: 0.625rem;
 }
 
-/* ── Sidebar-specific overrides ──────────────────────────── */
 
-agent-interface {
-  font-family: var(--font-sans) !important;
-  font-size: 13px !important;
-}
+/* ═══════════════════════════════════════════════════════════
+   GLOBAL — frosted glass over spreadsheet grid
+   ═══════════════════════════════════════════════════════════ */
 
-/* Input area — more breathing room around the editor card */
-agent-interface .shrink-0 > .mx-auto {
-  padding-left: 10px !important;
-  padding-right: 10px !important;
-  padding-bottom: 6px !important;
-}
-
-/* Textarea — more internal padding, ensure auto-grow works */
-message-editor textarea {
-  padding: 14px 16px !important;
-  min-height: 44px !important;
-  max-height: 200px !important;
-  field-sizing: content;
-  font-size: 14px !important;
-  line-height: 1.5 !important;
-}
-
-/* Toolbar below input — a bit more breathing room */
-message-editor .px-2.pb-2 {
-  padding-bottom: 8px !important;
-  padding-left: 8px !important;
-  padding-right: 8px !important;
-}
-
-/* User message pill — soft green tint */
-.user-message-container {
-  background: linear-gradient(
-    135deg,
-    oklch(0.50 0.14 155 / 0.06),
-    oklch(0.55 0.10 100 / 0.06)
-  ) !important;
-  border-color: oklch(0.50 0.14 155 / 0.15) !important;
-}
-
-/* Code blocks — slightly tighter */
-code-block {
-  font-size: 11.5px !important;
-}
-
-/* Markdown — controlled line height */
-markdown-block {
-  line-height: 1.55;
-}
-
-/* Tool call blocks — compact */
-tool-message {
-  font-size: 12px;
+body {
+  font-family: var(--font-sans);
+  /* Spreadsheet grid pattern — faint cells visible under glass */
+  background-color: oklch(0.98 0.002 90);
+  background-image:
+    linear-gradient(oklch(0.45 0.08 160 / 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(0.45 0.08 160 / 0.04) 1px, transparent 1px);
+  background-size: 64px 28px;
+  background-position: -1px -1px;
 }
 
 /* ── Scrollbar — thin, subtle ────────────────────────────── */
 * {
   scrollbar-width: thin;
-  scrollbar-color: oklch(0.82 0 0) transparent;
+  scrollbar-color: oklch(0.84 0 0) transparent;
 }
-*::-webkit-scrollbar { width: 5px; height: 5px; }
+*::-webkit-scrollbar { width: 4px; height: 4px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb {
-  background: oklch(0.82 0 0);
-  border-radius: 3px;
+  background: oklch(0.84 0 0);
+  border-radius: 2px;
 }
 *::-webkit-scrollbar-thumb:hover {
   background: oklch(0.70 0 0);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   AGENT INTERFACE — main chat layout
+   ═══════════════════════════════════════════════════════════ */
+
+agent-interface {
+  font-family: var(--font-sans) !important;
+  font-size: 13.5px !important;
+}
+
+/* Make the chat area transparent so grid shows through */
+agent-interface > .bg-background {
+  background: transparent !important;
+}
+
+/* Messages area — more horizontal padding in narrow sidebar */
+agent-interface > .flex.flex-col > .flex-1 > .max-w-3xl {
+  padding: 12px 14px 0 !important;
+  max-width: 100% !important;
+}
+
+/* Input wrapper — frosted glass + above empty state */
+agent-interface > .flex.flex-col > .shrink-0 {
+  position: relative;
+  z-index: 10;
+  background: oklch(1 0 0 / 0.65);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border-top: 1px solid oklch(0.45 0.08 160 / 0.06);
+}
+agent-interface > .flex.flex-col > .shrink-0 > .max-w-3xl {
+  padding: 0 10px 8px !important;
+  max-width: 100% !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   EMPTY STATE — welcome screen when no messages
+   ═══════════════════════════════════════════════════════════ */
+
+#empty-state {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px 120px;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+  background: oklch(0.98 0.002 90 / 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+#empty-state.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.empty-logo {
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--pi-green);
+  font-family: var(--font-sans);
+  margin-bottom: 8px;
+  opacity: 0.2;
+}
+
+.empty-tagline {
+  font-size: 14px;
+  color: var(--muted-foreground);
+  text-align: center;
+  line-height: 1.5;
+  max-width: 240px;
+}
+
+.empty-hints {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 260px;
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  padding: 10px 14px;
+  background: oklch(1 0 0 / 0.55);
+  border: 1px solid oklch(0.45 0.12 160 / 0.08);
+  border-radius: 10px;
+  line-height: 1.4;
+  pointer-events: auto;
+  cursor: default;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px oklch(0 0 0 / 0.03), 0 0 0 1px oklch(1 0 0 / 0.4) inset;
+}
+.empty-hint strong {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   MESSAGE EDITOR — input card at bottom
+   ═══════════════════════════════════════════════════════════ */
+
+/* The card itself — frosted glass card */
+message-editor > .bg-card {
+  border-radius: 14px !important;
+  border-color: oklch(0.45 0.08 160 / 0.10) !important;
+  box-shadow: 0 2px 8px oklch(0 0 0 / 0.04), 0 0 0 1px oklch(1 0 0 / 0.5) inset !important;
+  background: oklch(1 0 0 / 0.75) !important;
+  backdrop-filter: blur(12px) saturate(1.3);
+  -webkit-backdrop-filter: blur(12px) saturate(1.3);
+}
+message-editor > .bg-card:focus-within {
+  border-color: oklch(0.45 0.12 160 / 0.20) !important;
+  box-shadow: 0 2px 8px oklch(0 0 0 / 0.04), 0 0 0 1.5px oklch(0.45 0.12 160 / 0.08), 0 0 0 1px oklch(1 0 0 / 0.5) inset !important;
+}
+
+/* Textarea */
+message-editor textarea {
+  padding: 14px 16px !important;
+  min-height: 42px !important;
+  max-height: 180px !important;
+  field-sizing: content;
+  font-size: 13.5px !important;
+  font-family: var(--font-sans) !important;
+  line-height: 1.5 !important;
+}
+message-editor textarea::placeholder {
+  color: oklch(0.65 0 0) !important;
+  font-weight: 400;
+}
+
+/* Toolbar row — compact, refined */
+message-editor .px-2.pb-2 {
+  padding: 0 10px 8px !important;
+  gap: 4px;
+}
+
+/* All toolbar buttons — smaller, subtler */
+message-editor .px-2.pb-2 button {
+  height: 28px !important;
+  border-radius: 7px !important;
+  font-size: 11.5px !important;
+  font-family: var(--font-sans) !important;
+  color: var(--muted-foreground) !important;
+}
+message-editor .px-2.pb-2 button:hover {
+  background: var(--pi-green-lighter) !important;
+  color: var(--foreground) !important;
+}
+message-editor .px-2.pb-2 button svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+/* Model name in toolbar — sans-serif, truncated */
+message-editor .px-2.pb-2 button span {
+  font-family: var(--font-sans) !important;
+  font-size: 11px !important;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Thinking selector */
+message-editor .px-2.pb-2 [data-slot="trigger"] {
+  height: 28px !important;
+  font-size: 11px !important;
+  border-radius: 7px !important;
+  font-family: var(--font-sans) !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   MESSAGES — user and assistant
+   ═══════════════════════════════════════════════════════════ */
+
+/* User message bubble — frosted tinted pill */
+.user-message-container {
+  background: oklch(0.45 0.12 160 / 0.06) !important;
+  border: 1px solid oklch(0.45 0.12 160 / 0.10) !important;
+  border-radius: 14px !important;
+  padding: 10px 16px !important;
+  max-width: 92% !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 1px 4px oklch(0 0 0 / 0.03), 0 0 0 1px oklch(1 0 0 / 0.3) inset;
+}
+.user-message-container p {
+  margin: 0 !important;
+  font-size: 13.5px !important;
+  line-height: 1.5 !important;
+}
+
+/* Assistant messages — clean, left-aligned */
+assistant-message .px-4 {
+  padding-left: 2px !important;
+  padding-right: 2px !important;
+}
+
+/* Markdown content */
+markdown-block {
+  line-height: 1.6;
+}
+markdown-block p {
+  margin: 0 0 8px 0;
+  font-size: 13.5px;
+}
+markdown-block p:last-child {
+  margin-bottom: 0;
+}
+markdown-block code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: oklch(0.96 0.003 90);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+markdown-block pre {
+  background: oklch(0.97 0.002 90) !important;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Code blocks */
+code-block {
+  font-size: 12px !important;
+  border-radius: 8px !important;
+}
+
+/* Tool call cards — frosted */
+tool-message .p-2\.5 {
+  padding: 8px 12px !important;
+  border-radius: 10px !important;
+  border-color: oklch(0 0 0 / 0.06) !important;
+  background: oklch(1 0 0 / 0.5) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px oklch(0 0 0 / 0.03), 0 0 0 1px oklch(1 0 0 / 0.3) inset;
+}
+
+/* Thinking blocks */
+thinking-block {
+  font-size: 12px;
+}
+
+/* Usage/cost line */
+assistant-message .text-xs.text-muted-foreground {
+  font-size: 11px !important;
+  padding-left: 2px !important;
+}
+
+/* Error messages */
+assistant-message .bg-destructive\/10 {
+  border-radius: 10px !important;
+  font-size: 13px !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   MODEL SELECTOR dialog
+   ═══════════════════════════════════════════════════════════ */
+
+/* Backdrop */
+agent-model-selector .fixed.inset-0 {
+  background: oklch(0 0 0 / 0.3) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+/* Dialog card — frosted glass */
+agent-model-selector .fixed.z-50 {
+  width: min(340px, 92vw) !important;
+  height: min(500px, 78vh) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 16px 48px oklch(0 0 0 / 0.12), 0 2px 8px oklch(0 0 0 / 0.06) !important;
+  border-color: oklch(1 0 0 / 0.3) !important;
+  background: oklch(1 0 0 / 0.72) !important;
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+}
+
+/* Header section */
+agent-model-selector .p-6.pb-4 {
+  padding: 16px 16px 12px !important;
+  gap: 10px !important;
+  border-bottom-color: oklch(0.94 0.003 90) !important;
+}
+
+agent-model-selector .p-6.pb-4 h2 {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  font-family: var(--font-sans) !important;
+  letter-spacing: -0.01em;
+}
+
+/* Search input */
+agent-model-selector .p-6.pb-4 input {
+  font-size: 13px !important;
+  font-family: var(--font-sans) !important;
+  height: 34px !important;
+  border-radius: 9px !important;
+  padding: 0 12px !important;
+}
+
+/* Filter pills */
+agent-model-selector .p-6.pb-4 .flex.gap-2 button {
+  font-size: 11px !important;
+  height: 26px !important;
+  padding: 0 10px !important;
+  border-radius: 20px !important;
+  font-family: var(--font-sans) !important;
+}
+agent-model-selector .p-6.pb-4 .flex.gap-2 button svg {
+  width: 12px !important;
+  height: 12px !important;
+}
+
+/* Model list items */
+agent-model-selector [data-model-item] {
+  padding: 10px 16px !important;
+  border-bottom: 1px solid oklch(0.94 0.003 90) !important;
+  transition: background 0.1s ease;
+}
+agent-model-selector [data-model-item]:last-child {
+  border-bottom: none !important;
+}
+agent-model-selector [data-model-item]:hover,
+agent-model-selector [data-model-item].bg-accent {
+  background: var(--pi-green-lighter) !important;
+}
+
+/* Model name — sans-serif */
+agent-model-selector [data-model-item] .text-sm.font-medium {
+  font-family: var(--font-sans) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+/* Provider badge — compact pill */
+agent-model-selector [data-model-item] span[class*="rounded-md"][class*="border"] {
+  font-size: 10px !important;
+  font-family: var(--font-sans) !important;
+  padding: 1px 7px !important;
+  border-radius: 10px !important;
+  font-weight: 500 !important;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.5;
+  background: oklch(0.97 0.003 90) !important;
+  border-color: oklch(0.90 0.004 90) !important;
+  color: oklch(0.42 0 0) !important;
+}
+
+/* Meta row */
+agent-model-selector [data-model-item] .text-xs.text-muted-foreground {
+  font-size: 11px !important;
+  margin-top: 2px !important;
+}
+agent-model-selector [data-model-item] .text-xs.text-muted-foreground svg {
+  width: 12px !important;
+  height: 12px !important;
+}
+
+/* Checkmark */
+agent-model-selector [data-model-item] .text-green-500 {
+  color: var(--pi-green) !important;
+}
+
+/* Close button */
+agent-model-selector button[aria-label="Close"] {
+  top: 14px !important;
+  right: 14px !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   API KEY / SETTINGS dialogs
+   ═══════════════════════════════════════════════════════════ */
+
+agent-api-key-dialog .fixed.z-50,
+agent-settings-dialog .fixed.z-50 {
+  width: min(340px, 92vw) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 16px 48px oklch(0 0 0 / 0.12), 0 2px 8px oklch(0 0 0 / 0.06) !important;
+  background: oklch(1 0 0 / 0.72) !important;
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+}
+
+agent-api-key-dialog h2,
+agent-settings-dialog h2 {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  font-family: var(--font-sans) !important;
+}
+
+agent-api-key-dialog input,
+agent-settings-dialog input {
+  font-size: 13px !important;
+  border-radius: 9px !important;
+  font-family: var(--font-mono) !important;
 }

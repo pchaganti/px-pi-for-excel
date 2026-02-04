@@ -166,17 +166,39 @@ async function init(): Promise<void> {
     toolsFactory: () => createAllTools(),
   });
 
-  // 7. Clear loading, render ChatPanel
+  // 7. Clear loading, mount ChatPanel with empty state
   appEl.innerHTML = "";
   render(
     html`
       <div class="w-full h-full flex flex-col overflow-hidden"
-           style="background: var(--background); color: var(--foreground);">
+           style="background: var(--background); color: var(--foreground); position: relative;">
+        <!-- Empty state — shown when no messages -->
+        <div id="empty-state">
+          <div class="empty-logo">π</div>
+          <div class="empty-tagline">
+            Your AI assistant for Excel.<br/>Ask anything about your spreadsheet.
+          </div>
+          <div class="empty-hints">
+            <div class="empty-hint"><strong>"Summarize this sheet"</strong> — get an overview of your data</div>
+            <div class="empty-hint"><strong>"Add a VLOOKUP formula"</strong> — write formulas with context</div>
+            <div class="empty-hint"><strong>"Format as a table"</strong> — style and structure data</div>
+          </div>
+        </div>
         ${chatPanel}
       </div>
     `,
     appEl,
   );
+
+  // Hide empty state when messages appear
+  const emptyState = document.getElementById("empty-state");
+  agent.subscribe((ev) => {
+    if (ev.type === "message_start" || ev.type === "message_end") {
+      if (agent.state.messages.length > 0 && emptyState) {
+        emptyState.classList.add("hidden");
+      }
+    }
+  });
 
   console.log("[pi] ChatPanel mounted");
 }

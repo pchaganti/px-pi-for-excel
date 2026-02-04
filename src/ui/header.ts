@@ -49,8 +49,10 @@ export const headerStyles = `
     gap: 8px;
     padding: 10px 14px;
     padding-right: 44px;
-    border-bottom: 1px solid var(--border);
-    background: var(--background);
+    border-bottom: 1px solid oklch(0.45 0.08 160 / 0.08);
+    background: oklch(1 0 0 / 0.72);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
     flex-shrink: 0;
     position: relative;
     z-index: 10;
