@@ -10,10 +10,15 @@ node_modules/
 dist/
 
 # Certs (generated locally)
+*.pem
 poc/*.pem
 
 # Vite
+.vite/
 poc/.vite/
 
 # OS
 .DS_Store
+
+# Lock files (noisy in diffs)
+package-lock.json

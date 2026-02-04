@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pi for Excel</title>
+
+  <!-- Office.js — must load before any Office API calls -->
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; font-family: system-ui, sans-serif; }
+    body { display: flex; flex-direction: column; background: #ffffff; }
+
+    #app {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* Loading state */
+    #loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      color: #6b7280;
+      font-size: 14px;
+      gap: 8px;
+    }
+    #loading .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid #e5e7eb;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error state */
+    #error {
+      display: none;
+      padding: 16px;
+      color: #991b1b;
+      font-size: 13px;
+      background: #fef2f2;
+      border-bottom: 1px solid #fecaca;
+    }
+  </style>
+</head>
+<body>
+  <div id="error"></div>
+  <div id="app">
+    <div id="loading">
+      <div class="spinner"></div>
+      <span>Loading Pi…</span>
+    </div>
+  </div>
+
+  <script type="module" src="./taskpane.ts"></script>
+</body>
+</html>
