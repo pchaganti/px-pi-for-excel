@@ -179,9 +179,18 @@ async function init(): Promise<void> {
             Your AI assistant for Excel.<br/>Ask anything about your spreadsheet.
           </div>
           <div class="empty-hints">
-            <div class="empty-hint"><strong>"Summarize this sheet"</strong> — get an overview of your data</div>
-            <div class="empty-hint"><strong>"Add a VLOOKUP formula"</strong> — write formulas with context</div>
-            <div class="empty-hint"><strong>"Format as a table"</strong> — style and structure data</div>
+            ${["Summarize this sheet", "Add a VLOOKUP formula", "Format as a table"].map(
+              (hint) => html`
+                <button
+                  class="empty-hint"
+                  @click=${() => {
+                    const iface = document.querySelector("agent-interface") as any;
+                    if (iface?.setInput) iface.setInput(hint);
+                    document.getElementById("empty-state")?.classList.add("hidden");
+                  }}
+                >${hint}</button>
+              `,
+            )}
           </div>
         </div>
         ${chatPanel}
