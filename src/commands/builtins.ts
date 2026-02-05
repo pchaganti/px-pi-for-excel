@@ -87,9 +87,7 @@ export function registerBuiltins(agent: Agent): void {
           showToast("Usage: /name My Session Name");
           return;
         }
-        // Session naming would be handled through SessionsStore
-        // For now, store in a simple way
-        document.title = args.trim();
+        document.dispatchEvent(new CustomEvent("pi:session-rename", { detail: { title: args.trim() } }));
         showToast(`Session named: ${args.trim()}`);
       },
     },
@@ -114,8 +112,11 @@ export function registerBuiltins(agent: Agent): void {
       description: "Start a new chat session",
       source: "builtin",
       execute: () => {
-        agent.clearMessages();
+        // Signal new session (resets ID) then clear messages
         document.dispatchEvent(new CustomEvent("pi:session-new"));
+        agent.clearMessages();
+        // Show empty state again
+        document.getElementById("empty-state")?.classList.remove("hidden");
         showToast("New session started");
       },
     },
@@ -313,10 +314,20 @@ async function showResumeDialog(agent: Agent): Promise<void> {
       agent.setThinkingLevel(sessionData.thinkingLevel);
     }
 
-    // Force UI to re-render
+    // Notify session tracker of the resumed session
+    document.dispatchEvent(new CustomEvent("pi:session-resumed", {
+      detail: {
+        id: sessionData.id,
+        title: sessionData.title,
+        createdAt: sessionData.createdAt,
+      },
+    }));
+
+    // Force UI to re-render + hide empty state
     const iface = document.querySelector("agent-interface") as any;
     if (iface) iface.requestUpdate();
     document.dispatchEvent(new CustomEvent("pi:model-changed"));
+    document.getElementById("empty-state")?.classList.add("hidden");
 
     overlay!.remove();
     showToast(`Resumed: ${sessionData.title || "Untitled"}`);

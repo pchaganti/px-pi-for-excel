@@ -369,6 +369,150 @@ async function init(): Promise<void> {
     }
   });
 
+  // ── Session persistence (mirrors Pi TUI: save on every message_end) ──
+  let _sessionId: string = crypto.randomUUID();
+  let _sessionTitle = "";
+  let _sessionCreatedAt = new Date().toISOString();
+  let _firstAssistantSeen = false; // lazy-write like Pi TUI: only persist after first assistant msg
+
+  /** Save current session state to IndexedDB */
+  async function saveSession() {
+    if (!_firstAssistantSeen) return; // don't persist empty sessions
+    try {
+      const now = new Date().toISOString();
+      const messages = agent.state.messages;
+
+      // Auto-title from first user message (like Pi TUI)
+      if (!_sessionTitle && messages.length > 0) {
+        const firstUser = messages.find((m) => m.role === "user");
+        if (firstUser) {
+          const content = firstUser.content;
+          const text = typeof content === "string"
+            ? content
+            : Array.isArray(content)
+              ? content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("")
+              : "";
+          _sessionTitle = text.slice(0, 80) || "Untitled";
+        }
+      }
+
+      // Build preview: first 2KB of user+assistant text
+      let preview = "";
+      for (const m of messages) {
+        if (m.role !== "user" && m.role !== "assistant") continue;
+        const content = m.content;
+        const text = typeof content === "string"
+          ? content
+          : Array.isArray(content)
+            ? content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("")
+            : "";
+        preview += text + "\n";
+        if (preview.length > 2048) { preview = preview.slice(0, 2048); break; }
+      }
+
+      // Compute usage from messages
+      let inputTokens = 0, outputTokens = 0, totalCost = 0;
+      for (const m of messages) {
+        const u = (m as any).usage;
+        if (u) {
+          inputTokens += u.inputTokens || 0;
+          outputTokens += u.outputTokens || 0;
+          totalCost += u.totalCost || 0;
+        }
+      }
+
+      await sessions.saveSession(_sessionId, agent.state, {
+        id: _sessionId,
+        title: _sessionTitle,
+        createdAt: _sessionCreatedAt,
+        lastModified: now,
+        messageCount: messages.length,
+        usage: {
+          input: inputTokens,
+          output: outputTokens,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: inputTokens + outputTokens,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: totalCost },
+        },
+        thinkingLevel: agent.state.thinkingLevel || "off",
+        preview,
+      }, _sessionTitle);
+    } catch (err) {
+      console.warn("[pi] Session save failed:", err);
+    }
+  }
+
+  /** Start a fresh session (called by /new command) */
+  function startNewSession() {
+    _sessionId = crypto.randomUUID();
+    _sessionTitle = "";
+    _sessionCreatedAt = new Date().toISOString();
+    _firstAssistantSeen = false;
+  }
+
+  // Persist on every message_end (mirrors Pi TUI's appendMessage on message_end)
+  agent.subscribe((ev) => {
+    if (ev.type === "message_end") {
+      if (ev.message.role === "assistant") {
+        _firstAssistantSeen = true;
+      }
+      if (_firstAssistantSeen) {
+        saveSession();
+      }
+    }
+  });
+
+  // Auto-restore latest session on startup
+  try {
+    const latestId = await sessions.getLatestSessionId();
+    if (latestId) {
+      const sessionData = await sessions.loadSession(latestId);
+      if (sessionData && sessionData.messages.length > 0) {
+        _sessionId = sessionData.id;
+        _sessionTitle = sessionData.title || "";
+        _sessionCreatedAt = sessionData.createdAt;
+        _firstAssistantSeen = true;
+
+        agent.replaceMessages(sessionData.messages);
+        if (sessionData.model) agent.setModel(sessionData.model);
+        if (sessionData.thinkingLevel) agent.setThinkingLevel(sessionData.thinkingLevel);
+
+        // Hide empty state since we have messages
+        document.getElementById("empty-state")?.classList.add("hidden");
+
+        // Force AgentInterface to re-render (replaceMessages doesn't emit events)
+        requestAnimationFrame(() => {
+          const iface = document.querySelector("agent-interface") as any;
+          if (iface) iface.requestUpdate();
+        });
+
+        console.log(`[pi] Restored session: ${_sessionTitle || latestId}`);
+      }
+    }
+  } catch (err) {
+    console.warn("[pi] Session restore failed:", err);
+  }
+
+  // Listen for /new command
+  document.addEventListener("pi:session-new", () => {
+    startNewSession();
+  });
+
+  // Expose for /name command
+  document.addEventListener("pi:session-rename", ((e: CustomEvent) => {
+    _sessionTitle = e.detail?.title || _sessionTitle;
+    saveSession(); // persist the rename immediately
+  }) as EventListener);
+
+  // Handle /resume restoring a session
+  document.addEventListener("pi:session-resumed", ((e: CustomEvent) => {
+    _sessionId = e.detail?.id || _sessionId;
+    _sessionTitle = e.detail?.title || "";
+    _sessionCreatedAt = e.detail?.createdAt || new Date().toISOString();
+    _firstAssistantSeen = true;
+  }) as EventListener);
+
   // ── Register slash commands + load extensions ─────────────────
   registerBuiltins(agent);
 
