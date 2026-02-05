@@ -1,9 +1,10 @@
 # Docs
 
-Short, topic-based docs (mirrors Pi’s layout). Keep deeper decisions close to the code they affect.
+Short, topic-based docs (mirrors Pi's layout). Keep deeper decisions close to the code they affect.
 
 ## Architecture & Process
 - [Cleanup approach](./cleanup-approach.md)
+- [UI architecture](../src/ui/README.md) — layout, styling, the `@layer` gotcha
 
 ## Tools
 - [Tool behavior decisions](../src/tools/DECISIONS.md)
