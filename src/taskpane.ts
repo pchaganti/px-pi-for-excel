@@ -10,7 +10,7 @@ import "./boot.js";
 
 import { html, render } from "lit";
 import { Agent, type AgentEvent, type AgentState } from "@mariozechner/pi-agent-core";
-import { getModel, supportsXhigh } from "@mariozechner/pi-ai";
+import { getModel, getModels, supportsXhigh } from "@mariozechner/pi-ai";
 import {
   ApiKeyPromptDialog,
   ModelSelector,
@@ -50,21 +50,90 @@ export function setActiveProviders(providers: Set<string>) {
   _activeProviders = providers;
 }
 
-const FEATURED_MODELS = new Map([
-  ["claude-opus-4-5", 1],
-  ["gpt-5.2", 2],
-  ["gpt-5.2-codex", 3],
-  ["gemini-3-pro-preview", 4],
+const PROVIDER_ORDER = new Map<string, number>([
+  ["anthropic", 1],
+  ["openai-codex", 2],
+  ["openai", 3],
+  ["google", 4],
+  ["github-copilot", 5],
 ]);
 
-function modelRecencyScore(id: string): number {
-  const dateMatch = id.match(/(\d{8})/);
-  if (dateMatch) return parseInt(dateMatch[1]);
-  const verMatch = id.match(/(\d+)\.(\d+)/);
-  if (verMatch) return parseInt(verMatch[1]) * 100 + parseInt(verMatch[2]) * 10;
+function familyPriority(provider: string, id: string): number {
+  if (provider === "anthropic") {
+    if (id.startsWith("claude-opus-")) return 0;
+    if (id.startsWith("claude-sonnet-")) return 1;
+    if (id.startsWith("claude-haiku-")) return 2;
+    return 9;
+  }
+
+  if (provider === "openai-codex" || provider === "openai") {
+    if (id.includes("codex")) return 0;
+    if (id.startsWith("gpt-")) return 1;
+    if (id.startsWith("o")) return 2;
+    return 9;
+  }
+
+  if (provider === "google") {
+    // Prefer Pro-ish variants first, then Flash-ish, then any Gemini.
+    if (/^gemini-.*-pro/i.test(id)) return 0;
+    if (/^gemini-.*-flash/i.test(id)) return 1;
+    if (id.includes("gemini")) return 2;
+    return 9;
+  }
+
+  return 9;
+}
+
+function parseMajorMinor(id: string): number {
+  // Extract a comparable major/minor number from common model ID formats.
+  // Important: don't misinterpret 8-digit date suffixes (e.g. 20250514) as "minor".
+  // Examples:
+  // - claude-opus-4-5           -> 45
+  // - claude-opus-4-6           -> 46
+  // - claude-opus-4-20250514    -> 40 (major only; date handled separately)
+  // - gpt-5.3-codex             -> 53
+  // - gemini-2.5-pro            -> 25
+  // - gemini-3-pro-preview      -> 30
+
+  const pack = (major: number, minor: number | null): number => {
+    if (minor === null) return major * 10;
+    // minor < 10 => major*10 + minor (4.6 -> 46)
+    if (minor < 10) return major * 10 + minor;
+    // allow 2-digit minors (e.g. 4.12 -> 412)
+    return major * 100 + minor;
+  };
+
+  // Claude-style: -4-6 (but NOT -4-20250514)
+  const hyphenVer = id.match(/-(\d+)-(\d{1,2})(?:-|$)/);
+  if (hyphenVer) {
+    return pack(parseInt(hyphenVer[1], 10), parseInt(hyphenVer[2], 10));
+  }
+
+  // OpenAI/Gemini-style: 5.3 / 2.5
+  const dotVer = id.match(/(\d+)\.(\d{1,2})/);
+  if (dotVer) {
+    return pack(parseInt(dotVer[1], 10), parseInt(dotVer[2], 10));
+  }
+
+  // Fallback: first major number after hyphen
   const majorMatch = id.match(/-(\d+)(?:-|$)/);
-  if (majorMatch) return parseInt(majorMatch[1]) * 100;
+  if (majorMatch) {
+    return pack(parseInt(majorMatch[1], 10), null);
+  }
+
   return 0;
+}
+
+function modelRecencyScore(id: string): number {
+  // Prefer higher major/minor first, then higher date suffix.
+  const majorMinor = parseMajorMinor(id);
+
+  let date = 0;
+  const dateMatch = id.match(/(\d{8})/);
+  if (dateMatch) date = parseInt(dateMatch[1], 10);
+
+  // date is at most 8 digits → multiplier must exceed that range
+  return majorMinor * 100_000_000 + date;
 }
 
 const _origGetFilteredModels = (ModelSelector.prototype as any).getFilteredModels;
@@ -74,21 +143,173 @@ const _origGetFilteredModels = (ModelSelector.prototype as any).getFilteredModel
   if (_activeProviders && _activeProviders.size > 0) {
     filtered = all.filter((m: any) => _activeProviders!.has(m.provider));
   }
+
   const currentModel = this.currentModel;
-  filtered.sort((a: any, b: any) => {
-    const aCur = currentModel && a.model.id === currentModel.id && a.model.provider === currentModel.provider;
-    const bCur = currentModel && b.model.id === currentModel.id && b.model.provider === currentModel.provider;
-    if (aCur && !bCur) return -1;
-    if (!aCur && bCur) return 1;
-    const aFeat = FEATURED_MODELS.get(a.id) ?? Infinity;
-    const bFeat = FEATURED_MODELS.get(b.id) ?? Infinity;
-    if (aFeat !== bFeat) return aFeat - bFeat;
+
+  const isCurrent = (x: any) =>
+    currentModel && x.model.id === currentModel.id && x.model.provider === currentModel.provider;
+
+  const keyOf = (x: any) => `${x.provider}:${x.id}`;
+
+  const compareModels = (a: any, b: any) => {
+    const aProv = PROVIDER_ORDER.get(a.provider) ?? 999;
+    const bProv = PROVIDER_ORDER.get(b.provider) ?? 999;
+    if (aProv !== bProv) return aProv - bProv;
+
+    const aFam = familyPriority(a.provider, a.id);
+    const bFam = familyPriority(b.provider, b.id);
+    if (aFam !== bFam) return aFam - bFam;
+
     const aRec = modelRecencyScore(a.id);
     const bRec = modelRecencyScore(b.id);
     if (aRec !== bRec) return bRec - aRec;
+
     return a.id.localeCompare(b.id);
+  };
+
+  // "Latest for each" behavior:
+  // - keep current model at the very top
+  // - then show "featured" models (latest per provider, pattern-based)
+  //   - Anthropic: latest Sonnet if its version > latest Opus, then latest Opus
+  //   - OpenAI Codex: latest gpt-5.x-codex, then latest gpt-5.x
+  //   - Google: latest gemini-*-pro*
+  // - then show the remaining models, sorted deterministically
+
+  const byProvider = new Map<string, any[]>();
+  for (const m of filtered) {
+    const list = byProvider.get(m.provider) || [];
+    list.push(m);
+    byProvider.set(m.provider, list);
+  }
+
+  const providers = Array.from(byProvider.keys()).sort((a, b) => {
+    const aProv = PROVIDER_ORDER.get(a) ?? 999;
+    const bProv = PROVIDER_ORDER.get(b) ?? 999;
+    if (aProv !== bProv) return aProv - bProv;
+    return a.localeCompare(b);
   });
-  return filtered;
+
+  const pickBest = (models: any[], filter?: (m: any) => boolean) => {
+    const list = filter ? models.filter(filter) : models;
+    if (!list.length) return null;
+    return list
+      .slice()
+      .sort((a, b) => {
+        const aFam = familyPriority(a.provider, a.id);
+        const bFam = familyPriority(b.provider, b.id);
+        if (aFam !== bFam) return aFam - bFam;
+        const aRec = modelRecencyScore(a.id);
+        const bRec = modelRecencyScore(b.id);
+        if (aRec !== bRec) return bRec - aRec;
+        return a.id.localeCompare(b.id);
+      })[0];
+  };
+
+  const pickBestByRecency = (models: any[], filter: (m: any) => boolean) => {
+    const list = models.filter(filter);
+    if (!list.length) return null;
+    return list
+      .slice()
+      .sort((a, b) => {
+        const aRec = modelRecencyScore(a.id);
+        const bRec = modelRecencyScore(b.id);
+        if (aRec !== bRec) return bRec - aRec;
+        return a.id.localeCompare(b.id);
+      })[0];
+  };
+
+  const featured: any[] = [];
+  for (const provider of providers) {
+    const models = byProvider.get(provider) || [];
+    if (!models.length) continue;
+
+    // Provider-specific "latest" rules
+    if (provider === "anthropic") {
+      const bestOpus = pickBestByRecency(models, (m) => String(m.id).startsWith("claude-opus-"));
+      const bestSonnet = pickBestByRecency(models, (m) => String(m.id).startsWith("claude-sonnet-"));
+
+      if (bestOpus && bestSonnet) {
+        const opusVer = parseMajorMinor(bestOpus.id);
+        const sonnetVer = parseMajorMinor(bestSonnet.id);
+        if (sonnetVer > opusVer) {
+          featured.push(bestSonnet);
+          featured.push(bestOpus);
+          continue;
+        }
+        featured.push(bestOpus);
+        continue;
+      }
+
+      if (bestOpus) {
+        featured.push(bestOpus);
+        continue;
+      }
+
+      if (bestSonnet) {
+        featured.push(bestSonnet);
+        continue;
+      }
+
+      const best = pickBest(models);
+      if (best) featured.push(best);
+      continue;
+    }
+
+    if (provider === "openai-codex") {
+      const bestCodex = pickBestByRecency(models, (m) => /^gpt-5\.(\d+)-codex$/.test(String(m.id)));
+      const bestGpt5 = pickBestByRecency(models, (m) => /^gpt-5\./.test(String(m.id)) && !/codex/.test(String(m.id)));
+
+      if (bestCodex) featured.push(bestCodex);
+      if (bestGpt5) featured.push(bestGpt5);
+      if (bestCodex || bestGpt5) continue;
+
+      const best = pickBest(models);
+      if (best) featured.push(best);
+      continue;
+    }
+
+    if (provider === "google") {
+      const bestPro = pickBestByRecency(models, (m) => /^gemini-.*-pro/i.test(String(m.id)));
+      if (bestPro) {
+        featured.push(bestPro);
+        continue;
+      }
+
+      const best = pickBest(models);
+      if (best) featured.push(best);
+      continue;
+    }
+
+    // Generic fallback
+    const best = pickBest(models);
+    if (best) featured.push(best);
+  }
+
+  const out: any[] = [];
+  const used = new Set<string>();
+  const push = (m: any) => {
+    const k = keyOf(m);
+    if (used.has(k)) return;
+    used.add(k);
+    out.push(m);
+  };
+
+  // Current model first (if it's in the filtered list)
+  for (const m of filtered) {
+    if (isCurrent(m)) push(m);
+  }
+
+  // Then latest-for-each-provider
+  for (const m of featured) {
+    push(m);
+  }
+
+  // Then the remaining models
+  const remaining = filtered.filter((m: any) => !used.has(keyOf(m)));
+  remaining.sort(compareModels);
+  for (const m of remaining) push(m);
+
+  return out;
 };
 
 
@@ -124,6 +345,20 @@ let _headerState: { status: "ready" | "working" | "error"; modelAlias?: string }
   status: "ready",
 };
 
+function getAgentModelAlias(agent: Agent | null): string | undefined {
+  const m = agent?.state.model;
+  return m ? (m.name || m.id) : undefined;
+}
+
+function setModelAndSync(agent: Agent, model: any): void {
+  agent.setModel(model);
+  updateHeader({ modelAlias: getAgentModelAlias(agent) });
+  updateStatusBar(agent);
+  sendPopoutState();
+  // Ensure sidebar reacts to model capability changes (thinking levels, etc.)
+  requestAnimationFrame(() => _sidebar?.requestUpdate());
+}
+
 function updateHeader(opts: { status?: "ready" | "working" | "error"; modelAlias?: string } = {}) {
   _headerState = { ..._headerState, ...opts };
   render(renderHeader({
@@ -133,8 +368,7 @@ function updateHeader(opts: { status?: "ready" | "working" | "error"; modelAlias
     onModelClick: () => {
       if (!_agent) return;
       ModelSelector.open(_agent.state.model, (model) => {
-        _agent!.setModel(model);
-        updateHeader({ modelAlias: model.name || model.id });
+        setModelAndSync(_agent!, model);
       });
     },
     onPopoutClick: () => {
@@ -192,9 +426,7 @@ function handlePopoutMessage(arg: any): void {
       break;
     case "pi-dialog-set-model":
       if (data.model) {
-        _agent.setModel(data.model);
-        updateHeader({ modelAlias: data.model.name || data.model.id });
-        sendPopoutState();
+        setModelAndSync(_agent, data.model);
       }
       break;
     case "pi-dialog-set-thinking":
@@ -502,8 +734,14 @@ async function init(): Promise<void> {
         _sessionCreatedAt = sessionData.createdAt;
         _firstAssistantSeen = true;
         agent.replaceMessages(sessionData.messages);
-        if (sessionData.model) agent.setModel(sessionData.model);
-        if (sessionData.thinkingLevel) agent.setThinkingLevel(sessionData.thinkingLevel);
+        if (sessionData.model) {
+          setModelAndSync(agent, sessionData.model);
+        }
+        if (sessionData.thinkingLevel) {
+          agent.setThinkingLevel(sessionData.thinkingLevel);
+          updateStatusBar(agent);
+          sendPopoutState();
+        }
         // Force sidebar to re-render with restored messages
         requestAnimationFrame(() => sidebar.requestUpdate());
         console.log(`[pi] Restored session: ${_sessionTitle || latestId}`);
@@ -896,20 +1134,66 @@ async function showWelcomeLogin(providerKeys: InstanceType<typeof ProviderKeysSt
 // Default model selection
 // ============================================================================
 
-const PREFERRED_MODELS: [string, string][] = [
-  ["anthropic", "claude-opus-4-5"],
-  ["openai-codex", "gpt-5.2"],
-  ["openai-codex", "gpt-5.2-codex"],
-  ["google", "gemini-3-pro-preview"],
-  ["google", "gemini-3-flash-preview"],
+type DefaultModelRule = { provider: string; match: RegExp };
+
+const DEFAULT_MODEL_RULES: DefaultModelRule[] = [
+  // Prefer latest GPT-5.x Codex on ChatGPT subscription (openai-codex)
+  { provider: "openai-codex", match: /^gpt-5\.(\d+)-codex$/ },
+  { provider: "openai-codex", match: /^gpt-5\./ },
+
+  // API key OpenAI provider (if user connected OpenAI instead of openai-codex)
+  { provider: "openai", match: /^gpt-5\.(\d+)-codex$/ },
+  { provider: "openai", match: /^gpt-5\./ },
+
+  // Gemini defaults: Pro-ish first, then any Gemini
+  { provider: "google", match: /^gemini-.*-pro/i },
+  { provider: "google", match: /^gemini-/i },
 ];
 
+function pickLatestMatchingModel(provider: string, match: RegExp) {
+  try {
+    const models = (getModels as any)(provider) as Array<{ id: string }>;
+    const candidates = models.filter((m) => match.test(m.id));
+    candidates.sort((a, b) => modelRecencyScore(b.id) - modelRecencyScore(a.id));
+    return candidates[0] || null;
+  } catch {
+    return null;
+  }
+}
+
 function pickDefaultModel(availableProviders: string[]) {
-  for (const [provider, modelId] of PREFERRED_MODELS) {
-    if (availableProviders.includes(provider)) {
-      try { return (getModel as any)(provider, modelId); } catch {}
+  // Anthropic special-case:
+  // Prefer Opus, except if there's a *newer-version* Sonnet, use that first.
+  if (availableProviders.includes("anthropic")) {
+    try {
+      const models = (getModels as any)("anthropic") as Array<{ id: string }>;
+      const opus = models.filter((m) => String(m.id).startsWith("claude-opus-"))
+        .sort((a, b) => modelRecencyScore(b.id) - modelRecencyScore(a.id))[0];
+      const sonnet = models.filter((m) => String(m.id).startsWith("claude-sonnet-"))
+        .sort((a, b) => modelRecencyScore(b.id) - modelRecencyScore(a.id))[0];
+
+      if (opus && sonnet) {
+        if (parseMajorMinor(sonnet.id) > parseMajorMinor(opus.id)) {
+          return (getModel as any)("anthropic", sonnet.id);
+        }
+        return (getModel as any)("anthropic", opus.id);
+      }
+
+      if (opus) return (getModel as any)("anthropic", opus.id);
+      if (sonnet) return (getModel as any)("anthropic", sonnet.id);
+    } catch {}
+  }
+
+  // Other providers: pattern-based rules
+  for (const rule of DEFAULT_MODEL_RULES) {
+    if (!availableProviders.includes(rule.provider)) continue;
+    const m = pickLatestMatchingModel(rule.provider, rule.match);
+    if (m) {
+      try { return (getModel as any)(rule.provider, m.id); } catch {}
     }
   }
+
+  // Absolute fallback: keep this resilient across pi-ai version bumps
   return getModel("anthropic", "claude-opus-4-5");
 }
 
