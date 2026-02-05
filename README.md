@@ -18,9 +18,11 @@ Unlike proprietary alternatives (Claude for Excel, Copilot), Pi for Excel:
 - **7 Excel tools** — `get_workbook_overview`, `read_range`, `write_cells`, `search_workbook`, `modify_structure`, `format_cells`, `trace_dependencies`
 - **Auto-context injection** — automatically reads around your selection and tracks changes between messages
 - **Workbook blueprint** — sends a structural overview of your workbook to the LLM at session start
-- **Multi-provider auth** — API keys, OAuth (Anthropic, OpenAI, Google), or reuse credentials from Pi TUI
+- **Multi-provider auth** — API keys, OAuth (Anthropic, OpenAI, Google, GitHub Copilot, Antigravity), or reuse credentials from Pi TUI
+- **Persistent sessions** — conversations auto-save to IndexedDB and survive sidebar close/reopen. Resume any previous session with `/resume`
 - **Write verification** — automatically checks formula results after writing
-- **Pi TUI interop** — sessions are stored in Pi-compatible format
+- **Slash commands** — `/new`, `/resume`, `/name`, `/model`, `/login`, `/shortcuts`, and more
+- **Pi TUI interop** — sessions use the same `SessionData` format as pi-web-ui — future export/import is free
 
 ## Quick Start
 
@@ -69,6 +71,21 @@ Click the ⚙️ settings button in the sidebar to add API keys, or:
 1. If you already use [Pi TUI](https://github.com/mariozechner/pi-coding-agent), your credentials from `~/.pi/agent/auth.json` are loaded automatically in dev mode.
 2. Click the 🔑 button to authenticate via OAuth (Anthropic, Google).
 3. Paste an API key directly.
+
+## Commands
+
+Type `/` in the message input to see all commands:
+
+| Command | Description |
+|---------|-------------|
+| `/new` | Start a new chat session (current session is saved) |
+| `/resume` | Resume a previous session |
+| `/name <title>` | Rename the current session |
+| `/model` | Switch LLM model |
+| `/login` | Add or change API keys / OAuth |
+| `/shortcuts` | Show keyboard shortcuts |
+| `/compact` | Summarize conversation to free context |
+| `/copy` | Copy last response to clipboard |
 
 ## Architecture
 

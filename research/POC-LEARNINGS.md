@@ -94,6 +94,20 @@ Three levels of CORS behavior across providers:
 - Document the pi-mono dependency versions we're built against (currently v0.51.0 source / v0.51.5 npm).
 - Consider vendoring or pinning exact versions — pi-mono is actively developed.
 
+### pi-agent-core API gotchas
+
+Discovered during session persistence and UI integration:
+
+1. **`agent.replaceMessages()` does NOT emit events.** It silently sets `this._state.messages`. No `message_start`, no `message_end`, no notification to subscribers. If you call it to restore a session, `AgentInterface` won't know — you must manually call `requestUpdate()` on the AgentInterface component after restoring. Use `requestAnimationFrame()` to ensure DOM timing.
+
+2. **Agent queues are private.** `agent.steeringQueue` and `agent.followUpQueue` exist but are not exposed as public API. If you need to display queued items in a UI, you must track them externally. We maintain a `_queuedMessages` array in taskpane.ts and remove items by matching `message_start` events with `role === "user"` against the queue.
+
+3. **`agent.state.error` persists across turns.** After an abort or error, `agent.state.error` stays set until the next successful turn. If you display status based on this, you may show "error" state even after the user starts a new message. Must explicitly clear/override status on user abort.
+
+4. **Abort detection needs external flag.** `agent.abort()` eventually causes an `agent_end` event with `agent.state.error` containing "aborted" or "Request was aborted." But there's no built-in way to distinguish user-initiated abort (ESC) from a network timeout or other error. Must set your own `_userAborted` flag before calling `agent.abort()` and check it in the `agent_end` handler.
+
+5. **`agent.subscribe()` receives `AgentEvent` objects.** The callback signature is `(e: AgentEvent) => void`. Event types include `turn_start`, `turn_end`, `agent_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_end`. This is the primary hook for all UI updates and persistence.
+
 ---
 
 ## 5. Auth: Multi-Provider Works, But the UX Flow Matters
