@@ -69,7 +69,7 @@ If an ID doesn’t appear there, **don’t** add it to the add-in yet—either:
 Files:
 - `src/taskpane.ts` (ModelSelector patch + default-model rules)
 - `src/models/model-ordering.ts` (provider/family priority + version/recency scoring)
-- `tests/model-ordering.test.ts` (sanity tests; run `npm run test:models`)
+- `tests/model-ordering.test.ts` (sanity tests; run `npm run test:models` — requires Node 22+)
 
 We intentionally avoid pinning exact versioned IDs now. Instead we:
 

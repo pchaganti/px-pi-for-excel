@@ -34,7 +34,7 @@ Three review lenses:
 
 ### 5) Verification
 - `npx tsc --noEmit`
-- `npm run test:models`
+- `npm run test:models` (requires Node 22+ for `--experimental-strip-types`)
 - `npx vite build`
 - Manual spot test in Excel add‑in
 
