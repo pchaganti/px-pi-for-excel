@@ -58,15 +58,9 @@ export function setActiveProviders(providers: Set<string>) {
 // This is the curated "best current models" list — update when new models drop.
 const FEATURED_MODELS = new Map([
   ["claude-opus-4-5", 1],
-  ["claude-sonnet-4-20250514", 2],
-  ["claude-opus-4-1", 3],
-  ["gpt-5.2", 4],
-  ["gpt-5.2-codex", 5],
-  ["gpt-5.2-pro", 6],
-  ["gpt-5.1", 7],
-  ["gemini-3-pro-preview", 8],
-  ["gemini-3-flash-preview", 9],
-  ["gemini-2.5-pro-preview-06-05", 10],
+  ["gpt-5.2", 2],
+  ["gpt-5.2-codex", 3],
+  ["gemini-3-pro-preview", 4],
 ]);
 
 /** Extract a numeric version/date score from model ID for recency sorting. Higher = newer. */
