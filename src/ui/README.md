@@ -8,16 +8,16 @@ The sidebar UI has two layers:
 2. **pi-web-ui content components** — render message internals (markdown, code blocks, tool cards, thinking blocks). Imported via `@mariozechner/pi-web-ui` side-effect registration.
 
 ```
-┌─ header (header.ts, rendered into #header-root) ─┐
-├─ pi-sidebar ──────────────────────────────────────┤
-│  .pi-messages          ← scrollable              │
-│    message-list        ← pi-web-ui               │
-│    streaming-message-container  ← pi-web-ui      │
-│    .pi-empty           ← empty state overlay      │
-│  .pi-input-area        ← sticky footer           │
-│    pi-input            ← our component            │
-│    #pi-status-bar      ← context % + thinking     │
-└───────────────────────────────────────────────────┘
+┌─ pi-sidebar ──────────────────────────────────────┐
+│  .pi-messages          ← scrollable               │
+│    message-list        ← pi-web-ui                │
+│    streaming-message-container  ← pi-web-ui       │
+│    .pi-empty           ← empty state overlay       │
+│  .pi-working           ← "Working…" pulse (stream) │
+│  .pi-input-area        ← sticky footer            │
+│    pi-input            ← our component             │
+│    #pi-status-bar      ← model + ctx % + thinking  │
+└────────────────────────────────────────────────────┘
 ```
 
 `pi-sidebar` subscribes to the `Agent` directly and passes messages/tools/streaming state down as properties to the pi-web-ui components.
@@ -42,9 +42,10 @@ Tailwind v4 puts all utilities inside `@layer utilities`. Unlayered CSS always b
 | 1. CSS Variables | Colors, fonts, glass tokens — pi-web-ui consumes these via `var(--background)` etc. |
 | 2. Global | Body background (spreadsheet grid texture), scrollbars |
 | 3–5. Our components | `.pi-messages`, `.pi-input-card`, `.pi-empty` — fully ours, no overrides needed |
-| 6–9. Chrome | Status bar, toast, slash command menu, welcome overlay |
-| 10. Content overrides | **Targeted** pi-web-ui tweaks — user bubble color, sidebar-width margins, tool card borders |
-| 11–12. Dialogs, Queue | Model selector glass treatment, steer/follow-up queue |
+| 6. Working indicator | `.pi-working` — pulsing "Working…" bar shown during streaming |
+| 7–10. Chrome | Status bar (model picker + ctx + thinking), toast, slash command menu, welcome overlay |
+| 11. Content overrides | **Targeted** pi-web-ui tweaks — user bubble color, sidebar-width margins, tool card borders |
+| 12–13. Dialogs, Queue | Model selector glass treatment, steer/follow-up queue |
 
 ### When overriding pi-web-ui styles
 
@@ -59,9 +60,9 @@ pi-web-ui uses Light DOM (`createRenderRoot() { return this; }`), so styles leak
 
 | File | Replaces | Notes |
 |---|---|---|
-| `pi-sidebar.ts` | ChatPanel + AgentInterface | Owns layout, subscribes to Agent, renders message-list + streaming container |
+| `pi-sidebar.ts` | ChatPanel + AgentInterface | Owns layout, subscribes to Agent, renders message-list + streaming container + working indicator |
 | `pi-input.ts` | MessageEditor | Auto-growing textarea, send/abort button, fires `pi-send` / `pi-abort` events |
-| `header.ts` | — | Pure function `renderHeader()` + CSS string, rendered via `lit.render()` into `#header-root` |
+| `header.ts` | — | Stub (header removed; model picker + status live in footer status bar) |
 | `toast.ts` | — | `showToast(msg, duration)` — positions a fixed notification |
 | `loading.ts` | — | Splash screen shown during init |
 | `provider-login.ts` | — | API key entry rows for the welcome overlay |

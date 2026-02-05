@@ -176,6 +176,12 @@ export class PiSidebar extends LitElement {
         </div>
         ${!this._hasMessages ? this._renderEmptyState() : ""}
       </div>
+      ${this._isStreaming ? html`
+        <div class="pi-working">
+          <span class="pi-working__text">Working…</span>
+          <span class="pi-working__hint">escape to interrupt</span>
+        </div>
+      ` : ""}
       <div class="pi-input-area">
         <pi-input
           .isStreaming=${this._isStreaming}

@@ -28,7 +28,7 @@ import { ChangeTracker } from "./context/change-tracker.js";
 import { initAppStorage } from "./storage/init-app-storage.js";
 
 // UI components
-import { renderHeader, headerStyles } from "./ui/header.js";
+import { headerStyles } from "./ui/header.js";
 import { renderLoading, renderError, loadingStyles } from "./ui/loading.js";
 import { showToast } from "./ui/toast.js";
 import { PiSidebar } from "./ui/pi-sidebar.js";
@@ -226,7 +226,6 @@ const _origGetFilteredModels = (ModelSelector.prototype as any).getFilteredModel
 
 declare const Office: any;
 
-const headerRoot = document.getElementById("header-root")!;
 const appEl = document.getElementById("app")!;
 const loadingRoot = document.getElementById("loading-root")!;
 const errorRoot = document.getElementById("error-root")!;
@@ -244,35 +243,14 @@ document.head.appendChild(styleSheet);
 
 let _agent: Agent | null = null;
 let _sidebar: PiSidebar | null = null;
-let _headerState: { status: "ready" | "working" | "error"; modelAlias?: string } = {
-  status: "ready",
-};
 
-function getAgentModelAlias(agent: Agent | null): string | undefined {
-  const m = agent?.state.model;
-  return m ? (m.name || m.id) : undefined;
-}
-
-function setModelAndSync(agent: Agent, model: any): void {
-  agent.setModel(model);
-  updateHeader({ modelAlias: getAgentModelAlias(agent) });
-  updateStatusBar(agent);
-  // Ensure sidebar reacts to model capability changes (thinking levels, etc.)
-  requestAnimationFrame(() => _sidebar?.requestUpdate());
-}
-
-function updateHeader(opts: { status?: "ready" | "working" | "error"; modelAlias?: string } = {}) {
-  _headerState = { ..._headerState, ...opts };
-  render(renderHeader({
-    status: _headerState.status,
-    modelAlias: _headerState.modelAlias,
-    onModelClick: () => {
-      if (!_agent) return;
-      ModelSelector.open(_agent.state.model, (model) => {
-        setModelAndSync(_agent!, model);
-      });
-    },
-  }), headerRoot);
+function openModelSelector(): void {
+  if (!_agent) return;
+  ModelSelector.open(_agent.state.model, (model) => {
+    _agent!.setModel(model);
+    updateStatusBar(_agent!);
+    requestAnimationFrame(() => _sidebar?.requestUpdate());
+  });
 }
 
 function showErrorBanner(message: string): void {
@@ -283,7 +261,6 @@ function clearErrorBanner(): void {
   render(html``, errorRoot);
 }
 
-updateHeader();
 render(renderLoading(), loadingRoot);
 
 
@@ -400,25 +377,8 @@ async function init(): Promise<void> {
   appEl.innerHTML = "";
   appEl.appendChild(sidebar);
 
-  // 8. Header + status tracking
-  const getModelAlias = () => {
-    const m = agent.state.model;
-    return m ? (m.name || m.id) : undefined;
-  };
-  updateHeader({ modelAlias: getModelAlias() });
-
+  // 8. Error tracking
   agent.subscribe((ev) => {
-    // Header status
-    if (ev.type === "turn_start") {
-      updateHeader({ status: "working", modelAlias: getModelAlias() });
-    } else if (ev.type === "turn_end" || ev.type === "agent_end") {
-      updateHeader({
-        status: agent.state.error ? "error" : "ready",
-        modelAlias: getModelAlias(),
-      });
-    }
-
-    // Error banner
     if (ev.type === "message_start" && ev.message.role === "user") {
       clearErrorBanner();
     }
@@ -427,10 +387,7 @@ async function init(): Promise<void> {
         const isAbort = _userAborted ||
           /abort/i.test(agent.state.error) ||
           /cancel/i.test(agent.state.error);
-        if (isAbort) {
-          clearErrorBanner();
-          updateHeader({ status: "ready", modelAlias: getModelAlias() });
-        } else {
+        if (!isAbort) {
           showErrorBanner(`LLM error: ${agent.state.error}`);
         }
       } else {
@@ -438,7 +395,6 @@ async function init(): Promise<void> {
       }
       _userAborted = false;
     }
-
   });
 
   // ── Session persistence ──
@@ -533,11 +489,10 @@ async function init(): Promise<void> {
         _firstAssistantSeen = true;
         agent.replaceMessages(sessionData.messages);
         if (sessionData.model) {
-          setModelAndSync(agent, sessionData.model);
+          agent.setModel(sessionData.model);
         }
         if (sessionData.thinkingLevel) {
           agent.setThinkingLevel(sessionData.thinkingLevel);
-          updateStatusBar(agent);
         }
         // Force sidebar to re-render with restored messages
         requestAnimationFrame(() => sidebar.requestUpdate());
@@ -743,10 +698,18 @@ async function init(): Promise<void> {
   };
   requestAnimationFrame(wireTextarea);
 
-  // ── Thinking indicator click ──
+  // ── Status bar click handlers ──
   document.addEventListener("click", (e) => {
-    const target = (e.target as HTMLElement).closest?.(".pi-status-thinking");
-    if (target) {
+    const el = e.target as HTMLElement;
+
+    // Model picker
+    if (el.closest?.(".pi-status-model")) {
+      openModelSelector();
+      return;
+    }
+
+    // Thinking level toggle
+    if (el.closest?.(".pi-status-thinking")) {
       const levels = getThinkingLevels();
       const current = agent.state.thinkingLevel;
       const idx = levels.indexOf(current);
@@ -820,6 +783,12 @@ function updateStatusBar(agent: Agent): void {
   if (!el) return;
 
   const state = agent.state;
+
+  // Model alias
+  const model = state.model;
+  const modelAlias = model ? (model.name || model.id) : "Select model";
+
+  // Context usage
   let totalTokens = 0;
   for (const msg of state.messages) {
     const usage = (msg as any).usage;
@@ -832,14 +801,21 @@ function updateStatusBar(agent: Agent): void {
     ? `${(contextWindow / 1_000_000).toFixed(0)}M`
     : `${Math.round(contextWindow / 1000)}k`;
 
+  // Thinking level
   const thinkingLabels: Record<string, string> = {
     off: "off", minimal: "min", low: "low", medium: "med", high: "high", xhigh: "max",
   };
   const thinkingLevel = thinkingLabels[state.thinkingLevel] || state.thinkingLevel;
 
+  const chevronSvg = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
   const brainSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg>`;
 
   el.innerHTML = `
+    <button class="pi-status-model" title="Change model">
+      <span class="pi-status-model__mark">π</span>
+      <span class="pi-status-model__name">${modelAlias}</span>
+      ${chevronSvg}
+    </button>
     <span class="pi-status-ctx">${pct}% / ${ctxLabel}</span>
     <span class="pi-status-thinking" title="Shift+Tab to cycle">${brainSvg} ${thinkingLevel}</span>
   `;

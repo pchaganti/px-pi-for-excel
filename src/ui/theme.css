@@ -312,13 +312,48 @@ body {
 
 
 /* ═══════════════════════════════════════════════════════
-   6. STATUS BAR
+   6. WORKING INDICATOR
+   ═══════════════════════════════════════════════════════ */
+
+.pi-working {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 12px;
+  animation: pi-working-pulse 2.4s ease-in-out infinite;
+}
+
+.pi-working__text {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.pi-working__hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted-foreground);
+  opacity: 0.5;
+  letter-spacing: 0.02em;
+}
+
+@keyframes pi-working-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   7. STATUS BAR
    ═══════════════════════════════════════════════════════ */
 
 .pi-status-bar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 6px;
   padding: 4px 4px 2px;
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -327,7 +362,52 @@ body {
   opacity: 0.75;
 }
 
-.pi-status-ctx { font-variant-numeric: tabular-nums; }
+/* Model picker — left side */
+.pi-status-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  margin: -2px 0;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+  transition: background 0.15s, color 0.15s;
+  min-width: 0;
+  overflow: hidden;
+}
+.pi-status-model:hover {
+  background: var(--pi-green-lighter);
+  color: var(--foreground);
+}
+.pi-status-model__mark {
+  font-family: 'DM Sans', serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1;
+  flex-shrink: 0;
+}
+.pi-status-model__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.pi-status-model svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+/* Context usage — pushed right */
+.pi-status-ctx {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
 
 .pi-status-thinking {
   cursor: pointer;
@@ -346,7 +426,7 @@ body {
 
 
 /* ═══════════════════════════════════════════════════════
-   7. TOAST
+   8. TOAST
    ═══════════════════════════════════════════════════════ */
 
 .pi-toast {
@@ -376,7 +456,7 @@ body {
 
 
 /* ═══════════════════════════════════════════════════════
-   8. SLASH COMMAND MENU
+   9. SLASH COMMAND MENU
    ═══════════════════════════════════════════════════════ */
 
 .pi-cmd-menu {
@@ -443,7 +523,7 @@ body {
 
 
 /* ═══════════════════════════════════════════════════════
-   9. WELCOME / LOGIN OVERLAY
+   10. WELCOME / LOGIN OVERLAY
    ═══════════════════════════════════════════════════════ */
 
 .pi-welcome-overlay {
@@ -523,7 +603,7 @@ body {
 
 
 /* ═══════════════════════════════════════════════════════
-   10. PI-WEB-UI CONTENT OVERRIDES
+   11. PI-WEB-UI CONTENT OVERRIDES
    Targeted overrides for message components at sidebar width.
    ═══════════════════════════════════════════════════════ */
 
@@ -598,7 +678,7 @@ streaming-message-container .animate-pulse {
 
 
 /* ═══════════════════════════════════════════════════════
-   11. DIALOGS — ModelSelector, ApiKeyPrompt
+   12. DIALOGS — ModelSelector, ApiKeyPrompt
    ═══════════════════════════════════════════════════════ */
 
 /* Backdrop */
@@ -642,7 +722,7 @@ agent-api-key-dialog button[class*="bg-primary"] {
 
 
 /* ═══════════════════════════════════════════════════════
-   12. QUEUE DISPLAY — steer / follow-up messages
+   13. QUEUE DISPLAY — steer / follow-up messages
    ═══════════════════════════════════════════════════════ */
 
 .pi-queue {
