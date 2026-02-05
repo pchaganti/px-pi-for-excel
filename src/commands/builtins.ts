@@ -205,16 +205,16 @@ function showToast(message: string): void {
   setTimeout(() => toast!.classList.remove("visible"), 2000);
 }
 
-const PROVIDERS: Record<string, string> = {
-  anthropic:        "Anthropic",
-  openai:           "OpenAI",
-  "google":         "Google Gemini",
-  "amazon-bedrock": "Amazon Bedrock",
-  deepseek:         "DeepSeek",
-  mistral:          "Mistral",
-  groq:             "Groq",
-  xai:              "xAI / Grok",
-};
+const PROVIDERS: { id: string; label: string; oauth?: boolean }[] = [
+  { id: "anthropic",       label: "Anthropic",       oauth: true },
+  { id: "openai",          label: "OpenAI" },
+  { id: "google",          label: "Google Gemini" },
+  { id: "amazon-bedrock",  label: "Amazon Bedrock" },
+  { id: "deepseek",        label: "DeepSeek" },
+  { id: "mistral",         label: "Mistral" },
+  { id: "groq",            label: "Groq" },
+  { id: "xai",             label: "xAI / Grok" },
+];
 
 async function showProviderPicker(agent: Agent): Promise<void> {
   let overlay = document.getElementById("pi-login-overlay");
@@ -231,41 +231,153 @@ async function showProviderPicker(agent: Agent): Promise<void> {
   overlay.innerHTML = `
     <div class="pi-welcome-card" style="text-align: left; max-width: 340px;">
       <h2 style="font-size: 16px; font-weight: 600; margin: 0 0 4px; font-family: var(--font-sans);">Providers</h2>
-      <p style="font-size: 12px; color: var(--muted-foreground); margin: 0 0 12px; font-family: var(--font-sans);">Add API keys to use models from each provider.</p>
+      <p style="font-size: 12px; color: var(--muted-foreground); margin: 0 0 12px; font-family: var(--font-sans);">Connect providers to use their models.</p>
       <div class="pi-login-providers" style="display: flex; flex-direction: column; gap: 4px;"></div>
     </div>
   `;
 
   const list = overlay.querySelector(".pi-login-providers")!;
+  let expandedRow: HTMLElement | null = null;
 
-  for (const [id, label] of Object.entries(PROVIDERS)) {
+  for (const provider of PROVIDERS) {
+    const { id, label, oauth } = provider;
     const isActive = configuredSet.has(id);
-    const row = document.createElement("button");
-    row.className = "pi-welcome-provider";
-    row.style.cssText = "display: flex; justify-content: space-between; align-items: center;";
+
+    const row = document.createElement("div");
+    row.className = "pi-login-row";
     row.innerHTML = `
-      <span style="font-size: 13px;">${label}</span>
-      <span style="font-size: 11px; color: ${isActive ? "var(--pi-green)" : "var(--muted-foreground)"}; font-family: var(--font-mono);">
-        ${isActive ? "✓ connected" : "add key"}
-      </span>
+      <button class="pi-welcome-provider" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+        <span style="font-size: 13px;">${label}</span>
+        <span class="pi-login-status" style="font-size: 11px; color: ${isActive ? "var(--pi-green)" : "var(--muted-foreground)"}; font-family: var(--font-mono);">
+          ${isActive ? "✓ connected" : "set up →"}
+        </span>
+      </button>
+      <div class="pi-login-detail" style="display: none; padding: 8px 14px 12px; border: 1px solid oklch(0 0 0 / 0.05); border-top: none; border-radius: 0 0 10px 10px; margin-top: -1px; background: oklch(1 0 0 / 0.3);">
+        ${oauth ? `
+          <button class="pi-login-oauth" style="
+            width: 100%; padding: 9px 14px; margin-bottom: 8px;
+            background: var(--pi-green); color: white; border: none;
+            border-radius: 9px; font-family: var(--font-sans);
+            font-size: 13px; font-weight: 500; cursor: pointer;
+            transition: background 0.15s;
+          ">Login with ${label}</button>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <div style="flex: 1; height: 1px; background: oklch(0 0 0 / 0.08);"></div>
+            <span style="font-size: 11px; color: var(--muted-foreground); font-family: var(--font-sans);">or enter API key</span>
+            <div style="flex: 1; height: 1px; background: oklch(0 0 0 / 0.08);"></div>
+          </div>
+        ` : ""}
+        <div style="display: flex; gap: 6px;">
+          <input class="pi-login-key" type="password" placeholder="Enter API key"
+            style="flex: 1; padding: 7px 10px; border: 1px solid oklch(0 0 0 / 0.10);
+            border-radius: 8px; font-family: var(--font-mono); font-size: 12px;
+            background: oklch(1 0 0 / 0.6); outline: none;"
+          />
+          <button class="pi-login-save" style="
+            padding: 7px 12px; background: var(--pi-green); color: white;
+            border: none; border-radius: 8px; font-family: var(--font-sans);
+            font-size: 12px; font-weight: 500; cursor: pointer;
+            transition: background 0.15s; white-space: nowrap;
+          ">Save</button>
+        </div>
+        <p class="pi-login-error" style="display: none; font-size: 11px; color: oklch(0.55 0.22 25); margin: 6px 0 0; font-family: var(--font-sans);"></p>
+      </div>
     `;
-    row.addEventListener("click", async () => {
-      const { ApiKeyPromptDialog } = await import("@mariozechner/pi-web-ui");
-      // Hide login overlay while API key dialog is open to prevent backdrop stacking
-      overlay!.style.display = "none";
-      const success = await ApiKeyPromptDialog.prompt(id);
-      overlay!.style.display = "flex";
-      if (success) {
-        // Update the row status
-        const status = row.querySelector("span:last-child")!;
-        status.textContent = "✓ connected";
-        (status as HTMLElement).style.color = "var(--pi-green)";
-        // Notify taskpane to refresh active providers
-        document.dispatchEvent(new CustomEvent("pi:providers-changed"));
-        showToast(`${label} connected`);
+
+    const headerBtn = row.querySelector(".pi-welcome-provider")!;
+    const detail = row.querySelector(".pi-login-detail") as HTMLElement;
+    const keyInput = row.querySelector(".pi-login-key") as HTMLInputElement;
+    const saveBtn = row.querySelector(".pi-login-save") as HTMLButtonElement;
+    const errorEl = row.querySelector(".pi-login-error") as HTMLElement;
+    const oauthBtn = row.querySelector(".pi-login-oauth") as HTMLButtonElement | null;
+
+    // Toggle expand
+    headerBtn.addEventListener("click", () => {
+      if (expandedRow === detail) {
+        detail.style.display = "none";
+        expandedRow = null;
+      } else {
+        if (expandedRow) expandedRow.style.display = "none";
+        detail.style.display = "block";
+        expandedRow = detail;
+        keyInput.focus();
       }
     });
+
+    // OAuth login
+    if (oauthBtn) {
+      oauthBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        oauthBtn.textContent = "Opening login…";
+        oauthBtn.style.opacity = "0.7";
+        try {
+          const { getOAuthProvider } = await import("@mariozechner/pi-ai");
+          const oauthProvider = getOAuthProvider(id as any);
+          if (oauthProvider) {
+            const cred = await oauthProvider.login({
+              onAuth: (info) => {
+                window.open(info.url, "_blank");
+              },
+              onPrompt: async (prompt) => {
+                return window.prompt(prompt.message, prompt.placeholder || "") || "";
+              },
+              onProgress: (msg) => {
+                oauthBtn.textContent = msg;
+              },
+            });
+            const apiKey = oauthProvider.getApiKey(cred);
+            await storage.providerKeys.set(id, apiKey);
+            localStorage.setItem(`oauth_${id}`, JSON.stringify(cred));
+            markConnected(row, label);
+            detail.style.display = "none";
+            expandedRow = null;
+          }
+        } catch (err: any) {
+          errorEl.textContent = err.message || "Login failed";
+          errorEl.style.display = "block";
+        } finally {
+          oauthBtn.textContent = `Login with ${label}`;
+          oauthBtn.style.opacity = "1";
+        }
+      });
+    }
+
+    // API key save
+    saveBtn.addEventListener("click", async () => {
+      const key = keyInput.value.trim();
+      if (!key) return;
+      saveBtn.textContent = "Testing…";
+      saveBtn.style.opacity = "0.7";
+      errorEl.style.display = "none";
+      try {
+        await storage.providerKeys.set(id, key);
+        markConnected(row, label);
+        detail.style.display = "none";
+        expandedRow = null;
+      } catch (err: any) {
+        errorEl.textContent = "Failed to save key";
+        errorEl.style.display = "block";
+      } finally {
+        saveBtn.textContent = "Save";
+        saveBtn.style.opacity = "1";
+      }
+    });
+
+    // Enter key in input
+    keyInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") saveBtn.click();
+    });
+
     list.appendChild(row);
+  }
+
+  function markConnected(row: HTMLElement, label: string) {
+    const status = row.querySelector(".pi-login-status") as HTMLElement;
+    status.textContent = "✓ connected";
+    status.style.color = "var(--pi-green)";
+    configuredSet.add(label);
+    document.dispatchEvent(new CustomEvent("pi:providers-changed"));
+    showToast(`${label} connected`);
   }
 
   overlay.addEventListener("click", (e) => {
