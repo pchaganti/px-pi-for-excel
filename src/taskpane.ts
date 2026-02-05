@@ -10,7 +10,7 @@ import "./boot.js";
 
 import { html, render } from "lit";
 import { Agent } from "@mariozechner/pi-agent-core";
-import { getModel } from "@mariozechner/pi-ai";
+import { getModel, getProviders, getModels, type KnownProvider } from "@mariozechner/pi-ai";
 import {
   ChatPanel,
   AppStorage,
@@ -21,6 +21,7 @@ import {
   SettingsStore,
   setAppStorage,
   ApiKeyPromptDialog,
+  ModelSelector,
 } from "@mariozechner/pi-web-ui";
 
 import { installFetchInterceptor } from "./auth/cors-proxy.js";
@@ -57,14 +58,18 @@ styleSheet.textContent = headerStyles + loadingStyles;
 document.head.appendChild(styleSheet);
 
 // Render header and loading state immediately
+let _agent: Agent | null = null;
+
 function updateHeader(opts: { status?: "ready" | "working" | "error"; modelAlias?: string } = {}) {
   render(renderHeader({
     status: opts.status || "ready",
     modelAlias: opts.modelAlias,
     onModelClick: () => {
-      // Trigger the model selector by clicking the (now hidden) model button in toolbar
-      const modelBtn = document.querySelector("message-editor .px-2.pb-2 > .flex.gap-2:last-child > button:first-child") as HTMLElement;
-      if (modelBtn) modelBtn.click();
+      if (!_agent) return;
+      ModelSelector.open(_agent.state.model, (model) => {
+        _agent!.setModel(model);
+        updateHeader({ modelAlias: model.name || model.id });
+      });
     },
   }), headerRoot);
 }
@@ -139,6 +144,12 @@ async function init(): Promise<void> {
   // 2. Restore auth credentials
   await restoreCredentials(providerKeys);
 
+  // 2b. Check if user has any provider keys — show welcome/login if not
+  const configuredProviders = await providerKeys.list();
+  if (configuredProviders.length === 0) {
+    await showWelcomeLogin(providerKeys);
+  }
+
   // 3. Build initial workbook blueprint
   let blueprint: string | undefined;
   try {
@@ -151,13 +162,15 @@ async function init(): Promise<void> {
   // 4. Start change tracker
   changeTracker.start().catch(() => {});
 
-  // 5. Create agent
+  // 5. Create agent — pick default model from a provider the user has
   const systemPrompt = buildSystemPrompt(blueprint);
+  const availableProviders = await providerKeys.list();
+  const defaultModel = pickDefaultModel(availableProviders);
 
-  const agent = new Agent({
+  const agent = _agent = new Agent({
     initialState: {
       systemPrompt,
-      model: getModel("anthropic", "claude-opus-4-5"),
+      model: defaultModel,
       thinkingLevel: "off",
       messages: [],
       tools: [],
@@ -517,6 +530,82 @@ function flashThinkingLevel(level: string, color: string): void {
       flashBar!.style.opacity = "0";
     });
   });
+}
+
+// ============================================================================
+// Welcome / Login screen
+// ============================================================================
+
+const PROVIDER_INFO: Record<string, { label: string; placeholder: string }> = {
+  anthropic:       { label: "Anthropic",       placeholder: "sk-ant-..." },
+  openai:          { label: "OpenAI",          placeholder: "sk-..." },
+  "google-gemini": { label: "Google Gemini",   placeholder: "AIza..." },
+  "amazon-bedrock":{ label: "Amazon Bedrock",  placeholder: "Access key..." },
+  deepseek:        { label: "DeepSeek",        placeholder: "sk-..." },
+  mistral:         { label: "Mistral",         placeholder: "..." },
+  groq:            { label: "Groq",            placeholder: "gsk_..." },
+  xai:             { label: "xAI / Grok",      placeholder: "xai-..." },
+};
+
+async function showWelcomeLogin(providerKeys: InstanceType<typeof ProviderKeysStore>): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "pi-welcome-overlay";
+    overlay.innerHTML = `
+      <div class="pi-welcome-card">
+        <div class="pi-welcome-logo">π</div>
+        <h2 class="pi-welcome-title">Pi for Excel</h2>
+        <p class="pi-welcome-subtitle">Add an API key to get started</p>
+        <div class="pi-welcome-providers"></div>
+      </div>
+    `;
+
+    const providerList = overlay.querySelector(".pi-welcome-providers")!;
+    const providers = Object.entries(PROVIDER_INFO);
+
+    for (const [id, info] of providers) {
+      const row = document.createElement("button");
+      row.className = "pi-welcome-provider";
+      row.textContent = info.label;
+      row.addEventListener("click", async () => {
+        const success = await ApiKeyPromptDialog.prompt(id);
+        if (success) {
+          overlay.remove();
+          resolve();
+        }
+      });
+      providerList.appendChild(row);
+    }
+
+    document.body.appendChild(overlay);
+  });
+}
+
+// ============================================================================
+// Default model selection
+// ============================================================================
+
+const PREFERRED_MODELS: [string, string][] = [
+  ["anthropic", "claude-sonnet-4-20250514"],
+  ["anthropic", "claude-opus-4-5"],
+  ["openai", "gpt-4o"],
+  ["google-gemini", "gemini-2.0-flash"],
+  ["deepseek", "deepseek-chat"],
+  ["mistral", "mistral-large-latest"],
+  ["groq", "llama-3.3-70b-versatile"],
+  ["xai", "grok-3"],
+];
+
+function pickDefaultModel(availableProviders: string[]) {
+  for (const [provider, modelId] of PREFERRED_MODELS) {
+    if (availableProviders.includes(provider)) {
+      try {
+        return (getModel as any)(provider, modelId);
+      } catch { /* model not found */ }
+    }
+  }
+  // Fallback
+  return getModel("anthropic", "claude-opus-4-5");
 }
 
 // ============================================================================
