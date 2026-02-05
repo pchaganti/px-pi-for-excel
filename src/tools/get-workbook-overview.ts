@@ -20,7 +20,7 @@ export function createGetWorkbookOverviewTool(): AgentTool<typeof schema> {
     label: "Workbook Overview",
     description:
       "Get a structural overview of the workbook: sheet names, dimensions, " +
-      "header rows, named ranges, and tables. Use this at the start of a " +
+      "header rows, named ranges, tables, and object counts. Use this at the start of a " +
       "conversation or when you need to understand the workbook's structure " +
       "before reading specific ranges.",
     parameters: schema,
@@ -72,6 +72,21 @@ export async function buildOverview(): Promise<string> {
       const tables = sheet.tables;
       tables.load("items/name,items/columns/count,items/rows/count");
 
+      // Get object counts
+      const charts = sheet.charts;
+      charts.load("count");
+
+      const pivotTables = sheet.pivotTables;
+      const pivotCount = pivotTables.getCount();
+
+      let shapes: any | null = null;
+      try {
+        shapes = sheet.shapes;
+        shapes.load("items");
+      } catch {
+        shapes = null;
+      }
+
       await context.sync();
 
       const dims = used.isNullObject
@@ -100,6 +115,17 @@ export async function buildOverview(): Promise<string> {
         for (const table of tables.items) {
           lines.push(`   Table: "${table.name}" (${table.rows.count} rows × ${table.columns.count} cols)`);
         }
+      }
+
+      const chartCount = charts.count || 0;
+      const pivotTotal = pivotCount.value || 0;
+      const shapeCount = shapes ? shapes.items.length : 0;
+      const objectTotal = chartCount + pivotTotal + shapeCount;
+
+      if (objectTotal > 0) {
+        lines.push(
+          `   Objects: ${chartCount} chart(s), ${pivotTotal} pivot table(s), ${shapeCount} shape(s)`,
+        );
       }
     }
 

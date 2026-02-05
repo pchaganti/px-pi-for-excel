@@ -15,7 +15,7 @@ Unlike proprietary alternatives (Claude for Excel, Copilot), Pi for Excel:
 
 ## Features (v0.1.0)
 
-- **11 Excel tools** — `get_workbook_overview`, `read_range`, `read_selection`, `write_cells`, `fill_formula`, `search_workbook`, `modify_structure`, `format_cells`, `conditional_format`, `trace_dependencies`, `get_recent_changes`
+- **13 Excel tools** — `get_workbook_overview`, `read_range`, `get_range_as_csv`, `read_selection`, `get_all_objects`, `write_cells`, `fill_formula`, `search_workbook`, `modify_structure`, `format_cells`, `conditional_format`, `trace_dependencies`, `get_recent_changes`
 - **Auto-context injection** — automatically reads around your selection and tracks changes between messages
 - **Workbook blueprint** — sends a structural overview of your workbook to the LLM at session start
 - **Multi-provider auth** — API keys, OAuth (Anthropic, OpenAI, Google, GitHub Copilot, Antigravity), or reuse credentials from Pi TUI
@@ -96,7 +96,7 @@ src/
 ├── boot.ts               # Lit class field fix + CSS
 ├── excel/helpers.ts       # Office.js wrappers + edge-case guards
 ├── auth/                  # CORS proxy, credential restore, provider mapping
-├── tools/                 # 8 Excel tools (read, write, search, format, etc.)
+├── tools/                 # 13 Excel tools (read, write, search, format, etc.)
 ├── context/               # Blueprint, selection auto-read, change tracker
 ├── prompt/system-prompt.ts # Model-agnostic system prompt builder
 └── utils/format.ts        # Markdown tables, token truncation

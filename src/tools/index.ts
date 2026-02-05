@@ -14,6 +14,8 @@ import { createConditionalFormatTool } from "./conditional-format.js";
 import { createFillFormulaTool } from "./fill-formula.js";
 import { createReadSelectionTool } from "./read-selection.js";
 import { createGetRecentChangesTool } from "./get-recent-changes.js";
+import { createGetRangeAsCsvTool } from "./get-range-as-csv.js";
+import { createGetAllObjectsTool } from "./get-all-objects.js";
 import type { ChangeTracker } from "../context/change-tracker.js";
 
 /** Create all Excel tools */
@@ -22,6 +24,8 @@ export function createAllTools(opts?: { changeTracker?: ChangeTracker }): AgentT
     createGetWorkbookOverviewTool(),
     createReadRangeTool(),
     createReadSelectionTool(),
+    createGetRangeAsCsvTool(),
+    createGetAllObjectsTool(),
     createWriteCellsTool(),
     createFillFormulaTool(),
     createSearchWorkbookTool(),
