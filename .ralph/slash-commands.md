@@ -1,18 +1,18 @@
 # Slash Command System
 
-## Requirements
-1. When user types `/` as first char in textarea, show a filterable command menu
-2. Built-in commands: /settings, /model, /default-models, /copy, /name, /shortcuts, /share-session
-3. Extensible: registry for skills, extensions, prompt snippets
-4. Menu appears above textarea, filters as user types, arrow keys + enter to select
-5. ESC dismisses menu
+## Done
+- [x] SlashCommand type + CommandRegistry (src/commands/types.ts)
+- [x] 8 built-in commands: model, default-models, settings, copy, name, share-session, shortcuts, new
+- [x] Command menu popup UI (src/commands/command-menu.ts)
+- [x] Keyboard: arrow/enter/tab/esc navigation
+- [x] Filters as user types after /
+- [x] CSS: frosted glass menu + dark toast
+- [x] Wired to textarea input events
+- [x] /shortcuts shows overlay dialog with all keyboard shortcuts
+- [x] Toast notifications for feedback
 
-## Checklist
-- [ ] Create `src/commands/` module with SlashCommand type + registry
-- [ ] Built-in commands: settings, model, default-models, copy, name, shortcuts, share-session
-- [ ] Create `src/ui/command-menu.ts` — the popup menu component (absolute positioned above textarea)
-- [ ] Wire to textarea: detect `/` at start, show menu, filter on input, arrow/enter/esc
-- [ ] CSS for command menu (frosted glass, matches design)
-- [ ] Extension point: `registerCommand(name, handler)` for plugins
-- [ ] Implement each command's action
-- [ ] Build + screenshot verification
+## Remaining
+- [ ] Extension point API for plugins to register commands
+- [ ] Skills/prompt snippets as slash commands (load from config)
+- [ ] /default-models proper UI (scoped model cycling)
+- [ ] /share-session implementation

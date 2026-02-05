@@ -4,7 +4,7 @@
 
 import { commandRegistry, type SlashCommand } from "./types.js";
 import type { Agent } from "@mariozechner/pi-agent-core";
-import { ModelSelector } from "@mariozechner/pi-web-ui";
+import { ModelSelector, getAppStorage } from "@mariozechner/pi-web-ui";
 
 /** Register all built-in commands. Call once after agent is created. */
 export function registerBuiltins(agent: Agent): void {
@@ -112,6 +112,14 @@ export function registerBuiltins(agent: Agent): void {
         showToast("New session started");
       },
     },
+    {
+      name: "resume",
+      description: "Resume a previous session",
+      source: "builtin",
+      execute: async () => {
+        await showResumeDialog(agent);
+      },
+    },
   ];
 
   for (const cmd of builtins) {
@@ -132,6 +140,82 @@ function showToast(message: string): void {
   toast.textContent = message;
   toast.classList.add("visible");
   setTimeout(() => toast!.classList.remove("visible"), 2000);
+}
+
+async function showResumeDialog(agent: Agent): Promise<void> {
+  const storage = getAppStorage();
+  const sessions = await storage.sessions.getAllMetadata();
+
+  if (sessions.length === 0) {
+    showToast("No previous sessions");
+    return;
+  }
+
+  let overlay = document.getElementById("pi-resume-overlay");
+  if (overlay) { overlay.remove(); return; }
+
+  overlay = document.createElement("div");
+  overlay.id = "pi-resume-overlay";
+  overlay.className = "pi-welcome-overlay";
+
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    const now = new Date();
+    const diff = now.getTime() - d.getTime();
+    if (diff < 60000) return "just now";
+    if (diff < 3600000) return `${Math.round(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.round(diff / 3600000)}h ago`;
+    if (diff < 604800000) return `${Math.round(diff / 86400000)}d ago`;
+    return d.toLocaleDateString();
+  };
+
+  overlay.innerHTML = `
+    <div class="pi-welcome-card" style="text-align: left; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
+      <h2 style="font-size: 16px; font-weight: 600; margin: 0 0 12px; font-family: var(--font-sans); flex-shrink: 0;">Resume Session</h2>
+      <div class="pi-resume-list" style="overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+        ${sessions.slice(0, 20).map((s) => `
+          <button class="pi-welcome-provider pi-resume-item" data-id="${s.id}" style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
+            <span style="font-size: 13px; font-weight: 500;">${s.title || "Untitled"}</span>
+            <span style="font-size: 11px; color: var(--muted-foreground);">${s.messageCount || 0} messages · ${formatDate(s.lastModified)}</span>
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
+
+  overlay.addEventListener("click", async (e) => {
+    if (e.target === overlay) { overlay!.remove(); return; }
+    const item = (e.target as HTMLElement).closest(".pi-resume-item") as HTMLElement;
+    if (!item) return;
+    const id = item.dataset.id;
+    if (!id) return;
+
+    const sessionData = await storage.sessions.loadSession(id);
+    if (!sessionData) {
+      showToast("Session not found");
+      overlay!.remove();
+      return;
+    }
+
+    // Restore messages and model
+    agent.replaceMessages(sessionData.messages || []);
+    if (sessionData.model) {
+      agent.setModel(sessionData.model);
+    }
+    if (sessionData.thinkingLevel) {
+      agent.setThinkingLevel(sessionData.thinkingLevel);
+    }
+
+    // Force UI to re-render
+    const iface = document.querySelector("agent-interface") as any;
+    if (iface) iface.requestUpdate();
+    document.dispatchEvent(new CustomEvent("pi:model-changed"));
+
+    overlay!.remove();
+    showToast(`Resumed: ${sessionData.title || "Untitled"}`);
+  });
+
+  document.body.appendChild(overlay);
 }
 
 function showShortcutsDialog(): void {
