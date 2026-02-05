@@ -54,6 +54,7 @@ const CONVENTIONS = `## Conventions
 
 - Use A1 notation (e.g. "A1:D10", "Sheet2!B3").
 - Reference specific cells in explanations ("I put the total in E15").
+- Default font for formatting is Arial 10 (unless the user specifies otherwise).
 - Keep formulas simple and readable.
 - For large ranges, read a sample first to understand the structure.
 - When creating tables, include headers in the first row.

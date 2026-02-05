@@ -9,6 +9,12 @@ import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun, getRange, parseRangeRef, qualifiedAddress } from "../excel/helpers.js";
 
+const DEFAULT_FONT_NAME = "Arial";
+const DEFAULT_FONT_SIZE = 10;
+// Excel columnWidth in Office.js uses points. Approx conversion for Arial 10:
+// 1 character width ≈ 7.2 points (based on Excel UI measurement).
+const POINTS_PER_CHAR_ARIAL_10 = 7.2;
+
 const schema = Type.Object({
   range: Type.String({
     description: 'Range to format, e.g. "A1:D1", "Sheet2!B3:B20". Supports comma/semicolon-separated ranges on the same sheet (e.g. "A1:B2, D1:D2").',
@@ -41,7 +47,7 @@ const schema = Type.Object({
     }),
   ),
   wrap_text: Type.Optional(Type.Boolean({ description: "Enable text wrapping." })),
-  column_width: Type.Optional(Type.Number({ description: "Set column width in Excel character-width units (same as Excel UI). Converted to points internally." })),
+  column_width: Type.Optional(Type.Number({ description: "Set column width in Excel character-width units (assumes Arial 10). Converted to points internally." })),
   row_height: Type.Optional(Type.Number({ description: "Set row height in points." })),
   auto_fit: Type.Optional(
     Type.Boolean({ description: "Auto-fit column widths to content. Default: false." }),
@@ -83,7 +89,7 @@ export function createFormatCellsTool(): AgentTool<typeof schema> {
       try {
         const result = await excelRun(async (context: any) => {
           const { sheet, target, isMultiRange } = resolveFormatTarget(context, params.range);
-          sheet.load("name,standardWidth");
+          sheet.load("name");
           target.load("address");
 
           const needsAreas = isMultiRange && (params.number_format || params.merge !== undefined);
@@ -99,7 +105,6 @@ export function createFormatCellsTool(): AgentTool<typeof schema> {
           const warnings: string[] = [];
           const formatTarget = target.format;
           let columnWidthFormat: any | null = null;
-          let columnWidthScale: number | null = null;
 
           // Font properties
           if (params.bold !== undefined) {
@@ -169,29 +174,18 @@ export function createFormatCellsTool(): AgentTool<typeof schema> {
           if (params.column_width !== undefined) {
             const columnTarget = target.getEntireColumn();
 
-            // Column width in Office.js uses points. Convert from Excel's character width.
-            // Use sheet.standardWidth (chars) and a temporary standard-width measurement (points).
-            if (typeof sheet.standardWidth === "number" && sheet.standardWidth > 0) {
-              columnTarget.format.useStandardWidth = true;
-              columnTarget.format.load("columnWidth");
-              await context.sync();
-
-              const standardPoints = columnTarget.format.columnWidth;
-              if (typeof standardPoints === "number" && standardPoints > 0) {
-                columnWidthScale = standardPoints / sheet.standardWidth;
-              } else {
-                warnings.push("Could not determine standard column width in points; applying raw value.");
-              }
-            } else {
-              warnings.push("Sheet standard width unavailable; applying raw value.");
+            if (params.font_name && params.font_name !== DEFAULT_FONT_NAME) {
+              warnings.push(
+                `Column width assumes ${DEFAULT_FONT_NAME} ${DEFAULT_FONT_SIZE}; using ${params.font_name} may differ.`
+              );
+            }
+            if (params.font_size && params.font_size !== DEFAULT_FONT_SIZE) {
+              warnings.push(
+                `Column width assumes ${DEFAULT_FONT_NAME} ${DEFAULT_FONT_SIZE}; using ${params.font_size}pt may differ.`
+              );
             }
 
-            if (columnWidthScale) {
-              columnTarget.format.columnWidth = params.column_width * columnWidthScale;
-            } else {
-              columnTarget.format.columnWidth = params.column_width;
-            }
-
+            columnTarget.format.columnWidth = params.column_width * POINTS_PER_CHAR_ARIAL_10;
             columnTarget.format.load("columnWidth");
             columnWidthFormat = columnTarget.format;
             applied.push(`col width ${params.column_width}`);
@@ -267,7 +261,7 @@ export function createFormatCellsTool(): AgentTool<typeof schema> {
           if (columnWidthFormat) {
             const actualPoints = columnWidthFormat.columnWidth;
             if (typeof actualPoints === "number") {
-              const actualChars = columnWidthScale ? actualPoints / columnWidthScale : actualPoints;
+              const actualChars = actualPoints / POINTS_PER_CHAR_ARIAL_10;
               const delta = Math.abs(actualChars - params.column_width!);
               if (delta > 0.1) {
                 warnings.push(
