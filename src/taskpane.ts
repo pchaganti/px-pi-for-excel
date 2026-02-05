@@ -285,6 +285,12 @@ async function init(): Promise<void> {
   const { activate: activateSnake } = await import("./extensions/snake.js");
   await loadExtension(extensionAPI, activateSnake);
 
+  // ── Listen for provider changes (from /login command) ─────────
+  document.addEventListener("pi:providers-changed", async () => {
+    const updated = await providerKeys.list();
+    setActiveProviders(new Set(updated));
+  });
+
   // ── Keyboard shortcuts ──────────────────────────────────────────
   const THINKING_LEVELS = ["off", "low", "medium", "high"] as const;
   const THINKING_COLORS: Record<string, string> = {

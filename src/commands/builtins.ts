@@ -36,14 +36,21 @@ export function registerBuiltins(agent: Agent): void {
     },
     {
       name: "settings",
-      description: "Open settings",
+      description: "Manage API key for current provider",
       source: "builtin",
       execute: () => {
-        // Open the API key dialog for the current provider
         import("@mariozechner/pi-web-ui").then(({ ApiKeyPromptDialog }) => {
           const provider = agent.state.model?.provider || "anthropic";
           ApiKeyPromptDialog.prompt(provider);
         });
+      },
+    },
+    {
+      name: "login",
+      description: "Add or change provider API keys",
+      source: "builtin",
+      execute: async () => {
+        await showProviderPicker(agent);
       },
     },
     {
@@ -196,6 +203,73 @@ function showToast(message: string): void {
   toast.textContent = message;
   toast.classList.add("visible");
   setTimeout(() => toast!.classList.remove("visible"), 2000);
+}
+
+const PROVIDERS: Record<string, string> = {
+  anthropic:        "Anthropic",
+  openai:           "OpenAI",
+  "google":         "Google Gemini",
+  "amazon-bedrock": "Amazon Bedrock",
+  deepseek:         "DeepSeek",
+  mistral:          "Mistral",
+  groq:             "Groq",
+  xai:              "xAI / Grok",
+};
+
+async function showProviderPicker(agent: Agent): Promise<void> {
+  let overlay = document.getElementById("pi-login-overlay");
+  if (overlay) { overlay.remove(); return; }
+
+  const storage = getAppStorage();
+  const configuredKeys = await storage.providerKeys.list();
+  const configuredSet = new Set(configuredKeys);
+
+  overlay = document.createElement("div");
+  overlay.id = "pi-login-overlay";
+  overlay.className = "pi-welcome-overlay";
+
+  overlay.innerHTML = `
+    <div class="pi-welcome-card" style="text-align: left; max-width: 340px;">
+      <h2 style="font-size: 16px; font-weight: 600; margin: 0 0 4px; font-family: var(--font-sans);">Providers</h2>
+      <p style="font-size: 12px; color: var(--muted-foreground); margin: 0 0 12px; font-family: var(--font-sans);">Add API keys to use models from each provider.</p>
+      <div class="pi-login-providers" style="display: flex; flex-direction: column; gap: 4px;"></div>
+    </div>
+  `;
+
+  const list = overlay.querySelector(".pi-login-providers")!;
+
+  for (const [id, label] of Object.entries(PROVIDERS)) {
+    const isActive = configuredSet.has(id);
+    const row = document.createElement("button");
+    row.className = "pi-welcome-provider";
+    row.style.cssText = "display: flex; justify-content: space-between; align-items: center;";
+    row.innerHTML = `
+      <span style="font-size: 13px;">${label}</span>
+      <span style="font-size: 11px; color: ${isActive ? "var(--pi-green)" : "var(--muted-foreground)"}; font-family: var(--font-mono);">
+        ${isActive ? "✓ connected" : "add key"}
+      </span>
+    `;
+    row.addEventListener("click", async () => {
+      const { ApiKeyPromptDialog } = await import("@mariozechner/pi-web-ui");
+      const success = await ApiKeyPromptDialog.prompt(id);
+      if (success) {
+        // Update the row status
+        const status = row.querySelector("span:last-child")!;
+        status.textContent = "✓ connected";
+        (status as HTMLElement).style.color = "var(--pi-green)";
+        // Notify taskpane to refresh active providers
+        document.dispatchEvent(new CustomEvent("pi:providers-changed"));
+        showToast(`${label} connected`);
+      }
+    });
+    list.appendChild(row);
+  }
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay!.remove();
+  });
+
+  document.body.appendChild(overlay);
 }
 
 async function showResumeDialog(agent: Agent): Promise<void> {
