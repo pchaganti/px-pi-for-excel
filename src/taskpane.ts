@@ -346,10 +346,19 @@ async function init(): Promise<void> {
     }
     if (ev.type === "agent_end") {
       if (agent.state.error) {
-        showErrorBanner(`LLM error: ${agent.state.error}`);
+        const isAbort = _userAborted ||
+          /abort/i.test(agent.state.error) ||
+          /cancel/i.test(agent.state.error);
+        if (isAbort) {
+          clearErrorBanner();
+          updateHeader({ status: "ready", modelAlias: getModelAlias() });
+        } else {
+          showErrorBanner(`LLM error: ${agent.state.error}`);
+        }
       } else {
         clearErrorBanner();
       }
+      _userAborted = false;
     }
 
     // Empty state
@@ -374,6 +383,9 @@ async function init(): Promise<void> {
     setActiveProviders(new Set(updated));
   });
 
+  // ── Abort tracking ──────────────────────────────────────────────
+  let _userAborted = false;
+
   // ── Queue display ────────────────────────────────────────────────
   type QueuedItem = { type: "steer" | "follow-up"; text: string };
   const _queuedMessages: QueuedItem[] = [];
@@ -397,28 +409,27 @@ async function init(): Promise<void> {
     if (!container) {
       container = document.createElement("div");
       container.id = "pi-queue-display";
-      container.style.cssText = `
-        position: absolute; bottom: 100%; left: 0; right: 0;
-        padding: 6px 12px; z-index: 10;
-        font-family: var(--font-sans); font-size: 12px;
-        display: flex; flex-direction: column; gap: 3px;
-        background: oklch(0.97 0.005 100 / 0.85);
-        backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-        border-top: 1px solid oklch(0 0 0 / 0.06);
-      `;
-      // Insert above the message editor
-      const editor = document.querySelector("message-editor");
-      if (editor) {
-        (editor as HTMLElement).style.position = "relative";
-        editor.prepend(container);
-      } else {
-        document.body.appendChild(container);
-      }
+      // Append to body — we'll position it dynamically
+      document.body.appendChild(container);
     }
+    // Position above the message editor every update
+    const editor = document.querySelector("message-editor") as HTMLElement | null;
+    const editorTop = editor ? editor.getBoundingClientRect().top : window.innerHeight - 80;
+    container.style.cssText = `
+      position: fixed; left: 0; right: 0; z-index: 100;
+      bottom: ${window.innerHeight - editorTop}px;
+      padding: 5px 12px;
+      font-family: var(--font-sans); font-size: 12px;
+      display: flex; flex-direction: column; gap: 2px;
+      background: oklch(0.97 0.005 100 / 0.92);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      border-top: 1px solid oklch(0 0 0 / 0.06);
+      box-shadow: 0 -2px 8px oklch(0 0 0 / 0.04);
+    `;
     container.innerHTML = _queuedMessages.map(({ type, text }) => {
       const label = type === "steer" ? "Steering" : "Follow-up";
       const color = type === "steer" ? "oklch(0.55 0.15 250)" : "oklch(0.55 0.12 170)";
-      const truncated = text.length > 60 ? text.slice(0, 57) + "…" : text;
+      const truncated = text.length > 50 ? text.slice(0, 47) + "…" : text;
       return `<div style="display: flex; align-items: baseline; gap: 6px; line-height: 1.3;">
         <span style="font-size: 10px; font-weight: 600; color: ${color}; text-transform: uppercase; letter-spacing: 0.03em; flex-shrink: 0;">${label}</span>
         <span style="color: var(--muted-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${truncated}</span>
@@ -486,6 +497,7 @@ async function init(): Promise<void> {
     // ESC — abort (MessageEditor already handles this, but we add it globally too)
     if (e.key === "Escape" && isStreaming) {
       e.preventDefault();
+      _userAborted = true;
       agent.abort();
       return;
     }

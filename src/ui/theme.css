@@ -187,8 +187,7 @@ agent-interface > .flex.flex-col > .shrink-0 > .max-w-3xl {
   -webkit-backdrop-filter: var(--glass-blur);
 }
 #empty-state.hidden {
-  opacity: 0;
-  pointer-events: none;
+  display: none !important;
 }
 
 .empty-logo {
@@ -573,12 +572,16 @@ message-editor[isstreaming] textarea::placeholder {
    ABORT MESSAGE — friendlier wording
    ═══════════════════════════════════════════════════════════ */
 
-aborted-message span {
-  font-size: 0 !important;       /* hide original text */
+/* Replace all abort messages with friendly text */
+aborted-message span,
+assistant-message .text-destructive {
+  font-size: 0 !important;
   line-height: 0 !important;
+  color: transparent !important;
 }
-aborted-message span::after {
-  content: "Interrupted (ESC). Tell Pi what to do differently.";
+aborted-message span::after,
+assistant-message .text-destructive::after {
+  content: "Interrupted — tell Pi what to do differently.";
   font-size: 12.5px;
   line-height: 1.4;
   color: var(--muted-foreground);
