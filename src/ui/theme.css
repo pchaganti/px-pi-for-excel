@@ -334,6 +334,39 @@ message-editor .px-2.pb-2 > .flex.gap-2 {
 
 
 /* ═══════════════════════════════════════════════════════════
+   STEERING — keep textarea editable during streaming
+   ═══════════════════════════════════════════════════════════ */
+
+/* Don't visually dim the editor during streaming — user can steer */
+message-editor textarea {
+  opacity: 1 !important;
+}
+
+/* Placeholder hint changes during streaming */
+message-editor[isstreaming] textarea::placeholder {
+  content: "Steer (Enter) or queue follow-up (Alt+Enter)…";
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   ABORT MESSAGE — friendlier wording
+   ═══════════════════════════════════════════════════════════ */
+
+aborted-message span {
+  font-size: 0 !important;       /* hide original text */
+  line-height: 0 !important;
+}
+aborted-message span::after {
+  content: "Interrupted (ESC). Tell Pi what to do differently.";
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+  font-style: italic;
+  font-family: var(--font-sans);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
    STATUS BAR — context % + thinking level
    ═══════════════════════════════════════════════════════════ */
 

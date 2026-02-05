@@ -209,24 +209,94 @@ async function init(): Promise<void> {
     }
   });
 
-  // Shift+Tab cycles thinking level
+  // ── Keyboard shortcuts ──────────────────────────────────────────
   const THINKING_LEVELS = ["off", "low", "medium", "high"] as const;
+  const THINKING_COLORS: Record<string, string> = {
+    off: "#a0a0a0",       // grey
+    low: "#4488cc",       // blue
+    medium: "#22998a",    // teal
+    high: "#875f87",      // purple
+  };
+
+  // We capture on the document to intercept before MessageEditor's handler
   document.addEventListener("keydown", (e) => {
+    const textarea = document.querySelector("message-editor textarea") as HTMLTextAreaElement | null;
+    const isInEditor = textarea && (e.target === textarea || textarea.contains(e.target as Node));
+    const isStreaming = agent.state.isStreaming;
+
+    // ESC — abort (MessageEditor already handles this, but we add it globally too)
+    if (e.key === "Escape" && isStreaming) {
+      e.preventDefault();
+      agent.abort();
+      return;
+    }
+
+    // Shift+Tab — cycle thinking level
     if (e.shiftKey && e.key === "Tab") {
       e.preventDefault();
       const current = agent.state.thinkingLevel;
       const idx = THINKING_LEVELS.indexOf(current as any);
       const next = THINKING_LEVELS[(idx + 1) % THINKING_LEVELS.length];
       agent.setThinkingLevel(next);
-      // Force AgentInterface to re-render with new thinking level
       const iface = document.querySelector("agent-interface") as any;
       if (iface) iface.requestUpdate();
       updateStatusBar(agent);
+      flashThinkingLevel(next, THINKING_COLORS[next] || "#a0a0a0");
+      return;
     }
-  });
+
+    // Enter/Alt+Enter in textarea while streaming — steer or follow-up
+    if (isInEditor && e.key === "Enter" && !e.shiftKey && isStreaming) {
+      const text = textarea!.value.trim();
+      if (!text) return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation(); // prevent MessageEditor's handler
+
+      const msg = { role: "user" as const, content: [{ type: "text" as const, text }], timestamp: Date.now() };
+
+      if (e.altKey) {
+        // Alt+Enter → follow-up (queued for after agent finishes current turn)
+        agent.followUp(msg);
+      } else {
+        // Enter → steer (interrupts current turn)
+        agent.steer(msg);
+      }
+
+      // Clear the textarea
+      textarea!.value = "";
+      textarea!.dispatchEvent(new Event("input", { bubbles: true }));
+      return;
+    }
+
+    // Alt+Enter when NOT streaming — also queue follow-up for after next response
+    if (isInEditor && e.key === "Enter" && e.altKey && !isStreaming) {
+      const text = textarea!.value.trim();
+      if (!text) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const msg = { role: "user" as const, content: [{ type: "text" as const, text }], timestamp: Date.now() };
+      agent.followUp(msg);
+      textarea!.value = "";
+      textarea!.dispatchEvent(new Event("input", { bubbles: true }));
+      return;
+    }
+  }, true); // capture phase — fires before MessageEditor
 
   // Custom status bar — shows context % and thinking level
   injectStatusBar(agent);
+
+  // Dynamic placeholder — changes during streaming to hint at steer/follow-up
+  agent.subscribe((ev) => {
+    if (ev.type === "message_start" || ev.type === "message_end") {
+      const textarea = document.querySelector("message-editor textarea") as HTMLTextAreaElement | null;
+      if (textarea) {
+        textarea.placeholder = agent.state.isStreaming
+          ? "Steer (Enter) · Follow-up (⌥Enter)…"
+          : "Type a message…";
+      }
+    }
+  });
 
   // Make status bar thinking indicator clickable
   document.addEventListener("click", (e) => {
@@ -239,6 +309,7 @@ async function init(): Promise<void> {
       const iface = document.querySelector("agent-interface") as any;
       if (iface) iface.requestUpdate();
       updateStatusBar(agent);
+      flashThinkingLevel(next, THINKING_COLORS[next] || "#a0a0a0");
     }
   });
 
@@ -359,6 +430,48 @@ function updateStatusBar(agent: Agent, bar?: HTMLElement): void {
     <span class="pi-status-ctx">${pct}% / ${ctxLabel}</span>
     <span class="pi-status-thinking" title="Shift+Tab to cycle">${brainSvg} ${thinkingLevel}</span>
   `;
+}
+
+// ============================================================================
+// Thinking level flash — visual feedback on change
+// ============================================================================
+
+function flashThinkingLevel(level: string, color: string): void {
+  // Flash the status bar thinking indicator
+  const el = document.querySelector(".pi-status-thinking") as HTMLElement;
+  if (!el) return;
+
+  // Apply color + pulse animation
+  el.style.color = color;
+  el.style.background = `${color}18`; // 10% opacity fill
+  el.style.boxShadow = `0 0 8px ${color}40`;
+  el.style.transition = "none";
+
+  // Also flash a thin bar at the bottom of the input area
+  let flashBar = document.getElementById("pi-thinking-flash");
+  if (!flashBar) {
+    flashBar = document.createElement("div");
+    flashBar.id = "pi-thinking-flash";
+    flashBar.style.cssText = `
+      position: fixed; bottom: 0; left: 0; right: 0; height: 2px;
+      pointer-events: none; z-index: 100;
+      transition: opacity 0.6s ease-out;
+    `;
+    document.body.appendChild(flashBar);
+  }
+  flashBar.style.background = `linear-gradient(90deg, transparent, ${color}, transparent)`;
+  flashBar.style.opacity = "1";
+
+  // Fade out
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      el.style.transition = "color 0.8s ease, background 0.8s ease, box-shadow 0.8s ease";
+      el.style.color = "";
+      el.style.background = "";
+      el.style.boxShadow = "";
+      flashBar!.style.opacity = "0";
+    });
+  });
 }
 
 // ============================================================================
