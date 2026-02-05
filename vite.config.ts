@@ -114,7 +114,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         taskpane: "src/taskpane.html",
-        dialog: "src/dialog.html",
       },
       // Externalize Node.js-only packages that are never used in browser
       external: [
