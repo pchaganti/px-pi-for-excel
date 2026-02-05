@@ -467,21 +467,23 @@ message-editor .px-2.pb-2 > .flex.gap-2:last-child > button:last-child svg {
 
 .pi-toast {
   position: fixed;
-  bottom: 60px;
+  top: 52px;
   left: 50%;
-  transform: translateX(-50%) translateY(8px);
+  transform: translateX(-50%) translateY(-4px);
   z-index: 200;
-  padding: 8px 16px;
+  padding: 6px 14px;
   border-radius: 8px;
-  background: oklch(0.2 0 0 / 0.85);
+  background: oklch(0.18 0 0 / 0.88);
   color: white;
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: 12px;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 12px oklch(0 0 0 / 0.15);
   opacity: 0;
   transition: opacity 0.2s, transform 0.2s;
   pointer-events: none;
+  white-space: nowrap;
 }
 .pi-toast.visible {
   opacity: 1;

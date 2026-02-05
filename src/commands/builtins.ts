@@ -120,6 +120,62 @@ export function registerBuiltins(agent: Agent): void {
         await showResumeDialog(agent);
       },
     },
+    {
+      name: "compact",
+      description: "Summarize conversation to free context",
+      source: "builtin",
+      execute: async () => {
+        const msgs = agent.state.messages;
+        if (msgs.length < 4) {
+          showToast("Too few messages to compact");
+          return;
+        }
+        showToast("Compacting…");
+        try {
+          const { completeSimple } = await import("@mariozechner/pi-ai");
+          // Serialize conversation for summarization
+          const convo = msgs.map((m: any) => {
+            const role = m.role === "user" ? "User" : "Assistant";
+            const text = m.content
+              ?.filter((b: any) => b.type === "text")
+              .map((b: any) => b.text)
+              .join("\n") || "";
+            return `${role}: ${text}`;
+          }).join("\n\n");
+
+          const result = await completeSimple(agent.state.model!, {
+            systemPrompt: "You are a conversation summarizer. Summarize the following conversation concisely, preserving key decisions, facts, and context. Output ONLY the summary, no preamble.",
+            messages: [{
+              role: "user",
+              content: [{ type: "text", text: `Summarize this conversation:\n\n${convo}` }],
+              timestamp: Date.now(),
+            }],
+          });
+          const summary = result.content
+            ?.filter((b: any) => b.type === "text")
+            .map((b: any) => b.text)
+            .join("\n") || "Summary unavailable";
+
+          // Replace messages with a single summary + marker
+          agent.replaceMessages([{
+            role: "user",
+            content: [{ type: "text", text: "[This conversation was compacted]" }],
+            timestamp: Date.now(),
+          } as any, {
+            role: "assistant",
+            content: [{ type: "text", text: `**Session Summary (compacted)**\n\n${summary}` }],
+            timestamp: Date.now(),
+            stopReason: "end_turn",
+          } as any]);
+
+          const iface = document.querySelector("agent-interface") as any;
+          if (iface) iface.requestUpdate();
+          showToast(`Compacted ${msgs.length} messages → summary`);
+        } catch (e: any) {
+          showToast(`Compact failed: ${e.message}`);
+        }
+      },
+    },
   ];
 
   for (const cmd of builtins) {
