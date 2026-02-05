@@ -22,3 +22,5 @@ poc/.vite/
 
 # Lock files (noisy in diffs)
 package-lock.json
+*.html
+pi-session-*
