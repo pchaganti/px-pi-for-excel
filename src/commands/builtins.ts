@@ -283,6 +283,8 @@ function showShortcutsDialog(): void {
     ["⌥Enter", "Queue follow-up message"],
     ["/", "Open command menu"],
     ["↑↓", "Navigate command menu"],
+    ["F6", "Focus: Sheet ↔ Sidebar"],
+    ["⇧F6", "Focus: reverse direction"],
   ];
 
   let overlay = document.getElementById("pi-shortcuts-overlay");
