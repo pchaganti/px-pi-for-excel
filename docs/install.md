@@ -10,9 +10,9 @@ This guide is the **non-technical install** path:
 
 ## 1) Download the manifest
 
-Download **`manifest.prod.xml`** (production manifest) from the repo:
+Download **`manifest.prod.xml`** (production manifest):
 
-- https://raw.githubusercontent.com/tmustier/pi-for-excel/main/manifest.prod.xml
+- https://pi-for-excel.vercel.app/manifest.prod.xml
 
 > If the link 404s, the hosted build hasn’t been published yet.
 

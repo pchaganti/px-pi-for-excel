@@ -35,7 +35,9 @@ Generate the production manifest with the hosted base URL:
 ADDIN_BASE_URL="https://<project>.vercel.app" npm run manifest:prod
 ```
 
-This writes `manifest.prod.xml` in the repo root.
+This writes:
+- `manifest.prod.xml` (repo root)
+- `public/manifest.prod.xml` (so the hosted site can offer a one-click download at `/manifest.prod.xml`)
 
 ## Updates (automatic)
 

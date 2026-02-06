@@ -49,6 +49,7 @@ if (!parsed.hostname) {
 const repoRoot = path.resolve(process.cwd());
 const inPath = path.join(repoRoot, "manifest.xml");
 const outPath = path.join(repoRoot, process.env.OUT || "manifest.prod.xml");
+const publicOutPath = path.join(repoRoot, "public", "manifest.prod.xml");
 
 if (!fs.existsSync(inPath)) {
   fail(`Missing input manifest at ${inPath}`);
@@ -63,3 +64,8 @@ const replaced = xml.split(DEV_BASE_URL).join(baseUrl);
 
 fs.writeFileSync(outPath, replaced);
 console.log(`[pi-for-excel] Wrote ${outPath}`);
+
+// Also publish to public/ so the hosted site can offer a one-click download.
+fs.mkdirSync(path.dirname(publicOutPath), { recursive: true });
+fs.writeFileSync(publicOutPath, replaced);
+console.log(`[pi-for-excel] Wrote ${publicOutPath}`);
