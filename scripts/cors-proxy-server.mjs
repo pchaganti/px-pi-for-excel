@@ -123,6 +123,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
+    const startedAt = Date.now();
     const headers = buildOutboundHeaders(req.headers);
 
     const hasBody = req.method && !["GET", "HEAD"].includes(req.method);
@@ -136,6 +137,10 @@ const server = http.createServer(async (req, res) => {
       ...(body ? { duplex: "half" } : {}),
       redirect: "manual",
     });
+
+    // Log without query string to avoid leaking tokens
+    const safeTarget = `${targetUrl.origin}${targetUrl.pathname}`;
+    console.log(`[proxy] ${req.method || "GET"} ${safeTarget} -> ${upstream.status} (${Date.now() - startedAt}ms)`);
 
     res.statusCode = upstream.status;
 
@@ -169,6 +174,7 @@ const server = http.createServer(async (req, res) => {
     });
     nodeStream.pipe(res);
   } catch (err) {
+    console.warn(`[proxy] ${req.method || "GET"} ${targetUrl.origin}${targetUrl.pathname} -> ERROR (${err instanceof Error ? err.message : String(err)})`);
     res.statusCode = 502;
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.end(`Proxy error: ${err instanceof Error ? err.message : String(err)}`);
