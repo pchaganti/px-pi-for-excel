@@ -308,7 +308,7 @@ function splitRangeList(range: string): string[] {
     .filter(Boolean);
 }
 
-function resolveFormatTarget(context: any, ref: string): {
+function resolveFormatTarget(context: Excel.RequestContext, ref: string): {
   sheet: any;
   target: any;
   isMultiRange: boolean;

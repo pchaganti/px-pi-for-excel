@@ -86,7 +86,7 @@ export function createTraceDependenciesTool(): AgentTool<typeof schema> {
 }
 
 async function traceCell(
-  context: any,
+  context: Excel.RequestContext,
   cellRef: string,
   maxDepth: number,
   currentDepth: number,
