@@ -90,7 +90,7 @@ npm run sideload
 
 On first launch, a welcome overlay appears with provider login options:
 
-1. **OAuth** — click a provider (Anthropic, Google) to authenticate in your browser.
+1. **OAuth** — click a provider (e.g. Anthropic) to authenticate in your browser, then paste the authorization code back into the add-in when prompted.
 2. **API key** — paste a key directly for any supported provider.
 3. **Pi TUI credentials** — if you already use [Pi TUI](https://pi.dev), credentials from `~/.pi/agent/auth.json` are loaded automatically in dev mode.
 

@@ -38,6 +38,168 @@ export interface ProviderRowCallbacks {
   onConnected: (row: HTMLElement, id: string, label: string) => void;
 }
 
+class PromptCancelledError extends Error {
+  constructor() {
+    super("Prompt cancelled");
+  }
+}
+
+function normalizeAnthropicAuthorizationInput(input: string): string {
+  const value = input.trim();
+  if (!value) return value;
+
+  // Accept full redirect URL (or any URL with code/state query params)
+  try {
+    const url = new URL(value);
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    if (code) return state ? `${code}#${state}` : code;
+  } catch {
+    // ignore
+  }
+
+  // Accept query-string style pastes (code=...&state=...)
+  if (value.includes("code=")) {
+    try {
+      const params = new URLSearchParams(value.startsWith("?") ? value.slice(1) : value);
+      const code = params.get("code");
+      const state = params.get("state");
+      if (code) return state ? `${code}#${state}` : code;
+    } catch {
+      // ignore
+    }
+  }
+
+  // Accept whitespace-separated values (code state)
+  if (!value.includes("#")) {
+    const parts = value.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return `${parts[0]}#${parts[1]}`;
+  }
+
+  return value;
+}
+
+function normalizeApiKeyForProvider(
+  providerId: string,
+  raw: string,
+): { ok: true; key: string } | { ok: false; error: string } {
+  let key = raw.trim();
+  if (!key) return { ok: false, error: "API key is empty" };
+
+  // Common copy/paste format: "Bearer <token>"
+  if (/^bearer\s+/i.test(key)) {
+    key = key.replace(/^bearer\s+/i, "").trim();
+  }
+
+  if (providerId === "anthropic") {
+    // Prevent saving Anthropic OAuth *authorization code* (code#state) as an API key.
+    // OAuth access tokens are sk-ant-oat*, API keys are sk-ant-api*.
+    const looksLikeAuthCode = key.includes("#") && !key.includes("sk-ant-");
+    if (looksLikeAuthCode) {
+      return {
+        ok: false,
+        error:
+          "That looks like an OAuth authorization code (code#state). Use “Login with Anthropic” and paste it when prompted (don’t Save it as an API key).",
+      };
+    }
+  }
+
+  return { ok: true, key };
+}
+
+function promptForText(opts: {
+  title: string;
+  message: string;
+  placeholder?: string;
+  helperText?: string;
+  submitLabel?: string;
+}): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const existing = document.getElementById("pi-prompt-overlay");
+    existing?.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "pi-prompt-overlay";
+    overlay.className = "pi-welcome-overlay";
+    overlay.innerHTML = `
+      <div class="pi-welcome-card" style="text-align: left; max-width: 420px;">
+        <h2 class="pi-prompt-title" style="font-size: 16px; font-weight: 600; margin: 0 0 6px; font-family: var(--font-sans);"></h2>
+        <p class="pi-prompt-message" style="font-size: 12px; color: var(--muted-foreground); margin: 0 0 10px; font-family: var(--font-sans);"></p>
+        <p class="pi-prompt-helper" style="display:none; font-size: 11px; color: var(--muted-foreground); margin: 0 0 10px; font-family: var(--font-sans);"></p>
+        <input class="pi-prompt-input" type="text"
+          style="width: 100%; padding: 8px 10px; border: 1px solid oklch(0 0 0 / 0.10);
+          border-radius: 8px; font-family: var(--font-mono); font-size: 12px;
+          background: oklch(1 0 0 / 0.6); outline: none;"
+        />
+        <div style="display:flex; gap: 8px; margin-top: 12px;">
+          <button class="pi-prompt-cancel" style="flex:1; padding: 8px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08); background: oklch(0 0 0 / 0.03); cursor: pointer; font-family: var(--font-sans); font-size: 13px;">Cancel</button>
+          <button class="pi-prompt-ok" style="flex:1; padding: 8px; border-radius: 8px; border: none; background: var(--pi-green); color: white; cursor: pointer; font-family: var(--font-sans); font-size: 13px; font-weight: 600;">Continue</button>
+        </div>
+      </div>
+    `;
+
+    const titleEl = overlay.querySelector<HTMLElement>(".pi-prompt-title");
+    const msgEl = overlay.querySelector<HTMLElement>(".pi-prompt-message");
+    const helperEl = overlay.querySelector<HTMLElement>(".pi-prompt-helper");
+    const input = overlay.querySelector<HTMLInputElement>(".pi-prompt-input");
+    const cancelBtn = overlay.querySelector<HTMLButtonElement>(".pi-prompt-cancel");
+    const okBtn = overlay.querySelector<HTMLButtonElement>(".pi-prompt-ok");
+
+    if (!titleEl || !msgEl || !helperEl || !input || !cancelBtn || !okBtn) {
+      overlay.remove();
+      reject(new Error("Prompt UI failed to render"));
+      return;
+    }
+
+    titleEl.textContent = opts.title;
+    msgEl.textContent = opts.message;
+    if (opts.helperText) {
+      helperEl.textContent = opts.helperText;
+      helperEl.style.display = "block";
+    }
+    if (opts.placeholder) input.placeholder = opts.placeholder;
+    if (opts.submitLabel) okBtn.textContent = opts.submitLabel;
+
+    const cleanup = () => {
+      overlay.remove();
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+
+    const submit = () => {
+      const value = input.value.trim();
+      cleanup();
+      resolve(value);
+    };
+
+    const cancel = () => {
+      cleanup();
+      reject(new PromptCancelledError());
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cancel();
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submit();
+      }
+    };
+
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) cancel();
+    });
+
+    cancelBtn.addEventListener("click", cancel);
+    okBtn.addEventListener("click", submit);
+
+    document.addEventListener("keydown", onKeyDown, true);
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => input.focus());
+  });
+}
+
 /**
  * Build a provider login row with inline OAuth + API key.
  * Manages expand/collapse via the shared expandedRef.
@@ -53,6 +215,10 @@ export function buildProviderRow(
   const { id, label, oauth, desc } = provider;
   const { isActive, expandedRef, onConnected } = opts;
   const storage = getAppStorage();
+
+  const keyPlaceholder = id === "anthropic"
+    ? "sk-ant-api… or sk-ant-oat…"
+    : "Enter API key";
 
   const row = document.createElement("div");
   row.className = "pi-login-row";
@@ -82,7 +248,7 @@ export function buildProviderRow(
         </div>
       ` : ""}
       <div style="display: flex; gap: 6px;">
-        <input class="pi-login-key" type="password" placeholder="Enter API key"
+        <input class="pi-login-key" type="password" placeholder="${keyPlaceholder}"
           style="flex: 1; padding: 7px 10px; border: 1px solid oklch(0 0 0 / 0.10);
           border-radius: 8px; font-family: var(--font-mono); font-size: 12px;
           background: oklch(1 0 0 / 0.6); outline: none;"
@@ -127,6 +293,7 @@ export function buildProviderRow(
       e.stopPropagation();
       oauthBtn.textContent = "Opening login…";
       oauthBtn.style.opacity = "0.7";
+      errorEl.style.display = "none";
       try {
         const { getOAuthProvider } = await import("@mariozechner/pi-ai");
         if (!oauth) {
@@ -136,7 +303,25 @@ export function buildProviderRow(
         if (oauthProvider) {
           const cred = await oauthProvider.login({
             onAuth: (info) => { window.open(info.url, "_blank"); },
-            onPrompt: async (prompt) => window.prompt(prompt.message, prompt.placeholder || "") || "",
+            onPrompt: async (prompt) => {
+              const helperText = id === "anthropic"
+                ? "After completing login, copy the authorization string from the browser. You can paste the full URL, or a CODE#STATE value."
+                : undefined;
+
+              const value = await promptForText({
+                title: `Login with ${label}`,
+                message: prompt.message,
+                placeholder: prompt.placeholder || "",
+                helperText,
+                submitLabel: "Continue",
+              });
+
+              if (id === "anthropic") {
+                return normalizeAnthropicAuthorizationInput(value);
+              }
+
+              return value;
+            },
             onProgress: (msg) => { oauthBtn.textContent = msg; },
           });
           const apiKey = oauthProvider.getApiKey(cred);
@@ -148,6 +333,11 @@ export function buildProviderRow(
           expandedRef.current = null;
         }
       } catch (err: unknown) {
+        if (err instanceof PromptCancelledError) {
+          // User cancelled the prompt; leave UI unchanged.
+          return;
+        }
+
         const msg = getErrorMessage(err);
         const isLikelyCors =
           isCorsError(err) ||
@@ -168,8 +358,17 @@ export function buildProviderRow(
 
   // API key save
   saveBtn.addEventListener("click", async () => {
-    const key = keyInput.value.trim();
-    if (!key) return;
+    const rawKey = keyInput.value.trim();
+    if (!rawKey) return;
+
+    const normalized = normalizeApiKeyForProvider(id, rawKey);
+    if (!normalized.ok) {
+      errorEl.textContent = normalized.error;
+      errorEl.style.display = "block";
+      return;
+    }
+
+    const key = normalized.key;
     saveBtn.textContent = "Testing…";
     saveBtn.style.opacity = "0.7";
     errorEl.style.display = "none";
