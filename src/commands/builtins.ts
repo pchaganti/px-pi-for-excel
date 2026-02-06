@@ -5,8 +5,6 @@
 import type {
   AssistantMessage,
   StopReason,
-  TextContent,
-  ToolCall,
   Usage,
   UserMessage,
 } from "@mariozechner/pi-ai";
@@ -22,6 +20,7 @@ import {
 import { commandRegistry, type SlashCommand } from "./types.js";
 import { showToast } from "../ui/toast.js";
 import { getErrorMessage } from "../utils/errors.js";
+import { extractTextBlocks, summarizeContentForTranscript } from "../utils/content.js";
 import type { PiSidebar } from "../ui/pi-sidebar.js";
 
 type TranscriptEntry = {
@@ -45,27 +44,6 @@ const ZERO_USAGE: Usage = {
     total: 0,
   },
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isTextBlock(block: unknown): block is TextContent {
-  return (
-    isRecord(block) &&
-    block.type === "text" &&
-    typeof (block as { text?: unknown }).text === "string"
-  );
-}
-
-function isToolCallBlock(block: unknown): block is ToolCall {
-  return (
-    isRecord(block) &&
-    block.type === "toolCall" &&
-    typeof (block as { name?: unknown }).name === "string" &&
-    isRecord((block as { arguments?: unknown }).arguments)
-  );
-}
 
 /** Register all built-in commands. Call once after agent is created. */
 export function registerBuiltins(agent: Agent): void {
@@ -272,11 +250,7 @@ export function registerBuiltins(agent: Agent): void {
             ],
           });
 
-          const summary =
-            result.content
-              .filter(isTextBlock)
-              .map((b) => b.text)
-              .join("\n") || "Summary unavailable";
+          const summary = extractTextBlocks(result.content) || "Summary unavailable";
 
           const now = Date.now();
           const model = agent.state.model;
@@ -322,64 +296,6 @@ export function registerBuiltins(agent: Agent): void {
 }
 
 // ── Helpers ────────────────────────────────────────────────
-
-function extractTextBlocks(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter(isTextBlock)
-    .map((b) => b.text)
-    .join("\n");
-}
-
-function summarizeContentForTranscript(
-  content: unknown,
-  limits = { toolInput: 200, toolResult: 500 },
-): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-
-  return content
-    .map((b) => {
-      if (isTextBlock(b)) return b.text;
-
-      // pi-ai tool calls
-      if (isToolCallBlock(b)) {
-        const rawArgs = JSON.stringify(b.arguments);
-        const snippet =
-          rawArgs.length > limits.toolInput
-            ? rawArgs.slice(0, limits.toolInput)
-            : rawArgs;
-        return `[toolCall: ${b.name}(${snippet})]`;
-      }
-
-      // Backwards compatibility: Anthropic-style tool blocks
-      if (isRecord(b) && b.type === "tool_use") {
-        const name = typeof b.name === "string" ? b.name : "tool";
-        const input = JSON.stringify(b.input);
-        const snippet =
-          input.length > limits.toolInput ? input.slice(0, limits.toolInput) : input;
-        return `[tool_use: ${name}(${snippet})]`;
-      }
-
-      if (isRecord(b) && b.type === "tool_result") {
-        const raw =
-          typeof b.content === "string" ? b.content : JSON.stringify(b.content);
-        const snippet =
-          raw.length > limits.toolResult
-            ? raw.slice(0, limits.toolResult)
-            : raw;
-        return `[tool_result: ${snippet}]`;
-      }
-
-      if (isRecord(b) && typeof b.type === "string") {
-        return `[${b.type}]`;
-      }
-
-      return "[block]";
-    })
-    .join("\n");
-}
 
 function getLastAssistantText(messages: AgentMessage[]): string | null {
   for (let i = messages.length - 1; i >= 0; i--) {

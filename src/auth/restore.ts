@@ -12,6 +12,7 @@ import type { ProviderKeysStore } from "@mariozechner/pi-web-ui";
 import { originalFetch } from "./cors-proxy.js";
 import { mapToApiProvider, BROWSER_OAUTH_PROVIDERS } from "./provider-map.js";
 import { getErrorMessage } from "../utils/errors.js";
+import { isRecord } from "../utils/type-guards.js";
 
 type GetOAuthProvider = (id: string) => OAuthProviderInterface | undefined;
 
@@ -23,10 +24,6 @@ type ApiKeyCredential = {
 type OAuthCredential = OAuthCredentials & {
   type: "oauth";
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 function isApiKeyCredential(value: unknown): value is ApiKeyCredential {
   return (

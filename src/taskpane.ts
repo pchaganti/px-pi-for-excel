@@ -10,7 +10,7 @@ import "./boot.js";
 
 import { html, render } from "lit";
 import { Agent, type AgentMessage, type ThinkingLevel } from "@mariozechner/pi-agent-core";
-import { getModel, getModels, supportsXhigh, type Api, type Model, type TextContent } from "@mariozechner/pi-ai";
+import { getModel, getModels, supportsXhigh, type Api, type Model } from "@mariozechner/pi-ai";
 import {
   ApiKeyPromptDialog,
   ModelSelector,
@@ -28,6 +28,7 @@ import { readSelectionContext } from "./context/selection.js";
 import { ChangeTracker } from "./context/change-tracker.js";
 import { initAppStorage } from "./storage/init-app-storage.js";
 import { getErrorMessage } from "./utils/errors.js";
+import { extractTextFromContent } from "./utils/content.js";
 
 // UI components
 import { headerStyles } from "./ui/header.js";
@@ -318,20 +319,6 @@ function isLikelyCorsErrorMessage(msg: string): boolean {
   if (m.includes("cors requests are not allowed")) return true;
 
   return false;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isTextBlock(block: unknown): block is TextContent {
-  return isRecord(block) && block.type === "text" && typeof block.text === "string";
-}
-
-function extractTextFromContent(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content.filter(isTextBlock).map((b) => b.text).join("");
 }
 
 render(renderLoading(), loadingRoot);
