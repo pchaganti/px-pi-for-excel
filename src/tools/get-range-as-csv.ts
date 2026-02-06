@@ -69,7 +69,7 @@ export function createGetRangeAsCsvTool(): AgentTool<typeof schema> {
   };
 }
 
-function formatCsv(values: any[][]): string {
+function formatCsv(values: unknown[][]): string {
   if (!values || values.length === 0) return "";
 
   return values
@@ -77,7 +77,7 @@ function formatCsv(values: any[][]): string {
     .join("\n");
 }
 
-function toCsvField(value: any): string {
+function toCsvField(value: unknown): string {
   if (value === null || value === undefined) return "";
   let str = typeof value === "string" ? value : String(value);
   if (/[",\n\r]/.test(str)) {

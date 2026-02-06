@@ -9,10 +9,10 @@ import { colToLetter, parseCell } from "../excel/helpers.js";
  * Format a 2D array as a markdown table.
  * Uses the first row as header.
  */
-export function formatAsMarkdownTable(values: any[][]): string {
+export function formatAsMarkdownTable(values: unknown[][]): string {
   if (!values || values.length === 0) return "(empty)";
 
-  const stringify = (v: any): string => {
+  const stringify = (v: unknown): string => {
     if (v === null || v === undefined || v === "") return "";
     if (typeof v === "number") {
       // Avoid scientific notation for readability
@@ -47,7 +47,7 @@ export function formatAsMarkdownTable(values: any[][]): string {
  * @param formulas - 2D array from Range.formulas
  * @param startAddress - top-left cell of the range (e.g. "A1")
  */
-export function extractFormulas(formulas: any[][], startAddress: string): string[] {
+export function extractFormulas(formulas: unknown[][], startAddress: string): string[] {
   const result: string[] = [];
   const start = parseCell(startAddress);
 
@@ -68,7 +68,7 @@ export function extractFormulas(formulas: any[][], startAddress: string): string
  * Returns cell addresses and error types.
  */
 export function findErrors(
-  values: any[][],
+  values: unknown[][],
   startAddress: string,
 ): { address: string; error: string; formula?: string }[] {
   const errors: { address: string; error: string; formula?: string }[] = [];
@@ -91,7 +91,7 @@ export function findErrors(
 /**
  * Count non-empty cells in a 2D array.
  */
-export function countNonEmpty(values: any[][]): number {
+export function countNonEmpty(values: unknown[][]): number {
   let count = 0;
   for (const row of values) {
     for (const v of row) {
