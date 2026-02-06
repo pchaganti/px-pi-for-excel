@@ -183,16 +183,21 @@ The Vite dev server proxies API calls to LLM providers, stripping browser header
 - [x] Keyboard shortcuts (Escape, Shift+Tab, Ctrl+O)
 
 ### Up next
-- [ ] Agent interface redesign (#14) — tool tiers, progressive disclosure, dynamic conventions
-- [ ] Header bar UX (#12) — session switcher, workbook indicator
-- [ ] Welcome copy and example prompts (#11)
-- [ ] Extension API build-out (#13) — dynamic loading, tool registration, sandboxing
-- [ ] Semantic navigation — `find_by_label` (#7), `get_sheet_summary` (#8)
+- [ ] Agent interface redesign ([#14](https://github.com/tmustier/pi-for-excel/issues/14)) — tool tiers, progressive disclosure, dynamic conventions
+- [ ] Spreadsheet conventions ([#1](https://github.com/tmustier/pi-for-excel/issues/1)) — where to store/expose color coding, number formats, heading styles
+- [ ] Refactor taskpane.ts ([#10](https://github.com/tmustier/pi-for-excel/issues/10)) — split 900-line entry point into modules
+- [ ] Header bar UX ([#12](https://github.com/tmustier/pi-for-excel/issues/12)) — session switcher, workbook indicator
+- [ ] Welcome copy and example prompts ([#11](https://github.com/tmustier/pi-for-excel/issues/11))
+- [ ] Change approval UI + clickable cell citations ([#6](https://github.com/tmustier/pi-for-excel/issues/6))
+- [ ] Extension API build-out ([#13](https://github.com/tmustier/pi-for-excel/issues/13)) — dynamic loading, tool registration, sandboxing
+- [ ] Semantic navigation — `find_by_label` ([#7](https://github.com/tmustier/pi-for-excel/issues/7)), `get_sheet_summary` ([#8](https://github.com/tmustier/pi-for-excel/issues/8))
+- [ ] Comment support — read/write cell comments ([#2](https://github.com/tmustier/pi-for-excel/issues/2))
 
 ### Future
+- [ ] Production CORS solution ([#4](https://github.com/tmustier/pi-for-excel/issues/4)) — service worker or hosted relay
+- [ ] Tmux tool via local bridge ([#3](https://github.com/tmustier/pi-for-excel/issues/3)) — terminal access from the add-in
 - [ ] Python code execution via Pyodide
 - [ ] SpreadsheetBench evaluation (target >43%)
-- [ ] Production CORS solution (service worker or hosted relay)
 - [ ] Per-workbook instructions (like AGENTS.md)
 - [ ] Chart creation and modification
 - [ ] Named range awareness in formulas
