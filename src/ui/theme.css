@@ -358,6 +358,11 @@ pi-working-indicator {
   flex-shrink: 0;
   padding: 6px 10px;
   border-top: 1px solid oklch(0 0 0 / 0.06);
+  position: relative;
+  z-index: 10;
+  background: oklch(0.98 0.002 90 / 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 
@@ -369,12 +374,11 @@ pi-working-indicator {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 4px 2px;
+  padding: 5px 4px 3px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11.5px;
   letter-spacing: 0.01em;
   color: var(--muted-foreground);
-  opacity: 0.75;
 }
 
 /* Model picker — left side */
@@ -389,15 +393,17 @@ pi-working-indicator {
   margin: -2px 0;
   border-radius: 5px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--muted-foreground);
-  transition: background 0.15s, color 0.15s;
+  font-size: 11.5px;
+  color: var(--foreground);
+  opacity: 0.7;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
   min-width: 0;
   overflow: hidden;
 }
 .pi-status-model:hover {
   background: var(--pi-green-lighter);
   color: var(--foreground);
+  opacity: 1;
 }
 .pi-status-model__mark {
   font-family: 'DM Sans', serif;

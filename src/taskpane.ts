@@ -605,7 +605,11 @@ async function init(): Promise<void> {
       if (supportsXhigh(model)) levels.push("xhigh");
       return levels;
     }
-    if (provider === "anthropic") return ["off", "low", "medium", "high"];
+    if (provider === "anthropic") {
+      const levels = ["off", "low", "medium", "high"];
+      if (supportsXhigh(model)) levels.push("xhigh");
+      return levels;
+    }
     return ["off", "low", "medium", "high"];
   }
 
@@ -651,7 +655,7 @@ async function init(): Promise<void> {
     if ((e.ctrlKey || e.metaKey) && e.key === "o") {
       e.preventDefault();
       const collapsed = document.body.classList.toggle("pi-hide-internals");
-      showToast(collapsed ? "Internals collapsed (⌃O)" : "Internals expanded (⌃O)", 1500);
+      showToast(collapsed ? "Details hidden (⌃O)" : "Details shown (⌃O)", 1500);
       return;
     }
 

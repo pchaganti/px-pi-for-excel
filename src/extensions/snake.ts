@@ -125,7 +125,7 @@ export function activate(api: ExcelExtensionAPI) {
       }
 
       const keyHandler = (e: KeyboardEvent) => {
-        if (e.key === "Escape") { cleanup(); api.widget.dismiss(); return; }
+        if (e.key === "Escape") { e.stopPropagation(); e.preventDefault(); cleanup(); api.widget.dismiss(); return; }
         if (e.key === "r" || e.key === "R") {
           if (gameOver) {
             snake = [{ x: 11, y: 6 }, { x: 10, y: 6 }, { x: 9, y: 6 }];
@@ -140,6 +140,7 @@ export function activate(api: ExcelExtensionAPI) {
         const d = map[e.key];
         if (d) {
           e.preventDefault();
+          e.stopPropagation();
           const opp: Record<Dir, Dir> = { up: "down", down: "up", left: "right", right: "left" };
           if (d !== opp[dir]) nextDir = d;
         }
