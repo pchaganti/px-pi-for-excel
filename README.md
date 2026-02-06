@@ -1,6 +1,6 @@
 # Pi for Excel
 
-An open-source, multi-model AI sidebar add-in for Microsoft Excel — powered by [Pi](https://github.com/mariozechner/pi-coding-agent).
+An open-source, multi-model AI sidebar add-in for Microsoft Excel — powered by [Pi](https://pi.dev).
 
 **Bring your own key. Free. Open source.**
 
@@ -88,7 +88,7 @@ On first launch, a welcome overlay appears with provider login options:
 
 1. **OAuth** — click a provider (Anthropic, Google) to authenticate in your browser.
 2. **API key** — paste a key directly for any supported provider.
-3. **Pi TUI credentials** — if you already use [Pi TUI](https://github.com/mariozechner/pi-coding-agent), credentials from `~/.pi/agent/auth.json` are loaded automatically in dev mode.
+3. **Pi TUI credentials** — if you already use [Pi TUI](https://pi.dev), credentials from `~/.pi/agent/auth.json` are loaded automatically in dev mode.
 
 You can change providers later with the `/login` command or by clicking the model name in the status bar.
 
