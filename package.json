@@ -13,7 +13,8 @@
     "lint:fix": "eslint \"*.ts\" \"src/**/*.ts\" \"tests/**/*.ts\" --fix",
     "test:models": "node --test --experimental-strip-types tests/model-ordering.test.ts",
     "validate": "npx office-addin-manifest validate manifest.xml",
-    "sideload": "npx office-addin-debugging start manifest.xml desktop --app excel"
+    "sideload": "npx office-addin-debugging start manifest.xml desktop --app excel",
+    "prepare": "node scripts/install-githooks.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",

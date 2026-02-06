@@ -21,3 +21,7 @@ Notes for agents working in this repo:
 Verification helpers:
 - `npm run typecheck`
 - `npm run lint`
+
+Pre-commit hook:
+- Runs both checks automatically (see `.githooks/pre-commit`, installed via `npm install`).
+- Bypass when needed: `git commit --no-verify`
