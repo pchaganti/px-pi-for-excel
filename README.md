@@ -38,7 +38,7 @@ Existing AI add-ins for Excel are closed-source, locked to a single model, and c
 - **Write verification** — automatically checks formula results after writing
 - **Slash commands** — type `/` to browse all available commands with fuzzy search
 - **Extensions** — modular extension system with slash commands and inline widget UI (e.g., `/snake`)
-- **Keyboard shortcuts** — `Escape` to interrupt, `Shift+Tab` to cycle thinking depth (incl. **max** on supported models like Opus 4.6), `Ctrl+O` to hide/show thinking + tool details
+- **Keyboard shortcuts** — `Escape` to interrupt, `Shift+Tab` to cycle thinking depth (incl. **max** / `xhigh` effort on Opus 4.6+), `Ctrl+O` to hide/show thinking + tool details
 - **Working indicator** — rotating whimsical messages and feature discovery hints while the model is streaming
 - **Pi-compatible messages** — conversations use the same `AgentMessage` format as Pi TUI. Session storage differs (IndexedDB vs JSONL), but the message layer is shared — future import/export is straightforward.
 
@@ -106,7 +106,7 @@ Type `/` in the message input to see all commands:
 | `/resume` | Resume a previous session |
 | `/name <title>` | Rename the current session |
 | `/model` | Switch LLM model |
-| `/default-models` | Set preferred models per provider |
+| `/default-models` | Default model presets (currently opens the model selector) |
 | `/login` | Add or change API keys / OAuth |
 | `/settings` | Open settings dialog |
 | `/shortcuts` | Show keyboard shortcuts |
@@ -129,29 +129,44 @@ Type `/` in the message input to see all commands:
 
 ```
 src/
-├── taskpane.ts            # Entry — mounts sidebar, wires agent, status bar
-├── boot.ts                # Lit class field fix + CSS imports
-├── excel/helpers.ts       # Office.js wrappers + edge-case guards
-├── auth/                  # CORS proxy, credential restore, provider mapping
-├── tools/                 # 13 Excel tools (read, write, search, format, etc.)
-├── context/               # Blueprint, selection auto-read, change tracker
-├── prompt/system-prompt.ts # Model-agnostic system prompt builder
-├── commands/              # Slash command registry, builtins, extension API
-│   ├── types.ts           # Command registry + types
-│   ├── builtins.ts        # Built-in slash commands
-│   ├── command-menu.ts    # Slash menu rendering
-│   └── extension-api.ts   # Extension API (overlay, widget, toast, events)
-├── extensions/            # Extension modules
-│   └── snake.ts           # Snake game (inline widget)
-├── ui/                    # Sidebar UI components (Lit + CSS)
-│   ├── pi-sidebar.ts      # Main layout (messages, input, widget slot)
-│   ├── pi-input.ts        # Chat input with auto-grow + placeholder rotation
-│   ├── working-indicator.ts # Streaming status with rotating messages
-│   ├── theme.css          # Light theme, glass effects, component styles
-│   ├── provider-login.ts  # OAuth + API key login rows
-│   ├── toast.ts           # Toast notifications
-│   └── loading.ts         # Loading spinner + error banner
-└── utils/format.ts        # Markdown tables, token truncation
+├── taskpane.ts              # Thin entrypoint (boot import + tool renderers + bootstrap)
+├── boot.ts                  # CSS imports + Lit compat patch install
+├── compat/                  # Runtime monkey patches / shims
+│   ├── lit-class-field-shadowing.ts
+│   └── model-selector-patch.ts
+├── taskpane/                # Taskpane wiring modules
+│   ├── bootstrap.ts         # Office.onReady + fallback, styles, global patches
+│   ├── init.ts              # Agent + sidebar wiring
+│   ├── sessions.ts          # IndexedDB session persistence
+│   ├── queue-display.ts     # Steering/follow-up queue UI
+│   ├── keyboard-shortcuts.ts
+│   ├── status-bar.ts
+│   ├── welcome-login.ts
+│   ├── default-model.ts
+│   └── context-injection.ts
+├── excel/helpers.ts         # Office.js wrappers + edge-case guards
+├── auth/                    # CORS proxy, credential restore, provider mapping
+├── tools/                   # Excel tools (read, write, search, format, etc.)
+├── context/                 # Blueprint, selection auto-read, change tracker
+├── prompt/system-prompt.ts  # Model-agnostic system prompt builder
+├── commands/                # Slash command registry + extensions
+│   ├── types.ts             # Command registry + types
+│   ├── command-menu.ts      # Slash menu rendering
+│   ├── builtins.ts          # Public shim
+│   ├── builtins/            # Builtins split by domain (model/settings/session/export/etc.)
+│   └── extension-api.ts     # Extension API (overlay, widget, toast, events)
+├── extensions/              # Extension modules
+│   └── snake.ts             # Snake game (inline widget)
+├── ui/                      # Sidebar UI components (Lit + CSS)
+│   ├── pi-sidebar.ts
+│   ├── pi-input.ts
+│   ├── working-indicator.ts
+│   ├── tool-renderers.ts    # Render Excel tool output as markdown + collapsible sections
+│   ├── theme.css
+│   ├── provider-login.ts
+│   ├── toast.ts
+│   └── loading.ts
+└── utils/                   # small shared helpers (content/type guards/errors/format)
 ```
 
 The agent loop runs client-side in Excel's webview (WebView2 on Windows, WKWebView on Mac). Tool calls execute locally via Office.js — no server round-trips for Excel operations.
@@ -205,11 +220,11 @@ API-key based providers often work without a proxy; OAuth-based logins typically
 - [x] Slash command system with fuzzy search
 - [x] Extension system with widget API
 - [x] Keyboard shortcuts (Escape, Shift+Tab, Ctrl+O)
+- [x] Maintainability refactor — modularized taskpane + slash command builtins
 
 ### Up next
 - [ ] Agent interface redesign ([#14](https://github.com/tmustier/pi-for-excel/issues/14)) — tool tiers, progressive disclosure, dynamic conventions
 - [ ] Spreadsheet conventions ([#1](https://github.com/tmustier/pi-for-excel/issues/1)) — where to store/expose color coding, number formats, heading styles
-- [ ] Refactor taskpane.ts ([#10](https://github.com/tmustier/pi-for-excel/issues/10)) — split 900-line entry point into modules
 - [ ] Header bar UX ([#12](https://github.com/tmustier/pi-for-excel/issues/12)) — session switcher, workbook indicator
 - [ ] Welcome copy and example prompts ([#11](https://github.com/tmustier/pi-for-excel/issues/11))
 - [ ] Change approval UI + clickable cell citations ([#6](https://github.com/tmustier/pi-for-excel/issues/6))
@@ -230,7 +245,7 @@ API-key based providers often work without a proxy; OAuth-based logins typically
 
 ## Prior Art & Credits
 
-- [Pi](https://github.com/badlogic/pi-mono) by [@badlogic](https://github.com/badlogic) (Mario Zechner) — the agent framework powering this project. Pi for Excel uses pi-agent-core, pi-ai, and pi-web-ui for the agent loop, LLM abstraction, and session storage.
+- [Pi](https://pi.dev) by [@badlogic](https://github.com/badlogic) (Mario Zechner) — the agent framework powering this project (source: https://github.com/badlogic/pi-mono). Pi for Excel uses pi-agent-core, pi-ai, and pi-web-ui for the agent loop, LLM abstraction, and session storage.
 - [whimsical.ts](https://github.com/mitsuhiko/agent-stuff/blob/main/pi-extensions/whimsical.ts) by [@mitsuhiko](https://github.com/mitsuhiko) (Armin Ronacher) — the rotating "Working…" messages are adapted from his Pi extension, rewritten for a spreadsheet/finance audience.
 - [Microsoft Copilot Agent Mode](https://techcommunity.microsoft.com/) — JS code gen + reflection, 57.2% SpreadsheetBench
 - [Univer](https://univer.ai) — Canvas-based spreadsheet runtime, 68.86% SpreadsheetBench (different architecture)
