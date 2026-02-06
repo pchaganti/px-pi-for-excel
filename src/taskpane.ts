@@ -9,8 +9,8 @@
 import "./boot.js";
 
 import { html, render } from "lit";
-import { Agent } from "@mariozechner/pi-agent-core";
-import { getModel, getModels, supportsXhigh } from "@mariozechner/pi-ai";
+import { Agent, type AgentMessage, type ThinkingLevel } from "@mariozechner/pi-agent-core";
+import { getModel, getModels, supportsXhigh, type Api, type Model, type TextContent } from "@mariozechner/pi-ai";
 import {
   ApiKeyPromptDialog,
   ModelSelector,
@@ -59,22 +59,42 @@ export function setActiveProviders(providers: Set<string>) {
   _activeProviders = providers;
 }
 
-const _origGetFilteredModels = (ModelSelector.prototype as any).getFilteredModels;
-(ModelSelector.prototype as any).getFilteredModels = function () {
-  const all: Array<{ provider: string; id: string; model: any }> = _origGetFilteredModels.call(this);
+type ModelSelectorItem = {
+  provider: string;
+  id: string;
+  model: Model<Api>;
+};
+
+type ModelSelectorPrivate = {
+  // Private method on ModelSelector — patched at runtime.
+  getFilteredModels: (this: ModelSelector) => ModelSelectorItem[];
+};
+
+const modelSelectorProto = ModelSelector.prototype as unknown as ModelSelectorPrivate;
+const _origGetFilteredModels = modelSelectorProto.getFilteredModels;
+
+modelSelectorProto.getFilteredModels = function (this: ModelSelector): ModelSelectorItem[] {
+  const all = _origGetFilteredModels.call(this);
   let filtered = all;
-  if (_activeProviders && _activeProviders.size > 0) {
-    filtered = all.filter((m: any) => _activeProviders!.has(m.provider));
+
+  const active = _activeProviders;
+  if (active && active.size > 0) {
+    filtered = all.filter((m) => active.has(m.provider));
   }
 
   const currentModel = this.currentModel;
 
-  const isCurrent = (x: any) =>
-    currentModel && x.model.id === currentModel.id && x.model.provider === currentModel.provider;
+  const isCurrent = (x: ModelSelectorItem): boolean =>
+    Boolean(
+      currentModel &&
+        x.model.id === currentModel.id &&
+        x.model.provider === currentModel.provider,
+    );
 
-  const keyOf = (x: any) => `${x.provider}:${x.id}`;
+  const keyOf = (x: { provider: string; id: string }): string => `${x.provider}:${x.id}`;
 
-  const compareModels = (a: any, b: any) => compareModelRefs(a, b);
+  const compareModels = (a: ModelSelectorItem, b: ModelSelectorItem): number =>
+    compareModelRefs(a, b);
 
   // "Latest for each" behavior:
   // - keep current model at the very top
@@ -84,11 +104,11 @@ const _origGetFilteredModels = (ModelSelector.prototype as any).getFilteredModel
   //   - Google: latest gemini-*-pro*
   // - then show the remaining models, sorted deterministically
 
-  const byProvider = new Map<string, any[]>();
+  const byProvider = new Map<string, ModelSelectorItem[]>();
   for (const m of filtered) {
-    const list = byProvider.get(m.provider) || [];
-    list.push(m);
-    byProvider.set(m.provider, list);
+    const list = byProvider.get(m.provider);
+    if (list) list.push(m);
+    else byProvider.set(m.provider, [m]);
   }
 
   const providers = Array.from(byProvider.keys()).sort((a, b) => {
@@ -98,51 +118,60 @@ const _origGetFilteredModels = (ModelSelector.prototype as any).getFilteredModel
     return a.localeCompare(b);
   });
 
-  const pickBest = (models: any[], filter?: (m: any) => boolean) => {
+  const pickBest = (
+    models: ModelSelectorItem[],
+    filter?: (m: ModelSelectorItem) => boolean,
+  ): ModelSelectorItem | null => {
     const list = filter ? models.filter(filter) : models;
     if (!list.length) return null;
-    return list
-      .slice()
-      .sort((a, b) => {
-        const aFam = familyPriority(a.provider, a.id);
-        const bFam = familyPriority(b.provider, b.id);
-        if (aFam !== bFam) return aFam - bFam;
-        const aRec = modelRecencyScore(a.id);
-        const bRec = modelRecencyScore(b.id);
-        if (aRec !== bRec) return bRec - aRec;
-        return a.id.localeCompare(b.id);
-      })[0];
+    return (
+      list
+        .slice()
+        .sort((a, b) => {
+          const aFam = familyPriority(a.provider, a.id);
+          const bFam = familyPriority(b.provider, b.id);
+          if (aFam !== bFam) return aFam - bFam;
+          const aRec = modelRecencyScore(a.id);
+          const bRec = modelRecencyScore(b.id);
+          if (aRec !== bRec) return bRec - aRec;
+          return a.id.localeCompare(b.id);
+        })[0] ?? null
+    );
   };
 
-  const pickBestByRecency = (models: any[], filter: (m: any) => boolean) => {
+  const pickBestByRecency = (
+    models: ModelSelectorItem[],
+    filter: (m: ModelSelectorItem) => boolean,
+  ): ModelSelectorItem | null => {
     const list = models.filter(filter);
     if (!list.length) return null;
-    return list
-      .slice()
-      .sort((a, b) => {
-        const aRec = modelRecencyScore(a.id);
-        const bRec = modelRecencyScore(b.id);
-        if (aRec !== bRec) return bRec - aRec;
-        return a.id.localeCompare(b.id);
-      })[0];
+    return (
+      list
+        .slice()
+        .sort((a, b) => {
+          const aRec = modelRecencyScore(a.id);
+          const bRec = modelRecencyScore(b.id);
+          if (aRec !== bRec) return bRec - aRec;
+          return a.id.localeCompare(b.id);
+        })[0] ?? null
+    );
   };
 
-  const featured: any[] = [];
+  const featured: ModelSelectorItem[] = [];
   for (const provider of providers) {
-    const models = byProvider.get(provider) || [];
-    if (!models.length) continue;
+    const models = byProvider.get(provider);
+    if (!models || models.length === 0) continue;
 
     // Provider-specific "latest" rules
     if (provider === "anthropic") {
-      const bestOpus = pickBestByRecency(models, (m) => String(m.id).startsWith("claude-opus-"));
-      const bestSonnet = pickBestByRecency(models, (m) => String(m.id).startsWith("claude-sonnet-"));
+      const bestOpus = pickBestByRecency(models, (m) => m.id.startsWith("claude-opus-"));
+      const bestSonnet = pickBestByRecency(models, (m) => m.id.startsWith("claude-sonnet-"));
 
       if (bestOpus && bestSonnet) {
         const opusVer = parseMajorMinor(bestOpus.id);
         const sonnetVer = parseMajorMinor(bestSonnet.id);
         if (sonnetVer > opusVer) {
-          featured.push(bestSonnet);
-          featured.push(bestOpus);
+          featured.push(bestSonnet, bestOpus);
           continue;
         }
         featured.push(bestOpus);
@@ -165,8 +194,11 @@ const _origGetFilteredModels = (ModelSelector.prototype as any).getFilteredModel
     }
 
     if (provider === "openai-codex") {
-      const bestCodex = pickBestByRecency(models, (m) => /^gpt-5\.(\d+)-codex$/.test(String(m.id)));
-      const bestGpt5 = pickBestByRecency(models, (m) => /^gpt-5\./.test(String(m.id)) && !/codex/.test(String(m.id)));
+      const bestCodex = pickBestByRecency(models, (m) => /^gpt-5\.(\d+)-codex$/.test(m.id));
+      const bestGpt5 = pickBestByRecency(
+        models,
+        (m) => /^gpt-5\./.test(m.id) && !/codex/.test(m.id),
+      );
 
       if (bestCodex) featured.push(bestCodex);
       if (bestGpt5) featured.push(bestGpt5);
@@ -178,7 +210,7 @@ const _origGetFilteredModels = (ModelSelector.prototype as any).getFilteredModel
     }
 
     if (provider === "google") {
-      const bestPro = pickBestByRecency(models, (m) => /^gemini-.*-pro/i.test(String(m.id)));
+      const bestPro = pickBestByRecency(models, (m) => /^gemini-.*-pro/i.test(m.id));
       if (bestPro) {
         featured.push(bestPro);
         continue;
@@ -194,9 +226,10 @@ const _origGetFilteredModels = (ModelSelector.prototype as any).getFilteredModel
     if (best) featured.push(best);
   }
 
-  const out: any[] = [];
+  const out: ModelSelectorItem[] = [];
   const used = new Set<string>();
-  const push = (m: any) => {
+
+  const push = (m: ModelSelectorItem) => {
     const k = keyOf(m);
     if (used.has(k)) return;
     used.add(k);
@@ -214,7 +247,7 @@ const _origGetFilteredModels = (ModelSelector.prototype as any).getFilteredModel
   }
 
   // Then the remaining models
-  const remaining = filtered.filter((m: any) => !used.has(keyOf(m)));
+  const remaining = filtered.filter((m) => !used.has(keyOf(m)));
   remaining.sort(compareModels);
   for (const m of remaining) push(m);
 
@@ -226,11 +259,17 @@ const _origGetFilteredModels = (ModelSelector.prototype as any).getFilteredModel
 // Globals
 // ============================================================================
 
-declare const Office: any;
+function getRequiredElement<T extends HTMLElement>(id: string): T {
+  const el = document.getElementById(id);
+  if (!el) {
+    throw new Error(`[pi] Missing required element #${id}`);
+  }
+  return el as T;
+}
 
-const appEl = document.getElementById("app")!;
-const loadingRoot = document.getElementById("loading-root")!;
-const errorRoot = document.getElementById("error-root")!;
+const appEl = getRequiredElement<HTMLElement>("app");
+const loadingRoot = getRequiredElement<HTMLElement>("loading-root");
+const errorRoot = getRequiredElement<HTMLElement>("error-root");
 
 const changeTracker = new ChangeTracker();
 
@@ -247,10 +286,11 @@ let _agent: Agent | null = null;
 let _sidebar: PiSidebar | null = null;
 
 function openModelSelector(): void {
-  if (!_agent) return;
-  ModelSelector.open(_agent.state.model, (model) => {
-    _agent!.setModel(model);
-    updateStatusBar(_agent!);
+  const agent = _agent;
+  if (!agent) return;
+  ModelSelector.open(agent.state.model, (model) => {
+    agent.setModel(model);
+    updateStatusBar(agent);
     requestAnimationFrame(() => _sidebar?.requestUpdate());
   });
 }
@@ -268,6 +308,20 @@ function isLikelyCorsErrorMessage(msg: string): boolean {
   return m.includes("failed to fetch") || m.includes("cors") || m.includes("cross-origin") || m.includes("networkerror");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isTextBlock(block: unknown): block is TextContent {
+  return isRecord(block) && block.type === "text" && typeof block.text === "string";
+}
+
+function extractTextFromContent(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content.filter(isTextBlock).map((b) => b.text).join("");
+}
+
 render(renderLoading(), loadingRoot);
 
 
@@ -279,7 +333,7 @@ installFetchInterceptor();
 
 let initialized = false;
 
-Office.onReady(async (info: { host: any; platform: any }) => {
+Office.onReady(async (info) => {
   console.log(`[pi] Office.js ready: host=${info.host}, platform=${info.platform}`);
   try {
     initialized = true;
@@ -444,35 +498,43 @@ async function init(): Promise<void> {
       if (!_sessionTitle && messages.length > 0) {
         const firstUser = messages.find((m) => m.role === "user");
         if (firstUser) {
-          const content = firstUser.content;
-          const text = typeof content === "string"
-            ? content
-            : Array.isArray(content)
-              ? content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("")
-              : "";
+          const text = extractTextFromContent(firstUser.content);
           _sessionTitle = text.slice(0, 80) || "Untitled";
         }
       }
       let preview = "";
       for (const m of messages) {
         if (m.role !== "user" && m.role !== "assistant") continue;
-        const content = m.content;
-        const text = typeof content === "string"
-          ? content
-          : Array.isArray(content)
-            ? content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("")
-            : "";
+        const text = extractTextFromContent(m.content);
         preview += text + "\n";
         if (preview.length > 2048) { preview = preview.slice(0, 2048); break; }
       }
-      let inputTokens = 0, outputTokens = 0, totalCost = 0;
+      let inputTokens = 0;
+      let outputTokens = 0;
+      let cacheReadTokens = 0;
+      let cacheWriteTokens = 0;
+      let totalTokens = 0;
+
+      let costInput = 0;
+      let costOutput = 0;
+      let costCacheRead = 0;
+      let costCacheWrite = 0;
+      let costTotal = 0;
+
       for (const m of messages) {
-        const u = (m as any).usage;
-        if (u) {
-          inputTokens += u.inputTokens || 0;
-          outputTokens += u.outputTokens || 0;
-          totalCost += u.totalCost || 0;
-        }
+        if (m.role !== "assistant") continue;
+        const u = m.usage;
+        inputTokens += u.input;
+        outputTokens += u.output;
+        cacheReadTokens += u.cacheRead;
+        cacheWriteTokens += u.cacheWrite;
+        totalTokens += u.totalTokens;
+
+        costInput += u.cost.input;
+        costOutput += u.cost.output;
+        costCacheRead += u.cost.cacheRead;
+        costCacheWrite += u.cost.cacheWrite;
+        costTotal += u.cost.total;
       }
       await sessions.saveSession(_sessionId, agent.state, {
         id: _sessionId,
@@ -483,10 +545,16 @@ async function init(): Promise<void> {
         usage: {
           input: inputTokens,
           output: outputTokens,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: inputTokens + outputTokens,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: totalCost },
+          cacheRead: cacheReadTokens,
+          cacheWrite: cacheWriteTokens,
+          totalTokens,
+          cost: {
+            input: costInput,
+            output: costOutput,
+            cacheRead: costCacheRead,
+            cacheWrite: costCacheWrite,
+            total: costTotal,
+          },
         },
         thinkingLevel: agent.state.thinkingLevel || "off",
         preview,
@@ -606,12 +674,7 @@ async function init(): Promise<void> {
   agent.subscribe((ev) => {
     if (_queuedMessages.length === 0) return;
     if (ev.type === "message_start" && ev.message.role === "user") {
-      const content = ev.message.content;
-      const msgText = typeof content === "string"
-        ? content
-        : Array.isArray(content)
-          ? content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("")
-          : "";
+      const msgText = extractTextFromContent(ev.message.content);
       const idx = _queuedMessages.findIndex((q) => q.text === msgText);
       if (idx !== -1) {
         _queuedMessages.splice(idx, 1);
@@ -622,25 +685,32 @@ async function init(): Promise<void> {
   });
 
   // ── Keyboard shortcuts ──
-  const THINKING_COLORS: Record<string, string> = {
-    off: "#a0a0a0", minimal: "#767676", low: "#4488cc",
-    medium: "#22998a", high: "#875f87", xhigh: "#8b008b",
+  const THINKING_COLORS: Record<ThinkingLevel, string> = {
+    off: "#a0a0a0",
+    minimal: "#767676",
+    low: "#4488cc",
+    medium: "#22998a",
+    high: "#875f87",
+    xhigh: "#8b008b",
   };
 
-  function getThinkingLevels(): string[] {
+  function getThinkingLevels(): ThinkingLevel[] {
     const model = agent.state.model;
     if (!model || !model.reasoning) return ["off"];
+
     const provider = model.provider;
     if (provider === "openai" || provider === "openai-codex") {
-      const levels = ["off", "minimal", "low", "medium", "high"];
+      const levels: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high"];
       if (supportsXhigh(model)) levels.push("xhigh");
       return levels;
     }
+
     if (provider === "anthropic") {
-      const levels = ["off", "low", "medium", "high"];
+      const levels: ThinkingLevel[] = ["off", "low", "medium", "high"];
       if (supportsXhigh(model)) levels.push("xhigh");
       return levels;
     }
+
     return ["off", "low", "medium", "high"];
   }
 
@@ -651,7 +721,7 @@ async function init(): Promise<void> {
     }
 
     const textarea = sidebar.getTextarea();
-    const isInEditor = textarea && (e.target === textarea || textarea.contains(e.target as Node));
+    const isInEditor = Boolean(textarea && (e.target === textarea || textarea.contains(e.target as Node)));
     const isStreaming = agent.state.isStreaming;
 
     // ESC — dismiss command menu
@@ -675,8 +745,8 @@ async function init(): Promise<void> {
       const levels = getThinkingLevels();
       const current = agent.state.thinkingLevel;
       const idx = levels.indexOf(current);
-      const next = levels[(idx + 1) % levels.length];
-      agent.setThinkingLevel(next as any);
+      const next = levels[(idx >= 0 ? idx + 1 : 0) % levels.length];
+      agent.setThinkingLevel(next);
       updateStatusBar(agent);
       flashThinkingLevel(next, THINKING_COLORS[next] || "#a0a0a0");
       return;
@@ -691,8 +761,8 @@ async function init(): Promise<void> {
     }
 
     // Slash command execution
-    if (isInEditor && e.key === "Enter" && !e.shiftKey && textarea!.value.startsWith("/") && !isStreaming) {
-      const val = textarea!.value.trim();
+    if (isInEditor && textarea && e.key === "Enter" && !e.shiftKey && textarea.value.startsWith("/") && !isStreaming) {
+      const val = textarea.value.trim();
       const spaceIdx = val.indexOf(" ");
       const cmdName = spaceIdx > 0 ? val.slice(1, spaceIdx) : val.slice(1);
       const args = spaceIdx > 0 ? val.slice(spaceIdx + 1) : "";
@@ -709,8 +779,8 @@ async function init(): Promise<void> {
     }
 
     // Enter/Alt+Enter while streaming — steer or follow-up
-    if (isInEditor && e.key === "Enter" && !e.shiftKey && isStreaming) {
-      const text = textarea!.value.trim();
+    if (isInEditor && textarea && e.key === "Enter" && !e.shiftKey && isStreaming) {
+      const text = textarea.value.trim();
       if (!text) return;
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -757,8 +827,8 @@ async function init(): Promise<void> {
       const levels = getThinkingLevels();
       const current = agent.state.thinkingLevel;
       const idx = levels.indexOf(current);
-      const next = levels[(idx + 1) % levels.length];
-      agent.setThinkingLevel(next as any);
+      const next = levels[(idx >= 0 ? idx + 1 : 0) % levels.length];
+      agent.setThinkingLevel(next);
       updateStatusBar(agent);
       flashThinkingLevel(next, THINKING_COLORS[next] || "#a0a0a0");
     }
@@ -782,7 +852,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | nul
   }) as Promise<T | null>;
 }
 
-async function injectContext(messages: any[]): Promise<any[]> {
+async function injectContext(messages: AgentMessage[]): Promise<AgentMessage[]> {
   const injections: string[] = [];
   try {
     const sel = await withTimeout(readSelectionContext().catch(() => null), 1500);
@@ -793,9 +863,10 @@ async function injectContext(messages: any[]): Promise<any[]> {
   if (injections.length === 0) return messages;
 
   const injection = injections.join("\n\n");
-  const injectionMessage = {
-    role: "user" as const,
-    content: [{ type: "text" as const, text: `[Auto-context]\n${injection}` }],
+  const injectionMessage: AgentMessage = {
+    role: "user",
+    content: [{ type: "text", text: `[Auto-context]\n${injection}` }],
+    timestamp: Date.now(),
   };
   const nextMessages = [...messages];
   let lastUserIdx = -1;
@@ -835,8 +906,8 @@ function updateStatusBar(agent: Agent): void {
   // Context usage
   let totalTokens = 0;
   for (const msg of state.messages) {
-    const usage = (msg as any).usage;
-    if (usage) totalTokens += (usage.input || 0) + (usage.output || 0);
+    if (msg.role !== "assistant") continue;
+    totalTokens += msg.usage.input + msg.usage.output;
   }
 
   const contextWindow = state.model?.contextWindow || 200000;
@@ -902,13 +973,15 @@ function flashThinkingLevel(level: string, color: string): void {
   flashBar.style.background = `linear-gradient(90deg, transparent, ${color}, transparent)`;
   flashBar.style.opacity = "1";
 
+  const bar = flashBar;
+
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       el.style.transition = "color 0.8s ease, background 0.8s ease, box-shadow 0.8s ease";
       el.style.color = "";
       el.style.background = "";
       el.style.boxShadow = "";
-      flashBar!.style.opacity = "0";
+      bar.style.opacity = "0";
     });
   });
 }
@@ -918,7 +991,7 @@ function flashThinkingLevel(level: string, color: string): void {
 // Welcome / Login
 // ============================================================================
 
-async function showWelcomeLogin(providerKeys: InstanceType<typeof ProviderKeysStore>): Promise<void> {
+async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise<void> {
   const { ALL_PROVIDERS, buildProviderRow } = await import("./ui/provider-login.js");
 
   return new Promise<void>((resolve) => {
@@ -932,7 +1005,10 @@ async function showWelcomeLogin(providerKeys: InstanceType<typeof ProviderKeysSt
         <div class="pi-welcome-providers"></div>
       </div>
     `;
-    const providerList = overlay.querySelector(".pi-welcome-providers")!;
+    const providerList = overlay.querySelector<HTMLDivElement>(".pi-welcome-providers");
+    if (!providerList) {
+      throw new Error("Welcome provider list not found");
+    }
     const expandedRef = { current: null as HTMLElement | null };
     for (const provider of ALL_PROVIDERS) {
       const row = buildProviderRow(provider, {
@@ -958,7 +1034,9 @@ async function showWelcomeLogin(providerKeys: InstanceType<typeof ProviderKeysSt
 // Default model selection
 // ============================================================================
 
-type DefaultModelRule = { provider: string; match: RegExp };
+type DefaultProvider = "openai-codex" | "openai" | "google";
+
+type DefaultModelRule = { provider: DefaultProvider; match: RegExp };
 
 const DEFAULT_MODEL_RULES: DefaultModelRule[] = [
   // Prefer latest GPT-5.x Codex on ChatGPT subscription (openai-codex)
@@ -974,47 +1052,41 @@ const DEFAULT_MODEL_RULES: DefaultModelRule[] = [
   { provider: "google", match: /^gemini-/i },
 ];
 
-function pickLatestMatchingModel(provider: string, match: RegExp) {
-  try {
-    const models = (getModels as any)(provider) as Array<{ id: string }>;
-    const candidates = models.filter((m) => match.test(m.id));
-    candidates.sort((a, b) => modelRecencyScore(b.id) - modelRecencyScore(a.id));
-    return candidates[0] || null;
-  } catch {
-    return null;
-  }
+function pickLatestMatchingModel(
+  provider: DefaultProvider,
+  match: RegExp,
+): Model<Api> | null {
+  const models: Model<Api>[] = getModels(provider);
+  const candidates = models.filter((m) => match.test(m.id));
+  candidates.sort((a, b) => modelRecencyScore(b.id) - modelRecencyScore(a.id));
+  return candidates[0] ?? null;
 }
 
-function pickDefaultModel(availableProviders: string[]) {
+function pickDefaultModel(availableProviders: string[]): Model<Api> {
   // Anthropic special-case:
   // Prefer Opus, except if there's a *newer-version* Sonnet, use that first.
   if (availableProviders.includes("anthropic")) {
-    try {
-      const models = (getModels as any)("anthropic") as Array<{ id: string }>;
-      const opus = models.filter((m) => String(m.id).startsWith("claude-opus-"))
-        .sort((a, b) => modelRecencyScore(b.id) - modelRecencyScore(a.id))[0];
-      const sonnet = models.filter((m) => String(m.id).startsWith("claude-sonnet-"))
-        .sort((a, b) => modelRecencyScore(b.id) - modelRecencyScore(a.id))[0];
+    const models: Model<Api>[] = getModels("anthropic");
+    const opus = models
+      .filter((m) => m.id.startsWith("claude-opus-"))
+      .sort((a, b) => modelRecencyScore(b.id) - modelRecencyScore(a.id))[0];
+    const sonnet = models
+      .filter((m) => m.id.startsWith("claude-sonnet-"))
+      .sort((a, b) => modelRecencyScore(b.id) - modelRecencyScore(a.id))[0];
 
-      if (opus && sonnet) {
-        if (parseMajorMinor(sonnet.id) > parseMajorMinor(opus.id)) {
-          return (getModel as any)("anthropic", sonnet.id);
-        }
-        return (getModel as any)("anthropic", opus.id);
-      }
+    if (opus && sonnet) {
+      return parseMajorMinor(sonnet.id) > parseMajorMinor(opus.id) ? sonnet : opus;
+    }
 
-      if (opus) return (getModel as any)("anthropic", opus.id);
-      if (sonnet) return (getModel as any)("anthropic", sonnet.id);
-    } catch {}
+    if (opus) return opus;
+    if (sonnet) return sonnet;
   }
 
   // Other providers: pattern-based rules
   for (const rule of DEFAULT_MODEL_RULES) {
     if (!availableProviders.includes(rule.provider)) continue;
     const m = pickLatestMatchingModel(rule.provider, rule.match);
-    if (m) {
-      try { return (getModel as any)(rule.provider, m.id); } catch {}
-    }
+    if (m) return m;
   }
 
   // Absolute fallback: keep this resilient across pi-ai version bumps

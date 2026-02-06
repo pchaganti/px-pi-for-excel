@@ -2,11 +2,70 @@
  * Built-in slash commands for Pi for Excel.
  */
 
+import type {
+  AssistantMessage,
+  StopReason,
+  TextContent,
+  ToolCall,
+  Usage,
+  UserMessage,
+} from "@mariozechner/pi-ai";
+import type { Agent, AgentMessage } from "@mariozechner/pi-agent-core";
+import {
+  ApiKeysTab,
+  ModelSelector,
+  ProxyTab,
+  SettingsDialog,
+  getAppStorage,
+} from "@mariozechner/pi-web-ui";
+
 import { commandRegistry, type SlashCommand } from "./types.js";
-import type { Agent } from "@mariozechner/pi-agent-core";
-import { ApiKeysTab, ModelSelector, ProxyTab, SettingsDialog, getAppStorage } from "@mariozechner/pi-web-ui";
 import { showToast } from "../ui/toast.js";
 import { getErrorMessage } from "../utils/errors.js";
+import type { PiSidebar } from "../ui/pi-sidebar.js";
+
+type TranscriptEntry = {
+  role: AgentMessage["role"];
+  text: string;
+  usage?: Usage;
+  stopReason?: StopReason;
+};
+
+const ZERO_USAGE: Usage = {
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  totalTokens: 0,
+  cost: {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    total: 0,
+  },
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isTextBlock(block: unknown): block is TextContent {
+  return (
+    isRecord(block) &&
+    block.type === "text" &&
+    typeof (block as { text?: unknown }).text === "string"
+  );
+}
+
+function isToolCallBlock(block: unknown): block is ToolCall {
+  return (
+    isRecord(block) &&
+    block.type === "toolCall" &&
+    typeof (block as { name?: unknown }).name === "string" &&
+    isRecord((block as { arguments?: unknown }).arguments)
+  );
+}
 
 /** Register all built-in commands. Call once after agent is created. */
 export function registerBuiltins(agent: Agent): void {
@@ -72,15 +131,28 @@ export function registerBuiltins(agent: Agent): void {
           return;
         }
 
-        // Build a readable transcript
-        const transcript = msgs.map((m: any) => {
+        const transcript: TranscriptEntry[] = msgs.map((m) => {
           const text = summarizeContentForTranscript(m.content);
-          return { role: m.role, text, ...(m.usage ? { usage: m.usage } : {}), ...(m.stopReason ? { stopReason: m.stopReason } : {}) };
+          if (m.role === "assistant") {
+            return {
+              role: m.role,
+              text,
+              usage: m.usage,
+              stopReason: m.stopReason,
+            };
+          }
+          return { role: m.role, text };
         });
 
         const exportData = {
           exported: new Date().toISOString(),
-          model: agent.state.model ? { id: agent.state.model.id, name: agent.state.model.name, provider: agent.state.model.provider } : null,
+          model: agent.state.model
+            ? {
+              id: agent.state.model.id,
+              name: agent.state.model.name,
+              provider: agent.state.model.provider,
+            }
+            : null,
           thinkingLevel: agent.state.thinkingLevel,
           messageCount: msgs.length,
           transcript,
@@ -92,7 +164,9 @@ export function registerBuiltins(agent: Agent): void {
 
         if (args.trim() === "clipboard" || !args.trim()) {
           navigator.clipboard.writeText(json).then(() => {
-            showToast(`Transcript copied (${msgs.length} messages, ${(json.length / 1024).toFixed(0)}KB)`);
+            showToast(
+              `Transcript copied (${msgs.length} messages, ${(json.length / 1024).toFixed(0)}KB)`,
+            );
           });
         } else {
           // Download as file
@@ -116,7 +190,9 @@ export function registerBuiltins(agent: Agent): void {
           showToast("Usage: /name My Session Name");
           return;
         }
-        document.dispatchEvent(new CustomEvent("pi:session-rename", { detail: { title: args.trim() } }));
+        document.dispatchEvent(
+          new CustomEvent("pi:session-rename", { detail: { title: args.trim() } }),
+        );
         showToast(`Session named: ${args.trim()}`);
       },
     },
@@ -144,9 +220,11 @@ export function registerBuiltins(agent: Agent): void {
         // Signal new session (resets ID) then clear messages
         document.dispatchEvent(new CustomEvent("pi:session-new"));
         agent.clearMessages();
+
         // Force sidebar + status bar to re-render
-        const sidebar = document.querySelector("pi-sidebar") as any;
-        if (sidebar) sidebar.requestUpdate();
+        const sidebar = document.querySelector<PiSidebar>("pi-sidebar");
+        sidebar?.requestUpdate();
+
         document.dispatchEvent(new CustomEvent("pi:status-update"));
         showToast("New session started");
       },
@@ -170,38 +248,66 @@ export function registerBuiltins(agent: Agent): void {
           return;
         }
         showToast("Compacting…");
+
         try {
           const { completeSimple } = await import("@mariozechner/pi-ai");
+
           // Serialize conversation for summarization
           const convo = conversationToText(msgs);
 
-          const result = await completeSimple(agent.state.model!, {
-            systemPrompt: "You are a conversation summarizer. Summarize the following conversation concisely, preserving key decisions, facts, and context. Output ONLY the summary, no preamble.",
-            messages: [{
-              role: "user",
-              content: [{ type: "text", text: `Summarize this conversation:\n\n${convo}` }],
-              timestamp: Date.now(),
-            }],
+          const result = await completeSimple(agent.state.model, {
+            systemPrompt:
+              "You are a conversation summarizer. Summarize the following conversation concisely, preserving key decisions, facts, and context. Output ONLY the summary, no preamble.",
+            messages: [
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "text",
+                    text: `Summarize this conversation:\n\n${convo}`,
+                  },
+                ],
+                timestamp: Date.now(),
+              },
+            ],
           });
-          const summary = result.content
-            ?.filter((b: any) => b.type === "text")
-            .map((b: any) => b.text)
-            .join("\n") || "Summary unavailable";
 
-          // Replace messages with a single summary + marker
-          agent.replaceMessages([{
+          const summary =
+            result.content
+              .filter(isTextBlock)
+              .map((b) => b.text)
+              .join("\n") || "Summary unavailable";
+
+          const now = Date.now();
+          const model = agent.state.model;
+
+          const marker: UserMessage = {
             role: "user",
             content: [{ type: "text", text: "[This conversation was compacted]" }],
-            timestamp: Date.now(),
-          } as any, {
-            role: "assistant",
-            content: [{ type: "text", text: `**Session Summary (compacted)**\n\n${summary}` }],
-            timestamp: Date.now(),
-            stopReason: "end_turn",
-          } as any]);
+            timestamp: now,
+          };
 
-          const iface = document.querySelector("pi-sidebar") as any;
-          if (iface) iface.requestUpdate();
+          const summaryMessage: AssistantMessage = {
+            role: "assistant",
+            content: [
+              {
+                type: "text",
+                text: `**Session Summary (compacted)**\n\n${summary}`,
+              },
+            ],
+            api: model.api,
+            provider: model.provider,
+            model: model.id,
+            usage: ZERO_USAGE,
+            stopReason: "stop",
+            timestamp: now,
+          };
+
+          agent.replaceMessages([marker, summaryMessage]);
+
+          const iface = document.querySelector<PiSidebar>("pi-sidebar");
+          iface?.requestUpdate();
+
           showToast(`Compacted ${msgs.length} messages → summary`);
         } catch (e: unknown) {
           showToast(`Compact failed: ${getErrorMessage(e)}`);
@@ -217,42 +323,67 @@ export function registerBuiltins(agent: Agent): void {
 
 // ── Helpers ────────────────────────────────────────────────
 
-function extractTextBlocks(content: any): string {
+function extractTextBlocks(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content
-    .filter((b: any) => b.type === "text")
-    .map((b: any) => b.text)
+    .filter(isTextBlock)
+    .map((b) => b.text)
     .join("\n");
 }
 
 function summarizeContentForTranscript(
-  content: any,
+  content: unknown,
   limits = { toolInput: 200, toolResult: 500 },
 ): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
+
   return content
-    .map((b: any) => {
-      if (b.type === "text") return b.text;
-      if (b.type === "tool_use") {
-        const input = JSON.stringify(b.input);
-        const snippet = input.length > limits.toolInput ? input.slice(0, limits.toolInput) : input;
-        return `[tool_use: ${b.name}(${snippet})]`;
+    .map((b) => {
+      if (isTextBlock(b)) return b.text;
+
+      // pi-ai tool calls
+      if (isToolCallBlock(b)) {
+        const rawArgs = JSON.stringify(b.arguments);
+        const snippet =
+          rawArgs.length > limits.toolInput
+            ? rawArgs.slice(0, limits.toolInput)
+            : rawArgs;
+        return `[toolCall: ${b.name}(${snippet})]`;
       }
-      if (b.type === "tool_result") {
-        const raw = typeof b.content === "string" ? b.content : JSON.stringify(b.content);
-        const snippet = raw.length > limits.toolResult ? raw.slice(0, limits.toolResult) : raw;
+
+      // Backwards compatibility: Anthropic-style tool blocks
+      if (isRecord(b) && b.type === "tool_use") {
+        const name = typeof b.name === "string" ? b.name : "tool";
+        const input = JSON.stringify(b.input);
+        const snippet =
+          input.length > limits.toolInput ? input.slice(0, limits.toolInput) : input;
+        return `[tool_use: ${name}(${snippet})]`;
+      }
+
+      if (isRecord(b) && b.type === "tool_result") {
+        const raw =
+          typeof b.content === "string" ? b.content : JSON.stringify(b.content);
+        const snippet =
+          raw.length > limits.toolResult
+            ? raw.slice(0, limits.toolResult)
+            : raw;
         return `[tool_result: ${snippet}]`;
       }
-      return `[${b.type}]`;
+
+      if (isRecord(b) && typeof b.type === "string") {
+        return `[${b.type}]`;
+      }
+
+      return "[block]";
     })
     .join("\n");
 }
 
-function getLastAssistantText(messages: any[]): string | null {
+function getLastAssistantText(messages: AgentMessage[]): string | null {
   for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i] as any;
+    const msg = messages[i];
     if (msg.role === "assistant") {
       const text = extractTextBlocks(msg.content).trim();
       return text || null;
@@ -261,10 +392,10 @@ function getLastAssistantText(messages: any[]): string | null {
   return null;
 }
 
-function conversationToText(messages: any[]): string {
+function conversationToText(messages: AgentMessage[]): string {
   return messages
-    .map((m: any) => {
-      const role = m.role === "user" ? "User" : "Assistant";
+    .map((m) => {
+      const role = m.role === "user" ? "User" : m.role === "assistant" ? "Assistant" : "Tool";
       const text = extractTextBlocks(m.content);
       return `${role}: ${text}`;
     })
@@ -280,15 +411,18 @@ function openModelSelector(agent: Agent): void {
 }
 
 async function showProviderPicker(): Promise<void> {
-  let overlay = document.getElementById("pi-login-overlay");
-  if (overlay) { overlay.remove(); return; }
+  const existing = document.getElementById("pi-login-overlay");
+  if (existing) {
+    existing.remove();
+    return;
+  }
 
   const { ALL_PROVIDERS, buildProviderRow } = await import("../ui/provider-login.js");
   const storage = getAppStorage();
   const configuredKeys = await storage.providerKeys.list();
   const configuredSet = new Set(configuredKeys);
 
-  overlay = document.createElement("div");
+  const overlay = document.createElement("div");
   overlay.id = "pi-login-overlay";
   overlay.className = "pi-welcome-overlay";
 
@@ -300,7 +434,11 @@ async function showProviderPicker(): Promise<void> {
     </div>
   `;
 
-  const list = overlay.querySelector(".pi-login-providers")!;
+  const list = overlay.querySelector<HTMLDivElement>(".pi-login-providers");
+  if (!list) {
+    throw new Error("Provider list container not found");
+  }
+
   const expandedRef = { current: null as HTMLElement | null };
 
   for (const provider of ALL_PROVIDERS) {
@@ -308,7 +446,7 @@ async function showProviderPicker(): Promise<void> {
     const row = buildProviderRow(provider, {
       isActive,
       expandedRef,
-      onConnected: (_row, _id, label) => {
+      onConnected: (_row: HTMLElement, _id: string, label: string) => {
         document.dispatchEvent(new CustomEvent("pi:providers-changed"));
         showToast(`${label} connected`);
       },
@@ -317,7 +455,7 @@ async function showProviderPicker(): Promise<void> {
   }
 
   overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) overlay!.remove();
+    if (e.target === overlay) overlay.remove();
   });
 
   document.body.appendChild(overlay);
@@ -332,10 +470,13 @@ async function showResumeDialog(agent: Agent): Promise<void> {
     return;
   }
 
-  let overlay = document.getElementById("pi-resume-overlay");
-  if (overlay) { overlay.remove(); return; }
+  const existing = document.getElementById("pi-resume-overlay");
+  if (existing) {
+    existing.remove();
+    return;
+  }
 
-  overlay = document.createElement("div");
+  const overlay = document.createElement("div");
   overlay.id = "pi-resume-overlay";
   overlay.className = "pi-welcome-overlay";
 
@@ -354,27 +495,39 @@ async function showResumeDialog(agent: Agent): Promise<void> {
     <div class="pi-welcome-card" style="text-align: left; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
       <h2 style="font-size: 16px; font-weight: 600; margin: 0 0 12px; font-family: var(--font-sans); flex-shrink: 0;">Resume Session</h2>
       <div class="pi-resume-list" style="overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
-        ${sessions.slice(0, 20).map((s) => `
+        ${sessions
+          .slice(0, 20)
+          .map(
+            (s) => `
           <button class="pi-welcome-provider pi-resume-item" data-id="${s.id}" style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
             <span style="font-size: 13px; font-weight: 500;">${s.title || "Untitled"}</span>
             <span style="font-size: 11px; color: var(--muted-foreground);">${s.messageCount || 0} messages · ${formatDate(s.lastModified)}</span>
           </button>
-        `).join("")}
+        `,
+          )
+          .join("")}
       </div>
     </div>
   `;
 
   overlay.addEventListener("click", async (e) => {
-    if (e.target === overlay) { overlay!.remove(); return; }
-    const item = (e.target as HTMLElement).closest(".pi-resume-item") as HTMLElement;
+    if (e.target === overlay) {
+      overlay.remove();
+      return;
+    }
+
+    const item = (e.target as HTMLElement).closest(
+      ".pi-resume-item",
+    ) as HTMLElement | null;
     if (!item) return;
+
     const id = item.dataset.id;
     if (!id) return;
 
     const sessionData = await storage.sessions.loadSession(id);
     if (!sessionData) {
       showToast("Session not found");
-      overlay!.remove();
+      overlay.remove();
       return;
     }
 
@@ -388,20 +541,22 @@ async function showResumeDialog(agent: Agent): Promise<void> {
     }
 
     // Notify session tracker of the resumed session
-    document.dispatchEvent(new CustomEvent("pi:session-resumed", {
-      detail: {
-        id: sessionData.id,
-        title: sessionData.title,
-        createdAt: sessionData.createdAt,
-      },
-    }));
+    document.dispatchEvent(
+      new CustomEvent("pi:session-resumed", {
+        detail: {
+          id: sessionData.id,
+          title: sessionData.title,
+          createdAt: sessionData.createdAt,
+        },
+      }),
+    );
 
     // Force UI to re-render + hide empty state
-    const iface = document.querySelector("pi-sidebar") as any;
-    if (iface) iface.requestUpdate();
+    const iface = document.querySelector<PiSidebar>("pi-sidebar");
+    iface?.requestUpdate();
     document.dispatchEvent(new CustomEvent("pi:model-changed"));
 
-    overlay!.remove();
+    overlay.remove();
     showToast(`Resumed: ${sessionData.title || "Untitled"}`);
   });
 
@@ -421,28 +576,37 @@ function showShortcutsDialog(): void {
     ["⇧F6", "Focus: reverse direction"],
   ];
 
-  let overlay = document.getElementById("pi-shortcuts-overlay");
-  if (overlay) { overlay.remove(); return; }
+  const existing = document.getElementById("pi-shortcuts-overlay");
+  if (existing) {
+    existing.remove();
+    return;
+  }
 
-  overlay = document.createElement("div");
+  const overlay = document.createElement("div");
   overlay.id = "pi-shortcuts-overlay";
   overlay.className = "pi-welcome-overlay";
   overlay.innerHTML = `
     <div class="pi-welcome-card" style="text-align: left;">
       <h2 style="font-size: 16px; font-weight: 600; margin: 0 0 12px; font-family: var(--font-sans);">Keyboard Shortcuts</h2>
       <div style="display: flex; flex-direction: column; gap: 6px;">
-        ${shortcuts.map(([key, desc]) => `
+        ${shortcuts
+          .map(
+            ([key, desc]) => `
           <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
             <kbd style="font-family: var(--font-mono); font-size: 11px; padding: 2px 6px; background: oklch(0 0 0 / 0.05); border-radius: 4px; white-space: nowrap;">${key}</kbd>
             <span style="font-size: 12.5px; color: var(--muted-foreground); font-family: var(--font-sans);">${desc}</span>
           </div>
-        `).join("")}
+        `,
+          )
+          .join("")}
       </div>
       <button onclick="this.closest('.pi-welcome-overlay').remove()" style="margin-top: 16px; width: 100%; padding: 8px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08); background: oklch(0 0 0 / 0.03); cursor: pointer; font-family: var(--font-sans); font-size: 13px;">Close</button>
     </div>
   `;
+
   overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) overlay!.remove();
+    if (e.target === overlay) overlay.remove();
   });
+
   document.body.appendChild(overlay);
 }
