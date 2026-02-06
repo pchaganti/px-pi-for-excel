@@ -10,11 +10,9 @@
 
 import { streamSimple, type Api, type Context, type Model, type StreamOptions } from "@mariozechner/pi-ai";
 
-export type GetProxyUrl = () => Promise<string | undefined>;
+import { normalizeProxyUrl, validateOfficeProxyUrl } from "./proxy-validation.js";
 
-function normalizeProxyUrl(url: string): string {
-  return url.trim().replace(/\/+$/, "");
-}
+export type GetProxyUrl = () => Promise<string | undefined>;
 
 function shouldProxyProvider(provider: string, apiKey?: string): boolean {
   const p = provider.toLowerCase();
@@ -67,6 +65,9 @@ export function createOfficeStreamFn(getProxyUrl: GetProxyUrl) {
       return streamSimple(model, context, options);
     }
 
-    return streamSimple(applyProxy(model, proxyUrl), context, options);
+    // Guardrails: fail fast for known-bad proxy configs (e.g., HTTP proxy from HTTPS taskpane).
+    const validated = validateOfficeProxyUrl(proxyUrl);
+
+    return streamSimple(applyProxy(model, validated), context, options);
   };
 }

@@ -12,6 +12,8 @@
 
 import { getAppStorage } from "@mariozechner/pi-web-ui";
 
+import { validateOfficeProxyUrl } from "./proxy-validation.js";
+
 const DEV_REWRITES: [string, string][] = [
   // OAuth token endpoints
   ["https://console.anthropic.com/", "/oauth-proxy/anthropic/"],
@@ -49,18 +51,35 @@ async function getEnabledProxyUrl(): Promise<string | undefined> {
 
   proxyCache.checkedAt = now;
 
+  let enabled: unknown;
+  let url: unknown;
+
   try {
     const storage = getAppStorage();
-    const enabled = await storage.settings.get("proxy.enabled");
-    const url = await storage.settings.get("proxy.url");
-    proxyCache.enabled = Boolean(enabled);
-    proxyCache.url = typeof url === "string" && url.trim().length > 0 ? url.trim().replace(/\/+$/, "") : undefined;
+    enabled = await storage.settings.get("proxy.enabled");
+    url = await storage.settings.get("proxy.url");
   } catch {
     proxyCache.enabled = false;
     proxyCache.url = undefined;
+    return undefined;
   }
 
-  return proxyCache.enabled ? proxyCache.url : undefined;
+  proxyCache.enabled = Boolean(enabled);
+  if (!proxyCache.enabled) {
+    proxyCache.url = undefined;
+    return undefined;
+  }
+
+  if (typeof url !== "string" || url.trim().length === 0) {
+    proxyCache.url = undefined;
+    return undefined;
+  }
+
+  // Guardrails: validate proxy URL (and fail fast for mixed-content HTTP proxies).
+  // This may throw and should surface to the caller.
+  const validated = validateOfficeProxyUrl(url);
+  proxyCache.url = validated;
+  return validated;
 }
 
 function looksLikeOAuthOrTokenEndpoint(url: string): boolean {
