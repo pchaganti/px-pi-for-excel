@@ -31,6 +31,40 @@ function piAuthPlugin(): Plugin {
   };
 }
 
+/**
+ * Stub out the Amazon Bedrock provider in browser builds.
+ *
+ * pi-ai registers all built-in providers at import time, including Bedrock.
+ * The Bedrock provider pulls in AWS SDK Node transports which break Vite's
+ * production bundling for the browser.
+ */
+function stubBedrockProviderPlugin(): Plugin {
+  const stubPath = path.resolve(__dirname, "src/stubs/amazon-bedrock.ts");
+
+  return {
+    name: "stub-bedrock-provider",
+    enforce: "pre",
+    resolveId(id, importer) {
+      // Register-builtins imports Bedrock via a relative path.
+      if (
+        id === "./amazon-bedrock.js" &&
+        importer &&
+        importer.includes("@mariozechner/pi-ai") &&
+        importer.includes("providers/register-builtins")
+      ) {
+        return stubPath;
+      }
+
+      // Safety: also catch resolved imports.
+      if (id.includes("@mariozechner/pi-ai") && id.endsWith("/providers/amazon-bedrock.js")) {
+        return stubPath;
+      }
+
+      return null;
+    },
+  };
+}
+
 // ============================================================================
 // Proxy helper — strips browser headers so APIs don't treat requests as CORS
 // ============================================================================
@@ -71,7 +105,7 @@ const certPath = path.resolve(__dirname, "cert.pem");
 const hasHttpsCerts = fs.existsSync(keyPath) && fs.existsSync(certPath);
 
 export default defineConfig({
-  plugins: [piAuthPlugin()],
+  plugins: [piAuthPlugin(), stubBedrockProviderPlugin()],
 
   server: {
     port: 3000,
@@ -118,20 +152,12 @@ export default defineConfig({
       input: {
         taskpane: "src/taskpane.html",
       },
-      // Externalize Node.js-only packages that are never used in browser
+      // Externalize node:* imports (Rollup can't bundle them for the browser).
+      // Note: do NOT externalize regular deps (e.g. @smithy/*). If they leak
+      // through as bare imports, the built add-in will fail to boot.
       external: [
         /^node:/,
-        /^@smithy\//,
       ],
-      output: {
-        // Map externals to empty modules at runtime
-        globals: {
-          http: "{}",
-          https: "{}",
-          net: "{}",
-          tls: "{}",
-        },
-      },
     },
   },
 });
