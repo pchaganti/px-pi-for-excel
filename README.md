@@ -13,7 +13,7 @@ Unlike proprietary alternatives (Claude for Excel, Copilot), Pi for Excel:
 - **Keeps your data local** — the agent runs entirely in the browser; your spreadsheet data never leaves your machine (only the context you send to your chosen LLM provider)
 - **Is free and open source** — no subscription, no per-seat pricing
 
-## Features (v0.1.0)
+## Features
 
 - **13 Excel tools** — `get_workbook_overview`, `read_range`, `get_range_as_csv`, `read_selection`, `get_all_objects`, `write_cells`, `fill_formula`, `search_workbook`, `modify_structure`, `format_cells`, `conditional_format`, `trace_dependencies`, `get_recent_changes`
 - **Auto-context injection** — automatically reads around your selection and tracks changes between messages
@@ -21,7 +21,10 @@ Unlike proprietary alternatives (Claude for Excel, Copilot), Pi for Excel:
 - **Multi-provider auth** — API keys, OAuth (Anthropic, OpenAI, Google, GitHub Copilot, Antigravity), or reuse credentials from Pi TUI
 - **Persistent sessions** — conversations auto-save to IndexedDB and survive sidebar close/reopen. Resume any previous session with `/resume`
 - **Write verification** — automatically checks formula results after writing
-- **Slash commands** — `/new`, `/resume`, `/name`, `/model`, `/login`, `/shortcuts`, and more
+- **Slash commands** — type `/` to browse all available commands with fuzzy search
+- **Extensions** — modular extension system with slash commands and inline widget UI (e.g., `/snake`)
+- **Keyboard shortcuts** — `Escape` to interrupt, `Shift+Tab` to focus input, `Ctrl+O` to collapse thinking/tool blocks
+- **Working indicator** — rotating whimsical messages and feature discovery hints while the model is streaming
 - **Pi TUI interop** — sessions use the same `SessionData` format as pi-web-ui — future export/import is free
 
 ## Quick Start
@@ -66,11 +69,13 @@ npx office-addin-debugging start manifest.xml desktop --app excel
 
 ### Configure an LLM provider
 
-Click the ⚙️ settings button in the sidebar to add API keys, or:
+On first launch, a welcome overlay appears with provider login options:
 
-1. If you already use [Pi TUI](https://github.com/mariozechner/pi-coding-agent), your credentials from `~/.pi/agent/auth.json` are loaded automatically in dev mode.
-2. Click the 🔑 button to authenticate via OAuth (Anthropic, Google).
-3. Paste an API key directly.
+1. **OAuth** — click a provider (Anthropic, Google) to authenticate in your browser.
+2. **API key** — paste a key directly for any supported provider.
+3. **Pi TUI credentials** — if you already use [Pi TUI](https://github.com/mariozechner/pi-coding-agent), credentials from `~/.pi/agent/auth.json` are loaded automatically in dev mode.
+
+You can change providers later with the `/login` command or by clicking the model name in the status bar.
 
 ## Commands
 
@@ -82,22 +87,51 @@ Type `/` in the message input to see all commands:
 | `/resume` | Resume a previous session |
 | `/name <title>` | Rename the current session |
 | `/model` | Switch LLM model |
+| `/default-models` | Set preferred models per provider |
 | `/login` | Add or change API keys / OAuth |
+| `/settings` | Open settings dialog |
 | `/shortcuts` | Show keyboard shortcuts |
 | `/compact` | Summarize conversation to free context |
 | `/copy` | Copy last response to clipboard |
+| `/export` | Export conversation |
+| `/share-session` | Share the current session |
+| `/snake` | Play Snake! 🐍 (extension) |
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Escape` | Interrupt the current response |
+| `Shift+Tab` | Focus the input field |
+| `Ctrl+O` | Toggle collapse of thinking blocks and tool messages |
+| `/` | Open the slash command menu |
 
 ## Architecture
 
 ```
 src/
-├── taskpane.ts           # Entry — mounts ChatPanel, wires agent
-├── boot.ts               # Lit class field fix + CSS
+├── taskpane.ts            # Entry — mounts sidebar, wires agent, status bar
+├── boot.ts                # Lit class field fix + CSS imports
 ├── excel/helpers.ts       # Office.js wrappers + edge-case guards
 ├── auth/                  # CORS proxy, credential restore, provider mapping
 ├── tools/                 # 13 Excel tools (read, write, search, format, etc.)
 ├── context/               # Blueprint, selection auto-read, change tracker
 ├── prompt/system-prompt.ts # Model-agnostic system prompt builder
+├── commands/              # Slash command registry, builtins, extension API
+│   ├── types.ts           # Command registry + types
+│   ├── builtins.ts        # Built-in slash commands
+│   ├── command-menu.ts    # Slash menu rendering
+│   └── extension-api.ts   # Extension API (overlay, widget, toast, events)
+├── extensions/            # Extension modules
+│   └── snake.ts           # Snake game (inline widget)
+├── ui/                    # Sidebar UI components (Lit + CSS)
+│   ├── pi-sidebar.ts      # Main layout (messages, input, widget slot)
+│   ├── pi-input.ts        # Chat input with auto-grow + placeholder rotation
+│   ├── working-indicator.ts # Streaming status with rotating messages
+│   ├── theme.css          # Light theme, glass effects, component styles
+│   ├── provider-login.ts  # OAuth + API key login rows
+│   ├── toast.ts           # Toast notifications
+│   └── loading.ts         # Loading spinner + error banner
 └── utils/format.ts        # Markdown tables, token truncation
 ```
 
@@ -130,6 +164,8 @@ The Vite dev server proxies API calls to LLM providers, stripping browser header
 - [ ] Named range awareness in formulas
 - [ ] Data validation
 - [ ] Pi TUI ↔ Excel session teleport
+- [ ] Extension API build-out (#13) — dynamic loading, tool registration, sandboxing
+- [ ] Header bar UX (#12) — session switcher, workbook indicator
 
 ## Prior Art
 
