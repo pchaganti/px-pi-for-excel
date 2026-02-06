@@ -842,8 +842,15 @@ function updateStatusBar(agent: Agent): void {
 // ============================================================================
 
 function flashThinkingLevel(level: string, color: string): void {
-  const labels: Record<string, string> = { off: "Off", low: "Low", medium: "Medium", high: "High" };
-  showToast(`Thinking: ${labels[level] || level} (⇧Tab to toggle)`, 1500);
+  const labels: Record<string, string> = {
+    off: "Off",
+    minimal: "Min",
+    low: "Low",
+    medium: "Medium",
+    high: "High",
+    xhigh: "Max",
+  };
+  showToast(`Thinking: ${labels[level] || level} (next turn)`, 1500);
 
   const el = document.querySelector(".pi-status-thinking") as HTMLElement;
   if (!el) return;
