@@ -38,13 +38,22 @@ export interface OverlayAPI {
   dismiss(): void;
 }
 
+export interface WidgetAPI {
+  /** Show an HTML element as an inline widget above the input area */
+  show(el: HTMLElement): void;
+  /** Remove the widget */
+  dismiss(): void;
+}
+
 export interface ExcelExtensionAPI {
   /** Register a slash command */
   registerCommand(name: string, cmd: ExtensionCommand): void;
   /** Access the agent */
   agent: Agent;
-  /** Show/dismiss overlay UI */
+  /** Show/dismiss full-screen overlay UI */
   overlay: OverlayAPI;
+  /** Show/dismiss inline widget above input (messages still visible above) */
+  widget: WidgetAPI;
   /** Show a toast notification */
   toast(message: string): void;
   /** Subscribe to agent events */
@@ -94,6 +103,36 @@ export function createExtensionAPI(agent: Agent): ExcelExtensionAPI {
         if (container) {
           container.style.display = "none";
           container.innerHTML = "";
+        }
+      },
+    },
+
+    widget: {
+      show(el: HTMLElement) {
+        let slot = document.getElementById("pi-widget-slot");
+        if (!slot) {
+          // Fallback: insert before .pi-input-area inside the sidebar
+          const inputArea = document.querySelector(".pi-input-area");
+          if (inputArea) {
+            slot = document.createElement("div");
+            slot.id = "pi-widget-slot";
+            slot.className = "pi-widget-slot";
+            inputArea.parentElement!.insertBefore(slot, inputArea);
+          } else {
+            console.warn("[pi] No widget slot or input area found");
+            return;
+          }
+        }
+        slot.innerHTML = "";
+        slot.appendChild(el);
+        slot.style.display = "block";
+      },
+
+      dismiss() {
+        const slot = document.getElementById("pi-widget-slot");
+        if (slot) {
+          slot.style.display = "none";
+          slot.innerHTML = "";
         }
       },
     },

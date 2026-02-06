@@ -1,14 +1,14 @@
 /**
  * Snake game extension for Pi for Excel.
- * Browser-based version using canvas overlay.
+ * Renders as an inline widget above the input — messages stay visible above.
  */
 
 import type { ExcelExtensionAPI } from "../commands/extension-api.js";
 
-const CELL = 16;
-const COLS = 20;
-const ROWS = 15;
-const TICK = 120;
+const CELL = 14;
+const COLS = 22;
+const ROWS = 12;
+const TICK = 110;
 
 type Dir = "up" | "down" | "left" | "right";
 type Pt = { x: number; y: number };
@@ -19,24 +19,28 @@ export function activate(api: ExcelExtensionAPI) {
     handler: () => {
       const el = document.createElement("div");
       el.style.cssText = `
-        display: flex; flex-direction: column; align-items: center; gap: 8px;
-        background: oklch(1 0 0 / 0.92); border-radius: 16px; padding: 16px;
-        backdrop-filter: blur(24px); box-shadow: 0 8px 32px oklch(0 0 0 / 0.12);
+        display: flex; flex-direction: column; align-items: center; gap: 6px;
+        background: oklch(1 0 0 / 0.92); border-radius: 12px; padding: 10px;
+        backdrop-filter: blur(24px); box-shadow: 0 4px 16px oklch(0 0 0 / 0.08);
       `;
 
       const header = document.createElement("div");
-      header.style.cssText = "font-family: var(--font-mono); font-size: 12px; color: var(--muted-foreground);";
-      header.textContent = "Score: 0 · Arrow keys to move · ESC to quit";
+      header.style.cssText = "font-family: var(--font-mono); font-size: 10.5px; color: var(--muted-foreground); width: 100%; display: flex; justify-content: space-between;";
+      header.innerHTML = `<span>Score: 0</span><span style="opacity: 0.5">arrows · esc quit</span>`;
       el.appendChild(header);
 
       const canvas = document.createElement("canvas");
-      canvas.width = COLS * CELL;
-      canvas.height = ROWS * CELL;
-      canvas.style.cssText = `border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08);`;
+      const dpr = window.devicePixelRatio || 1;
+      const logicalW = COLS * CELL;
+      const logicalH = ROWS * CELL;
+      canvas.width = logicalW * dpr;
+      canvas.height = logicalH * dpr;
+      canvas.style.cssText = `border-radius: 6px; border: 1px solid oklch(0 0 0 / 0.06); display: block; width: ${logicalW}px; height: ${logicalH}px;`;
       el.appendChild(canvas);
 
       const ctx = canvas.getContext("2d")!;
-      let snake: Pt[] = [{ x: 10, y: 7 }, { x: 9, y: 7 }, { x: 8, y: 7 }];
+      ctx.scale(dpr, dpr);
+      let snake: Pt[] = [{ x: 11, y: 6 }, { x: 10, y: 6 }, { x: 9, y: 6 }];
       let food = spawnFood(snake);
       let dir: Dir = "right";
       let nextDir: Dir = "right";
@@ -51,9 +55,8 @@ export function activate(api: ExcelExtensionAPI) {
       }
 
       function draw() {
-        // Background
         ctx.fillStyle = "#f8f8f6";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, logicalW, logicalH);
 
         // Grid (subtle)
         ctx.strokeStyle = "rgba(0,0,0,0.03)";
@@ -68,7 +71,7 @@ export function activate(api: ExcelExtensionAPI) {
 
         // Snake
         snake.forEach((p, i) => {
-          const r = i === 0 ? 4 : 3;
+          const r = i === 0 ? 3 : 2;
           ctx.fillStyle = i === 0 ? "oklch(0.40 0.12 160)" : "oklch(0.50 0.10 160)";
           ctx.beginPath();
           ctx.roundRect(p.x * CELL + 1, p.y * CELL + 1, CELL - 2, CELL - 2, r);
@@ -77,14 +80,20 @@ export function activate(api: ExcelExtensionAPI) {
 
         if (gameOver) {
           ctx.fillStyle = "rgba(0,0,0,0.5)";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillRect(0, 0, logicalW, logicalH);
           ctx.fillStyle = "white";
-          ctx.font = "bold 18px sans-serif";
+          ctx.font = "bold 16px sans-serif";
           ctx.textAlign = "center";
-          ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 10);
-          ctx.font = "13px sans-serif";
-          ctx.fillText(`Score: ${score} · Press R to restart`, canvas.width / 2, canvas.height / 2 + 14);
+          ctx.fillText("GAME OVER", logicalW / 2, logicalH / 2 - 8);
+          ctx.font = "12px sans-serif";
+          ctx.fillText(`Score: ${score} · R restart · ESC quit`, logicalW / 2, logicalH / 2 + 12);
         }
+      }
+
+      function updateHeader() {
+        header.innerHTML = gameOver
+          ? `<span>Game Over! ${score}</span><span style="opacity: 0.5">R restart · esc quit</span>`
+          : `<span>Score: ${score}</span><span style="opacity: 0.5">arrows · esc quit</span>`;
       }
 
       function tick() {
@@ -100,7 +109,7 @@ export function activate(api: ExcelExtensionAPI) {
         if (nh.x < 0 || nh.x >= COLS || nh.y < 0 || nh.y >= ROWS || snake.some(s => s.x === nh.x && s.y === nh.y)) {
           gameOver = true;
           draw();
-          header.textContent = `Game Over! Score: ${score} · R to restart · ESC to quit`;
+          updateHeader();
           return;
         }
 
@@ -108,7 +117,7 @@ export function activate(api: ExcelExtensionAPI) {
         if (nh.x === food.x && nh.y === food.y) {
           score += 10;
           food = spawnFood(snake);
-          header.textContent = `Score: ${score} · Arrow keys to move · ESC to quit`;
+          updateHeader();
         } else {
           snake.pop();
         }
@@ -116,13 +125,13 @@ export function activate(api: ExcelExtensionAPI) {
       }
 
       const keyHandler = (e: KeyboardEvent) => {
-        if (e.key === "Escape") { cleanup(); api.overlay.dismiss(); return; }
+        if (e.key === "Escape") { cleanup(); api.widget.dismiss(); return; }
         if (e.key === "r" || e.key === "R") {
           if (gameOver) {
-            snake = [{ x: 10, y: 7 }, { x: 9, y: 7 }, { x: 8, y: 7 }];
+            snake = [{ x: 11, y: 6 }, { x: 10, y: 6 }, { x: 9, y: 6 }];
             food = spawnFood(snake);
             dir = "right"; nextDir = "right"; score = 0; gameOver = false;
-            header.textContent = "Score: 0 · Arrow keys to move · ESC to quit";
+            updateHeader();
             draw();
           }
           return;
@@ -145,7 +154,7 @@ export function activate(api: ExcelExtensionAPI) {
         document.removeEventListener("keydown", keyHandler);
       }
 
-      api.overlay.show(el);
+      api.widget.show(el);
     },
   });
 }
