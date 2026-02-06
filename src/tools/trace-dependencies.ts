@@ -11,6 +11,7 @@
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun, getRange, qualifiedAddress, getDirectPrecedentsSafe } from "../excel/helpers.js";
+import { getErrorMessage } from "../utils/errors.js";
 
 const schema = Type.Object({
   cell: Type.String({
@@ -75,9 +76,9 @@ export function createTraceDependenciesTool(): AgentTool<typeof schema> {
           content: [{ type: "text", text: lines.join("\n") }],
           details: undefined,
         };
-      } catch (e: any) {
+      } catch (e: unknown) {
         return {
-          content: [{ type: "text", text: `Error tracing dependencies: ${e.message}` }],
+          content: [{ type: "text", text: `Error tracing dependencies: ${getErrorMessage(e)}` }],
           details: undefined,
         };
       }

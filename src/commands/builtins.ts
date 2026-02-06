@@ -6,6 +6,7 @@ import { commandRegistry, type SlashCommand } from "./types.js";
 import type { Agent } from "@mariozechner/pi-agent-core";
 import { ModelSelector, getAppStorage } from "@mariozechner/pi-web-ui";
 import { showToast } from "../ui/toast.js";
+import { getErrorMessage } from "../utils/errors.js";
 
 /** Register all built-in commands. Call once after agent is created. */
 export function registerBuiltins(agent: Agent): void {
@@ -205,8 +206,8 @@ export function registerBuiltins(agent: Agent): void {
           const iface = document.querySelector("pi-sidebar") as any;
           if (iface) iface.requestUpdate();
           showToast(`Compacted ${msgs.length} messages → summary`);
-        } catch (e: any) {
-          showToast(`Compact failed: ${e.message}`);
+        } catch (e: unknown) {
+          showToast(`Compact failed: ${getErrorMessage(e)}`);
         }
       },
     },

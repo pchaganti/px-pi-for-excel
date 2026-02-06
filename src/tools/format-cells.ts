@@ -8,6 +8,7 @@
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun, getRange, parseRangeRef, qualifiedAddress } from "../excel/helpers.js";
+import { getErrorMessage } from "../utils/errors.js";
 
 const DEFAULT_FONT_NAME = "Arial";
 const DEFAULT_FONT_SIZE = 10;
@@ -291,9 +292,9 @@ export function createFormatCellsTool(): AgentTool<typeof schema> {
           ],
           details: undefined,
         };
-      } catch (e: any) {
+      } catch (e: unknown) {
         return {
-          content: [{ type: "text", text: `Error formatting: ${e.message}` }],
+          content: [{ type: "text", text: `Error formatting: ${getErrorMessage(e)}` }],
           details: undefined,
         };
       }

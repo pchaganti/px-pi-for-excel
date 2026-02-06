@@ -9,6 +9,7 @@ import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun, getRange, qualifiedAddress } from "../excel/helpers.js";
 import { countOccupiedCells, validateFormula } from "./write-cells.js";
 import { findErrors } from "../utils/format.js";
+import { getErrorMessage } from "../utils/errors.js";
 
 const schema = Type.Object({
   range: Type.String({
@@ -158,9 +159,9 @@ export function createFillFormulaTool(): AgentTool<typeof schema> {
         }
 
         return { content: [{ type: "text", text: lines.join("\n") }], details: undefined };
-      } catch (e: any) {
+      } catch (e: unknown) {
         return {
-          content: [{ type: "text", text: `Error filling formula: ${e.message}` }],
+          content: [{ type: "text", text: `Error filling formula: ${getErrorMessage(e)}` }],
           details: undefined,
         };
       }

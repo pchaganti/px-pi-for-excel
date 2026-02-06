@@ -8,6 +8,7 @@
 
 import { originalFetch } from "./cors-proxy.js";
 import { mapToApiProvider, BROWSER_OAUTH_PROVIDERS } from "./provider-map.js";
+import { getErrorMessage } from "../utils/errors.js";
 
 /**
  * Restore credentials from all available sources.

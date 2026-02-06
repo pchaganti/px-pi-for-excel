@@ -11,6 +11,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun } from "../excel/helpers.js";
+import { getErrorMessage } from "../utils/errors.js";
 
 const schema = Type.Object({});
 
@@ -31,9 +32,9 @@ export function createGetWorkbookOverviewTool(): AgentTool<typeof schema> {
           content: [{ type: "text", text: overview }],
           details: undefined,
         };
-      } catch (e: any) {
+      } catch (e: unknown) {
         return {
-          content: [{ type: "text", text: `Error getting workbook overview: ${e.message}` }],
+          content: [{ type: "text", text: `Error getting workbook overview: ${getErrorMessage(e)}` }],
           details: undefined,
         };
       }

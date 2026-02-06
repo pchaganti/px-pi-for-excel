@@ -8,6 +8,7 @@
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun, qualifiedAddress, parseCell, colToLetter } from "../excel/helpers.js";
+import { getErrorMessage } from "../utils/errors.js";
 
 const schema = Type.Object({
   query: Type.String({
@@ -76,9 +77,9 @@ export function createSearchWorkbookTool(): AgentTool<typeof schema> {
         if (useRegex) {
           try {
             regex = new RegExp(query, "i");
-          } catch (e: any) {
+          } catch (e: unknown) {
             return {
-              content: [{ type: "text", text: `Invalid regex "${query}": ${e.message}` }],
+              content: [{ type: "text", text: `Invalid regex "${query}": ${getErrorMessage(e)}` }],
               details: undefined,
             };
           }
@@ -190,9 +191,9 @@ export function createSearchWorkbookTool(): AgentTool<typeof schema> {
           content: [{ type: "text", text: lines.join("\n") }],
           details: undefined,
         };
-      } catch (e: any) {
+      } catch (e: unknown) {
         return {
-          content: [{ type: "text", text: `Error searching: ${e.message}` }],
+          content: [{ type: "text", text: `Error searching: ${getErrorMessage(e)}` }],
           details: undefined,
         };
       }

@@ -7,6 +7,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { readSelectionContext } from "../context/selection.js";
+import { getErrorMessage } from "../utils/errors.js";
 
 const schema = Type.Object({});
 
@@ -31,9 +32,9 @@ export function createReadSelectionTool(): AgentTool<typeof schema> {
           content: [{ type: "text", text: selection.text }],
           details: undefined,
         };
-      } catch (e: any) {
+      } catch (e: unknown) {
         return {
-          content: [{ type: "text", text: `Error reading selection: ${e.message}` }],
+          content: [{ type: "text", text: `Error reading selection: ${getErrorMessage(e)}` }],
           details: undefined,
         };
       }

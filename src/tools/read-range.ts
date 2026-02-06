@@ -10,6 +10,7 @@ import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun, getRange, qualifiedAddress, parseCell, colToLetter } from "../excel/helpers.js";
 import { formatAsMarkdownTable, extractFormulas, findErrors } from "../utils/format.js";
+import { getErrorMessage } from "../utils/errors.js";
 
 const schema = Type.Object({
   range: Type.String({
@@ -70,9 +71,9 @@ export function createReadRangeTool(): AgentTool<typeof schema> {
         } else {
           return formatDetailed(fullAddress, result, startCell);
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         return {
-          content: [{ type: "text", text: `Error reading "${params.range}": ${e.message}` }],
+          content: [{ type: "text", text: `Error reading "${params.range}": ${getErrorMessage(e)}` }],
           details: undefined,
         };
       }

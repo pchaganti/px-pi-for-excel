@@ -7,6 +7,7 @@
  */
 
 import { excelRun } from "../excel/helpers.js";
+import { getErrorMessage } from "../utils/errors.js";
 
 interface CellChange {
   sheet: string;
@@ -58,8 +59,8 @@ export class ChangeTracker {
       });
       this.registered = true;
       console.log("[change-tracker] Listening for changes");
-    } catch (e: any) {
-      console.warn("[change-tracker] Failed to register:", e.message);
+    } catch (e: unknown) {
+      console.warn("[change-tracker] Failed to register:", getErrorMessage(e));
     }
   }
 

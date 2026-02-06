@@ -14,6 +14,7 @@ import {
   colToLetter, computeRangeAddress, padValues,
 } from "../excel/helpers.js";
 import { formatAsMarkdownTable, findErrors } from "../utils/format.js";
+import { getErrorMessage } from "../utils/errors.js";
 
 const schema = Type.Object({
   start_cell: Type.String({
@@ -148,9 +149,9 @@ export function createWriteCellsTool(): AgentTool<typeof schema> {
           return formatBlocked(result);
         }
         return formatSuccess(result, rows, cols);
-      } catch (e: any) {
+      } catch (e: unknown) {
         return {
-          content: [{ type: "text", text: `Error writing cells: ${e.message}` }],
+          content: [{ type: "text", text: `Error writing cells: ${getErrorMessage(e)}` }],
           details: undefined,
         };
       }

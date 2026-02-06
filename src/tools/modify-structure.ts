@@ -8,6 +8,7 @@
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun } from "../excel/helpers.js";
+import { getErrorMessage } from "../utils/errors.js";
 
 // Helper for string enum (TypeBox doesn't have a built-in StringEnum)
 function StringEnum<T extends string[]>(values: [...T], opts?: { description?: string }) {
@@ -223,9 +224,9 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
           content: [{ type: "text", text: result }],
           details: undefined,
         };
-      } catch (e: any) {
+      } catch (e: unknown) {
         return {
-          content: [{ type: "text", text: `Error: ${e.message}` }],
+          content: [{ type: "text", text: `Error: ${getErrorMessage(e)}` }],
           details: undefined,
         };
       }
