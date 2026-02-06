@@ -32,11 +32,12 @@ const EXCEL_TOOL_NAMES = [
   "get_recent_changes",
 ] as const;
 
+type ToolState = "inprogress" | "complete" | "error";
+
 function formatParamsJson(params: unknown): string {
   if (params === undefined) return "";
 
-  // pi-ai's ToolCall.arguments are usually objects, but some providers may
-  // stream/emit a JSON string. Handle both.
+  // ToolCall.arguments are usually objects, but some providers may emit JSON strings.
   try {
     if (typeof params === "string") {
       try {
@@ -60,8 +61,7 @@ function splitToolResultContent(result: ToolResultMessage<unknown>): {
     .map((c) => c.text)
     .join("\n");
 
-  const images = (result.content ?? [])
-    .filter((c): c is ImageContent => c.type === "image");
+  const images = (result.content ?? []).filter((c): c is ImageContent => c.type === "image");
 
   return { text, images };
 }
@@ -78,6 +78,35 @@ function tryFormatJsonOutput(text: string): { isJson: boolean; formatted: string
   }
 }
 
+function stripMarkdownInline(line: string): string {
+  return line
+    // headings
+    .replace(/^#+\s+/, "")
+    // bullets
+    .replace(/^\s*[-*]\s+/, "")
+    // links
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    // bold/italic/code
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .trim();
+}
+
+function extractSummaryLine(text: string): string | null {
+  for (const rawLine of text.split("\n")) {
+    const t = rawLine.trim();
+    if (!t) continue;
+
+    // Avoid showing a raw table row as the summary.
+    if (t.startsWith("|")) continue;
+
+    const stripped = stripMarkdownInline(t);
+    if (stripped) return stripped;
+  }
+  return null;
+}
+
 function detectStandaloneImagePath(text: string): string | null {
   const t = text.trim();
   if (!t) return null;
@@ -90,7 +119,7 @@ function detectStandaloneImagePath(text: string): string | null {
   const isWinAbs = /^[A-Za-z]:\\/.test(t);
   const isFileUrl = t.startsWith("file://");
 
-  return (isUnixAbs || isWinAbs || isFileUrl) ? t : null;
+  return isUnixAbs || isWinAbs || isFileUrl ? t : null;
 }
 
 function pathBasename(path: string): string {
@@ -137,10 +166,31 @@ function renderImages(images: ImageContent[]): TemplateResult {
   `;
 }
 
+function renderExcelToolHeader(opts: {
+  toolName: string;
+  state: ToolState;
+  summary?: string | null;
+}): TemplateResult {
+  const summary = opts.summary?.trim();
+
+  const headerText = html`
+    <span class="pi-excel-tool-header">
+      <span class="pi-excel-tool-name">${opts.toolName}</span>
+      ${summary ? html`<span class="pi-excel-tool-summary">${summary}</span>` : ""}
+    </span>
+  `;
+
+  return renderHeader(opts.state, Code, headerText);
+}
+
 function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, unknown> {
   return {
-    render(params: unknown, result: ToolResultMessage<unknown> | undefined, isStreaming?: boolean): ToolRenderResult {
-      const state = result
+    render(
+      params: unknown,
+      result: ToolResultMessage<unknown> | undefined,
+      isStreaming?: boolean,
+    ): ToolRenderResult {
+      const state: ToolState = result
         ? (result.isError ? "error" : "complete")
         : isStreaming
           ? "inprogress"
@@ -151,47 +201,51 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
       // With result: show input + rendered output
       if (result) {
         const { text, images } = splitToolResultContent(result);
+        const summary = extractSummaryLine(text);
         const standaloneImagePath = detectStandaloneImagePath(text);
         const json = tryFormatJsonOutput(text);
 
-        const headerText = html`<span class="font-mono">${toolName}</span>`;
-
         return {
           content: html`
-            <div class="space-y-3">
-              ${renderHeader(state, Code, headerText)}
+            <div class="pi-excel-tool">
+              <div class="pi-excel-tool__header">
+                ${renderExcelToolHeader({ toolName, state, summary })}
+              </div>
 
-              ${paramsJson
-                ? html`
-                  <div>
-                    <div class="text-xs font-medium mb-1 text-muted-foreground">Input</div>
-                    <code-block .code=${paramsJson} language="json"></code-block>
-                  </div>
-                `
-                : ""}
-
-              <div>
-                <div class="text-xs font-medium mb-1 text-muted-foreground">Output</div>
-
-                ${standaloneImagePath
+              <div class="pi-excel-tool__body mt-3 space-y-3">
+                ${paramsJson
                   ? html`
-                    <div class="text-sm">
-                      <div>
-                        Image file: <a
-                          href=${toFileUrl(standaloneImagePath)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="underline"
-                        >${pathBasename(standaloneImagePath)}</a>
-                      </div>
-                      <div class="mt-1 text-xs font-mono text-muted-foreground break-all">${standaloneImagePath}</div>
+                    <div class="pi-excel-tool__section">
+                      <div class="text-xs font-medium mb-1 text-muted-foreground">Input</div>
+                      <code-block .code=${paramsJson} language="json"></code-block>
                     </div>
                   `
-                  : json.isJson
-                    ? html`<code-block .code=${json.formatted} language="json"></code-block>`
-                    : html`<markdown-block .content=${text || "(no output)"}></markdown-block>`}
+                  : ""}
 
-                ${renderImages(images)}
+                <div class="pi-excel-tool__section">
+                  <div class="text-xs font-medium mb-1 text-muted-foreground">Output</div>
+
+                  ${standaloneImagePath
+                    ? html`
+                      <div class="text-sm">
+                        <div>
+                          Image file:
+                          <a
+                            href=${toFileUrl(standaloneImagePath)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="underline"
+                          >${pathBasename(standaloneImagePath)}</a>
+                        </div>
+                        <div class="mt-1 text-xs font-mono text-muted-foreground break-all">${standaloneImagePath}</div>
+                      </div>
+                    `
+                    : json.isJson
+                      ? html`<code-block .code=${json.formatted} language="json"></code-block>`
+                      : html`<markdown-block .content=${text || "(no output)"}></markdown-block>`}
+
+                  ${renderImages(images)}
+                </div>
               </div>
             </div>
           `,
@@ -201,15 +255,17 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
 
       // Streaming/pending: show header + input
       if (paramsJson) {
-        const headerText = html`<span class="font-mono">${toolName}</span>`;
-
         return {
           content: html`
-            <div class="space-y-3">
-              ${renderHeader(state, Code, headerText)}
-              <div>
-                <div class="text-xs font-medium mb-1 text-muted-foreground">Input</div>
-                <code-block .code=${paramsJson} language="json"></code-block>
+            <div class="pi-excel-tool">
+              <div class="pi-excel-tool__header">
+                ${renderExcelToolHeader({ toolName, state })}
+              </div>
+              <div class="pi-excel-tool__body mt-3">
+                <div class="pi-excel-tool__section">
+                  <div class="text-xs font-medium mb-1 text-muted-foreground">Input</div>
+                  <code-block .code=${paramsJson} language="json"></code-block>
+                </div>
               </div>
             </div>
           `,
@@ -218,11 +274,12 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
       }
 
       // No params or result yet
-      const headerText = html`<span class="font-mono">${toolName}</span>`;
       return {
         content: html`
-          <div>
-            ${renderHeader(state, Code, headerText)}
+          <div class="pi-excel-tool">
+            <div class="pi-excel-tool__header">
+              ${renderExcelToolHeader({ toolName, state })}
+            </div>
           </div>
         `,
         isCustom: false,

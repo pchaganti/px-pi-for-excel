@@ -655,12 +655,37 @@ pi-working-indicator {
 user-message .mx-4  { margin-left: 8px !important; margin-right: 8px !important; }
 assistant-message .px-4 { padding-left: 12px !important; padding-right: 12px !important; }
 
-/* Tool cards — clean border */
-tool-message .border {
+/* Tool cards — clean border (only the outer tool card wrapper) */
+tool-message > div.border {
   border: 1px solid var(--border) !important;
   background: oklch(0.99 0.002 90) !important;
   border-radius: 10px !important;
   box-shadow: 0 1px 3px oklch(0 0 0 / 0.04);
+}
+
+/* Excel tool renderer (Pi-for-Excel) — header typography */
+tool-message .pi-excel-tool-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13.5px;
+  font-family: var(--font-sans);
+}
+
+tool-message .pi-excel-tool-name {
+  font-weight: 600;
+  color: var(--foreground);
+  flex: 0 0 auto;
+}
+
+tool-message .pi-excel-tool-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Markdown — readable at sidebar width */
@@ -703,13 +728,27 @@ thinking-block { font-size: 12px; }
   transform: none !important;
 }
 
-/* Tool messages: collapse card to a slim single-line summary */
+/* Tool messages: collapse to a slim single-line row */
+.pi-hide-internals tool-message .pi-excel-tool__body {
+  display: none !important;
+}
+
 .pi-hide-internals tool-message > div {
-  max-height: 24px;
+  max-height: 36px;
   overflow: hidden;
-  padding: 4px 10px !important;
-  opacity: 0.5;
-  font-size: 11px;
+  padding: 6px 12px !important;
+  opacity: 0.65;
+}
+
+.pi-hide-internals tool-message > div.border {
+  border-radius: 999px !important;
+  box-shadow: none !important;
+  background: oklch(1 0 0 / 0.60) !important;
+}
+
+/* Reduce vertical gaps between blocks when internals are hidden */
+.pi-hide-internals assistant-message .px-4.flex.flex-col.gap-3 {
+  gap: 8px !important;
 }
 
 /* Usage/cost — hidden (context % in status bar is enough) */
