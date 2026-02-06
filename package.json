@@ -7,6 +7,9 @@
     "dev": "vite --port 3000",
     "build": "vite build",
     "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint \"*.ts\" \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "lint:fix": "eslint \"*.ts\" \"src/**/*.ts\" \"tests/**/*.ts\" --fix",
     "test:models": "node --test --experimental-strip-types tests/model-ordering.test.ts",
     "validate": "npx office-addin-manifest validate manifest.xml",
     "sideload": "npx office-addin-debugging start manifest.xml desktop --app excel"
@@ -23,6 +26,9 @@
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
     "@types/office-js": "^1.0.421",
+    "@typescript-eslint/eslint-plugin": "^8.43.0",
+    "@typescript-eslint/parser": "^8.43.0",
+    "eslint": "^9.35.0",
     "office-addin-debugging": "^6.0.6",
     "office-addin-manifest": "^2.1.2",
     "typescript": "^5.7.0",
