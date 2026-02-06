@@ -42,7 +42,11 @@ Existing AI add-ins for Excel are closed-source, locked to a single model, and c
 - **Working indicator** — rotating whimsical messages and feature discovery hints while the model is streaming
 - **Pi-compatible messages** — conversations use the same `AgentMessage` format as Pi TUI. Session storage differs (IndexedDB vs JSONL), but the message layer is shared — future import/export is straightforward.
 
-## Quick Start
+## Install (recommended)
+
+See **[`docs/install.md`](./docs/install.md)**.
+
+## Developer Quick Start
 
 ### Prerequisites
 - Node.js 20+
@@ -65,7 +69,7 @@ mv localhost.pem cert.pem
 mv localhost-key.pem key.pem
 
 # Start dev server
-npx vite --port 3000
+npm run dev
 ```
 
 ### Sideload into Excel
@@ -79,7 +83,7 @@ Then open Excel → Insert → My Add-ins → Pi for Excel (Dev).
 
 **Windows:**
 ```bash
-npx office-addin-debugging start manifest.xml desktop --app excel
+npm run sideload
 ```
 
 ### Configure an LLM provider
