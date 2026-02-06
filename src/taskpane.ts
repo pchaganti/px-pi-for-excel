@@ -14,12 +14,12 @@ import { getModel, getModels, supportsXhigh, type Api, type Model, type TextCont
 import {
   ApiKeyPromptDialog,
   ModelSelector,
-  createStreamFn,
   type ProviderKeysStore,
   getAppStorage,
 } from "@mariozechner/pi-web-ui";
 
 import { installFetchInterceptor } from "./auth/cors-proxy.js";
+import { createOfficeStreamFn } from "./auth/stream-proxy.js";
 import { restoreCredentials } from "./auth/restore.js";
 import { createAllTools } from "./tools/index.js";
 import { buildSystemPrompt } from "./prompt/system-prompt.js";
@@ -305,7 +305,19 @@ function clearErrorBanner(): void {
 
 function isLikelyCorsErrorMessage(msg: string): boolean {
   const m = msg.toLowerCase();
-  return m.includes("failed to fetch") || m.includes("cors") || m.includes("cross-origin") || m.includes("networkerror");
+
+  // Browser/network errors
+  if (m.includes("failed to fetch")) return true;
+  if (m.includes("load failed")) return true; // WebKit/Safari
+  if (m.includes("networkerror")) return true;
+
+  // Explicit CORS wording
+  if (m.includes("cors") || m.includes("cross-origin")) return true;
+
+  // Anthropic sometimes returns a JSON 401 with a CORS-specific message when direct browser access is disabled.
+  if (m.includes("cors requests are not allowed")) return true;
+
+  return false;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -391,7 +403,7 @@ async function init(): Promise<void> {
   setActiveProviders(new Set(availableProviders));
   const defaultModel = pickDefaultModel(availableProviders);
 
-  const streamFn = createStreamFn(async () => {
+  const streamFn = createOfficeStreamFn(async () => {
     try {
       const storage = getAppStorage();
       const enabled = await storage.settings.get("proxy.enabled");
@@ -445,7 +457,7 @@ async function init(): Promise<void> {
     agent.prompt(text).catch((e: unknown) => {
       const msg = e instanceof Error ? e.message : String(e);
       if (isLikelyCorsErrorMessage(msg)) {
-        showErrorBanner("Network error (likely CORS). Start the local proxy (npm run proxy) and enable it in /settings → Proxy.");
+        showErrorBanner("Network error (likely CORS). Start the local HTTPS proxy (npm run proxy:https) and enable it in /settings → Proxy.");
       } else {
         showErrorBanner(`LLM error: ${msg}`);
       }
@@ -472,7 +484,7 @@ async function init(): Promise<void> {
         if (!isAbort) {
           const err = agent.state.error;
           if (isLikelyCorsErrorMessage(err)) {
-            showErrorBanner("Network error (likely CORS). Start the local proxy (npm run proxy) and enable it in /settings → Proxy.");
+            showErrorBanner("Network error (likely CORS). Start the local HTTPS proxy (npm run proxy:https) and enable it in /settings → Proxy.");
           } else {
             showErrorBanner(`LLM error: ${err}`);
           }

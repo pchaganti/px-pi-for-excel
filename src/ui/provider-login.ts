@@ -148,10 +148,15 @@ export function buildProviderRow(
           expandedRef.current = null;
         }
       } catch (err: unknown) {
-        if (isCorsError(err)) {
-          errorEl.textContent = "Login was blocked by browser CORS. Start the local proxy (npm run proxy) and enable it in /settings → Proxy.";
+        const msg = getErrorMessage(err);
+        const isLikelyCors =
+          isCorsError(err) ||
+          (typeof msg === "string" && /load failed|failed to fetch|cors|cross-origin|networkerror/i.test(msg));
+
+        if (isLikelyCors) {
+          errorEl.textContent = "Login was blocked by browser CORS. Start the local HTTPS proxy (npm run proxy:https) and enable it in /settings → Proxy.";
         } else {
-          errorEl.textContent = getErrorMessage(err) || "Login failed";
+          errorEl.textContent = msg || "Login failed";
         }
         errorEl.style.display = "block";
       } finally {
