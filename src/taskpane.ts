@@ -359,6 +359,9 @@ async function init(): Promise<void> {
     }
   };
 
+  // ── Abort tracking (hoisted — used by onAbort + error handler below) ──
+  let _userAborted = false;
+
   // 7. Create and mount PiSidebar
   const sidebar = _sidebar = new PiSidebar();
   sidebar.agent = agent;
@@ -494,8 +497,8 @@ async function init(): Promise<void> {
         if (sessionData.thinkingLevel) {
           agent.setThinkingLevel(sessionData.thinkingLevel);
         }
-        // Force sidebar to re-render with restored messages
-        requestAnimationFrame(() => sidebar.requestUpdate());
+        // Force sidebar to pick up restored messages
+        sidebar.syncFromAgent();
         console.log(`[pi] Restored session: ${_sessionTitle || latestId}`);
       }
     }
@@ -525,9 +528,6 @@ async function init(): Promise<void> {
     const updated = await providerKeys.list();
     setActiveProviders(new Set(updated));
   });
-
-  // ── Abort tracking ──
-  let _userAborted = false;
 
   // ── Queue display ──
   type QueuedItem = { type: "steer" | "follow-up"; text: string };
@@ -643,6 +643,14 @@ async function init(): Promise<void> {
       agent.setThinkingLevel(next as any);
       updateStatusBar(agent);
       flashThinkingLevel(next, THINKING_COLORS[next] || "#a0a0a0");
+      return;
+    }
+
+    // Ctrl+O — toggle thinking/tool visibility
+    if ((e.ctrlKey || e.metaKey) && e.key === "o") {
+      e.preventDefault();
+      const collapsed = document.body.classList.toggle("pi-hide-internals");
+      showToast(collapsed ? "Internals collapsed (⌃O)" : "Internals expanded (⌃O)", 1500);
       return;
     }
 
@@ -811,13 +819,13 @@ function updateStatusBar(agent: Agent): void {
   const brainSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg>`;
 
   el.innerHTML = `
-    <button class="pi-status-model" title="Change model">
+    <button class="pi-status-model" title="Click to change model">
       <span class="pi-status-model__mark">π</span>
       <span class="pi-status-model__name">${modelAlias}</span>
       ${chevronSvg}
     </button>
-    <span class="pi-status-ctx">${pct}% / ${ctxLabel}</span>
-    <span class="pi-status-thinking" title="Shift+Tab to cycle">${brainSvg} ${thinkingLevel}</span>
+    <span class="pi-status-ctx" title="Context window usage">${pct}% / ${ctxLabel}</span>
+    <span class="pi-status-thinking" title="Click or ⇧Tab to cycle thinking depth">${brainSvg} ${thinkingLevel}</span>
   `;
 }
 
