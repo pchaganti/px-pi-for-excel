@@ -325,6 +325,8 @@ pi-working-indicator {
   justify-content: flex-start;
   gap: 8px;
   padding: 6px 14px;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .pi-working__text {
@@ -333,6 +335,8 @@ pi-working-indicator {
   font-weight: 500;
   color: var(--primary);
   transition: opacity 0.25s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .pi-working__hint {
@@ -342,6 +346,10 @@ pi-working-indicator {
   opacity: 0.7;
   letter-spacing: 0.02em;
   transition: opacity 0.25s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 /* Crossfade: fade out, swap text, fade in */
@@ -379,6 +387,9 @@ pi-working-indicator {
   font-size: 11.5px;
   letter-spacing: 0.01em;
   color: var(--muted-foreground);
+  flex-wrap: nowrap;
+  overflow: hidden;
+  min-width: 0;
 }
 
 /* Model picker — left side */
@@ -428,6 +439,8 @@ pi-working-indicator {
 .pi-status-ctx {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .pi-status-thinking {
@@ -438,6 +451,8 @@ pi-working-indicator {
   align-items: center;
   gap: 4px;
   transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .pi-status-thinking svg { flex-shrink: 0; }
 .pi-status-thinking:hover {

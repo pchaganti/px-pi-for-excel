@@ -556,10 +556,12 @@ async function init(): Promise<void> {
       container.className = "pi-queue";
       document.body.appendChild(container);
     }
-    // Position above the input area
+    // Position above the working indicator (or input area if indicator hidden)
+    const workingEl = sidebar.querySelector("pi-working-indicator") as HTMLElement | null;
     const inputArea = sidebar.querySelector(".pi-input-area") as HTMLElement | null;
-    const inputTop = inputArea ? inputArea.getBoundingClientRect().top : window.innerHeight - 80;
-    container.style.bottom = `${window.innerHeight - inputTop}px`;
+    const anchorEl = workingEl && workingEl.offsetHeight > 0 ? workingEl : inputArea;
+    const anchorTop = anchorEl ? anchorEl.getBoundingClientRect().top : window.innerHeight - 80;
+    container.style.bottom = `${window.innerHeight - anchorTop}px`;
 
     container.innerHTML = _queuedMessages.map(({ type, text }) => {
       const label = type === "steer" ? "Steering" : "Follow-up";

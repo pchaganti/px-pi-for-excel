@@ -109,7 +109,7 @@ export class PiInput extends LitElement {
         <textarea
           class="pi-input-textarea"
           .value=${this._value}
-          placeholder=${this.isStreaming ? "Steer (Enter) · Follow-up (⌥Enter)…" : PLACEHOLDER_HINTS[this._placeholderIndex]}
+          placeholder=${this.isStreaming ? "Steer (↵) · Follow-up (⌥↵)" : PLACEHOLDER_HINTS[this._placeholderIndex]}
           rows="1"
           @input=${this._onInput}
           @keydown=${this._onKeydown}
