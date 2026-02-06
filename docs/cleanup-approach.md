@@ -33,7 +33,8 @@ Three review lenses:
 - Keep UI wiring close to UI code; tool logic close to tool code
 
 ### 5) Verification
-- `npx tsc --noEmit`
+- `npm run typecheck`
+- `npm run lint`
 - `npm run test:models` (requires Node 22+ for `--experimental-strip-types`)
 - `npx vite build`
 - Manual spot test in Excel add‑in
