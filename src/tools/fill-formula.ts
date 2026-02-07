@@ -138,7 +138,7 @@ export function createFillFormulaTool(): AgentTool<typeof schema> {
 
         const fullAddr = qualifiedAddress(result.sheetName, result.address);
         const lines: string[] = [];
-        lines.push(`✅ Filled formula across **${fullAddr}** (${result.rowCount}×${result.columnCount})`);
+        lines.push(`Filled formula across **${fullAddr}** (${result.rowCount}×${result.columnCount})`);
         lines.push(`**Formula pattern:** \`${params.formula}\``);
 
         const topLeft = result.readBackFormulas?.[0]?.[0];

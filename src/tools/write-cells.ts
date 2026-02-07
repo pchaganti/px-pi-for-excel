@@ -275,7 +275,7 @@ function formatSuccess(result: SuccessWriteCellsResult, rows: number, cols: numb
   const startCell = cellPart.split(":")[0];
 
   const lines: string[] = [];
-  lines.push(`✅ Written to **${fullAddr}** (${rows}×${cols})`);
+  lines.push(`Written to **${fullAddr}** (${rows}×${cols})`);
 
   // Check for formula errors
   const errors = findErrors(result.readBackValues, startCell);

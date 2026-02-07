@@ -316,7 +316,7 @@ export function createFormatCellsTool(): AgentTool<typeof schema> {
           content: [
             {
               type: "text",
-              text: `✅ Formatted **${fullAddr}**: ${result.applied.join(", ")}.${warningText}`,
+              text: `Formatted **${fullAddr}**: ${result.applied.join(", ")}.${warningText}`,
             },
           ],
           details: undefined,

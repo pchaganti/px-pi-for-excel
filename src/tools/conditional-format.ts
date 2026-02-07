@@ -144,7 +144,7 @@ async function clearFormats(params: Params): Promise<AgentToolResult<undefined>>
     content: [
       {
         type: "text",
-        text: `✅ Cleared ${result.existing} conditional format(s) from **${fullAddr}**.`,
+        text: `Cleared ${result.existing} conditional format(s) from **${fullAddr}**.`,
       },
     ],
     details: undefined,
@@ -202,7 +202,7 @@ async function addFormat(params: Params): Promise<AgentToolResult<undefined>> {
     content: [
       {
         type: "text",
-        text: `✅ Added conditional format to **${fullAddr}** — ${details}.`,
+        text: `Added conditional format to **${fullAddr}** — ${details}.`,
       },
     ],
     details: undefined,
