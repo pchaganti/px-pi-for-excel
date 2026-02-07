@@ -108,6 +108,10 @@ export default defineConfig({
   plugins: [piAuthPlugin(), stubBedrockProviderPlugin()],
 
   server: {
+    // Must stay on :3000 because manifest hardcodes it.
+    // Bind IPv6 too: Excel's webview may resolve localhost → ::1 and fail if we only listen on 127.0.0.1.
+    host: "::",
+    strictPort: true,
     port: 3000,
     https: hasHttpsCerts
       ? { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) }
