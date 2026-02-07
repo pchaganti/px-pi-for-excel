@@ -91,25 +91,67 @@ export function createReadRangeTool(): AgentTool<typeof schema> {
   };
 }
 
+function hasAnyNonEmptyCell(values: unknown[][]): boolean {
+  for (const row of values) {
+    for (const v of row) {
+      if (v !== null && v !== undefined && v !== "") return true;
+    }
+  }
+  return false;
+}
+
+function formatAsExcelMarkdownTable(values: unknown[][], startCell: string): string {
+  if (!values || values.length === 0) return "(empty)";
+
+  const start = parseCell(startCell);
+  const numCols = Math.max(...values.map((r) => r.length));
+
+  const header: unknown[] = [""];
+  for (let c = 0; c < numCols; c++) {
+    header.push(colToLetter(start.col + c));
+  }
+
+  const rows: unknown[][] = [header];
+
+  for (let r = 0; r < values.length; r++) {
+    const row: unknown[] = [start.row + r, ...values[r]];
+    while (row.length < numCols + 1) row.push("");
+    rows.push(row);
+  }
+
+  return formatAsMarkdownTable(rows);
+}
+
 function formatCompact(
   address: string,
   result: ReadRangeResult,
   startCell: string,
 ): AgentToolResult<undefined> {
   const lines: string[] = [];
+
+  // Collect these once; we also use them to detect a truly empty range.
+  const formulas = extractFormulas(result.formulas, startCell);
+  const errors = findErrors(result.values, startCell);
+  const hasValues = hasAnyNonEmptyCell(result.values);
+
   lines.push(`**${address}** (${result.rows}×${result.cols})`);
+
+  if (!hasValues && formulas.length === 0 && errors.length === 0) {
+    lines.push("");
+    lines.push("_All cells are empty._");
+    return { content: [{ type: "text", text: lines.join("\n") }], details: undefined };
+  }
+
   lines.push("");
-  lines.push(formatAsMarkdownTable(result.values));
+  lines.push(formatAsExcelMarkdownTable(result.values, startCell));
 
   // Append formulas if any exist
-  const formulas = extractFormulas(result.formulas, startCell);
   if (formulas.length > 0) {
     lines.push("");
     lines.push(`**Formulas:** ${formulas.join(", ")}`);
   }
 
   // Append errors if any
-  const errors = findErrors(result.values, startCell);
   if (errors.length > 0) {
     lines.push("");
     lines.push(`⚠️ **Errors:** ${errors.map((e) => `${e.address}=${e.error}`).join(", ")}`);
@@ -124,15 +166,27 @@ function formatDetailed(
   startCell: string,
 ): AgentToolResult<undefined> {
   const lines: string[] = [];
+
+  // Collect these once; we also use them to detect a truly empty range.
+  const formulas = extractFormulas(result.formulas, startCell);
+  const errors = findErrors(result.values, startCell);
+  const hasValues = hasAnyNonEmptyCell(result.values);
+
   lines.push(`**${address}** (${result.rows}×${result.cols})`);
+
+  if (!hasValues && formulas.length === 0 && errors.length === 0) {
+    lines.push("");
+    lines.push("_All cells are empty._");
+    return { content: [{ type: "text", text: lines.join("\n") }], details: undefined };
+  }
+
   lines.push("");
 
   // Values table
   lines.push("### Values");
-  lines.push(formatAsMarkdownTable(result.values));
+  lines.push(formatAsExcelMarkdownTable(result.values, startCell));
 
   // All formulas
-  const formulas = extractFormulas(result.formulas, startCell);
   if (formulas.length > 0) {
     lines.push("");
     lines.push("### Formulas");
@@ -164,7 +218,6 @@ function formatDetailed(
   }
 
   // Errors
-  const errors = findErrors(result.values, startCell);
   if (errors.length > 0) {
     lines.push("");
     lines.push("### ⚠️ Errors");

@@ -40,6 +40,11 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **`get_recent_changes`:** flushes `ChangeTracker` and returns user edits since last message.
 - **Rationale:** makes context features discoverable/useful to the agent when it needs them explicitly.
 
+## Range reading (`read_range`)
+- **Compact/detailed tables:** render an Excel-style markdown grid with **column letters** and **row numbers** (instead of treating the first data row as a table header).
+- **Empty ranges:** if a range has **no values, formulas, or errors**, return `_All cells are empty._` (omit the table) to avoid confusing “blank header” visuals.
+- **Rationale:** improves readability in the sidebar UI and avoids ambiguous tables for 1-row or empty ranges.
+
 ## Default formatting assumption
 - **System prompt:** “Default font for formatting is Arial 10 unless user specifies otherwise.”
 - **Rationale:** keeps column width conversions consistent with the chosen baseline.
