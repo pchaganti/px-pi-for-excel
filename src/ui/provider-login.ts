@@ -355,7 +355,7 @@ export function buildProviderRow(
           (typeof msg === "string" && /load failed|failed to fetch|cors|cross-origin|networkerror/i.test(msg));
 
         if (isLikelyCors) {
-          errorEl.textContent = "Login was blocked by browser CORS. Start the local HTTPS proxy (npm run proxy:https) and enable it in /settings → Proxy.";
+          errorEl.textContent = "Login was blocked by browser CORS. Start the local HTTPS proxy (npm run proxy:https) and enable it (Proxy toggle above, or /settings → Proxy).";
         } else {
           errorEl.textContent = msg || "Login failed";
         }
