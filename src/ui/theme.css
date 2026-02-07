@@ -580,8 +580,12 @@ pi-working-indicator {
   border: var(--glass-border);
   padding: 28px 24px;
   width: min(340px, 90vw);
+  max-height: min(680px, 86vh);
   box-shadow: var(--glass-shadow-lg);
   position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .pi-welcome-logo {
@@ -612,6 +616,9 @@ pi-working-indicator {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 2px;
 }
 
 .pi-welcome-provider {

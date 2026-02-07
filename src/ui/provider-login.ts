@@ -17,13 +17,24 @@ export interface ProviderDef {
   desc?: string;
 }
 
+const isBrowserOfficeHost = (): boolean =>
+  typeof window !== "undefined" && typeof (window as unknown as { Office?: unknown }).Office !== "undefined";
+
 export const ALL_PROVIDERS: ProviderDef[] = [
-  // OAuth providers first (free with subscription)
-  { id: "anthropic",           label: "Anthropic",        oauth: "anthropic",          desc: "Claude Pro/Max" },
-  { id: "openai-codex",       label: "ChatGPT Plus/Pro", oauth: "openai-codex",       desc: "Codex Subscription" },
-  { id: "github-copilot",     label: "GitHub Copilot",   oauth: "github-copilot" },
-  { id: "google-gemini-cli",  label: "Gemini CLI",       oauth: "google-gemini-cli",  desc: "Google Cloud Code Assist" },
-  { id: "google-antigravity", label: "Antigravity",      oauth: "google-antigravity", desc: "Gemini 3, Claude, GPT-OSS" },
+  // OAuth providers first (subscription / device flows)
+  { id: "anthropic",       label: "Anthropic",      oauth: "anthropic",      desc: "Claude Pro/Max" },
+  { id: "github-copilot",  label: "GitHub Copilot", oauth: "github-copilot" },
+
+  // NOTE: These OAuth providers rely on Node.js-only flows (local callback server, etc.).
+  // Hide them in Office taskpanes to avoid confusing runtime errors.
+  ...(!isBrowserOfficeHost()
+    ? [
+        { id: "openai-codex",       label: "ChatGPT Plus/Pro", oauth: "openai-codex",       desc: "Codex Subscription" },
+        { id: "google-gemini-cli",  label: "Gemini CLI",       oauth: "google-gemini-cli",  desc: "Google Cloud Code Assist" },
+        { id: "google-antigravity", label: "Antigravity",      oauth: "google-antigravity", desc: "Gemini 3, Claude, GPT-OSS" },
+      ]
+    : []),
+
   // API key providers
   { id: "openai",             label: "OpenAI",           desc: "API key" },
   { id: "google",             label: "Google Gemini",    desc: "API key" },
