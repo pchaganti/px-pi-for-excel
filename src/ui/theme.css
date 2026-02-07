@@ -665,7 +665,7 @@ tool-message > div.border {
 
 /* Excel tool renderer (Pi-for-Excel) — header typography */
 tool-message .pi-excel-tool-header {
-  display: flex;
+  display: inline-flex;
   align-items: baseline;
   gap: 8px;
   min-width: 0;
@@ -715,36 +715,29 @@ markdown-block pre {
 code-block { font-size: 12px !important; border-radius: 8px !important; }
 
 /* Thinking blocks */
-thinking-block { font-size: 12px; }
-
-/* Ctrl+O toggle — collapse thinking + tool internals */
-
-/* Thinking: keep "> Thinking…" header, hide expanded content */
-.pi-hide-internals thinking-block markdown-block {
-  display: none !important;
-}
-/* Force chevron to collapsed rotation */
-.pi-hide-internals thinking-block .thinking-header .rotate-90 {
-  transform: none !important;
+thinking-block { font-size: 13.5px; font-family: var(--font-sans); }
+thinking-block .thinking-header {
+  font-size: 13.5px !important;
+  width: 100%;
+  justify-content: space-between;
 }
 
-/* Tool messages: collapse to a slim single-line row */
-.pi-hide-internals tool-message .pi-excel-tool__body {
-  display: none !important;
-}
+/* Move chevron to the right to match tool cards */
+thinking-block .thinking-header > span:first-child { order: 2; }
+thinking-block .thinking-header > span:last-child { order: 1; }
 
-.pi-hide-internals tool-message > div {
-  max-height: 36px;
-  overflow: hidden;
+/* Ctrl+O toggle — thinking blocks become pills */
+.pi-hide-internals thinking-block .thinking-header {
   padding: 6px 12px !important;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: oklch(1 0 0 / 0.60);
+  box-shadow: none;
   opacity: 0.65;
 }
 
-.pi-hide-internals tool-message > div.border {
-  border-radius: 999px !important;
-  box-shadow: none !important;
-  background: oklch(1 0 0 / 0.60) !important;
-}
+/* Ctrl+O toggle — tool cards: keep normal card styling.
+   (We collapse/expand the tool body by toggling max-h-* classes in JS.) */
 
 /* Reduce vertical gaps between blocks when internals are hidden */
 .pi-hide-internals assistant-message .px-4.flex.flex-col.gap-3 {

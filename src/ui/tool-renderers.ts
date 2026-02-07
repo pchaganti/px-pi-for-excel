@@ -9,11 +9,13 @@
 import type { ImageContent, TextContent, ToolResultMessage } from "@mariozechner/pi-ai";
 import {
   registerToolRenderer,
+  renderCollapsibleHeader,
   renderHeader,
   type ToolRenderer,
   type ToolRenderResult,
 } from "@mariozechner/pi-web-ui";
 import { html, type TemplateResult } from "lit";
+import { createRef, ref } from "lit/directives/ref.js";
 import { Code } from "lucide";
 
 const EXCEL_TOOL_NAMES = [
@@ -166,21 +168,18 @@ function renderImages(images: ImageContent[]): TemplateResult {
   `;
 }
 
-function renderExcelToolHeader(opts: {
+function renderExcelToolTitle(opts: {
   toolName: string;
-  state: ToolState;
   summary?: string | null;
 }): TemplateResult {
   const summary = opts.summary?.trim();
 
-  const headerText = html`
+  return html`
     <span class="pi-excel-tool-header">
       <span class="pi-excel-tool-name">${opts.toolName}</span>
       ${summary ? html`<span class="pi-excel-tool-summary">${summary}</span>` : ""}
     </span>
   `;
-
-  return renderHeader(opts.state, Code, headerText);
 }
 
 function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, unknown> {
@@ -198,6 +197,21 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
 
       const paramsJson = formatParamsJson(params);
 
+      const contentRef = createRef<HTMLDivElement>();
+      const chevronRef = createRef<HTMLElement>();
+      const defaultExpanded = !document.body.classList.contains("pi-hide-internals");
+
+      const wrapBody = (inner: TemplateResult) =>
+        defaultExpanded
+          ? html`<div
+              ${ref(contentRef)}
+              class="pi-excel-tool__body overflow-hidden transition-all duration-300 space-y-3 max-h-[2000px] mt-3"
+            >${inner}</div>`
+          : html`<div
+              ${ref(contentRef)}
+              class="pi-excel-tool__body overflow-hidden transition-all duration-300 space-y-3 max-h-0"
+            >${inner}</div>`;
+
       // With result: show input + rendered output
       if (result) {
         const { text, images } = splitToolResultContent(result);
@@ -209,10 +223,17 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
           content: html`
             <div class="pi-excel-tool">
               <div class="pi-excel-tool__header">
-                ${renderExcelToolHeader({ toolName, state, summary })}
+                ${renderCollapsibleHeader(
+                  state,
+                  Code,
+                  renderExcelToolTitle({ toolName, summary }),
+                  contentRef,
+                  chevronRef,
+                  defaultExpanded,
+                )}
               </div>
 
-              <div class="pi-excel-tool__body mt-3 space-y-3">
+              ${wrapBody(html`
                 ${paramsJson
                   ? html`
                     <div class="pi-excel-tool__section">
@@ -246,7 +267,7 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
 
                   ${renderImages(images)}
                 </div>
-              </div>
+              `)}
             </div>
           `,
           isCustom: false,
@@ -259,14 +280,21 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
           content: html`
             <div class="pi-excel-tool">
               <div class="pi-excel-tool__header">
-                ${renderExcelToolHeader({ toolName, state })}
+                ${renderCollapsibleHeader(
+                  state,
+                  Code,
+                  renderExcelToolTitle({ toolName }),
+                  contentRef,
+                  chevronRef,
+                  defaultExpanded,
+                )}
               </div>
-              <div class="pi-excel-tool__body mt-3">
+              ${wrapBody(html`
                 <div class="pi-excel-tool__section">
                   <div class="text-xs font-medium mb-1 text-muted-foreground">Input</div>
                   <code-block .code=${paramsJson} language="json"></code-block>
                 </div>
-              </div>
+              `)}
             </div>
           `,
           isCustom: false,
@@ -278,7 +306,7 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
         content: html`
           <div class="pi-excel-tool">
             <div class="pi-excel-tool__header">
-              ${renderExcelToolHeader({ toolName, state })}
+              ${renderHeader(state, Code, renderExcelToolTitle({ toolName }))}
             </div>
           </div>
         `,

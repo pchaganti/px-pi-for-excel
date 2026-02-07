@@ -32,6 +32,47 @@ const THINKING_COLORS: Record<ThinkingLevel, string> = {
   xhigh: "#8b008b",
 };
 
+function setExcelToolCardsExpanded(expanded: boolean): void {
+  const toolMessages = document.querySelectorAll("tool-message");
+
+  for (const toolMessage of toolMessages) {
+    const body = toolMessage.querySelector<HTMLElement>(".pi-excel-tool__body");
+    if (!body) continue;
+
+    if (expanded) {
+      body.classList.remove("max-h-0");
+      body.classList.add("max-h-[2000px]", "mt-3");
+    } else {
+      body.classList.remove("max-h-[2000px]", "mt-3");
+      body.classList.add("max-h-0");
+    }
+
+    const up = toolMessage.querySelector<HTMLElement>(".chevron-up");
+    const down = toolMessage.querySelector<HTMLElement>(".chevrons-up-down");
+    if (!up || !down) continue;
+
+    if (expanded) {
+      up.classList.remove("hidden");
+      down.classList.add("hidden");
+    } else {
+      up.classList.add("hidden");
+      down.classList.remove("hidden");
+    }
+  }
+}
+
+function collapseThinkingBlocks(): void {
+  const blocks = document.querySelectorAll("thinking-block");
+  for (const block of blocks) {
+    // When expanded, ThinkingBlock renders a markdown-block for its body.
+    const isExpanded = Boolean(block.querySelector("markdown-block"));
+    if (!isExpanded) continue;
+
+    const header = block.querySelector<HTMLElement>(".thinking-header");
+    header?.click();
+  }
+}
+
 export function getThinkingLevels(agent: Agent): ThinkingLevel[] {
   const model = agent.state.model;
   if (!model || !model.reasoning) return ["off"];
@@ -111,6 +152,13 @@ export function installKeyboardShortcuts(opts: {
     if ((e.ctrlKey || e.metaKey) && e.key === "o") {
       e.preventDefault();
       const collapsed = document.body.classList.toggle("pi-hide-internals");
+
+      // Collapse/expand tool cards to match the new mode.
+      requestAnimationFrame(() => setExcelToolCardsExpanded(!collapsed));
+
+      // When hiding internals, also collapse any expanded thinking blocks.
+      if (collapsed) requestAnimationFrame(() => collapseThinkingBlocks());
+
       showToast(collapsed ? "Details hidden (⌃O)" : "Details shown (⌃O)", 1500);
       return;
     }
