@@ -171,18 +171,52 @@ function renderImages(images: ImageContent[]): TemplateResult {
 
 /* ── Human-readable descriptions ────────────────────────────── */
 
+/** Strip "(N×M)" / "(NxM)" dimension notation — not intuitive for users. */
+function stripDimensions(text: string): string {
+  return text.replace(/\s*\(\d+[×x]\d+\)/gi, "").trim();
+}
+
+/** Extract target address from write_cells / fill_formula result text. */
+function extractWrittenAddress(text: string): string | null {
+  // "Written to **Sheet1!A1:C10** (…)" or "Filled formula across **Sheet1!A1:B20** (…)"
+  const m = /(?:Written to|Filled formula across)\s+\*\*([^*]+)\*\*/.exec(text);
+  return m ? m[1] : null;
+}
+
+/** Count formula errors mentioned in tool result text. */
+function countResultErrors(text: string): number {
+  const m = /(\d+)\s+formula error/i.exec(text);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+/** True when result text starts with the blocked sentinel. */
+function isBlocked(text: string): boolean {
+  return text.trimStart().startsWith("⛔");
+}
+
+/** Result-aware summary for result text that is already user-friendly. */
+function resultSummary(text: string): string | null {
+  const line = extractSummaryLine(text);
+  return line ? stripDimensions(line) : null;
+}
+
+/** Append error / blocked badge when relevant. */
+function withBadge(base: string, resultText?: string): string {
+  if (!resultText) return base;
+  if (isBlocked(resultText)) return `${base} — blocked`;
+  const n = countResultErrors(resultText);
+  if (n > 0) return `${base} — ${n} error${n !== 1 ? "s" : ""}`;
+  return base;
+}
+
 /** One-liner describing what the tool call does/did. */
 function describeToolCall(toolName: string, params: unknown, resultText?: string): string {
-  if (resultText) {
-    const summary = extractSummaryLine(resultText);
-    if (summary) return summary;
-  }
-
   const p = safeParseParams(params);
   const range = p.range as string | undefined;
   const startCell = p.start_cell as string | undefined;
 
   switch (toolName) {
+    // ── Read tools: always use param-based (result text has confusing NxM) ──
     case "read_range":
       return range ? `Read ${range}` : "Read range";
     case "read_selection":
@@ -193,15 +227,34 @@ function describeToolCall(toolName: string, params: unknown, resultText?: string
       return range ? `Export ${range} as CSV` : "Export as CSV";
     case "get_all_objects":
       return "Get charts & objects";
-    case "write_cells":
-      return startCell ? `Write starting at ${startCell}` : "Write cells";
-    case "fill_formula":
-      return range ? `Fill formula in ${range}` : "Fill formula";
-    case "search_workbook": {
-      const q = p.query as string | undefined;
-      return q ? `Search "${q}"` : "Search workbook";
+
+    // ── Write tools: extract actual target from result, flag errors ──
+    case "write_cells": {
+      const addr = resultText ? extractWrittenAddress(resultText) : null;
+      const base = addr
+        ? `Wrote to ${addr}`
+        : startCell ? `Write starting at ${startCell}` : "Write cells";
+      return withBadge(base, resultText);
+    }
+    case "fill_formula": {
+      const addr = resultText ? extractWrittenAddress(resultText) : null;
+      const base = addr
+        ? `Filled ${addr}`
+        : range ? `Fill formula in ${range}` : "Fill formula";
+      return withBadge(base, resultText);
+    }
+
+    // ── Tools with good human-readable result text ──
+    case "format_cells": {
+      if (resultText) { const s = resultSummary(resultText); if (s) return s; }
+      return range ? `Format ${range}` : "Format cells";
+    }
+    case "conditional_format": {
+      if (resultText) { const s = resultSummary(resultText); if (s) return s; }
+      return range ? `Conditional format ${range}` : "Conditional format";
     }
     case "modify_structure": {
+      if (resultText) { const s = resultSummary(resultText); if (s) return s; }
       const action = p.action as string | undefined;
       const name = (p.name ?? p.new_name) as string | undefined;
       if (action === "add_sheet") return name ? `Add sheet "${name}"` : "Add sheet";
@@ -209,18 +262,23 @@ function describeToolCall(toolName: string, params: unknown, resultText?: string
       if (action === "delete_sheet") return "Delete sheet";
       return "Modify structure";
     }
-    case "format_cells":
-      return range ? `Format ${range}` : "Format cells";
-    case "conditional_format":
-      return range ? `Conditional format ${range}` : "Conditional format";
+    case "search_workbook": {
+      if (resultText) { const s = resultSummary(resultText); if (s) return s; }
+      const q = p.query as string | undefined;
+      return q ? `Search "${q}"` : "Search workbook";
+    }
+
+    // ── Other tools: param-based descriptions ──
     case "trace_dependencies": {
       const cell = (p.cell ?? p.range) as string | undefined;
       return cell ? `Trace ${cell}` : "Trace dependencies";
     }
     case "get_recent_changes":
       return "Recent changes";
-    default:
+    default: {
+      if (resultText) { const s = resultSummary(resultText); if (s) return s; }
       return toolName.replace(/_/g, " ");
+    }
   }
 }
 
