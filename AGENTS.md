@@ -25,3 +25,23 @@ Verification helpers:
 Pre-commit hook:
 - Runs both checks automatically (see `.githooks/pre-commit`, installed via `npm install`).
 - Bypass when needed: `git commit --no-verify`
+
+## Excel Add-in dev: sideloaded manifest gotcha
+
+Excel Mac loads the add-in from a **sideloaded manifest** stored at:
+```
+~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/{add-in-id}.manifest.xml
+```
+
+This file is **separate from** the repo's `manifest.xml`. If local CSS/JS changes aren't appearing in the sidebar despite the Vite dev server running correctly:
+
+1. **Check the sideloaded manifest first.** It may point to a production URL (e.g. `https://pi-for-excel.vercel.app/…`) instead of `https://localhost:3000/…`.
+2. Fix it by copying the repo manifest over: `cp manifest.xml ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/a1b2c3d4-e5f6-7890-abcd-ef1234567890.manifest.xml`
+3. Quit Excel fully and reopen.
+
+If the manifest URL is correct and changes still don't appear, clear the WKWebView cache:
+```
+rm -rf ~/Library/Containers/com.microsoft.Excel/Data/Library/WebKit/
+rm -rf ~/Library/Containers/com.microsoft.Excel/Data/Library/Caches/WebKit/
+```
+Then quit + reopen Excel.
