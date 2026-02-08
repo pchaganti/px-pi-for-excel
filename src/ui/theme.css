@@ -735,37 +735,150 @@ pi-working-indicator {
 user-message .mx-4  { margin-left: 8px !important; margin-right: 8px !important; }
 assistant-message .px-4 { padding-left: 12px !important; padding-right: 12px !important; }
 
-/* Tool cards — clean border (only the outer tool card wrapper) */
+/* ── Tool cards — compact, collapsed by default ──────────── */
+
+.pi-tool-card {
+  border-radius: 10px;
+  border: 1px solid oklch(0 0 0 / 0.06);
+  background: oklch(1 0 0 / 0.45);
+  overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.pi-tool-card:hover {
+  border-color: oklch(0 0 0 / 0.10);
+}
+
+/* Error state — warm red tint */
+.pi-tool-card[data-state="error"] {
+  border-color: oklch(0.55 0.22 25 / 0.25);
+}
+
+/* Header — the clickable toggle row from pi-web-ui */
+.pi-tool-card__header > button {
+  padding: 9px 12px !important;
+  gap: 7px !important;
+  font-size: 13px !important;
+  min-width: 0 !important;
+  overflow: hidden;
+}
+.pi-tool-card__header > button > div {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Collapsed: hide the Code icon — description is enough */
+.pi-tool-card__header > button > div > .text-green-600,
+.pi-tool-card__header > button > div > .dark\:text-green-500 {
+  display: none;
+}
+
+/* Title — the human-readable description */
+.pi-tool-card__title {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.pi-tool-card[data-state="error"] .pi-tool-card__title {
+  color: var(--destructive);
+}
+
+/* Body — revealed on expand */
+.pi-tool-card__body {
+  /* max-h-0 / max-h-[2000px] toggled by pi-web-ui JS */
+}
+/* pi-web-ui adds mt-3 when expanded; keep our card tight */
+.pi-tool-card__body.mt-3 {
+  margin-top: 0 !important;
+}
+.pi-tool-card__inner {
+  padding: 2px 14px 14px;
+  border-top: 1px solid oklch(0 0 0 / 0.04);
+}
+
+/* Tool identifier — subtle mono label */
+.pi-tool-card__detail {
+  padding: 8px 0 2px;
+}
+.pi-tool-card__tool-id {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted-foreground);
+  opacity: 0.55;
+  letter-spacing: 0.02em;
+}
+
+/* Sections (Input / Output) */
+.pi-tool-card__section {
+  margin-top: 10px;
+}
+.pi-tool-card__section-label {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+/* Stepper dot — left side of tool messages */
+tool-message {
+  position: relative;
+  padding-left: 18px;
+  min-width: 0;
+  overflow: hidden;
+}
+tool-message::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 15px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: oklch(0 0 0 / 0.16);
+  z-index: 1;
+}
+/* In-progress: pulsing teal dot */
+tool-message:has(.pi-tool-card[data-state="inprogress"])::before {
+  background: var(--pi-green);
+  animation: pi-dot-pulse 1.5s ease-in-out infinite;
+}
+/* Error: red dot */
+tool-message:has(.pi-tool-card[data-state="error"])::before {
+  background: var(--destructive);
+}
+
+@keyframes pi-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Connecting line between consecutive tool messages */
+tool-message:has(+ tool-message)::after {
+  content: '';
+  position: absolute;
+  left: 4.5px;
+  top: 23px;
+  bottom: -3px;
+  width: 1px;
+  background: oklch(0 0 0 / 0.08);
+  z-index: 0;
+}
+
+/* Fallback: hide pi-web-ui default wrapper if it appears */
 tool-message > div.border {
   border: 1px solid var(--border) !important;
   background: oklch(0.99 0.002 90) !important;
   border-radius: 10px !important;
   box-shadow: 0 1px 3px oklch(0 0 0 / 0.04);
-}
-
-/* Excel tool renderer (Pi-for-Excel) — header typography */
-tool-message .pi-excel-tool-header {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-  font-size: 13.5px;
-  font-family: var(--font-sans);
-}
-
-tool-message .pi-excel-tool-name {
-  font-weight: 600;
-  color: var(--foreground);
-  flex: 0 0 auto;
-}
-
-tool-message .pi-excel-tool-summary {
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--muted-foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Markdown — readable at sidebar width */

@@ -36,7 +36,7 @@ function setExcelToolCardsExpanded(expanded: boolean): void {
   const toolMessages = document.querySelectorAll("tool-message");
 
   for (const toolMessage of toolMessages) {
-    const body = toolMessage.querySelector<HTMLElement>(".pi-excel-tool__body");
+    const body = toolMessage.querySelector<HTMLElement>(".pi-tool-card__body");
     if (!body) continue;
 
     if (expanded) {
