@@ -176,6 +176,29 @@ function stripDimensions(text: string): string {
   return text.replace(/\s*\(\d+[×x]\d+\)/gi, "").trim();
 }
 
+/**
+ * Compact multi-range addresses by factoring out a shared sheet prefix.
+ *   "Summary!A3,Summary!A13,Summary!A22" → "Summary!A3,A13,A22"
+ *   "Costs!A18:C18, Costs!A19:C19"       → "Costs!A18:C18,A19:C19"
+ */
+function compactRange(range: string): string {
+  const parts = range.split(/\s*,\s*/);
+  if (parts.length <= 1) return range;
+
+  const parsed = parts.map((p) => {
+    const bang = p.indexOf("!");
+    return bang >= 0
+      ? { sheet: p.substring(0, bang), addr: p.substring(bang + 1) }
+      : { sheet: "", addr: p };
+  });
+
+  const first = parsed[0].sheet;
+  if (first && parsed.every((p) => p.sheet === first)) {
+    return `${first}!${parsed.map((p) => p.addr).join(",")}`;
+  }
+  return range;
+}
+
 /** Extract target address from write_cells / fill_formula result text. */
 function extractWrittenAddress(text: string): string | null {
   // "Written to **Sheet1!A1:C10** (…)" or "Filled formula across **Sheet1!A1:B20** (…)"
@@ -216,43 +239,39 @@ function describeToolCall(toolName: string, params: unknown, resultText?: string
   const startCell = p.start_cell as string | undefined;
 
   switch (toolName) {
-    // ── Read tools: always use param-based (result text has confusing NxM) ──
+    // ── Read tools: always param-based (result text has confusing NxM) ──
     case "read_range":
-      return range ? `Read ${range}` : "Read range";
+      return range ? `Read ${compactRange(range)}` : "Read range";
     case "read_selection":
       return "Read selection";
     case "get_workbook_overview":
       return "Workbook overview";
     case "get_range_as_csv":
-      return range ? `Export ${range} as CSV` : "Export as CSV";
+      return range ? `Export ${compactRange(range)} as CSV` : "Export as CSV";
     case "get_all_objects":
       return "Get charts & objects";
 
-    // ── Write tools: extract actual target from result, flag errors ──
+    // ── Write tools: extract target from result, flag errors ──
     case "write_cells": {
       const addr = resultText ? extractWrittenAddress(resultText) : null;
       const base = addr
-        ? `Wrote to ${addr}`
-        : startCell ? `Write starting at ${startCell}` : "Write cells";
+        ? `Wrote ${addr}`
+        : startCell ? `Write ${startCell}` : "Write cells";
       return withBadge(base, resultText);
     }
     case "fill_formula": {
       const addr = resultText ? extractWrittenAddress(resultText) : null;
       const base = addr
         ? `Filled ${addr}`
-        : range ? `Fill formula in ${range}` : "Fill formula";
+        : range ? `Fill ${compactRange(range)}` : "Fill formula";
       return withBadge(base, resultText);
     }
 
-    // ── Tools with good human-readable result text ──
-    case "format_cells": {
-      if (resultText) { const s = resultSummary(resultText); if (s) return s; }
-      return range ? `Format ${range}` : "Format cells";
-    }
-    case "conditional_format": {
-      if (resultText) { const s = resultSummary(resultText); if (s) return s; }
-      return range ? `Conditional format ${range}` : "Conditional format";
-    }
+    // ── Format tools: just the compacted range (details are in the card body) ──
+    case "format_cells":
+      return range ? `Format ${compactRange(range)}` : "Format cells";
+    case "conditional_format":
+      return range ? `Cond. format ${compactRange(range)}` : "Conditional format";
     case "modify_structure": {
       if (resultText) { const s = resultSummary(resultText); if (s) return s; }
       const action = p.action as string | undefined;
