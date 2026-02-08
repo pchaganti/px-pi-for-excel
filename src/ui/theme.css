@@ -859,6 +859,27 @@ tool-message {
   min-width: 0;
 }
 
+/* ── Grouped tool cards ────────────────────────────────── */
+
+/* Hide non-first members of a collapsed group */
+tool-message.pi-grouped {
+  display: none;
+}
+
+/* "+N more" badge on group leader */
+tool-message[data-group-size] .pi-tool-card__header::after {
+  content: '+' attr(data-group-size) ' more';
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-left: auto;
+  padding: 1px 6px;
+  background: oklch(0 0 0 / 0.04);
+  border-radius: 4px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
 /* Fallback: hide pi-web-ui default wrapper if it appears */
 tool-message > div.border {
   border: 1px solid var(--border) !important;

@@ -350,7 +350,7 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
 
         return {
           content: html`
-            <div class="pi-tool-card" data-state=${state}>
+            <div class="pi-tool-card" data-state=${state} data-tool-name=${toolName}>
               <div class="pi-tool-card__header">
                 ${renderCollapsibleHeader(state, Code, title, contentRef, chevronRef, defaultExpanded)}
               </div>
@@ -400,7 +400,7 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
       if (paramsJson) {
         return {
           content: html`
-            <div class="pi-tool-card" data-state=${state}>
+            <div class="pi-tool-card" data-state=${state} data-tool-name=${toolName}>
               <div class="pi-tool-card__header">
                 ${renderCollapsibleHeader(state, Code, title, contentRef, chevronRef, defaultExpanded)}
               </div>
@@ -426,7 +426,7 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
       // ── No params or result yet ──────────────────────────
       return {
         content: html`
-          <div class="pi-tool-card" data-state=${state}>
+          <div class="pi-tool-card" data-state=${state} data-tool-name=${toolName}>
             <div class="pi-tool-card__header">
               ${renderHeader(state, Code, title)}
             </div>

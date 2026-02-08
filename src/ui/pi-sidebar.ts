@@ -14,6 +14,7 @@ import type { StreamingMessageContainer } from "@mariozechner/pi-web-ui";
 import "@mariozechner/pi-web-ui";
 import "./pi-input.js";
 import "./working-indicator.js";
+import { initToolGrouping } from "./tool-grouping.js";
 import type { PiInput } from "./pi-input.js";
 
 @customElement("pi-sidebar")
@@ -31,6 +32,7 @@ export class PiSidebar extends LitElement {
   @query("pi-input") private _input?: PiInput;
 
   private _unsubscribe?: () => void;
+  private _cleanupGrouping?: () => void;
   private _autoScroll = true;
   private _lastScrollTop = 0;
   private _resizeObserver?: ResizeObserver;
@@ -68,6 +70,8 @@ export class PiSidebar extends LitElement {
     super.disconnectedCallback();
     this._unsubscribe?.();
     this._unsubscribe = undefined;
+    this._cleanupGrouping?.();
+    this._cleanupGrouping = undefined;
     this._resizeObserver?.disconnect();
   }
 
@@ -78,6 +82,8 @@ export class PiSidebar extends LitElement {
   override async firstUpdated() {
     await this.updateComplete;
     this._setupAutoScroll();
+    const inner = this.querySelector(".pi-messages__inner");
+    if (inner) this._cleanupGrouping = initToolGrouping(inner as HTMLElement);
   }
 
   private _setupSubscription() {
