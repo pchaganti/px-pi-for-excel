@@ -1,11 +1,12 @@
 /**
  * Tool card grouping — collapses consecutive same-tool calls into a single
- * card with a "+N more" badge. Click the badge to expand; normal card
- * header clicks still toggle the card body as usual.
+ * container with a "+N more" badge. Click the badge to expand into a
+ * continuous list; normal card header clicks still toggle body as usual.
  */
 
-/** State tracked per group-leader element. */
+/** State tracked per wrapper element. */
 interface GroupState {
+  leader: Element;
   members: Element[];
   expanded: boolean;
 }
@@ -23,28 +24,27 @@ export function initToolGrouping(root: HTMLElement): () => void {
 
   function onClick(e: Event) {
     const target = e.target as HTMLElement;
-    // Only respond to clicks directly on the badge element.
     if (!target.classList.contains("pi-group-badge")) return;
 
-    const toolMsg = target.closest("tool-message");
-    if (!toolMsg) return;
-    const state = groups.get(toolMsg);
+    const wrapper = target.closest(".pi-tool-group");
+    if (!wrapper) return;
+    const state = groups.get(wrapper);
     if (!state) return;
 
     e.stopPropagation();
     e.preventDefault();
-    toggleGroup(toolMsg, state);
+    toggleGroup(wrapper, state);
   }
 
-  function toggleGroup(leader: Element, state: GroupState) {
+  function toggleGroup(wrapper: Element, state: GroupState) {
     state.expanded = !state.expanded;
     if (state.expanded) {
-      leader.classList.add("pi-group-expanded");
-      removeBadge(leader);
+      wrapper.classList.add("expanded");
+      removeBadge(state.leader);
       for (const m of state.members) m.classList.remove("pi-grouped");
     } else {
-      leader.classList.remove("pi-group-expanded");
-      insertBadge(leader, state.members.length);
+      wrapper.classList.remove("expanded");
+      insertBadge(state.leader, state.members.length);
       for (const m of state.members) m.classList.add("pi-grouped");
     }
   }
@@ -61,41 +61,62 @@ export function initToolGrouping(root: HTMLElement): () => void {
     button.appendChild(badge);
   }
 
-  function removeBadge(leader: Element) {
-    leader.querySelector(".pi-group-badge")?.remove();
+  function removeBadge(el: Element) {
+    el.querySelector(".pi-group-badge")?.remove();
+  }
+
+  /* ── Unwrap existing groups ────────────────────────────── */
+
+  function unwrapAll() {
+    for (const wrapper of root.querySelectorAll(".pi-tool-group")) {
+      const parent = wrapper.parentNode;
+      if (!parent) continue;
+      while (wrapper.firstChild) parent.insertBefore(wrapper.firstChild, wrapper);
+      parent.removeChild(wrapper);
+    }
+    groups.clear();
   }
 
   /* ── Grouping pass ────────────────────────────────────── */
 
   function applyGrouping() {
-    // Build a flat ordered list of tool-messages in DOM order.
+    // Disconnect observer during DOM manipulation to avoid re-entrancy.
+    observer.disconnect();
+
+    // Remember which leaders were expanded before re-grouping.
+    const expandedLeaders = new Set<Element>();
+    for (const [, s] of groups) {
+      if (s.expanded) expandedLeaders.add(s.leader);
+    }
+
+    // Flatten — move all tool-messages back to root.
+    unwrapAll();
+
+    // Clean up classes on all tool-messages.
     const toolMessages: Element[] = [];
-    for (const el of root.querySelectorAll("tool-message")) toolMessages.push(el);
-
-    // Clear previous grouping state
-    const prevLeaders = new Set(groups.keys());
-    groups.clear();
-
-    for (const el of toolMessages) {
-      el.classList.remove("pi-grouped", "pi-group-expanded", "pi-group-member", "pi-group-last");
+    for (const el of root.querySelectorAll("tool-message")) {
+      el.classList.remove("pi-grouped", "pi-group-member");
       el.removeAttribute("data-group-size");
       removeBadge(el);
+      toolMessages.push(el);
     }
 
     // Identify runs of 2+ consecutive same-name completed tools.
     const runs: Element[][] = [];
     let currentRun: Element[] = [];
 
-    for (let i = 0; i < toolMessages.length; i++) {
-      const el = toolMessages[i];
+    for (const el of toolMessages) {
       const card = el.querySelector(".pi-tool-card");
-      if (!card) continue;
+      if (!card) {
+        if (currentRun.length >= 2) runs.push(currentRun);
+        currentRun = [];
+        continue;
+      }
 
       const toolName = card.getAttribute("data-tool-name");
-      const state = card.getAttribute("data-state");
+      const cardState = card.getAttribute("data-state");
 
-      // Only group completed tools
-      if (state !== "complete" || !toolName) {
+      if (cardState !== "complete" || !toolName) {
         if (currentRun.length >= 2) runs.push(currentRun);
         currentRun = [];
         continue;
@@ -118,30 +139,39 @@ export function initToolGrouping(root: HTMLElement): () => void {
     }
     if (currentRun.length >= 2) runs.push(currentRun);
 
-    // Apply grouping to each run.
+    // Wrap each run in a container element.
     for (const run of runs) {
       const leader = run[0];
       const members = run.slice(1);
-      const expanded = prevLeaders.has(leader); // preserve expansion state
+      const wasExpanded = expandedLeaders.has(leader);
 
-      leader.setAttribute("data-group-size", String(members.length));
+      const wrapper = document.createElement("div");
+      wrapper.className = "pi-tool-group";
+
+      // Insert wrapper where the first element is, then move all run elements in.
+      leader.parentNode!.insertBefore(wrapper, leader);
+      for (const el of run) wrapper.appendChild(el);
+
+      // Mark members.
       for (const m of members) m.classList.add("pi-group-member");
-      members[members.length - 1].classList.add("pi-group-last");
 
-      if (!expanded) {
+      if (wasExpanded) {
+        wrapper.classList.add("expanded");
+      } else {
         insertBadge(leader, members.length);
         for (const m of members) m.classList.add("pi-grouped");
-      } else {
-        leader.classList.add("pi-group-expanded");
       }
 
-      groups.set(leader, { members, expanded });
+      groups.set(wrapper, { leader, members, expanded: wasExpanded });
     }
+
+    // Reconnect observer after all DOM work is done.
+    observer.observe(root, { childList: true, subtree: true });
   }
 
   /**
    * Check whether two elements are consecutive siblings (no intervening
-   * element siblings that aren't whitespace text nodes).
+   * element siblings — only whitespace text nodes allowed).
    */
   function areConsecutiveSiblings(a: Element, b: Element): boolean {
     let node: Node | null = a.nextSibling;
@@ -172,7 +202,7 @@ export function initToolGrouping(root: HTMLElement): () => void {
 
   root.addEventListener("click", onClick, true);
 
-  // Initial pass
+  // Initial pass.
   applyGrouping();
 
   /* ── Cleanup ──────────────────────────────────────────── */
@@ -182,11 +212,11 @@ export function initToolGrouping(root: HTMLElement): () => void {
     if (rafId) cancelAnimationFrame(rafId);
     root.removeEventListener("click", onClick, true);
 
+    unwrapAll();
     for (const el of root.querySelectorAll("tool-message")) {
-      el.classList.remove("pi-grouped", "pi-group-expanded", "pi-group-member", "pi-group-last");
+      el.classList.remove("pi-grouped", "pi-group-member");
       el.removeAttribute("data-group-size");
       removeBadge(el);
     }
-    groups.clear();
   };
 }
