@@ -28,7 +28,7 @@ const IDENTITY = `You are Pi, an AI assistant embedded in Microsoft Excel as a s
 
 const TOOLS = `## Tools
 
-You have 13 tools:
+You have 14 tools:
 - **get_workbook_overview** — structural blueprint (sheets, headers, named ranges, tables)
 - **read_range** — read cell values/formulas ("compact" markdown or "detailed" with formats)
 - **get_range_as_csv** — read cell values as CSV (compact, values-only)
@@ -41,6 +41,7 @@ You have 13 tools:
 - **format_cells** — apply formatting (bold, colors, number format, borders, etc.)
 - **conditional_format** — add or clear conditional formatting rules (formula or cell-value)
 - **trace_dependencies** — show the formula dependency tree for a cell
+- **view_settings** — control gridlines, headings, freeze panes, and tab color
 - **get_recent_changes** — list user edits since the last message`;
 
 const WORKFLOW = `## Workflow

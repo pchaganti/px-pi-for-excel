@@ -17,6 +17,7 @@ import { createReadSelectionTool } from "./read-selection.js";
 import { createGetRecentChangesTool } from "./get-recent-changes.js";
 import { createGetRangeAsCsvTool } from "./get-range-as-csv.js";
 import { createGetAllObjectsTool } from "./get-all-objects.js";
+import { createViewSettingsTool } from "./view-settings.js";
 import type { ChangeTracker } from "../context/change-tracker.js";
 
 type AnyTool = AgentTool<TSchema, unknown>;
@@ -36,6 +37,7 @@ export function createAllTools(opts?: { changeTracker?: ChangeTracker }): AnyToo
     createFormatCellsTool(),
     createConditionalFormatTool(),
     createTraceDependenciesTool(),
+    createViewSettingsTool(),
   ] as unknown as AnyTool[];
 
   if (opts?.changeTracker) {

@@ -31,6 +31,7 @@ const EXCEL_TOOL_NAMES = [
   "conditional_format",
   "trace_dependencies",
   "get_recent_changes",
+  "view_settings",
 ] as const;
 
 type ToolState = "inprogress" | "complete" | "error";
