@@ -1,6 +1,7 @@
 /**
  * Tool card grouping — collapses consecutive same-tool calls into a single
- * card with a "+N more" badge. Click to expand/collapse.
+ * card with a "+N more" badge. Click the badge to expand; normal card
+ * header clicks still toggle the card body as usual.
  */
 
 /** State tracked per group-leader element. */
@@ -22,61 +23,66 @@ export function initToolGrouping(root: HTMLElement): () => void {
 
   function onClick(e: Event) {
     const target = e.target as HTMLElement;
-    // Click on the badge (::after on .pi-tool-card__header) or
-    // anywhere on a group-leader's header row.
+    // Only respond to clicks directly on the badge element.
+    if (!target.classList.contains("pi-group-badge")) return;
+
     const toolMsg = target.closest("tool-message");
     if (!toolMsg) return;
     const state = groups.get(toolMsg);
     if (!state) return;
 
-    // Only respond to clicks on the header area (not expanded body).
-    const header = toolMsg.querySelector(".pi-tool-card__header");
-    if (!header?.contains(target)) return;
-
     e.stopPropagation();
+    e.preventDefault();
     toggleGroup(toolMsg, state);
   }
 
   function toggleGroup(leader: Element, state: GroupState) {
     state.expanded = !state.expanded;
     if (state.expanded) {
-      leader.removeAttribute("data-group-size");
       leader.classList.add("pi-group-expanded");
+      removeBadge(leader);
       for (const m of state.members) m.classList.remove("pi-grouped");
     } else {
-      leader.setAttribute("data-group-size", String(state.members.length));
       leader.classList.remove("pi-group-expanded");
+      insertBadge(leader, state.members.length);
       for (const m of state.members) m.classList.add("pi-grouped");
     }
+  }
+
+  /* ── Badge management ─────────────────────────────────── */
+
+  function insertBadge(leader: Element, count: number) {
+    removeBadge(leader);
+    const button = leader.querySelector(".pi-tool-card__header > button");
+    if (!button) return;
+    const badge = document.createElement("span");
+    badge.className = "pi-group-badge";
+    badge.textContent = `+${count} more`;
+    button.appendChild(badge);
+  }
+
+  function removeBadge(leader: Element) {
+    leader.querySelector(".pi-group-badge")?.remove();
   }
 
   /* ── Grouping pass ────────────────────────────────────── */
 
   function applyGrouping() {
-    // 1. Collect all direct children of root that are tool-message elements.
-    //    We walk children in DOM order.
-    const children = Array.from(root.querySelectorAll(":scope tool-message, :scope message-list tool-message"));
-
-    // Build a flat ordered list of tool-messages in DOM order
-    // (querySelectorAll returns document order).
-    // We need to detect runs that are truly consecutive *siblings* —
-    // non-tool-message elements between them break the run.
+    // Build a flat ordered list of tool-messages in DOM order.
     const toolMessages: Element[] = [];
-    const allElements = root.querySelectorAll("tool-message");
-    for (const el of allElements) toolMessages.push(el);
+    for (const el of root.querySelectorAll("tool-message")) toolMessages.push(el);
 
-    // 2. Clear previous grouping state
+    // Clear previous grouping state
     const prevLeaders = new Set(groups.keys());
     groups.clear();
 
     for (const el of toolMessages) {
-      el.classList.remove("pi-grouped", "pi-group-expanded");
+      el.classList.remove("pi-grouped", "pi-group-expanded", "pi-group-member", "pi-group-last");
       el.removeAttribute("data-group-size");
+      removeBadge(el);
     }
 
-    // 3. Identify runs of consecutive same-name completed tools.
-    //    "Consecutive" = adjacent tool-message siblings with no intervening
-    //    non-tool-message elements (thinking-block, markdown-block, etc.).
+    // Identify runs of 2+ consecutive same-name completed tools.
     const runs: Element[][] = [];
     let currentRun: Element[] = [];
 
@@ -95,8 +101,6 @@ export function initToolGrouping(root: HTMLElement): () => void {
         continue;
       }
 
-      // Check if this tool-message is a direct sibling of the previous one
-      // (no non-tool-message elements in between).
       if (currentRun.length > 0) {
         const prev = currentRun[currentRun.length - 1];
         const prevCard = prev.querySelector(".pi-tool-card");
@@ -114,14 +118,18 @@ export function initToolGrouping(root: HTMLElement): () => void {
     }
     if (currentRun.length >= 2) runs.push(currentRun);
 
-    // 4. Apply grouping to each run.
+    // Apply grouping to each run.
     for (const run of runs) {
       const leader = run[0];
       const members = run.slice(1);
       const expanded = prevLeaders.has(leader); // preserve expansion state
 
       leader.setAttribute("data-group-size", String(members.length));
+      for (const m of members) m.classList.add("pi-group-member");
+      members[members.length - 1].classList.add("pi-group-last");
+
       if (!expanded) {
+        insertBadge(leader, members.length);
         for (const m of members) m.classList.add("pi-grouped");
       } else {
         leader.classList.add("pi-group-expanded");
@@ -136,27 +144,14 @@ export function initToolGrouping(root: HTMLElement): () => void {
    * element siblings that aren't whitespace text nodes).
    */
   function areConsecutiveSiblings(a: Element, b: Element): boolean {
-    // They might not be direct siblings if nested inside message-list etc.
-    // Walk from a's next sibling to see if we reach b before hitting
-    // a non-tool-message element.
     let node: Node | null = a.nextSibling;
     while (node) {
       if (node === b) return true;
-      // Skip text nodes (whitespace)
       if (node.nodeType === Node.TEXT_NODE) {
         node = node.nextSibling;
         continue;
       }
-      // Any other element that isn't our target breaks the run
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const el = node as Element;
-        if (el.tagName.toLowerCase() === "tool-message") {
-          // It's a different tool-message (not b) — break
-          return false;
-        }
-        // Non-tool-message element breaks the group
-        return false;
-      }
+      if (node.nodeType === Node.ELEMENT_NODE) return false;
       node = node.nextSibling;
     }
     return false;
@@ -187,10 +182,10 @@ export function initToolGrouping(root: HTMLElement): () => void {
     if (rafId) cancelAnimationFrame(rafId);
     root.removeEventListener("click", onClick, true);
 
-    // Remove all grouping artefacts
     for (const el of root.querySelectorAll("tool-message")) {
-      el.classList.remove("pi-grouped", "pi-group-expanded");
+      el.classList.remove("pi-grouped", "pi-group-expanded", "pi-group-member", "pi-group-last");
       el.removeAttribute("data-group-size");
+      removeBadge(el);
     }
     groups.clear();
   };
