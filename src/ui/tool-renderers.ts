@@ -223,80 +223,95 @@ function resultSummary(text: string): string | null {
   return line ? stripDimensions(line) : null;
 }
 
-/** Append error / blocked badge when relevant. */
-function withBadge(base: string, resultText?: string): string {
-  if (!resultText) return base;
-  if (isBlocked(resultText)) return `${base} — blocked`;
+/** Append error / blocked badge to the detail string. */
+function badge(resultText?: string): string {
+  if (!resultText) return "";
+  if (isBlocked(resultText)) return " — blocked";
   const n = countResultErrors(resultText);
-  if (n > 0) return `${base} — ${n} error${n !== 1 ? "s" : ""}`;
-  return base;
+  if (n > 0) return ` — ${n} error${n !== 1 ? "s" : ""}`;
+  return "";
 }
 
-/** One-liner describing what the tool call does/did. */
-function describeToolCall(toolName: string, params: unknown, resultText?: string): string {
+interface ToolDesc {
+  /** Bold verb, e.g. "Read", "Wrote", "Format" */
+  action: string;
+  /** Normal-weight rest, e.g. "Costs!A1:C19" */
+  detail: string;
+}
+
+/** Split a result-text summary line into action (first word) + rest. */
+function splitFirstWord(text: string): ToolDesc {
+  const i = text.indexOf(" ");
+  return i > 0
+    ? { action: text.substring(0, i), detail: text.substring(i + 1) }
+    : { action: text, detail: "" };
+}
+
+/** Structured description: bold action + normal-weight detail. */
+function describeToolCall(toolName: string, params: unknown, resultText?: string): ToolDesc {
   const p = safeParseParams(params);
   const range = p.range as string | undefined;
   const startCell = p.start_cell as string | undefined;
 
   switch (toolName) {
-    // ── Read tools: always param-based (result text has confusing NxM) ──
+    // ── Read tools ──
     case "read_range":
-      return range ? `Read ${compactRange(range)}` : "Read range";
+      return { action: "Read", detail: range ? compactRange(range) : "range" };
     case "read_selection":
-      return "Read selection";
+      return { action: "Read", detail: "selection" };
     case "get_workbook_overview":
-      return "Workbook overview";
+      return { action: "Overview", detail: "" };
     case "get_range_as_csv":
-      return range ? `Export ${compactRange(range)} as CSV` : "Export as CSV";
+      return { action: "Export", detail: range ? `${compactRange(range)} as CSV` : "as CSV" };
     case "get_all_objects":
-      return "Get charts & objects";
+      return { action: "Get", detail: "charts & objects" };
 
-    // ── Write tools: extract target from result, flag errors ──
+    // ── Write tools ──
     case "write_cells": {
       const addr = resultText ? extractWrittenAddress(resultText) : null;
-      const base = addr
-        ? `Wrote ${addr}`
-        : startCell ? `Write ${startCell}` : "Write cells";
-      return withBadge(base, resultText);
+      return addr
+        ? { action: "Wrote", detail: addr + badge(resultText) }
+        : { action: "Write", detail: (startCell ?? "cells") + badge(resultText) };
     }
     case "fill_formula": {
       const addr = resultText ? extractWrittenAddress(resultText) : null;
-      const base = addr
-        ? `Filled ${addr}`
-        : range ? `Fill ${compactRange(range)}` : "Fill formula";
-      return withBadge(base, resultText);
+      return addr
+        ? { action: "Filled", detail: addr + badge(resultText) }
+        : { action: "Fill", detail: (range ? compactRange(range) : "formula") + badge(resultText) };
     }
 
-    // ── Format tools: just the compacted range (details are in the card body) ──
+    // ── Format tools ──
     case "format_cells":
-      return range ? `Format ${compactRange(range)}` : "Format cells";
+      return { action: "Format", detail: range ? compactRange(range) : "cells" };
     case "conditional_format":
-      return range ? `Cond. format ${compactRange(range)}` : "Conditional format";
+      return { action: "Cond. format", detail: range ? compactRange(range) : "cells" };
+
+    // ── Result-text tools (split first word as action) ──
     case "modify_structure": {
-      if (resultText) { const s = resultSummary(resultText); if (s) return s; }
-      const action = p.action as string | undefined;
+      if (resultText) { const s = resultSummary(resultText); if (s) return splitFirstWord(s); }
+      const act = p.action as string | undefined;
       const name = (p.name ?? p.new_name) as string | undefined;
-      if (action === "add_sheet") return name ? `Add sheet "${name}"` : "Add sheet";
-      if (action === "rename_sheet") return name ? `Rename to "${name}"` : "Rename sheet";
-      if (action === "delete_sheet") return "Delete sheet";
-      return "Modify structure";
+      if (act === "add_sheet") return { action: "Add", detail: name ? `sheet "${name}"` : "sheet" };
+      if (act === "rename_sheet") return { action: "Rename", detail: name ? `to "${name}"` : "sheet" };
+      if (act === "delete_sheet") return { action: "Delete", detail: "sheet" };
+      return { action: "Modify", detail: "structure" };
     }
     case "search_workbook": {
-      if (resultText) { const s = resultSummary(resultText); if (s) return s; }
+      if (resultText) { const s = resultSummary(resultText); if (s) return splitFirstWord(s); }
       const q = p.query as string | undefined;
-      return q ? `Search "${q}"` : "Search workbook";
+      return { action: "Search", detail: q ? `"${q}"` : "workbook" };
     }
 
-    // ── Other tools: param-based descriptions ──
+    // ── Other tools ──
     case "trace_dependencies": {
       const cell = (p.cell ?? p.range) as string | undefined;
-      return cell ? `Trace ${cell}` : "Trace dependencies";
+      return { action: "Trace", detail: cell ?? "dependencies" };
     }
     case "get_recent_changes":
-      return "Recent changes";
+      return { action: "Recent", detail: "changes" };
     default: {
-      if (resultText) { const s = resultSummary(resultText); if (s) return s; }
-      return toolName.replace(/_/g, " ");
+      if (resultText) { const s = resultSummary(resultText); if (s) return splitFirstWord(s); }
+      return { action: toolName.replace(/_/g, " "), detail: "" };
     }
   }
 }
@@ -324,8 +339,8 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
       const defaultExpanded = false;
 
       const resultText = result ? splitToolResultContent(result).text : undefined;
-      const description = describeToolCall(toolName, params, resultText);
-      const title = html`<span class="pi-tool-card__title">${description}</span>`;
+      const desc = describeToolCall(toolName, params, resultText);
+      const title = html`<span class="pi-tool-card__title"><strong>${desc.action}</strong>${desc.detail ? ` ${desc.detail}` : ""}</span>`;
 
       // ── With result ─────────────────────────────────────
       if (result) {
