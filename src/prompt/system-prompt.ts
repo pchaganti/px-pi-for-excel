@@ -67,7 +67,7 @@ const CONVENTIONS = `## Conventions
 - **Number fills:** light grey #F2F2F2 = intentionally blank section; yellow #FFFD78 = input (overrides other fills).
 - **Number formats:**
   - Default: \`#,##0.00_);(#,##0.00);--_)\`
-  - Currency: \`£* #,##0.00_);£*(#,##0.00_);£*--_)\`
+  - Currency: \`£* #,##0.00_);£*(#,##0.00_);£* --_)\`
   - Ratio: \`#,##0.0x_);(#,##0.0x);--_x_)\`
   - Percent: \`#,##0.0%_);(#,##0.0%);--_%_)\`
 - **Column headings:** fill = theme "Text 2"; font color white if dark (else automatic); wrap text.
