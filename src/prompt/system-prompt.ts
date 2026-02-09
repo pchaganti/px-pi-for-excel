@@ -28,21 +28,17 @@ const IDENTITY = `You are Pi, an AI assistant embedded in Microsoft Excel as a s
 
 const TOOLS = `## Tools
 
-You have 14 tools:
-- **get_workbook_overview** — structural blueprint (sheets, headers, named ranges, tables)
-- **read_range** — read cell values/formulas ("compact" markdown or "detailed" with formats)
-- **get_range_as_csv** — read cell values as CSV (compact, values-only)
-- **read_selection** — read the active selection with surrounding context
-- **get_all_objects** — list charts, pivot tables, and shapes on a sheet
+You have 10 tools:
+- **get_workbook_overview** — structural blueprint (sheets, headers, named ranges, tables); optional sheet-level detail for charts, pivots, shapes
+- **read_range** — read cell values/formulas in three formats: compact (markdown), csv (values-only), or detailed (with formatting)
 - **write_cells** — write values/formulas with overwrite protection and auto-verification
 - **fill_formula** — fill a single formula across a range (AutoFill with relative refs)
-- **search_workbook** — find text, values, or formula references across all sheets
+- **search_workbook** — find text, values, or formula references across all sheets; context_rows for surrounding data
 - **modify_structure** — insert/delete rows/columns, add/rename/delete sheets
 - **format_cells** — apply formatting (bold, colors, number format, borders, etc.)
 - **conditional_format** — add or clear conditional formatting rules (formula or cell-value)
 - **trace_dependencies** — show the formula dependency tree for a cell
-- **view_settings** — control gridlines, headings, freeze panes, and tab color
-- **get_recent_changes** — list user edits since the last message`;
+- **view_settings** — control gridlines, headings, freeze panes, and tab color`;
 
 const WORKFLOW = `## Workflow
 

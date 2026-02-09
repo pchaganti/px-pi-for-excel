@@ -1,5 +1,5 @@
 /**
- * Tool registry — creates all Excel tools for the agent.
+ * Tool registry — creates all 10 Excel tools for the agent.
  */
 
 import type { AgentTool } from "@mariozechner/pi-agent-core";
@@ -13,23 +13,15 @@ import { createFormatCellsTool } from "./format-cells.js";
 import { createTraceDependenciesTool } from "./trace-dependencies.js";
 import { createConditionalFormatTool } from "./conditional-format.js";
 import { createFillFormulaTool } from "./fill-formula.js";
-import { createReadSelectionTool } from "./read-selection.js";
-import { createGetRecentChangesTool } from "./get-recent-changes.js";
-import { createGetRangeAsCsvTool } from "./get-range-as-csv.js";
-import { createGetAllObjectsTool } from "./get-all-objects.js";
 import { createViewSettingsTool } from "./view-settings.js";
-import type { ChangeTracker } from "../context/change-tracker.js";
 
 type AnyTool = AgentTool<TSchema, unknown>;
 
-/** Create all Excel tools */
-export function createAllTools(opts?: { changeTracker?: ChangeTracker }): AnyTool[] {
-  const tools = [
+/** Create all 10 Excel tools */
+export function createAllTools(): AnyTool[] {
+  return [
     createGetWorkbookOverviewTool(),
     createReadRangeTool(),
-    createReadSelectionTool(),
-    createGetRangeAsCsvTool(),
-    createGetAllObjectsTool(),
     createWriteCellsTool(),
     createFillFormulaTool(),
     createSearchWorkbookTool(),
@@ -39,10 +31,4 @@ export function createAllTools(opts?: { changeTracker?: ChangeTracker }): AnyToo
     createTraceDependenciesTool(),
     createViewSettingsTool(),
   ] as unknown as AnyTool[];
-
-  if (opts?.changeTracker) {
-    tools.push(createGetRecentChangesTool(opts.changeTracker) as unknown as AnyTool);
-  }
-
-  return tools;
 }

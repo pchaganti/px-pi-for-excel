@@ -1,8 +1,9 @@
 /**
  * read_range — Read cell values, formulas, and optionally formatting.
  *
- * Two modes:
+ * Three modes:
  * - "compact" (default): Markdown table of values. Token-efficient.
+ * - "csv": Raw CSV values only. Analysis-friendly.
  * - "detailed": Full JSON with formulas, number formats. For debugging.
  */
 
@@ -19,9 +20,10 @@ const schema = Type.Object({
       "If no sheet is specified, uses the active sheet.",
   }),
   mode: Type.Optional(
-    Type.Union([Type.Literal("compact"), Type.Literal("detailed")], {
+    Type.Union([Type.Literal("compact"), Type.Literal("csv"), Type.Literal("detailed")], {
       description:
         '"compact" (default): markdown table of values. ' +
+        '"csv": values only as CSV. ' +
         '"detailed": includes formulas and number formats.',
     }),
   ),
@@ -45,6 +47,7 @@ export function createReadRangeTool(): AgentTool<typeof schema> {
     label: "Read Range",
     description:
       "Read cell values from an Excel range. Returns a markdown table by default (compact mode). " +
+      'Use mode "csv" for raw CSV values (analysis-friendly). ' +
       'Use mode "detailed" to also see formulas and number formats. ' +
       "Always read before modifying — never guess what's in the spreadsheet.",
     parameters: schema,
@@ -78,6 +81,8 @@ export function createReadRangeTool(): AgentTool<typeof schema> {
 
         if (mode === "compact") {
           return formatCompact(fullAddress, result, startCell);
+        } else if (mode === "csv") {
+          return formatCsvOutput(fullAddress, result);
         } else {
           return formatDetailed(fullAddress, result, startCell);
         }
@@ -224,6 +229,44 @@ function formatDetailed(
     for (const e of errors) {
       lines.push(`- ${e.address}: ${e.error}`);
     }
+  }
+
+  return { content: [{ type: "text", text: lines.join("\n") }], details: undefined };
+}
+
+/* ── CSV helpers (migrated from get-range-as-csv) ──────────────────── */
+
+function toCsvField(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const str = typeof value === "string" ? value : String(value);
+  if (/[",\n\r]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function valuesToCsv(values: unknown[][]): string {
+  if (!values || values.length === 0) return "";
+  return values
+    .map((row) => row.map((v) => toCsvField(v)).join(","))
+    .join("\n");
+}
+
+function formatCsvOutput(
+  address: string,
+  result: ReadRangeResult,
+): AgentToolResult<undefined> {
+  const lines: string[] = [];
+  lines.push(`**${address}** (${result.rows}×${result.cols})`);
+  lines.push("");
+
+  const csv = valuesToCsv(result.values);
+  if (!csv) {
+    lines.push("(empty)");
+  } else {
+    lines.push("```csv");
+    lines.push(csv);
+    lines.push("```");
   }
 
   return { content: [{ type: "text", text: lines.join("\n") }], details: undefined };

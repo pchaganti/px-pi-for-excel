@@ -41,6 +41,13 @@ const schema = Type.Object({
       description: "Maximum number of results to return. Default: 20.",
     }),
   ),
+  context_rows: Type.Optional(
+    Type.Number({
+      description:
+        "Number of rows above and below each match to include as context. Default: 0 (no context). " +
+        "Use 2-5 when searching for labels to see surrounding structure.",
+    }),
+  ),
 });
 
 type Params = Static<typeof schema>;
@@ -50,6 +57,7 @@ interface SearchMatch {
   address: string;
   value: unknown;
   formula?: string;
+  context?: string;
 }
 
 export function createSearchWorkbookTool(): AgentTool<typeof schema> {
@@ -59,7 +67,8 @@ export function createSearchWorkbookTool(): AgentTool<typeof schema> {
     description:
       "Search for text, values, or formulas across the workbook. " +
       "Returns matching cells with sheet name, address, value, and formula. " +
-      "Use this to find specific data, locate cells by label, or trace cross-sheet references.",
+      "Use this to find specific data, locate cells by label, or trace cross-sheet references. " +
+      "Set context_rows to see surrounding data for each match (useful for finding labeled cells and understanding their position).",
     parameters: schema,
     execute: async (
       _toolCallId: string,
@@ -70,6 +79,7 @@ export function createSearchWorkbookTool(): AgentTool<typeof schema> {
         const offset = Math.max(params.offset || 0, 0);
         const searchFormulas = params.search_formulas || false;
         const useRegex = params.use_regex || false;
+        const contextRows = Math.min(Math.max(params.context_rows ?? 0, 0), 10);
         const query = params.query;
         const queryLower = query.toLowerCase();
 
@@ -147,6 +157,39 @@ export function createSearchWorkbookTool(): AgentTool<typeof schema> {
                     formula: typeof formula === "string" && formula.startsWith("=") ? formula : undefined,
                   });
 
+                  if (contextRows > 0) {
+                    const rStart = Math.max(0, r - contextRows);
+                    const rEnd = Math.min(values.length - 1, r + contextRows);
+                    const colRadius = 10;
+                    const cStart = Math.max(0, c - colRadius);
+                    const cEnd = Math.min(values[0].length - 1, c + colRadius);
+
+                    const ctxLines: string[] = [];
+                    const hdr: string[] = [""];
+                    for (let ci = cStart; ci <= cEnd; ci++) {
+                      hdr.push(colToLetter(start.col + ci));
+                    }
+                    ctxLines.push("| " + hdr.join(" | ") + " |");
+                    ctxLines.push("|" + hdr.map(() => "---").join("|") + "|");
+
+                    for (let ri = rStart; ri <= rEnd; ri++) {
+                      const cells: string[] = [String(start.row + ri)];
+                      for (let ci = cStart; ci <= cEnd; ci++) {
+                        const v = values[ri][ci];
+                        let s = v === null || v === undefined || v === "" ? "" : String(v);
+                        if (s.length > 20) s = s.substring(0, 20) + "…";
+                        s = s.replace(/\|/g, "\\|");
+                        cells.push(s);
+                      }
+                      const marker = ri === r ? " ◀" : "";
+                      ctxLines.push("| " + cells.join(" | ") + " |" + marker);
+                    }
+
+                    allMatches[allMatches.length - 1].context = ctxLines
+                      .map((l) => "  " + l)
+                      .join("\n");
+                  }
+
                   if (allMatches.length >= maxResults) {
                     hasMore = true;
                     break outer;
@@ -185,6 +228,9 @@ export function createSearchWorkbookTool(): AgentTool<typeof schema> {
             : String(m.value);
           const formulaStr = m.formula ? ` ← ${m.formula}` : "";
           lines.push(`- **${addr}**: ${val}${formulaStr}`);
+          if (m.context) {
+            lines.push(m.context);
+          }
         }
 
         return {

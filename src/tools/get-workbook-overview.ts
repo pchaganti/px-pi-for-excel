@@ -8,12 +8,23 @@
  * Pushes rich structural metadata (headers, named ranges, tables) — not just sheet names + dimensions.
  */
 
-import { Type } from "@sinclair/typebox";
+import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
-import { excelRun } from "../excel/helpers.js";
+import { excelRun, colToLetter } from "../excel/helpers.js";
 import { getErrorMessage } from "../utils/errors.js";
 
-const schema = Type.Object({});
+const schema = Type.Object({
+  sheet: Type.Optional(
+    Type.String({
+      description:
+        "If provided, return detailed info for this specific sheet " +
+        "(dimensions, headers, tables, named ranges, objects, and a data preview). " +
+        "If omitted, return the workbook-level overview.",
+    }),
+  ),
+});
+
+type Params = Static<typeof schema>;
 
 export function createGetWorkbookOverviewTool(): AgentTool<typeof schema> {
   return {
@@ -23,13 +34,19 @@ export function createGetWorkbookOverviewTool(): AgentTool<typeof schema> {
       "Get a structural overview of the workbook: sheet names, dimensions, " +
       "header rows, named ranges, tables, and object counts. Use this at the start of a " +
       "conversation or when you need to understand the workbook's structure " +
-      "before reading specific ranges.",
+      "before reading specific ranges. Optionally pass a sheet name for detailed " +
+      "sheet-level info including objects, tables, named ranges, and a data preview.",
     parameters: schema,
-    execute: async (): Promise<AgentToolResult<undefined>> => {
+    execute: async (
+      _toolCallId: string,
+      params: Params,
+    ): Promise<AgentToolResult<undefined>> => {
       try {
-        const overview = await buildOverview();
+        const text = params.sheet
+          ? await buildSheetDetail(params.sheet)
+          : await buildOverview();
         return {
-          content: [{ type: "text", text: overview }],
+          content: [{ type: "text", text }],
           details: undefined,
         };
       } catch (e: unknown) {
@@ -137,6 +154,144 @@ export async function buildOverview(): Promise<string> {
       lines.push(`### Named Ranges (${visibleNames.length})`);
       for (const n of visibleNames) {
         lines.push(`- **${n.name}** = ${n.value}`);
+      }
+    }
+
+    return lines.join("\n");
+  });
+}
+
+// ============================================================================
+// Sheet-level detail (absorbs former get_all_objects logic)
+// ============================================================================
+
+/** Build detailed info for a single sheet including objects, tables, named ranges, and a data preview. */
+async function buildSheetDetail(sheetName: string): Promise<string> {
+  return excelRun(async (context) => {
+    const sheet = context.workbook.worksheets.getItem(sheetName);
+    sheet.load("name,visibility");
+
+    const used = sheet.getUsedRangeOrNullObject();
+    used.load("rowCount,columnCount,address,values");
+
+    // Header row
+    const headerRange = sheet.getRange("1:1").getUsedRangeOrNullObject();
+    headerRange.load("values");
+
+    // Tables
+    const tables = sheet.tables;
+    tables.load("items/name,items/columns/count,items/rows/count");
+
+    // Named ranges (workbook-level; we filter to this sheet below)
+    const names = context.workbook.names;
+    names.load("items/name,items/value,items/visible");
+
+    // Objects — charts, pivot tables, shapes
+    const charts = sheet.charts;
+    charts.load("items/name,count");
+
+    const pivotTables = sheet.pivotTables;
+    pivotTables.load("items/name");
+    const pivotCount = pivotTables.getCount();
+
+    let shapes: Excel.ShapeCollection | null = null;
+    try {
+      shapes = sheet.shapes;
+      shapes.load("items/name");
+    } catch {
+      shapes = null;
+    }
+
+    await context.sync();
+
+    const lines: string[] = [];
+
+    // ── Header ──
+    const visibility = sheet.visibility === "Visible" ? "" : ` (${sheet.visibility})`;
+    const dims = used.isNullObject
+      ? "empty"
+      : `${used.rowCount} rows × ${used.columnCount} cols`;
+    lines.push(`## Sheet: ${sheet.name}${visibility}`);
+    lines.push(`Dimensions: ${dims}`);
+
+    // ── Headers ──
+    const headers = headerRange.isNullObject
+      ? []
+      : (headerRange.values[0] as unknown[]).filter(
+          (v) => v !== null && v !== undefined && v !== "",
+        );
+    if (headers.length > 0) {
+      lines.push(`Headers: ${headers.join(", ")}`);
+    }
+
+    // ── Tables ──
+    if (tables.items.length > 0) {
+      lines.push("");
+      lines.push(`### Tables (${tables.items.length})`);
+      for (const table of tables.items) {
+        lines.push(
+          `- **${table.name}** (${table.rows.count} rows × ${table.columns.count} cols)`,
+        );
+      }
+    }
+
+    // ── Named ranges referencing this sheet ──
+    const sheetPrefix = `${sheet.name}!`.toLowerCase();
+    const sheetQuotedPrefix = `'${sheet.name}'!`.toLowerCase();
+    const relevantNames = names.items.filter((n) => {
+      if (!n.visible) return false;
+      const val = n.value.toLowerCase();
+      return val.startsWith(sheetPrefix) || val.startsWith(sheetQuotedPrefix);
+    });
+    if (relevantNames.length > 0) {
+      lines.push("");
+      lines.push(`### Named Ranges (${relevantNames.length})`);
+      for (const n of relevantNames) {
+        lines.push(`- **${n.name}** = ${n.value}`);
+      }
+    }
+
+    // ── Objects (charts, pivot tables, shapes) ──
+    const chartNames = charts.items.map((c) => c.name);
+    const pivotNames = pivotTables.items.map((p) => p.name);
+    const shapeNames = shapes ? shapes.items.map((s) => s.name) : [];
+    const objectTotal = chartNames.length + pivotNames.length + shapeNames.length;
+
+    if (objectTotal > 0) {
+      lines.push("");
+      lines.push("### Objects");
+      lines.push(
+        `- Charts (${chartNames.length}): ${chartNames.length > 0 ? chartNames.join(", ") : "(none)"}`,
+      );
+      lines.push(
+        `- Pivot tables (${pivotCount.value}): ${pivotNames.length > 0 ? pivotNames.join(", ") : "(none)"}`,
+      );
+      lines.push(
+        `- Shapes (${shapeNames.length}): ${shapeNames.length > 0 ? shapeNames.join(", ") : "(none)"}`,
+      );
+    }
+
+    // ── Data preview (first 5 rows as markdown table) ──
+    if (!used.isNullObject && used.rowCount > 0 && used.columnCount > 0) {
+      const previewRowCount = Math.min(5, used.rowCount);
+      const allValues = used.values as unknown[][];
+      const previewRows = allValues.slice(0, previewRowCount);
+      const colCount = used.columnCount;
+
+      // Column letters as header
+      const colLetters = Array.from({ length: colCount }, (_, i) => colToLetter(i));
+      const headerRow = `| | ${colLetters.join(" | ")} |`;
+      const separator = `|---|${colLetters.map(() => "---").join("|")}|`;
+
+      lines.push("");
+      lines.push(`### Preview (first ${previewRowCount} rows)`);
+      lines.push(headerRow);
+      lines.push(separator);
+      for (let r = 0; r < previewRows.length; r++) {
+        const cells = previewRows[r].map((v) =>
+          v === null || v === undefined || v === "" ? "" : String(v),
+        );
+        lines.push(`| ${r + 1} | ${cells.join(" | ")} |`);
       }
     }
 

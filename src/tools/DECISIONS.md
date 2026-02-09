@@ -35,10 +35,14 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Overwrite protection:** blocks only if values/formulas exist (same policy as `write_cells`).
 - **Rationale:** major productivity win for large formula blocks.
 
-## Selection & change tools
-- **`read_selection`:** explicit tool version of auto-injected selection context.
-- **`get_recent_changes`:** flushes `ChangeTracker` and returns user edits since last message.
-- **Rationale:** makes context features discoverable/useful to the agent when it needs them explicitly.
+## Tool consolidation (14 → 10)
+- `get_range_as_csv` merged into `read_range` as `mode: 'csv'`
+- `read_selection` removed — auto-context already reads the selection every turn
+- `get_all_objects` absorbed into `get_workbook_overview` via optional `sheet` param
+- `get_recent_changes` removed — auto-context already injects changes every turn
+- `find_by_label` (#7) absorbed into `search_workbook` via `context_rows` param
+- `get_sheet_summary` (#8) absorbed into `get_workbook_overview` via `sheet` param
+- **Rationale:** one tool per distinct verb, modes over multiplied tools. Progressive disclosure for future tools (charts, tables, etc.)
 
 ## Range reading (`read_range`)
 - **Compact/detailed tables:** render an Excel-style markdown grid with **column letters** and **row numbers** (instead of treating the first data row as a table header).

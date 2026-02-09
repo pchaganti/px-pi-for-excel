@@ -117,7 +117,7 @@ export async function initTaskpane(opts: {
       model: defaultModel,
       thinkingLevel: "off",
       messages: [],
-      tools: createAllTools({ changeTracker }),
+      tools: createAllTools(),
     },
     transformContext: createContextInjector(changeTracker),
     streamFn,
