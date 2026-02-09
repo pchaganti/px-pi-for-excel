@@ -19,7 +19,9 @@ export function formatAsMarkdownTable(values: unknown[][]): string {
       if (Math.abs(v) < 1e15 && Math.abs(v) > 1e-6) return String(v);
       return v.toExponential(4);
     }
-    return String(v);
+    if (typeof v === "string") return v;
+    if (typeof v === "boolean") return String(v);
+    return JSON.stringify(v);
   };
 
   const rows = values.map((row) => row.map(stringify));

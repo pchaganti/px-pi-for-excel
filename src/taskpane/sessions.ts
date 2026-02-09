@@ -122,7 +122,7 @@ export async function setupSessionPersistence(opts: {
   agent.subscribe((ev) => {
     if (ev.type === "message_end") {
       if (ev.message.role === "assistant") firstAssistantSeen = true;
-      if (firstAssistantSeen) saveSession();
+      if (firstAssistantSeen) void saveSession();
     }
   });
 
@@ -153,16 +153,20 @@ export async function setupSessionPersistence(opts: {
   }
 
   document.addEventListener("pi:session-new", () => startNewSession());
+
+  interface RenameDetail { title?: string }
+  interface ResumeDetail { id?: string; title?: string; createdAt?: string }
+
   document.addEventListener(
     "pi:session-rename",
-    ((e: CustomEvent) => {
+    ((e: CustomEvent<RenameDetail>) => {
       sessionTitle = e.detail?.title || sessionTitle;
-      saveSession();
+      void saveSession();
     }) as EventListener,
   );
   document.addEventListener(
     "pi:session-resumed",
-    ((e: CustomEvent) => {
+    ((e: CustomEvent<ResumeDetail>) => {
       sessionId = e.detail?.id || sessionId;
       sessionTitle = e.detail?.title || "";
       sessionCreatedAt = e.detail?.createdAt || new Date().toISOString();

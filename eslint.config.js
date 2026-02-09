@@ -1,8 +1,6 @@
-import tsParser from "@typescript-eslint/parser";
-import tsPlugin from "@typescript-eslint/eslint-plugin";
+import tseslint from "typescript-eslint";
 
-/** @type {import('eslint').Linter.FlatConfig[]} */
-export default [
+export default tseslint.config(
   {
     ignores: [
       "dist/**",
@@ -12,18 +10,18 @@ export default [
       "research/**",
     ],
   },
+
+  // Baseline: recommended + type-checked rules for all TS files.
+  ...tseslint.configs.recommendedTypeChecked,
+
   {
-    files: ["**/*.ts"],
     languageOptions: {
-      parser: tsParser,
       parserOptions: {
-        ecmaVersion: "latest",
-        sourceType: "module",
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
       },
     },
-    plugins: {
-      "@typescript-eslint": tsPlugin,
-    },
+
     rules: {
       // ── Type-system hygiene (Python-typing spirit) ─────────────────────────
 
@@ -32,17 +30,14 @@ export default [
       "@typescript-eslint/ban-ts-comment": [
         "error",
         {
-          // Default is "ban" (true). Be explicit so intent is clear.
           "ts-ignore": true,
           "ts-nocheck": true,
-          // Only allow expect-error with a justification comment.
           "ts-expect-error": "allow-with-description",
           minimumDescriptionLength: 10,
         },
       ],
 
-      // Any defeats type checking. Start as warning (we have legacy any usage);
-      // we can tighten to "error" once the surface area is reduced.
+      // Any defeats type checking. Warn for now; tighten to "error" once clean.
       "@typescript-eslint/no-explicit-any": "warn",
 
       // Non-null assertion is a common escape hatch; prefer runtime checks.
@@ -56,6 +51,46 @@ export default [
           objectLiteralTypeAssertions: "never",
         },
       ],
+
+      // ── Async safety ───────────────────────────────────────────────────────
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+      "@typescript-eslint/await-thenable": "error",
+
+      // ── Dead-code hygiene ──────────────────────────────────────────────────
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+
+      // ── Relaxations for legitimate patterns ────────────────────────────────
+
+      // We use `require()` in a few CJS-compat spots (install-githooks, etc.).
+      "@typescript-eslint/no-require-imports": "off",
+
+      // Empty catch blocks are fine when intentional (e.g. best-effort cleanup).
+      "@typescript-eslint/no-empty-function": "off",
+
+      // `void` operator is used to deliberately discard promises in fire-and-forget.
+      "no-void": "off",
+
+      // Allow `${expr}` in template literals even when expr is non-string.
+      "@typescript-eslint/restrict-template-expressions": [
+        "warn",
+        {
+          allowNumber: true,
+          allowBoolean: true,
+          allowNullish: false,
+        },
+      ],
+
+      // Unbound methods show up in event-handler patterns with Lit;
+      // too noisy to be useful here.
+      "@typescript-eslint/unbound-method": "off",
     },
   },
-];
+);

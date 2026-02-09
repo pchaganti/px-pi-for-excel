@@ -238,7 +238,8 @@ function formatDetailed(
 
 function toCsvField(value: unknown): string {
   if (value === null || value === undefined) return "";
-  const str = typeof value === "string" ? value : String(value);
+  if (typeof value === "string") return value.includes(",") || value.includes('"') || value.includes("\n") || value.includes("\r") ? `"${value.replace(/"/g, '""')}"` : value;
+  const str = typeof value === "number" || typeof value === "boolean" ? String(value) : JSON.stringify(value);
   if (/[",\n\r]/.test(str)) {
     return `"${str.replace(/"/g, '""')}"`;
   }

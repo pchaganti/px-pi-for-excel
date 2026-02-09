@@ -130,8 +130,8 @@ export function createSearchWorkbookTool(): AgentTool<typeof schema> {
 
             for (let r = 0; r < values.length; r++) {
               for (let c = 0; c < values[r].length; c++) {
-                const value = values[r][c];
-                const formula = formulas[r][c];
+                const value: unknown = values[r][c];
+                const formula: unknown = formulas[r][c];
 
                 let match = false;
                 if (searchFormulas) {
@@ -140,7 +140,7 @@ export function createSearchWorkbookTool(): AgentTool<typeof schema> {
                   match = regex ? regex.test(target) : target.toLowerCase().includes(queryLower);
                 } else {
                   if (value === null || value === undefined || value === "") continue;
-                  const target = String(value);
+                  const target = typeof value === "string" ? value : typeof value === "number" || typeof value === "boolean" ? String(value) : JSON.stringify(value);
                   match = regex ? regex.test(target) : target.toLowerCase().includes(queryLower);
                 }
 
@@ -175,8 +175,8 @@ export function createSearchWorkbookTool(): AgentTool<typeof schema> {
                     for (let ri = rStart; ri <= rEnd; ri++) {
                       const cells: string[] = [String(start.row + ri)];
                       for (let ci = cStart; ci <= cEnd; ci++) {
-                        const v = values[ri][ci];
-                        let s = v === null || v === undefined || v === "" ? "" : String(v);
+                        const v: unknown = values[ri][ci];
+                        let s = v === null || v === undefined || v === "" ? "" : typeof v === "string" ? v : typeof v === "number" || typeof v === "boolean" ? String(v) : JSON.stringify(v);
                         if (s.length > 20) s = s.substring(0, 20) + "…";
                         s = s.replace(/\|/g, "\\|");
                         cells.push(s);

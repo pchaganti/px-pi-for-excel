@@ -14,7 +14,7 @@ export function createSettingsCommands(): SlashCommand[] {
       description: "Settings (API keys + CORS proxy)",
       source: "builtin",
       execute: () => {
-        SettingsDialog.open([new ApiKeysTab(), new ProxyTab()]);
+        void SettingsDialog.open([new ApiKeysTab(), new ProxyTab()]);
       },
     },
     {

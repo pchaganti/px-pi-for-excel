@@ -1,0 +1,31 @@
+title: "Implementation roadmap"
+subtitle: "Effort vs impact for each change"
+tracker: "Next Steps"
+slide_layout: "Default"
+
+table:
+  rows: 7
+  cols: 3
+  has_col_header: true
+  has_row_header: true
+  column_widths: [4, 1, 4]
+
+  col_headers:
+    - "Effort"
+    - "Impact"
+
+  row_headers:
+    - "Merge get_range_as_csv into read_range"
+    - "Remove read_selection"
+    - "Remove get_recent_changes"
+    - "Absorb get_all_objects into overview"
+    - "Add context_rows to search_workbook"
+    - "Build dynamic tool injection"
+
+  cells:
+    - ["Small", "Removes model confusion between two read tools"]
+    - ["Trivial", "No capability loss — auto-context covers it"]
+    - ["Trivial", "No capability loss — auto-context covers it"]
+    - ["Small", "Removes a rarely-used tool, enables sheet-level detail"]
+    - ["Small", "Absorbs find_by_label (#7) cleanly"]
+    - ["Medium", "Sustainable path for charts, tables, validation, etc."]

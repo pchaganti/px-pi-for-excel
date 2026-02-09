@@ -174,7 +174,7 @@ export function createViewSettingsTool(): AgentTool<typeof schema> {
             }
 
             default:
-              throw new Error(`Unknown action: ${params.action}`);
+              throw new Error(`Unknown action: ${String(params.action as string)}`);
           }
         });
 

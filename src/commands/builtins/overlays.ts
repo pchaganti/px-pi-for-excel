@@ -108,19 +108,21 @@ export async function showResumeDialog(agent: Agent): Promise<void> {
     </div>
   `;
 
-  overlay.addEventListener("click", async (e) => {
+  overlay.addEventListener("click", (e) => {
     if (e.target === overlay) {
       overlay.remove();
       return;
     }
 
-    const item = (e.target as HTMLElement).closest(
+    const item = (e.target as HTMLElement).closest<HTMLElement>(
       ".pi-resume-item",
-    ) as HTMLElement | null;
+    );
     if (!item) return;
 
     const id = item.dataset.id;
     if (!id) return;
+
+    void (async () => {
 
     const sessionData = await storage.sessions.loadSession(id);
     if (!sessionData) {
@@ -156,6 +158,7 @@ export async function showResumeDialog(agent: Agent): Promise<void> {
 
     overlay.remove();
     showToast(`Resumed: ${sessionData.title || "Untitled"}`);
+    })();
   });
 
   document.body.appendChild(overlay);

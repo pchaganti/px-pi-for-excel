@@ -172,12 +172,12 @@ export async function loadExtension(
   if (typeof source === "function") {
     await source(api);
   } else {
-    // Dynamic import from URL
-    const mod = await import(/* @vite-ignore */ source);
+    // Dynamic import from URL — shape unknown at compile time
+    const mod: Record<string, unknown> = await import(/* @vite-ignore */ source) as Record<string, unknown>;
     if (typeof mod.activate === "function") {
-      await mod.activate(api);
+      await (mod.activate as (api: ExcelExtensionAPI) => void | Promise<void>)(api);
     } else if (typeof mod.default === "function") {
-      await mod.default(api);
+      await (mod.default as (api: ExcelExtensionAPI) => void | Promise<void>)(api);
     }
   }
 }

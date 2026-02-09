@@ -80,7 +80,7 @@ export function handleCommandMenuKey(e: KeyboardEvent): boolean {
         textarea.value = "";
         textarea.dispatchEvent(new Event("input", { bubbles: true }));
       }
-      cmd.execute("");
+      void cmd.execute("");
     }
     return true;
   }
@@ -134,7 +134,7 @@ function renderMenu(): void {
           textarea.value = "";
           textarea.dispatchEvent(new Event("input", { bubbles: true }));
         }
-        cmd.execute("");
+        void cmd.execute("");
       }
     });
     item.addEventListener("mouseenter", () => {
@@ -153,7 +153,7 @@ function renderMenu(): void {
  * Call once after the textarea is available.
  */
 export function wireCommandMenu(textarea: HTMLTextAreaElement): void {
-  const getAnchor = () => (textarea.closest(".pi-input-card") || textarea.closest(".bg-card") || textarea) as HTMLElement;
+  const getAnchor = (): HTMLElement => textarea.closest<HTMLElement>(".pi-input-card") ?? textarea.closest<HTMLElement>(".bg-card") ?? textarea;
 
   textarea.addEventListener("input", () => {
     const val = textarea.value;

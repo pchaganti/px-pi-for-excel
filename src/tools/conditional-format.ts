@@ -193,9 +193,9 @@ async function addFormat(params: Params): Promise<AgentToolResult<undefined>> {
   const fullAddr = qualifiedAddress(result.sheetName, result.address);
   const details =
     params.type === "formula"
-      ? `formula rule (${params.formula})`
-      : `cell value rule (${params.operator} ${params.value}${
-          params.value2 !== undefined ? ` and ${params.value2}` : ""
+      ? `formula rule (${params.formula ?? ""})`
+      : `cell value rule (${params.operator ?? ""} ${params.value ?? ""}${
+          params.value2 !== undefined ? ` and ${String(params.value2)}` : ""
         })`;
 
   return {

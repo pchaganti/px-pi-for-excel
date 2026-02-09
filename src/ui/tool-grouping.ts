@@ -84,7 +84,7 @@ export function initToolGrouping(root: HTMLElement): () => void {
       const wrapper = document.createElement("div");
       wrapper.className = "pi-tool-group";
 
-      leader.parentNode!.insertBefore(wrapper, leader);
+      if (leader.parentNode) leader.parentNode.insertBefore(wrapper, leader);
       for (const el of run) wrapper.appendChild(el);
 
       for (const m of members) m.classList.add("pi-group-member");

@@ -32,7 +32,7 @@ export function installLitClassFieldShadowingPatch(): void {
 
   reactiveProto.performUpdate = function (this: ReactiveElement) {
     if (!this.hasUpdated) {
-      const proto = Object.getPrototypeOf(this);
+      const proto = Object.getPrototypeOf(this) as Record<string, unknown>;
       const self = this as unknown as Record<string, unknown>;
 
       for (const key of Object.getOwnPropertyNames(this)) {

@@ -283,7 +283,7 @@ export function buildProviderRow(
   const keyInput = row.querySelector(".pi-login-key") as HTMLInputElement;
   const saveBtn = row.querySelector(".pi-login-save") as HTMLButtonElement;
   const errorEl = row.querySelector(".pi-login-error") as HTMLElement;
-  const oauthBtn = row.querySelector(".pi-login-oauth") as HTMLButtonElement | null;
+  const oauthBtn = row.querySelector<HTMLButtonElement>(".pi-login-oauth");
 
   // Toggle expand
   headerBtn.addEventListener("click", () => {
@@ -300,10 +300,11 @@ export function buildProviderRow(
 
   // OAuth login
   if (oauthBtn) {
-    oauthBtn.addEventListener("click", async (e) => {
+    oauthBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       oauthBtn.textContent = "Opening login…";
       oauthBtn.style.opacity = "0.7";
+      void (async () => {
       errorEl.style.display = "none";
       try {
         const { getOAuthProvider } = await import("@mariozechner/pi-ai");
@@ -364,11 +365,12 @@ export function buildProviderRow(
         oauthBtn.textContent = `Login with ${label}`;
         oauthBtn.style.opacity = "1";
       }
+      })();
     });
   }
 
   // API key save
-  saveBtn.addEventListener("click", async () => {
+  saveBtn.addEventListener("click", () => { void (async () => {
     const rawKey = keyInput.value.trim();
     if (!rawKey) return;
 
@@ -397,7 +399,7 @@ export function buildProviderRow(
       saveBtn.textContent = "Save";
       saveBtn.style.opacity = "1";
     }
-  });
+  })(); });
 
   // Enter key in input
   keyInput.addEventListener("keydown", (e) => {

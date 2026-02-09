@@ -50,7 +50,7 @@ export function bootstrapTaskpane(): void {
   // Office bootstrap (with fallback for local dev)
   let initialized = false;
 
-  Office.onReady(async (info) => {
+  void Office.onReady(async (info) => {
     console.log(`[pi] Office.js ready: host=${info.host}, platform=${info.platform}`);
     try {
       initialized = true;

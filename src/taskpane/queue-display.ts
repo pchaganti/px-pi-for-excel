@@ -37,8 +37,8 @@ export function createQueueDisplay(opts: {
     }
 
     // Position above the working indicator (or input area if indicator hidden)
-    const workingEl = sidebar.querySelector("pi-working-indicator") as HTMLElement | null;
-    const inputArea = sidebar.querySelector(".pi-input-area") as HTMLElement | null;
+    const workingEl = sidebar.querySelector<HTMLElement>("pi-working-indicator");
+    const inputArea = sidebar.querySelector<HTMLElement>(".pi-input-area");
     const anchorEl = workingEl && workingEl.offsetHeight > 0 ? workingEl : inputArea;
     const anchorTop = anchorEl ? anchorEl.getBoundingClientRect().top : window.innerHeight - 80;
     container.style.bottom = `${window.innerHeight - anchorTop}px`;

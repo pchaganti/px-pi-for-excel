@@ -114,8 +114,8 @@ export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise
       }
     };
 
-    proxyEnabledEl?.addEventListener("change", saveProxyUi);
-    proxySaveEl?.addEventListener("click", saveProxyUi);
+    proxyEnabledEl?.addEventListener("change", () => void saveProxyUi());
+    proxySaveEl?.addEventListener("click", () => void saveProxyUi());
 
     hydrateProxyUi().catch(() => {});
 
@@ -125,13 +125,15 @@ export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise
       const row = buildProviderRow(provider, {
         isActive: false,
         expandedRef,
-        onConnected: async (_row, _id, label) => {
-          const updated = await providerKeys.list();
-          setActiveProviders(new Set(updated));
-          document.dispatchEvent(new CustomEvent("pi:providers-changed"));
-          showToast(`${label} connected`);
-          overlay.remove();
-          resolve();
+        onConnected: (_row, _id, label) => {
+          void (async () => {
+            const updated = await providerKeys.list();
+            setActiveProviders(new Set(updated));
+            document.dispatchEvent(new CustomEvent("pi:providers-changed"));
+            showToast(`${label} connected`);
+            overlay.remove();
+            resolve();
+          })();
         },
       });
       providerList.appendChild(row);

@@ -150,7 +150,7 @@ export async function initTaskpane(opts: {
   sidebar.emptyHints = ["Summarize this sheet", "Add a VLOOKUP formula", "Format as a table"];
 
   const openModelSelector = (): void => {
-    ModelSelector.open(agent.state.model, (model) => {
+    void ModelSelector.open(agent.state.model, (model) => {
       agent.setModel(model);
       updateStatusBar(agent);
       requestAnimationFrame(() => sidebar.requestUpdate());
@@ -218,9 +218,11 @@ export async function initTaskpane(opts: {
   const { activate: activateSnake } = await import("../extensions/snake.js");
   await loadExtension(extensionAPI, activateSnake);
 
-  document.addEventListener("pi:providers-changed", async () => {
-    const updated = await providerKeys.list();
-    setActiveProviders(new Set(updated));
+  document.addEventListener("pi:providers-changed", () => {
+    void (async () => {
+      const updated = await providerKeys.list();
+      setActiveProviders(new Set(updated));
+    })();
   });
 
   // ── Queue display ──

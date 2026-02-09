@@ -141,8 +141,10 @@ export function createFillFormulaTool(): AgentTool<typeof schema> {
         lines.push(`Filled formula across **${fullAddr}** (${result.rowCount}×${result.columnCount})`);
         lines.push(`**Formula pattern:** \`${params.formula}\``);
 
-        const topLeft = result.readBackFormulas?.[0]?.[0];
-        const bottomRight = result.readBackFormulas?.[result.rowCount - 1]?.[result.columnCount - 1];
+        const topLeftRaw: unknown = result.readBackFormulas?.[0]?.[0] ?? "";
+        const bottomRightRaw: unknown = result.readBackFormulas?.[result.rowCount - 1]?.[result.columnCount - 1] ?? "";
+        const topLeft = typeof topLeftRaw === "string" ? topLeftRaw : JSON.stringify(topLeftRaw);
+        const bottomRight = typeof bottomRightRaw === "string" ? bottomRightRaw : JSON.stringify(bottomRightRaw);
         if (topLeft && bottomRight && (result.rowCount > 1 || result.columnCount > 1)) {
           lines.push(`**Example formulas:** top-left \`${topLeft}\`, bottom-right \`${bottomRight}\``);
         }

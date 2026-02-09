@@ -134,7 +134,7 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
             case "delete_columns": {
               if (!params.position) throw new Error("position is required for delete_columns");
               const sheet = getSheet();
-              let col = params.position - 1;
+              const col = params.position - 1;
               let startLetter = "";
               let temp = col;
               while (temp >= 0) {
@@ -216,7 +216,7 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
             }
 
             default:
-              throw new Error(`Unknown action: ${action}`);
+              throw new Error(`Unknown action: ${String(action as string)}`);
           }
         });
 

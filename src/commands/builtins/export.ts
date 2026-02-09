@@ -93,7 +93,7 @@ export function createExportCommands(agent: Agent): SlashCommand[] {
         const json = JSON.stringify(exportData, null, 2);
 
         if (args.trim() === "clipboard" || !args.trim()) {
-          navigator.clipboard.writeText(json).then(() => {
+          void navigator.clipboard.writeText(json).then(() => {
             showToast(
               `Transcript copied (${msgs.length} messages, ${(json.length / 1024).toFixed(0)}KB)`,
             );
@@ -170,7 +170,7 @@ export function createCompactCommands(agent: Agent): SlashCommand[] {
                 text: `**Session Summary (compacted)**\n\n${summary}`,
               },
             ],
-            api: model.api,
+            api: model.api as string,
             provider: model.provider,
             model: model.id,
             usage: ZERO_USAGE,

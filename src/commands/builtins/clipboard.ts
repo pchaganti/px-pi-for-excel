@@ -29,7 +29,7 @@ export function createClipboardCommands(agent: Agent): SlashCommand[] {
         const msgs = agent.state.messages;
         const text = getLastAssistantText(msgs);
         if (text) {
-          navigator.clipboard.writeText(text).then(() => {
+          void navigator.clipboard.writeText(text).then(() => {
             showToast("Copied to clipboard");
           });
           return;

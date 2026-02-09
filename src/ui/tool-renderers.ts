@@ -20,9 +20,6 @@ import { Code } from "lucide";
 const EXCEL_TOOL_NAMES = [
   "get_workbook_overview",
   "read_range",
-  "read_selection",
-  "get_range_as_csv",
-  "get_all_objects",
   "write_cells",
   "fill_formula",
   "search_workbook",
@@ -30,7 +27,6 @@ const EXCEL_TOOL_NAMES = [
   "format_cells",
   "conditional_format",
   "trace_dependencies",
-  "get_recent_changes",
   "view_settings",
 ] as const;
 
@@ -51,7 +47,7 @@ function formatParamsJson(params: unknown): string {
     }
     return JSON.stringify(params, null, 2);
   } catch {
-    return String(params);
+    return typeof params === "string" || typeof params === "number" || typeof params === "boolean" ? String(params) : JSON.stringify(params);
   }
 }
 
@@ -59,7 +55,11 @@ function safeParseParams(params: unknown): Record<string, unknown> {
   if (!params) return {};
   if (typeof params === "object" && params !== null) return params as Record<string, unknown>;
   if (typeof params === "string") {
-    try { return JSON.parse(params); } catch { return {}; }
+    try {
+      const parsed: unknown = JSON.parse(params);
+      if (typeof parsed === "object" && parsed !== null) return parsed as Record<string, unknown>;
+      return {};
+    } catch { return {}; }
   }
   return {};
 }
@@ -83,7 +83,7 @@ function tryFormatJsonOutput(text: string): { isJson: boolean; formatted: string
   if (!trimmed) return { isJson: false, formatted: text };
 
   try {
-    const parsed = JSON.parse(trimmed);
+    const parsed: unknown = JSON.parse(trimmed);
     return { isJson: true, formatted: JSON.stringify(parsed, null, 2) };
   } catch {
     return { isJson: false, formatted: text };
@@ -256,16 +256,15 @@ function describeToolCall(toolName: string, params: unknown, resultText?: string
 
   switch (toolName) {
     // ── Read tools ──
-    case "read_range":
-      return { action: "Read", detail: range ? compactRange(range) : "range" };
-    case "read_selection":
-      return { action: "Read", detail: "selection" };
-    case "get_workbook_overview":
-      return { action: "Overview", detail: "" };
-    case "get_range_as_csv":
-      return { action: "Export", detail: range ? `${compactRange(range)} as CSV` : "as CSV" };
-    case "get_all_objects":
-      return { action: "Get", detail: "charts & objects" };
+    case "read_range": {
+      const mode = p.mode as string | undefined;
+      const label = mode === "csv" ? "Export" : "Read";
+      return { action: label, detail: range ? compactRange(range) + (mode === "csv" ? " (CSV)" : "") : "range" };
+    }
+    case "get_workbook_overview": {
+      const sheet = p.sheet as string | undefined;
+      return { action: "Overview", detail: sheet ?? "" };
+    }
 
     // ── Write tools ──
     case "write_cells": {

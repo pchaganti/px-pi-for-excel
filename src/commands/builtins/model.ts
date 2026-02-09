@@ -8,7 +8,7 @@ import { ModelSelector } from "@mariozechner/pi-web-ui";
 import type { SlashCommand } from "../types.js";
 
 function openModelSelector(agent: Agent): void {
-  ModelSelector.open(agent.state.model, (model) => {
+  void ModelSelector.open(agent.state.model, (model) => {
     agent.setModel(model);
     // Header update is handled by the agent subscriber in taskpane.ts
     document.dispatchEvent(new CustomEvent("pi:model-changed"));

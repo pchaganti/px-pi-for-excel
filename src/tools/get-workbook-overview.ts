@@ -240,7 +240,8 @@ async function buildSheetDetail(sheetName: string): Promise<string> {
     const sheetQuotedPrefix = `'${sheet.name}'!`.toLowerCase();
     const relevantNames = names.items.filter((n) => {
       if (!n.visible) return false;
-      const val = n.value.toLowerCase();
+      const rawVal: unknown = n.value;
+      const val = typeof rawVal === "string" ? rawVal.toLowerCase() : "";
       return val.startsWith(sheetPrefix) || val.startsWith(sheetQuotedPrefix);
     });
     if (relevantNames.length > 0) {
@@ -289,7 +290,7 @@ async function buildSheetDetail(sheetName: string): Promise<string> {
       lines.push(separator);
       for (let r = 0; r < previewRows.length; r++) {
         const cells = previewRows[r].map((v) =>
-          v === null || v === undefined || v === "" ? "" : String(v),
+          v === null || v === undefined || v === "" ? "" : typeof v === "string" ? v : typeof v === "number" || typeof v === "boolean" ? String(v) : JSON.stringify(v),
         );
         lines.push(`| ${r + 1} | ${cells.join(" | ")} |`);
       }

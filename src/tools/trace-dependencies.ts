@@ -111,8 +111,8 @@ async function traceCell(
   }
   visited.add(fullAddr);
 
-  const formula = range.formulas[0][0];
-  const value = range.values[0][0];
+  const formula: unknown = range.formulas[0][0];
+  const value: unknown = range.values[0][0];
 
   // Not a formula — leaf node
   if (typeof formula !== "string" || !formula.startsWith("=")) {
@@ -217,8 +217,9 @@ function parseFormulaRefs(formula: string, currentSheet: string): string[] {
 /** Render the dependency tree as an indented text tree */
 function renderTree(node: DepNode, lines: string[], prefix: string, isLast: boolean): void {
   const connector = isLast ? "└── " : "├── ";
-  const valueStr = node.value !== "" && node.value !== null && node.value !== undefined
-    ? ` = ${node.value}`
+  const rawVal = node.value;
+  const valueStr = rawVal !== "" && rawVal !== null && rawVal !== undefined
+    ? ` = ${typeof rawVal === "string" || typeof rawVal === "number" || typeof rawVal === "boolean" ? String(rawVal) : JSON.stringify(rawVal)}`
     : "";
   const formulaStr = node.formula ? ` (${node.formula})` : "";
 

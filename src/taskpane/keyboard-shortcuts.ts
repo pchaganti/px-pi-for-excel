@@ -183,7 +183,7 @@ export function installKeyboardShortcuts(opts: {
         hideCommandMenu();
         const input = sidebar.getInput();
         if (input) input.clear();
-        cmd.execute(args);
+        void cmd.execute(args);
         return;
       }
     }

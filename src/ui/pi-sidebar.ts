@@ -79,8 +79,7 @@ export class PiSidebar extends LitElement {
     if (changed.has("agent")) this._setupSubscription();
   }
 
-  override async firstUpdated() {
-    await this.updateComplete;
+  override firstUpdated() {
     this._setupAutoScroll();
     const inner = this.querySelector(".pi-messages__inner");
     if (inner) this._cleanupGrouping = initToolGrouping(inner as HTMLElement);
@@ -148,7 +147,7 @@ export class PiSidebar extends LitElement {
     });
   }
 
-  private _onSend = (e: CustomEvent) => {
+  private _onSend = (e: CustomEvent<{ text: string }>) => {
     this._autoScroll = true;
     this.onSend?.(e.detail.text);
     this._input?.clear();
