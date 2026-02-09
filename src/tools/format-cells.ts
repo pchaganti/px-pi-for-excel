@@ -9,6 +9,8 @@ import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun, getRange, parseRangeRef, qualifiedAddress } from "../excel/helpers.js";
 import { getErrorMessage } from "../utils/errors.js";
+import { resolveStyles } from "../conventions/index.js";
+import type { BorderWeight } from "../conventions/index.js";
 
 const DEFAULT_FONT_NAME = "Arial";
 const DEFAULT_FONT_SIZE = 10;
@@ -20,6 +22,15 @@ const schema = Type.Object({
   range: Type.String({
     description: 'Range to format, e.g. "A1:D1", "Sheet2!B3:B20". Supports comma/semicolon-separated ranges on the same sheet (e.g. "A1:B2, D1:D2").',
   }),
+  style: Type.Optional(
+    Type.Union([Type.String(), Type.Array(Type.String())], {
+      description:
+        'Named style(s) to apply. Compose as array (left-to-right). ' +
+        'Format: "number", "integer", "currency", "percent", "ratio", "text". ' +
+        'Structural: "header", "total-row", "subtotal", "input", "blank-section". ' +
+        'Example: ["currency", "total-row"] = currency format + bold + top border.',
+    }),
+  ),
   bold: Type.Optional(Type.Boolean({ description: "Set bold." })),
   italic: Type.Optional(Type.Boolean({ description: "Set italic." })),
   underline: Type.Optional(Type.Boolean({ description: "Set underline." })),
@@ -34,7 +45,18 @@ const schema = Type.Object({
   number_format: Type.Optional(
     Type.String({
       description:
-        'Excel number format string, e.g. "#,##0.00", "0%", "$#,##0", "yyyy-mm-dd".',
+        'Preset name ("number", "integer", "currency", "percent", "ratio", "text") ' +
+        'or raw Excel format string. Overrides style\'s number format.',
+    }),
+  ),
+  number_format_dp: Type.Optional(
+    Type.Number({
+      description: "Override decimal places for a number format preset.",
+    }),
+  ),
+  currency_symbol: Type.Optional(
+    Type.String({
+      description: 'Override currency symbol, e.g. "£", "€". Only with currency preset.',
     }),
   ),
   horizontal_alignment: Type.Optional(
@@ -63,10 +85,26 @@ const schema = Type.Object({
       ],
       {
         description:
-          'Border weight: "thin", "medium", "thick", or "none" to remove borders. Applied to all edges.',
+          'Border weight for ALL edges (shorthand). Individual edge params override this.',
       },
     ),
   ),
+  border_top: Type.Optional(Type.Union(
+    [Type.Literal("thin"), Type.Literal("medium"), Type.Literal("thick"), Type.Literal("none")],
+    { description: "Top border weight." },
+  )),
+  border_bottom: Type.Optional(Type.Union(
+    [Type.Literal("thin"), Type.Literal("medium"), Type.Literal("thick"), Type.Literal("none")],
+    { description: "Bottom border weight." },
+  )),
+  border_left: Type.Optional(Type.Union(
+    [Type.Literal("thin"), Type.Literal("medium"), Type.Literal("thick"), Type.Literal("none")],
+    { description: "Left border weight." },
+  )),
+  border_right: Type.Optional(Type.Union(
+    [Type.Literal("thin"), Type.Literal("medium"), Type.Literal("thick"), Type.Literal("none")],
+    { description: "Right border weight." },
+  )),
   merge: Type.Optional(
     Type.Boolean({ description: "Merge the range into a single cell." }),
   ),
@@ -91,22 +129,46 @@ export function createFormatCellsTool(): AgentTool<typeof schema> {
     label: "Format Cells",
     description:
       "Apply formatting to a range of cells (supports comma-separated ranges on one sheet). " +
-      "Set font properties (bold, italic, color, size), fill color, number format, alignment, borders, " +
-      "column width (Excel character units), and more. Does NOT modify cell values — use write_cells for that.",
+      "Use named styles for common patterns: style: \"currency\" or style: [\"currency\", \"total-row\"]. " +
+      "Individual params (bold, fill_color, etc.) override style properties. " +
+      "Does NOT modify cell values — use write_cells for that.",
     parameters: schema,
     execute: async (
       _toolCallId: string,
       params: Params,
     ): Promise<AgentToolResult<undefined>> => {
       try {
+        // ── Resolve styles + overrides into flat properties ──────────
+        const styleResult = resolveStyles(params.style, {
+          numberFormat: params.number_format,
+          numberFormatDp: params.number_format_dp,
+          currencySymbol: params.currency_symbol,
+          bold: params.bold,
+          italic: params.italic,
+          underline: params.underline,
+          fontColor: params.font_color,
+          fontSize: params.font_size,
+          fontName: params.font_name,
+          fillColor: params.fill_color,
+          horizontalAlignment: params.horizontal_alignment as "Left" | "Center" | "Right" | "General" | undefined,
+          verticalAlignment: params.vertical_alignment as "Top" | "Center" | "Bottom" | undefined,
+          wrapText: params.wrap_text,
+          borderTop: params.border_top as BorderWeight | undefined,
+          borderBottom: params.border_bottom as BorderWeight | undefined,
+          borderLeft: params.border_left as BorderWeight | undefined,
+          borderRight: params.border_right as BorderWeight | undefined,
+        });
+        const props = styleResult.properties;
+
         const result = await excelRun(async (context) => {
           const resolved = resolveFormatTarget(context, params.range);
           resolved.sheet.load("name");
           resolved.target.load("address");
 
           const requestedColumnWidth = params.column_width;
+          const hasNumberFormat = styleResult.excelNumberFormat !== undefined;
 
-          const needsAreas = resolved.isMultiRange && (params.number_format || params.merge !== undefined);
+          const needsAreas = resolved.isMultiRange && (hasNumberFormat || params.merge !== undefined);
           if (!resolved.isMultiRange) {
             resolved.target.load("rowCount,columnCount");
           } else if (needsAreas) {
@@ -120,45 +182,51 @@ export function createFormatCellsTool(): AgentTool<typeof schema> {
           const isMultiRange = resolved.isMultiRange;
 
           const applied: string[] = [];
-          const warnings: string[] = [];
+          const warnings: string[] = [...styleResult.warnings];
           const formatTarget = target.format;
           let columnWidthFormat: Excel.RangeFormat | null = null;
 
-          // Font properties
-          if (params.bold !== undefined) {
-            formatTarget.font.bold = params.bold;
-            applied.push(params.bold ? "bold" : "not bold");
-          }
-          if (params.italic !== undefined) {
-            formatTarget.font.italic = params.italic;
-            applied.push(params.italic ? "italic" : "not italic");
-          }
-          if (params.underline !== undefined) {
-            formatTarget.font.underline = params.underline ? "Single" : "None";
-            applied.push(params.underline ? "underline" : "no underline");
-          }
-          if (params.font_color) {
-            formatTarget.font.color = params.font_color;
-            applied.push(`font color ${params.font_color}`);
-          }
-          if (params.font_size) {
-            formatTarget.font.size = params.font_size;
-            applied.push(`${params.font_size}pt`);
-          }
-          if (params.font_name) {
-            formatTarget.font.name = params.font_name;
-            applied.push(`font ${params.font_name}`);
+          // Report which styles were applied
+          if (params.style) {
+            const names = Array.isArray(params.style) ? params.style : [params.style];
+            applied.push(`style ${names.join(" + ")}`);
           }
 
-          // Fill
-          if (params.fill_color) {
-            formatTarget.fill.color = params.fill_color;
-            applied.push(`fill ${params.fill_color}`);
+          // Font properties (from resolved style + overrides)
+          if (props.bold !== undefined) {
+            formatTarget.font.bold = props.bold;
+            if (!params.style) applied.push(props.bold ? "bold" : "not bold");
+          }
+          if (props.italic !== undefined) {
+            formatTarget.font.italic = props.italic;
+            if (!params.style) applied.push(props.italic ? "italic" : "not italic");
+          }
+          if (props.underline !== undefined) {
+            formatTarget.font.underline = props.underline ? "Single" : "None";
+            if (!params.style) applied.push(props.underline ? "underline" : "no underline");
+          }
+          if (props.fontColor) {
+            formatTarget.font.color = props.fontColor;
+            if (!params.style) applied.push(`font color ${props.fontColor}`);
+          }
+          if (props.fontSize) {
+            formatTarget.font.size = props.fontSize;
+            if (!params.style) applied.push(`${props.fontSize}pt`);
+          }
+          if (props.fontName) {
+            formatTarget.font.name = props.fontName;
+            if (!params.style) applied.push(`font ${props.fontName}`);
           }
 
-          // Number format
-          if (params.number_format) {
-            const numberFormat = params.number_format;
+          // Fill (from resolved style + overrides)
+          if (props.fillColor) {
+            formatTarget.fill.color = props.fillColor;
+            if (!params.style) applied.push(`fill ${props.fillColor}`);
+          }
+
+          // Number format (from resolved style or raw)
+          if (styleResult.excelNumberFormat) {
+            const numberFormat = styleResult.excelNumberFormat;
             if (!resolved.isMultiRange) {
               const range = resolved.target;
               const formatMatrix = Array.from({ length: range.rowCount }, () =>
@@ -174,45 +242,47 @@ export function createFormatCellsTool(): AgentTool<typeof schema> {
                 area.numberFormat = formatMatrix;
               }
             }
-            applied.push(`format "${numberFormat}"`);
+            if (!params.style) applied.push(`format "${numberFormat}"`);
           }
 
-          // Alignment
-          if (params.horizontal_alignment) {
-            if (!isHorizontalAlignment(params.horizontal_alignment)) {
+          // Alignment (from resolved style + overrides)
+          if (props.horizontalAlignment) {
+            const hAlign = props.horizontalAlignment;
+            if (!isHorizontalAlignment(hAlign)) {
               throw new Error(
-                `Invalid horizontal_alignment "${params.horizontal_alignment}". Use Left, Center, Right, or General.`,
+                `Invalid horizontal_alignment "${String(hAlign)}". Use Left, Center, Right, or General.`,
               );
             }
-            formatTarget.horizontalAlignment = params.horizontal_alignment;
-            applied.push(`align ${params.horizontal_alignment.toLowerCase()}`);
+            formatTarget.horizontalAlignment = hAlign;
+            if (!params.style) applied.push(`align ${hAlign.toLowerCase()}`);
           }
-          if (params.vertical_alignment) {
-            if (!isVerticalAlignment(params.vertical_alignment)) {
+          if (props.verticalAlignment) {
+            const vAlign = props.verticalAlignment;
+            if (!isVerticalAlignment(vAlign)) {
               throw new Error(
-                `Invalid vertical_alignment "${params.vertical_alignment}". Use Top, Center, or Bottom.`,
+                `Invalid vertical_alignment "${String(vAlign)}". Use Top, Center, or Bottom.`,
               );
             }
-            formatTarget.verticalAlignment = params.vertical_alignment;
-            applied.push(`v-align ${params.vertical_alignment.toLowerCase()}`);
+            formatTarget.verticalAlignment = vAlign;
+            if (!params.style) applied.push(`v-align ${vAlign.toLowerCase()}`);
           }
-          if (params.wrap_text !== undefined) {
-            formatTarget.wrapText = params.wrap_text;
-            applied.push(params.wrap_text ? "wrap" : "no wrap");
+          if (props.wrapText !== undefined) {
+            formatTarget.wrapText = props.wrapText;
+            if (!params.style) applied.push(props.wrapText ? "wrap" : "no wrap");
           }
 
-          // Dimensions
+          // Dimensions (not part of styles — always from direct params)
           if (params.column_width !== undefined) {
             const columnTarget = target.getEntireColumn();
 
-            if (params.font_name && params.font_name !== DEFAULT_FONT_NAME) {
+            if (props.fontName && props.fontName !== DEFAULT_FONT_NAME) {
               warnings.push(
-                `Column width assumes ${DEFAULT_FONT_NAME} ${DEFAULT_FONT_SIZE}; using ${params.font_name} may differ.`
+                `Column width assumes ${DEFAULT_FONT_NAME} ${DEFAULT_FONT_SIZE}; using ${props.fontName} may differ.`
               );
             }
-            if (params.font_size && params.font_size !== DEFAULT_FONT_SIZE) {
+            if (props.fontSize && props.fontSize !== DEFAULT_FONT_SIZE) {
               warnings.push(
-                `Column width assumes ${DEFAULT_FONT_NAME} ${DEFAULT_FONT_SIZE}; using ${params.font_size}pt may differ.`
+                `Column width assumes ${DEFAULT_FONT_NAME} ${DEFAULT_FONT_SIZE}; using ${props.fontSize}pt may differ.`
               );
             }
 
@@ -232,36 +302,8 @@ export function createFormatCellsTool(): AgentTool<typeof schema> {
             applied.push("auto-fit");
           }
 
-          // Borders
-          if (params.borders) {
-            const borderValue = params.borders;
-
-            const borderIndexes = [
-              "EdgeTop",
-              "EdgeBottom",
-              "EdgeLeft",
-              "EdgeRight",
-              "InsideHorizontal",
-              "InsideVertical",
-            ] as const;
-
-            for (const border of borderIndexes) {
-              const borderItem = formatTarget.borders.getItem(border);
-              if (borderValue === "none") {
-                borderItem.style = "None";
-              } else {
-                borderItem.style = "Continuous";
-                const borderWeight: "Thin" | "Medium" | "Thick" =
-                  borderValue === "thin"
-                    ? "Thin"
-                    : borderValue === "medium"
-                      ? "Medium"
-                      : "Thick";
-                borderItem.weight = borderWeight;
-              }
-            }
-            applied.push(`${params.borders} borders`);
-          }
+          // Borders — resolve from: individual edge params > style edges > `borders` shorthand
+          applyBorders(formatTarget, params, props, applied);
 
           // Merge
           if (params.merge !== undefined) {
@@ -329,6 +371,90 @@ export function createFormatCellsTool(): AgentTool<typeof schema> {
       }
     },
   };
+}
+
+// ── Border application ───────────────────────────────────────────────
+
+/** Map a border weight string to the Office.js enum value. */
+function toBorderWeight(weight: BorderWeight): "Thin" | "Medium" | "Thick" {
+  return weight === "thin" ? "Thin" : weight === "medium" ? "Medium" : "Thick";
+}
+
+/** Apply a single border edge. */
+function applyEdge(
+  formatTarget: Excel.RangeFormat,
+  edge: "EdgeTop" | "EdgeBottom" | "EdgeLeft" | "EdgeRight",
+  weight: BorderWeight,
+): void {
+  const borderItem = formatTarget.borders.getItem(edge);
+  if (weight === "none") {
+    borderItem.style = "None";
+  } else {
+    borderItem.style = "Continuous";
+    borderItem.weight = toBorderWeight(weight);
+  }
+}
+
+/**
+ * Resolve and apply borders. Priority:
+ *   1. Individual edge params (border_top, etc.) — highest
+ *   2. Style-resolved edges (from named styles)
+ *   3. `borders` shorthand (all edges + inside) — lowest
+ */
+function applyBorders(
+  formatTarget: Excel.RangeFormat,
+  params: Params,
+  props: { borderTop?: BorderWeight; borderBottom?: BorderWeight; borderLeft?: BorderWeight; borderRight?: BorderWeight },
+  applied: string[],
+): void {
+  const shorthand = params.borders;
+  const hasShorthand = shorthand !== undefined;
+  const hasEdges = params.border_top !== undefined || params.border_bottom !== undefined ||
+    params.border_left !== undefined || params.border_right !== undefined;
+  const hasStyleEdges = props.borderTop !== undefined || props.borderBottom !== undefined ||
+    props.borderLeft !== undefined || props.borderRight !== undefined;
+
+  if (!hasShorthand && !hasEdges && !hasStyleEdges) return;
+
+  if (hasShorthand && !hasEdges && !hasStyleEdges) {
+    // Pure shorthand — apply to all edges including inside (existing behavior)
+    const borderIndexes = [
+      "EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight",
+      "InsideHorizontal", "InsideVertical",
+    ] as const;
+    for (const border of borderIndexes) {
+      const borderItem = formatTarget.borders.getItem(border);
+      if (shorthand === "none") {
+        borderItem.style = "None";
+      } else {
+        borderItem.style = "Continuous";
+        borderItem.weight = toBorderWeight(shorthand);
+      }
+    }
+    applied.push(`${shorthand} borders`);
+    return;
+  }
+
+  // Individual edges — style provides base, params override
+  const edges: Array<{ edge: "EdgeTop" | "EdgeBottom" | "EdgeLeft" | "EdgeRight"; param: BorderWeight | undefined; styleProp: BorderWeight | undefined; label: string }> = [
+    { edge: "EdgeTop", param: params.border_top as BorderWeight | undefined, styleProp: props.borderTop, label: "top" },
+    { edge: "EdgeBottom", param: params.border_bottom as BorderWeight | undefined, styleProp: props.borderBottom, label: "bottom" },
+    { edge: "EdgeLeft", param: params.border_left as BorderWeight | undefined, styleProp: props.borderLeft, label: "left" },
+    { edge: "EdgeRight", param: params.border_right as BorderWeight | undefined, styleProp: props.borderRight, label: "right" },
+  ];
+
+  const appliedEdges: string[] = [];
+  for (const { edge, param, styleProp, label } of edges) {
+    const weight = param ?? styleProp;
+    if (weight !== undefined) {
+      applyEdge(formatTarget, edge, weight);
+      appliedEdges.push(`${label}:${weight}`);
+    }
+  }
+
+  if (appliedEdges.length > 0) {
+    applied.push(`borders ${appliedEdges.join(", ")}`);
+  }
 }
 
 function splitRangeList(range: string): string[] {

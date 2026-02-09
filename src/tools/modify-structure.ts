@@ -8,6 +8,7 @@
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun } from "../excel/helpers.js";
+import { invalidateBlueprint } from "../context/blueprint.js";
 import { getErrorMessage } from "../utils/errors.js";
 
 // Helper for string enum (TypeBox doesn't have a built-in StringEnum)
@@ -219,6 +220,11 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
               throw new Error(`Unknown action: ${String(action as string)}`);
           }
         });
+
+        // Structural change — invalidate cached blueprint so next getBlueprint() rebuilds.
+        // NOTE: the system prompt (which embeds the blueprint) is not yet auto-refreshed;
+        // the model can call get_workbook_overview to see the updated structure.
+        invalidateBlueprint();
 
         return {
           content: [{ type: "text", text: result }],

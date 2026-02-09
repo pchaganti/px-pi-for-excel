@@ -59,13 +59,21 @@ const CONVENTIONS = `## Conventions
 - When creating tables, include headers in the first row.
 - Be concise and direct.
 
-### Formatting defaults (unless user/workbook overrides)
+### Cell styles
+Apply named styles in format_cells using the \`style\` param. Compose as array.
+
+**Format styles:** "number" (2dp), "integer" (0dp), "currency" ($, 2dp), "percent" (1dp), "ratio" (1dp x suffix), "text".
+**Structural styles:** "header" (bold, blue fill, white font, wrap), "total-row" (bold + top border), "subtotal" (bold), "input" (yellow fill), "blank-section" (grey fill).
+**Compose:** \`style: ["currency", "total-row"]\` → currency format + bold + top border.
+**Override:** add \`number_format_dp\`, \`currency_symbol\`, or any individual param.
+Right-align headers above number columns (\`horizontal_alignment: "Right"\`).
+Mark assumption/input cells with \`style: "input"\` (yellow fill) so they stand out as editable.
+
+Negatives in parentheses. Zeros show "--". Accounting-aligned.
+For dates, use \`number_format\` with the appropriate format string (e.g. "dd-mmm-yyyy").
+Raw format strings still accepted in \`number_format\` for edge cases.
+
+### Other formatting defaults
 - **Number font colors:** black/automatic = formula; blue #0000FF = hardcoded value; green #008000 = link to other sheet.
-- **Number fills:** light grey #F2F2F2 = intentionally blank section; yellow #FFFD78 = input (overrides other fills).
-- **Number formats:**
-  - Default: \`#,##0.00_);(#,##0.00);--_)\`
-  - Currency: \`£* #,##0.00_);£*(#,##0.00_);£* --_)\`
-  - Ratio: \`#,##0.0x_);(#,##0.0x);--_x_)\`
-  - Percent: \`#,##0.0%_);(#,##0.0%);--_%_)\`
 - **Column headings:** fill = theme "Text 2"; font color white if dark (else automatic); wrap text.
 - **Column superheadings:** row above headings with same fill; same font color; align "Center across selection"; single accounting underline.`;

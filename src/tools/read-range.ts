@@ -12,6 +12,7 @@ import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun, getRange, qualifiedAddress, parseCell, colToLetter } from "../excel/helpers.js";
 import { formatAsMarkdownTable, extractFormulas, findErrors } from "../utils/format.js";
 import { getErrorMessage } from "../utils/errors.js";
+import { humanizeFormat } from "../conventions/index.js";
 
 const schema = Type.Object({
   range: Type.String({
@@ -218,7 +219,9 @@ function formatDetailed(
     lines.push("");
     lines.push("### Number Formats");
     for (const [fmt, cells] of formatMap) {
-      lines.push(`- \`${fmt}\` → ${cells.join(", ")}`);
+      const label = humanizeFormat(fmt);
+      const display = label !== fmt ? `**${label}** (\`${fmt}\`)` : `\`${fmt}\``;
+      lines.push(`- ${display} → ${cells.join(", ")}`);
     }
   }
 

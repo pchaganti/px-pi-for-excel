@@ -26,7 +26,7 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 ## Overwrite protection (`write_cells.allow_overwrite`)
 - **Blocks only on existing data:** values or formulas.
 - **Does NOT block** on formatting, conditional formats, or data validation rules.
-- **Rationale:** formatting-only cells are not meaningful “content” and shouldn’t block writes.
+- **Rationale:** formatting-only cells are not meaningful "content" and shouldn't block writes.
 
 ## Fill formulas (`fill_formula`)
 - **Purpose:** avoid large 2D formula arrays by using Excel AutoFill.
@@ -37,18 +37,44 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 
 ## Tool consolidation (14 → 10)
 - `get_range_as_csv` merged into `read_range` as `mode: 'csv'`
-- `read_selection` removed — auto-context already reads the selection every turn
+- `read_selection` removed - auto-context already reads the selection every turn
 - `get_all_objects` absorbed into `get_workbook_overview` via optional `sheet` param
-- `get_recent_changes` removed — auto-context already injects changes every turn
+- `get_recent_changes` removed - auto-context already injects changes every turn
 - `find_by_label` (#7) absorbed into `search_workbook` via `context_rows` param
 - `get_sheet_summary` (#8) absorbed into `get_workbook_overview` via `sheet` param
 - **Rationale:** one tool per distinct verb, modes over multiplied tools. Progressive disclosure for future tools (charts, tables, etc.)
 
 ## Range reading (`read_range`)
 - **Compact/detailed tables:** render an Excel-style markdown grid with **column letters** and **row numbers** (instead of treating the first data row as a table header).
-- **Empty ranges:** if a range has **no values, formulas, or errors**, return `_All cells are empty._` (omit the table) to avoid confusing “blank header” visuals.
+- **Empty ranges:** if a range has **no values, formulas, or errors**, return `_All cells are empty._` (omit the table) to avoid confusing "blank header" visuals.
 - **Rationale:** improves readability in the sidebar UI and avoids ambiguous tables for 1-row or empty ranges.
 
 ## Default formatting assumption
-- **System prompt:** “Default font for formatting is Arial 10 unless user specifies otherwise.”
+- **System prompt:** "Default font for formatting is Arial 10 unless user specifies otherwise."
 - **Rationale:** keeps column width conversions consistent with the chosen baseline.
+
+## Named styles and format presets (`format_cells.style`)
+- **Style param:** `string | string[]` — single name or composable array (left-to-right merge).
+- **Built-in format styles:** `number` (2dp), `integer` (0dp), `currency` ($, 2dp), `percent` (1dp), `ratio` (1dp, x suffix), `text`.
+- **Built-in structural styles:** `header`, `total-row`, `subtotal`, `input`, `blank-section`.
+- **Composition:** format + structural styles are orthogonal (no property overlap), so composing is always clean.
+- **Override with params:** individual params (bold, fill_color, etc.) always win over style properties (CSS inline specificity).
+- **`number_format` accepts preset names:** `number_format: "currency"` is equivalent to `style: "currency"` — backward compatible, raw format strings still accepted.
+- **`number_format_dp`:** override decimal places for any numeric preset.
+- **`currency_symbol`:** override the currency symbol (only applies to `currency` preset; warned and ignored otherwise).
+- **Type-checking warnings:** integer + dp > 0, currency_symbol on non-currency, dp on text → warning in tool output.
+- **Date formats:** no preset — too many variations. Use raw `number_format` string (e.g. "dd-mmm-yyyy").
+- **Source of truth:** `src/conventions/defaults.ts` — format strings, styles, and house-style conventions are defined once and imported by tools + prompt.
+- **Rationale:** agents say `"currency"` instead of pasting fragile 40-char format strings. Composition reduces multi-param calls. See `.research/conventions-design.md` for full design.
+
+## Individual border edges (`format_cells.border_top/bottom/left/right`)
+- **New params:** `border_top`, `border_bottom`, `border_left`, `border_right` — each accepts `thin | medium | thick | none`.
+- **Priority:** individual edge params > style-resolved edges > `borders` shorthand.
+- **Shorthand preserved:** `borders` still applies to all edges + inside (existing behavior, backward compatible).
+- **Rationale:** enables `total-row` style (top border only) and other edge-specific formatting without the all-edges shorthand.
+
+## Format humanization (`read_range` detailed mode)
+- **Behavior:** known format strings are displayed with human-readable labels alongside the raw string (e.g. `**currency (£, 2dp)** (\`£* #,##0.00...\`)`).
+- **Unknown formats:** displayed as raw strings (no change from before).
+- **Implementation:** `src/conventions/humanize.ts` pre-generates a lookup table from all preset+dp+symbol combinations.
+- **Rationale:** raw format strings in read-back are opaque; labels make them immediately understandable.
