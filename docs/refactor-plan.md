@@ -1,5 +1,7 @@
 # Refactor Plan — modularize `taskpane` + `builtins`
 
+> **Status: DONE.** Shipped in v0.2.0-pre. All extractions complete, biggest file is now ~444 LOC (tool-renderers.ts).
+
 Context: codebase grew from rapid prototyping. Lint + typecheck are now clean; next priority is **maintainability** (smaller modules, clearer ownership) with **no behavior changes**.
 
 ## Goals

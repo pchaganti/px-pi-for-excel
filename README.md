@@ -25,12 +25,12 @@ Existing AI add-ins for Excel are closed-source, locked to a single model, and c
 | **Change tracking** | No awareness of what you edited between messages. | **Automatic change tracking** — the agent sees your edits and adapts. |
 | **Models** | Locked to one provider and model. | **Any model** — swap between Opus, Sonnet, GPT, Gemini, Codex, or local models mid-conversation. |
 | **Cost** | $20+/month per seat. | **Free.** Bring your own API key. |
-| **Tool overhead** | Separate tools for compact vs. detailed reads — the model often picks the wrong one. | **Single `read_range` tool** with a `mode` parameter. Less overhead, fewer wasted calls. |
+| **Tool overhead** | Separate tools for compact vs. detailed reads — the model often picks the wrong one. | **10 tools, one per verb.** `read_range` has a `mode` param (compact/csv/detailed). Less overhead, fewer wasted calls. |
 | **Writes** | Overwrite protection, but no verification. | **Auto-verification** — reads back written cells to check for `#REF!`, `#VALUE!`, and other errors. |
 
 ## Features
 
-- **13 Excel tools** — `get_workbook_overview`, `read_range`, `get_range_as_csv`, `read_selection`, `get_all_objects`, `write_cells`, `fill_formula`, `search_workbook`, `modify_structure`, `format_cells`, `conditional_format`, `trace_dependencies`, `get_recent_changes`
+- **10 Excel tools** — `get_workbook_overview`, `read_range`, `write_cells`, `fill_formula`, `search_workbook`, `modify_structure`, `format_cells`, `conditional_format`, `trace_dependencies`, `view_settings`
 - **Auto-context injection** — automatically reads around your selection and tracks changes between messages
 - **Workbook blueprint** — sends a structural overview of your workbook to the LLM at session start
 - **Multi-provider auth** — API keys, OAuth (Anthropic, OpenAI, Google, GitHub Copilot, Antigravity), or reuse credentials from Pi TUI
@@ -222,14 +222,26 @@ API-key based providers often work without a proxy; OAuth-based logins typically
 - [x] Keyboard shortcuts (Escape, Shift+Tab, Ctrl+O)
 - [x] Maintainability refactor — modularized taskpane + slash command builtins
 
+### Shipped in v0.2.0-pre
+- [x] Tool consolidation: 14 → 10 tools — one tool per distinct verb, no overlap ([#14](https://github.com/tmustier/pi-for-excel/issues/14) §A, §6)
+- [x] `view_settings` tool — gridlines, headings, freeze panes, tab color
+- [x] `read_range` gains `mode: "csv"` (absorbs `get_range_as_csv`)
+- [x] `get_workbook_overview` gains `sheet` param for sheet-level detail (absorbs `get_all_objects`, closes [#8](https://github.com/tmustier/pi-for-excel/issues/8))
+- [x] `search_workbook` gains `context_rows` for surrounding data (closes [#7](https://github.com/tmustier/pi-for-excel/issues/7))
+- [x] Compact collapsible tool cards with action verbs + markdown rendering
+- [x] Consecutive same-tool grouping with expand/collapse
+- [x] Full ESLint upgrade — type-aware `recommendedTypeChecked` preset, 0 errors/warnings
+- [x] Architecture: modularized taskpane into 8 focused modules, builtins split by domain
+
 ### Up next
-- [ ] Agent interface redesign ([#14](https://github.com/tmustier/pi-for-excel/issues/14)) — tool tiers, progressive disclosure, dynamic conventions
-- [ ] Spreadsheet conventions ([#1](https://github.com/tmustier/pi-for-excel/issues/1)) — where to store/expose color coding, number formats, heading styles
+- [ ] Progressive disclosure infrastructure ([#14](https://github.com/tmustier/pi-for-excel/issues/14) §A) — on-demand tool injection via keyword scanning in `transformContext`
+- [ ] New tools: charts, tables, data validation ([#18](https://github.com/tmustier/pi-for-excel/issues/18)) — as on-demand tier 1
+- [ ] Spreadsheet conventions ([#1](https://github.com/tmustier/pi-for-excel/issues/1)) — user-configurable, not hardcoded in system prompt
+- [ ] Auto context management ([#14](https://github.com/tmustier/pi-for-excel/issues/14) §D) — blueprint refresh after structural changes, auto-compact
 - [ ] Header bar UX ([#12](https://github.com/tmustier/pi-for-excel/issues/12)) — session switcher, workbook indicator
 - [ ] Welcome copy and example prompts ([#11](https://github.com/tmustier/pi-for-excel/issues/11))
 - [ ] Change approval UI + clickable cell citations ([#6](https://github.com/tmustier/pi-for-excel/issues/6))
 - [ ] Extension API build-out ([#13](https://github.com/tmustier/pi-for-excel/issues/13)) — dynamic loading, tool registration, sandboxing
-- [ ] Semantic navigation — `find_by_label` ([#7](https://github.com/tmustier/pi-for-excel/issues/7)), `get_sheet_summary` ([#8](https://github.com/tmustier/pi-for-excel/issues/8))
 - [ ] Comment support — read/write cell comments ([#2](https://github.com/tmustier/pi-for-excel/issues/2))
 
 ### Future
@@ -238,9 +250,8 @@ API-key based providers often work without a proxy; OAuth-based logins typically
 - [ ] Python code execution via Pyodide
 - [ ] SpreadsheetBench evaluation (target >43%)
 - [ ] Per-workbook instructions (like AGENTS.md)
-- [ ] Chart creation and modification
-- [ ] Named range awareness in formulas
-- [ ] Data validation
+- [ ] On-demand tier 2 tools: named ranges, comments, protection, page layout, images, hyperlinks
+- [ ] Pivot tables and slicers
 - [ ] Pi TUI ↔ Excel session import/export
 
 ## Prior Art & Credits

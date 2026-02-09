@@ -41,12 +41,9 @@ Three review lenses:
 
 ## Current hotspots / refactor candidates (keep a running list)
 
-- `src/taskpane.ts`
-  - Split into smaller modules (model selection, header/status sync, session persistence).
-  - Reduce `any` usage around models; prefer typed model interface.
-  - DONE: extracted model ordering/"featured" helpers to `src/models/model-ordering.ts`.
-  - Consider removing the ModelSelector monkey-patch in favor of an explicit wrapper API (if Pi-web-ui exposes hooks).
-  - DONE: added model ordering unit tests in `tests/model-ordering.test.ts` (`npm run test:models`).
+- `src/taskpane.ts` — **DONE (v0.2.0-pre).** Split into `taskpane/init.ts`, `bootstrap.ts`, `sessions.ts`, `keyboard-shortcuts.ts`, `context-injection.ts`, `default-model.ts`, `queue-display.ts`, `welcome-login.ts`. Builtins split by domain. Zero `any`, zero lint warnings.
+- `src/ui/tool-renderers.ts` (444 LOC) — largest file. Could split render functions by tool category if it grows further.
+- `src/tools/` — consolidated from 14 → 10 tools. Each file is self-contained and ≤371 LOC.
 
 ## Output expectations
 
