@@ -33,15 +33,15 @@ export function createQueueDisplay(opts: {
       container = document.createElement("div");
       container.id = "pi-queue-display";
       container.className = "pi-queue";
-      document.body.appendChild(container);
+      // Insert into sidebar layout (before input area) so it participates
+      // in flexbox flow — no fixed positioning, no overlay issues.
+      const inputArea = sidebar.querySelector<HTMLElement>(".pi-input-area");
+      if (inputArea) {
+        inputArea.parentElement?.insertBefore(container, inputArea);
+      } else {
+        sidebar.appendChild(container);
+      }
     }
-
-    // Position above the working indicator (or input area if indicator hidden)
-    const workingEl = sidebar.querySelector<HTMLElement>("pi-working-indicator");
-    const inputArea = sidebar.querySelector<HTMLElement>(".pi-input-area");
-    const anchorEl = workingEl && workingEl.offsetHeight > 0 ? workingEl : inputArea;
-    const anchorTop = anchorEl ? anchorEl.getBoundingClientRect().top : window.innerHeight - 80;
-    container.style.bottom = `${window.innerHeight - anchorTop}px`;
 
     container.innerHTML = queued
       .map(({ type, text }) => {

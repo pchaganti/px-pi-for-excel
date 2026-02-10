@@ -270,7 +270,7 @@ function describeToolCall(toolName: string, params: unknown, resultText?: string
     case "write_cells": {
       const addr = resultText ? extractWrittenAddress(resultText) : null;
       return addr
-        ? { action: "Wrote", detail: addr + badge(resultText) }
+        ? { action: "Edit", detail: addr + badge(resultText) }
         : { action: "Write", detail: (startCell ?? "cells") + badge(resultText) };
     }
     case "fill_formula": {
@@ -340,7 +340,7 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
 
       const resultText = result ? splitToolResultContent(result).text : undefined;
       const desc = describeToolCall(toolName, params, resultText);
-      const title = html`<span class="pi-tool-card__title"><strong>${desc.action}</strong>${desc.detail ? ` ${desc.detail}` : ""}</span>`;
+      const title = html`<span class="pi-tool-card__title"><strong>${desc.action}</strong>${desc.detail ? html` <span class="pi-tool-card__detail-text">${desc.detail}</span>` : ""}</span>`;
 
       // ── With result ─────────────────────────────────────
       if (result) {

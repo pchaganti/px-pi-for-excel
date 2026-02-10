@@ -724,16 +724,21 @@ pi-working-indicator {
    ═══════════════════════════════════════════════════════ */
 
 /* User message — teal tint instead of orange gradient */
+/* User message — white card, right-aligned */
+user-message .mx-4 {
+  margin-left: 8px !important;
+  margin-right: 8px !important;
+  justify-content: flex-end !important;
+}
 .user-message-container {
-  background: oklch(0.45 0.12 160 / 0.06) !important;
-  border: 1px solid oklch(0.45 0.12 160 / 0.12) !important;
+  background: oklch(1 0 0 / 0.85) !important;
+  border: 1px solid oklch(0 0 0 / 0.08) !important;
   border-radius: 14px !important;
   box-shadow: 0 1px 4px oklch(0 0 0 / 0.04),
               inset 0 1px 0 0 oklch(1 0 0 / 0.5);
+  max-width: 85%;
+  margin-left: 15% !important;
 }
-
-/* Sidebar-width margin/padding adjustments */
-user-message .mx-4  { margin-left: 8px !important; margin-right: 8px !important; }
 assistant-message .px-4 { padding-left: 12px !important; padding-right: 12px !important; }
 
 /* ── Tool cards — compact, collapsed by default ──────────── */
@@ -745,7 +750,7 @@ assistant-message .px-4 { padding-left: 12px !important; padding-right: 12px !im
   background: oklch(1 0 0 / 0.65);
   overflow: hidden;
   min-width: 0;
-  max-width: 100%;
+  max-width: 85%;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 .pi-tool-card:hover {
@@ -756,21 +761,33 @@ assistant-message .px-4 { padding-left: 12px !important; padding-right: 12px !im
   border-color: oklch(0.55 0.22 25 / 0.25);
 }
 
-/* Complete — strip card chrome, compact single line */
+/* Complete standalone — keep card, switch to green tint like tool group */
 .pi-tool-card[data-state="complete"] {
+  border-color: oklch(0.45 0.12 160 / 0.10);
+  background: oklch(0.45 0.12 160 / 0.04);
+}
+.pi-tool-card[data-state="complete"]:hover {
+  border-color: oklch(0.45 0.12 160 / 0.18);
+}
+.pi-tool-card[data-state="complete"] .pi-tool-card__header > button {
+  padding: 9px 12px !important;
+}
+
+/* Complete inside group — strip card chrome (group provides the container) */
+.pi-tool-group .pi-tool-card[data-state="complete"] {
   border: none;
   background: none;
   box-shadow: none;
   border-radius: 0;
 }
-.pi-tool-card[data-state="complete"]:hover {
+.pi-tool-group .pi-tool-card[data-state="complete"]:hover {
   border-color: transparent;
 }
-.pi-tool-card[data-state="complete"] .pi-tool-card__header > button {
+.pi-tool-group .pi-tool-card[data-state="complete"] .pi-tool-card__header > button {
   padding: 2px 4px !important;
 }
-/* Expanded body gets its own container when card chrome is gone */
-.pi-tool-card[data-state="complete"] .pi-tool-card__inner {
+/* Expanded body gets its own container when card chrome is gone (grouped only) */
+.pi-tool-group .pi-tool-card[data-state="complete"] .pi-tool-card__inner {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: oklch(0.99 0.002 90);
@@ -795,20 +812,27 @@ assistant-message .px-4 { padding-left: 12px !important; padding-right: 12px !im
   display: none;
 }
 
-/* Title — the human-readable description */
+/* Title — match thinking block: same font, muted → foreground on hover */
 .pi-tool-card__title {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 13.5px;
   font-weight: 400;
-  color: var(--foreground);
+  color: var(--muted-foreground);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+  transition: color 0.15s;
+}
+.pi-tool-card__header > button:hover .pi-tool-card__title {
+  color: var(--foreground);
 }
 .pi-tool-card__title strong {
-  font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
+}
+.pi-tool-card__detail-text {
+  font-size: 12px;
+  opacity: 0.7;
 }
 .pi-tool-card[data-state="complete"] .pi-tool-card__title {
   color: var(--muted-foreground);
@@ -869,6 +893,7 @@ tool-message {
   background: oklch(0.45 0.12 160 / 0.04);
   border: 1px solid oklch(0.45 0.12 160 / 0.10);
   border-radius: 14px;
+  max-width: 85%;
 }
 
 /* Rows inside group */
@@ -915,11 +940,22 @@ markdown-block pre {
 /* Code blocks */
 code-block { font-size: 12px !important; border-radius: 8px !important; }
 
-/* Thinking blocks */
-thinking-block { font-size: 13.5px; font-family: var(--font-sans); }
+/* Thinking blocks — green card matching tool cards, left-aligned */
+thinking-block {
+  font-size: 13.5px;
+  font-family: var(--font-sans);
+  max-width: 85%;
+}
+thinking-block .thinking-block {
+  border-radius: 14px;
+  border: 1px solid oklch(0.45 0.12 160 / 0.10);
+  background: oklch(0.45 0.12 160 / 0.04);
+  overflow: hidden;
+}
 thinking-block .thinking-header {
   font-size: 13.5px !important;
   width: 100%;
+  padding: 9px 12px !important;
   justify-content: space-between;
 }
 
@@ -927,15 +963,58 @@ thinking-block .thinking-header {
 thinking-block .thinking-header > span:first-child { order: 2; }
 thinking-block .thinking-header > span:last-child { order: 1; }
 
+/* Expanded body — contained inside the card */
+thinking-block markdown-block {
+  display: block;
+  padding: 0 14px 14px;
+  border-top: 1px solid oklch(0 0 0 / 0.04);
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+  max-height: 300px;
+  overflow-y: auto;
+}
 
-/* Ctrl+O toggle — thinking blocks become pills */
+/* Make shimmer more prominent — faster + higher-contrast gradient */
+thinking-block .thinking-header > .animate-shimmer {
+  animation-duration: 1.2s !important;
+  --tw-gradient-from: oklch(0.55 0 0) !important;
+  --tw-gradient-via: oklch(0.15 0 0) !important;
+  --tw-gradient-to: oklch(0.55 0 0) !important;
+}
+
+/* Spinner on thinking header while streaming.
+   .animate-shimmer only exists on the text span during active streaming,
+   so no :has() needed — target the class directly via ::before.
+   Uses the same Lucide Loader icon as tool cards (via CSS mask). */
+thinking-block .thinking-header > .animate-shimmer::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-right: 6px;
+  vertical-align: middle;
+  background-color: var(--foreground);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2v4'/%3E%3Cpath d='m16.2 7.8 2.9-2.9'/%3E%3Cpath d='M18 12h4'/%3E%3Cpath d='m16.2 16.2 2.9 2.9'/%3E%3Cpath d='M12 18v4'/%3E%3Cpath d='m4.9 19.1 2.9-2.9'/%3E%3Cpath d='M2 12h4'/%3E%3Cpath d='m4.9 4.9 2.9 2.9'/%3E%3C/svg%3E");
+  -webkit-mask-size: contain;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2v4'/%3E%3Cpath d='m16.2 7.8 2.9-2.9'/%3E%3Cpath d='M18 12h4'/%3E%3Cpath d='m16.2 16.2 2.9 2.9'/%3E%3Cpath d='M12 18v4'/%3E%3Cpath d='m4.9 19.1 2.9-2.9'/%3E%3Cpath d='M2 12h4'/%3E%3Cpath d='m4.9 4.9 2.9 2.9'/%3E%3C/svg%3E");
+  mask-size: contain;
+  animation: pi-think-spin 0.7s linear infinite;
+}
+@keyframes pi-think-spin {
+  to { transform: rotate(360deg); }
+}
+
+
+/* Ctrl+O toggle — thinking blocks: strip card chrome like complete tool cards */
+.pi-hide-internals thinking-block .thinking-block {
+  border: none;
+  background: none;
+  border-radius: 0;
+}
 .pi-hide-internals thinking-block .thinking-header {
-  padding: 6px 12px !important;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: oklch(1 0 0 / 0.60);
-  box-shadow: none;
-  opacity: 0.65;
+  padding: 2px 4px !important;
+  opacity: 0.55;
 }
 
 /* Ctrl+O toggle — tool cards: keep normal card styling.
@@ -959,10 +1038,9 @@ assistant-message .text-destructive {
   padding-left: 12px !important;
 }
 
-/* Streaming cursor */
+/* Streaming cursor — hidden; the pi-working indicator already signals activity */
 streaming-message-container .animate-pulse {
-  background-color: var(--pi-green) !important;
-  opacity: 0.6;
+  display: none !important;
 }
 
 
@@ -1094,10 +1172,7 @@ agent-model-selector [data-model-item] .text-xs {
    ═══════════════════════════════════════════════════════ */
 
 .pi-queue {
-  position: fixed;
-  left: 0;
-  right: 0;
-  z-index: 100;
+  flex-shrink: 0;
   padding: 5px 12px;
   font-family: var(--font-sans);
   font-size: 12px;

@@ -73,6 +73,17 @@ function collapseThinkingBlocks(): void {
   }
 }
 
+function expandThinkingBlocks(): void {
+  const blocks = document.querySelectorAll("thinking-block");
+  for (const block of blocks) {
+    const isExpanded = Boolean(block.querySelector("markdown-block"));
+    if (isExpanded) continue;
+
+    const header = block.querySelector<HTMLElement>(".thinking-header");
+    header?.click();
+  }
+}
+
 export function getThinkingLevels(agent: Agent): ThinkingLevel[] {
   const model = agent.state.model;
   if (!model || !model.reasoning) return ["off"];
@@ -156,8 +167,10 @@ export function installKeyboardShortcuts(opts: {
       // Collapse/expand tool cards to match the new mode.
       requestAnimationFrame(() => setExcelToolCardsExpanded(!collapsed));
 
-      // When hiding internals, also collapse any expanded thinking blocks.
-      if (collapsed) requestAnimationFrame(() => collapseThinkingBlocks());
+      // Collapse/expand thinking blocks to match the new mode.
+      requestAnimationFrame(() =>
+        collapsed ? collapseThinkingBlocks() : expandThinkingBlocks(),
+      );
 
       showToast(collapsed ? "Details hidden (⌃O)" : "Details shown (⌃O)", 1500);
       return;
