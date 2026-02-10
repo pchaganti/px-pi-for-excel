@@ -369,9 +369,8 @@ pi-working-indicator {
   line-height: 1.4;
   letter-spacing: 0;
   white-space: normal;
-  max-width: 260px;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  width: max-content;
+  max-width: 200px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.18);
   border: 1px solid var(--border);
   pointer-events: none;
@@ -411,9 +410,8 @@ pi-working-indicator {
   line-height: 1.4;
   letter-spacing: 0;
   white-space: normal;
-  max-width: 260px;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  width: max-content;
+  max-width: 200px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.18);
   border: 1px solid var(--border);
   pointer-events: none;
