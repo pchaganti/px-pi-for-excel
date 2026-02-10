@@ -146,7 +146,7 @@ export function createCompactCommands(agent: Agent): SlashCommand[] {
           showToast("Too few messages to compact");
           return;
         }
-        showToast("Compacting to free up context");
+        showToast("Compacting to free up context", 60000);
 
         try {
           // Serialize conversation for summarization
