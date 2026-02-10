@@ -200,6 +200,15 @@ npx office-addin-manifest validate manifest.xml
    ```
    (defaults to `https://localhost:3001`)
 
+   **Security:** the proxy only accepts browser requests from Pi for Excel origins by default:
+   - `https://localhost:3000` (dev)
+   - `https://pi-for-excel.vercel.app` (hosted)
+
+   If you host the add-in on a different origin, set `ALLOWED_ORIGINS` (comma-separated):
+   ```bash
+   ALLOWED_ORIGINS="https://my-addin.example.com" npm run proxy:https
+   ```
+
    If port 3001 is taken, pick another port:
    ```bash
    PORT=3003 npm run proxy:https

@@ -5,6 +5,7 @@
 import type { Agent } from "@mariozechner/pi-agent-core";
 
 import { showToast } from "../ui/toast.js";
+import { escapeHtml } from "../utils/html.js";
 
 export function injectStatusBar(agent: Agent): void {
   agent.subscribe(() => updateStatusBar(agent));
@@ -22,6 +23,7 @@ export function updateStatusBar(agent: Agent): void {
   // Model alias
   const model = state.model;
   const modelAlias = model ? (model.name || model.id) : "Select model";
+  const modelAliasEscaped = escapeHtml(modelAlias);
 
   // Context usage
   let totalTokens = 0;
@@ -61,7 +63,7 @@ export function updateStatusBar(agent: Agent): void {
     <span class="pi-status-ctx has-tooltip"><span class="${ctxColor}">${pct}%</span> / ${ctxLabel}<span class="pi-tooltip pi-tooltip--left">${ctxBaseTooltip}${ctxWarning}</span></span>
     <button class="pi-status-model" data-tooltip="Switch the AI model powering this session">
       <span class="pi-status-model__mark">π</span>
-      <span class="pi-status-model__name">${modelAlias}</span>
+      <span class="pi-status-model__name">${modelAliasEscaped}</span>
       ${chevronSvg}
     </button>
     <span class="pi-status-thinking" data-tooltip="Controls how long the model &quot;thinks&quot; before answering — higher = slower but better reasoning. Click or ⇧Tab to cycle.">${brainSvg} ${thinkingLevel}</span>

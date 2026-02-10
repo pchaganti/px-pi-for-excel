@@ -52,6 +52,30 @@ const HOP_BY_HOP_HEADERS = new Set([
   "upgrade",
 ]);
 
+// SECURITY: local CORS proxies are a common footgun. Even if bound to localhost,
+// a browser tab on any origin can still call it unless we restrict CORS.
+// Default allowlist matches our dev + hosted origins; override via env var.
+const DEFAULT_ALLOWED_ORIGINS = new Set([
+  "https://localhost:3000",
+  "https://pi-for-excel.vercel.app",
+]);
+
+const allowedOrigins = (() => {
+  const raw = process.env.ALLOWED_ORIGINS;
+  if (!raw) return DEFAULT_ALLOWED_ORIGINS;
+  const set = new Set(
+    raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  return set.size > 0 ? set : DEFAULT_ALLOWED_ORIGINS;
+})();
+
+function isAllowedOrigin(origin) {
+  return typeof origin === "string" && allowedOrigins.has(origin);
+}
+
 function isLoopbackAddress(addr) {
   if (!addr) return false;
   if (addr === "::1" || addr === "0:0:0:0:0:0:0:1") return true;
@@ -61,7 +85,12 @@ function isLoopbackAddress(addr) {
 }
 
 function setCorsHeaders(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const origin = req.headers.origin;
+  if (isAllowedOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  }
+
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
@@ -126,6 +155,15 @@ const handler = async (req, res) => {
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.end("forbidden");
     console.warn(`[proxy] blocked non-loopback client: ${remote || "unknown"}`);
+    return;
+  }
+
+  const origin = req.headers.origin;
+  if (!isAllowedOrigin(origin)) {
+    res.statusCode = 403;
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.end("forbidden");
+    console.warn(`[proxy] blocked request from disallowed origin: ${origin || "(none)"}`);
     return;
   }
 
