@@ -73,6 +73,14 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Shorthand preserved:** `borders` still applies to all edges + inside (existing behavior, backward compatible).
 - **Rationale:** enables `total-row` style (top border only) and other edge-specific formatting without the all-edges shorthand.
 
+## Tool card input/output humanization (UI)
+- **Input:** tool parameters are rendered as a clean key-value list instead of raw JSON. Each tool has a per-tool humanizer in `src/ui/humanize-params.ts` that maps params to readable labels (e.g. "Range", "Fill ● White", "Font ● Gray, italic").
+- **Output:** hex color codes (`#RRGGBB`) in tool result text are replaced with human-readable names via nearest-match against a ~45-color palette (`src/ui/color-names.ts`). Section label changed from "Output" to "Result".
+- **Color chips:** inline colored circles (`pi-color-chip`) shown next to fill/font colors.
+- **Data preview:** `write_cells` values shown as a mini table (up to 3 rows × 6 columns) instead of raw JSON arrays.
+- **Fallback:** unknown tools (non-Excel) still get the raw JSON code-block.
+- **Rationale:** raw JSON and hex codes are unintuitive for Excel-savvy, less-technical users. The humanized view keeps all info but presents it in Excel vocabulary.
+
 ## Format humanization (`read_range` detailed mode)
 - **Behavior:** known format strings are displayed with human-readable labels alongside the raw string (e.g. `**currency (£, 2dp)** (\`£* #,##0.00...\`)`).
 - **Unknown formats:** displayed as raw strings (no change from before).

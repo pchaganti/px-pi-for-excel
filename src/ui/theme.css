@@ -47,6 +47,29 @@
   --pi-green-lighter: oklch(0.45 0.12 160 / 0.04);
   --pi-surface: oklch(0.98 0.002 90);
 
+  /* ── Pill tokens — shared across all card-like components ── */
+  --pill-radius: 14px;
+  --pill-border-width: 1px;
+  --pill-border: var(--pill-border-width) solid oklch(0 0 0 / 0.08);
+  --pill-bg: oklch(1 0 0 / 0.85);
+  --pill-shadow: 0 1px 4px oklch(0 0 0 / 0.04), inset 0 1px 0 0 oklch(1 0 0 / 0.5);
+  --pill-hover-border: oklch(0 0 0 / 0.12);
+  /* Layout — asymmetric inset for user vs assistant alignment */
+  --pill-inset: 15%;
+  /* Header sizing */
+  --pill-padding-x: 12px;
+  --pill-padding-y: 9px;
+  /* Prose indent — aligns assistant text with pill header text */
+  --pill-text-indent: calc(var(--pill-border-width) + var(--pill-padding-x));
+  /* Green tint — complete tools, tool groups, thinking */
+  --pill-green-border: var(--pill-border-width) solid oklch(0.45 0.12 160 / 0.10);
+  --pill-green-bg: oklch(0.45 0.12 160 / 0.04);
+  --pill-green-hover-border: oklch(0.45 0.12 160 / 0.18);
+  /* Red tint — error tools */
+  --pill-red-border: var(--pill-border-width) solid oklch(0.55 0.22 25 / 0.10);
+  --pill-red-bg: oklch(0.55 0.22 25 / 0.04);
+  --pill-red-hover-border: oklch(0.55 0.22 25 / 0.18);
+
   /* ── Liquid Glass tokens ────────────────────────────── */
   /* Light blur + brightness/saturate for refraction feel */
   --glass-blur: blur(3px) saturate(1.6) brightness(1.04);
@@ -162,11 +185,10 @@ body {
 
 .pi-input-card {
   position: relative;
-  border-radius: 14px;
-  border: 1px solid oklch(0 0 0 / 0.08);
-  background: oklch(1 0 0 / 0.9);
-  box-shadow: 0 1px 4px oklch(0 0 0 / 0.05),
-              inset 0 1px 0 oklch(1 0 0 / 0.6);
+  border-radius: var(--pill-radius);
+  border: var(--pill-border);
+  background: var(--pill-bg);
+  box-shadow: var(--pill-shadow);
   overflow: hidden;
 }
 
@@ -731,46 +753,54 @@ user-message .mx-4 {
   justify-content: flex-end !important;
 }
 .user-message-container {
-  background: oklch(1 0 0 / 0.85) !important;
-  border: 1px solid oklch(0 0 0 / 0.08) !important;
-  border-radius: 14px !important;
-  box-shadow: 0 1px 4px oklch(0 0 0 / 0.04),
-              inset 0 1px 0 0 oklch(1 0 0 / 0.5);
-  max-width: 85%;
-  margin-left: 15% !important;
+  background: var(--pill-bg) !important;
+  border: var(--pill-border) !important;
+  border-radius: var(--pill-radius) !important;
+  box-shadow: var(--pill-shadow);
+  max-width: calc(100% - var(--pill-inset));
+  margin-left: var(--pill-inset) !important;
 }
 assistant-message .px-4 { padding-left: 12px !important; padding-right: 12px !important; }
+assistant-message { margin-right: var(--pill-inset); }
+/* Indent prose so it aligns with pill header text */
+assistant-message .px-4 > markdown-block { margin-left: var(--pill-text-indent); }
 
 /* ── Tool cards — compact, collapsed by default ──────────── */
 
 /* Card base — used for inprogress + error; complete overrides below */
 .pi-tool-card {
-  border-radius: 10px;
-  border: 1px solid oklch(0 0 0 / 0.06);
-  background: oklch(1 0 0 / 0.65);
+  border-radius: var(--pill-radius);
+  border: var(--pill-border);
+  background: var(--pill-bg);
+  box-shadow: var(--pill-shadow);
   overflow: hidden;
   min-width: 0;
-  max-width: 85%;
+  margin-right: var(--pill-inset);
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 .pi-tool-card:hover {
-  border-color: oklch(0 0 0 / 0.10);
+  border-color: var(--pill-hover-border);
 }
-/* Error state — warm red tint */
+/* Error state — red tint */
 .pi-tool-card[data-state="error"] {
-  border-color: oklch(0.55 0.22 25 / 0.25);
+  border: var(--pill-red-border);
+  background: var(--pill-red-bg);
+}
+.pi-tool-card[data-state="error"]:hover {
+  border-color: var(--pill-red-hover-border);
 }
 
-/* Complete standalone — keep card, switch to green tint like tool group */
+/* Complete standalone — green tint */
 .pi-tool-card[data-state="complete"] {
-  border-color: oklch(0.45 0.12 160 / 0.10);
-  background: oklch(0.45 0.12 160 / 0.04);
+  border: var(--pill-green-border);
+  background: var(--pill-green-bg);
+  box-shadow: none;
 }
 .pi-tool-card[data-state="complete"]:hover {
-  border-color: oklch(0.45 0.12 160 / 0.18);
+  border-color: var(--pill-green-hover-border);
 }
 .pi-tool-card[data-state="complete"] .pi-tool-card__header > button {
-  padding: 9px 12px !important;
+  padding: var(--pill-padding-y) var(--pill-padding-x) !important;
 }
 
 /* Complete inside group — strip card chrome (group provides the container) */
@@ -779,6 +809,7 @@ assistant-message .px-4 { padding-left: 12px !important; padding-right: 12px !im
   background: none;
   box-shadow: none;
   border-radius: 0;
+  margin-right: 0;
 }
 .pi-tool-group .pi-tool-card[data-state="complete"]:hover {
   border-color: transparent;
@@ -796,7 +827,7 @@ assistant-message .px-4 { padding-left: 12px !important; padding-right: 12px !im
 
 /* Header — the clickable toggle row from pi-web-ui */
 .pi-tool-card__header > button {
-  padding: 9px 12px !important;
+  padding: var(--pill-padding-y) var(--pill-padding-x) !important;
   gap: 7px !important;
   font-size: 13px !important;
   min-width: 0 !important;
@@ -880,6 +911,87 @@ assistant-message .px-4 { padding-left: 12px !important; padding-right: 12px !im
   margin-bottom: 6px;
 }
 
+/* ── Humanized param list ─────────────────────────────────── */
+
+.pi-params {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 10px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  padding: 2px 0;
+}
+
+.pi-params__row {
+  display: contents;
+}
+
+.pi-params__label {
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+  white-space: nowrap;
+  padding-top: 1px;
+}
+
+.pi-params__value {
+  color: var(--foreground);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pi-params__more {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.pi-params__code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  background: oklch(0.96 0.003 90);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* Color chip — small inline circle swatch */
+.pi-color-chip {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid oklch(0 0 0 / 0.15);
+  vertical-align: middle;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.pi-color-chip-label {
+  vertical-align: middle;
+}
+
+/* Data preview — mini table for write_cells values */
+.pi-data-preview {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border-collapse: collapse;
+  margin-top: 3px;
+  line-height: 1.4;
+}
+
+.pi-data-preview td {
+  padding: 1px 8px 1px 0;
+  white-space: nowrap;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pi-data-preview__fade {
+  color: var(--muted-foreground);
+  font-style: italic;
+  font-size: 10.5px;
+}
+
 /* Flex overflow fix for tool cards */
 tool-message {
   min-width: 0;
@@ -890,10 +1002,10 @@ tool-message {
 .pi-tool-group {
   display: flex;
   flex-direction: column;
-  background: oklch(0.45 0.12 160 / 0.04);
-  border: 1px solid oklch(0.45 0.12 160 / 0.10);
-  border-radius: 14px;
-  max-width: 85%;
+  background: var(--pill-green-bg);
+  border: var(--pill-green-border);
+  border-radius: var(--pill-radius);
+  margin-right: var(--pill-inset);
 }
 
 /* Rows inside group */
@@ -944,18 +1056,18 @@ code-block { font-size: 12px !important; border-radius: 8px !important; }
 thinking-block {
   font-size: 13.5px;
   font-family: var(--font-sans);
-  max-width: 85%;
+  margin-right: var(--pill-inset);
 }
 thinking-block .thinking-block {
-  border-radius: 14px;
-  border: 1px solid oklch(0.45 0.12 160 / 0.10);
-  background: oklch(0.45 0.12 160 / 0.04);
+  border-radius: var(--pill-radius);
+  border: var(--pill-green-border);
+  background: var(--pill-green-bg);
   overflow: hidden;
 }
 thinking-block .thinking-header {
   font-size: 13.5px !important;
   width: 100%;
-  padding: 9px 12px !important;
+  padding: var(--pill-padding-y) var(--pill-padding-x) !important;
   justify-content: space-between;
 }
 

@@ -16,6 +16,8 @@ import {
 import { html, type TemplateResult } from "lit";
 import { createRef, ref } from "lit/directives/ref.js";
 import { Code } from "lucide";
+import { humanizeToolInput } from "./humanize-params.js";
+import { humanizeColorsInText } from "./color-names.js";
 
 const EXCEL_TOOL_NAMES = [
   "get_workbook_overview",
@@ -200,6 +202,20 @@ function compactRange(range: string): string {
   return range;
 }
 
+/**
+ * Compact sheet-qualified ranges inside bold markdown markers.
+ *   "Formatted **Sheet1!A1,Sheet1!B2**: ..." → "Formatted **Sheet1!A1, B2**: ..."
+ */
+function compactRangesInMarkdown(text: string): string {
+  return text.replace(/\*\*([^*]+)\*\*/g, (_match, inner: string) => {
+    if (!inner.includes("!")) return `**${inner}**`;
+    const compacted = compactRange(inner);
+    // Add spaces after commas for readability
+    const spaced = compacted.replace(/,(?!\s)/g, ", ");
+    return `**${spaced}**`;
+  });
+}
+
 /** Extract target address from write_cells / fill_formula result text. */
 function extractWrittenAddress(text: string): string | null {
   // "Written to **Sheet1!A1:C10** (…)" or "Filled formula across **Sheet1!A1:B20** (…)"
@@ -364,11 +380,11 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
                   ${paramsJson ? html`
                     <div class="pi-tool-card__section">
                       <div class="pi-tool-card__section-label">Input</div>
-                      <code-block .code=${paramsJson} language="json"></code-block>
+                      ${humanizeToolInput(toolName, params) ?? html`<code-block .code=${paramsJson} language="json"></code-block>`}
                     </div>
                   ` : ""}
                   <div class="pi-tool-card__section">
-                    <div class="pi-tool-card__section-label">Output</div>
+                    <div class="pi-tool-card__section-label">Result</div>
                     ${standaloneImagePath
                       ? html`
                         <div class="text-sm">
@@ -385,7 +401,7 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
                       `
                       : json.isJson
                         ? html`<code-block .code=${json.formatted} language="json"></code-block>`
-                        : html`<markdown-block .content=${text || "(no output)"}></markdown-block>`}
+                        : html`<markdown-block .content=${compactRangesInMarkdown(humanizeColorsInText(text)) || "(no output)"}></markdown-block>`}
                     ${renderImages(images)}
                   </div>
                 </div>
@@ -413,7 +429,7 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
                   </div>
                   <div class="pi-tool-card__section">
                     <div class="pi-tool-card__section-label">Input</div>
-                    <code-block .code=${paramsJson} language="json"></code-block>
+                    ${humanizeToolInput(toolName, params) ?? html`<code-block .code=${paramsJson} language="json"></code-block>`}
                   </div>
                 </div>
               </div>
