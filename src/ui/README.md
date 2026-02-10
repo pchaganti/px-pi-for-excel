@@ -47,6 +47,14 @@ Tailwind v4 puts all utilities inside `@layer utilities`. Unlayered CSS always b
 | 11. Content overrides | **Targeted** pi-web-ui tweaks — user bubble color, sidebar-width margins, tool card borders |
 | 12–13. Dialogs, Queue | Model selector glass treatment, steer/follow-up queue |
 
+> Note: `theme.css` is an entrypoint; styles are split into `src/ui/theme/*.css` and imported in order:
+> - `theme/tokens.css` (1)
+> - `theme/base.css` (2)
+> - `theme/components.css` (3–10)
+> - `theme/content-overrides.css` (11)
+> - `theme/dialogs.css` (12)
+> - `theme/queue.css` (13)
+
 ### When overriding pi-web-ui styles
 
 pi-web-ui uses Light DOM (`createRenderRoot() { return this; }`), so styles leak both ways. When you need to override:

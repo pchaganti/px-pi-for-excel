@@ -1,0 +1,90 @@
+/* ═══════════════════════════════════════════════════════
+   1. CSS VARIABLES — theme + component tokens
+   ═══════════════════════════════════════════════════════ */
+
+/*
+ * Light theme palette.
+ * Apply the same token set to `.dark` to force light mode everywhere.
+ */
+:root,
+.dark {
+  --background: oklch(0.985 0.002 90);
+  --foreground: oklch(0.18 0 0);
+  --card: oklch(1 0 0 / 0.75);
+  --card-foreground: oklch(0.18 0 0);
+  --popover: oklch(1 0 0 / 0.85);
+  --popover-foreground: oklch(0.18 0 0);
+  --primary: oklch(0.45 0.12 160); /* teal-green */
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.96 0.004 90);
+  --secondary-foreground: oklch(0.25 0 0);
+  --muted: oklch(0.96 0.003 90);
+  --muted-foreground: oklch(0.50 0 0);
+  --accent: oklch(0.97 0.006 90);
+  --accent-foreground: oklch(0.30 0.08 160);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.92 0.004 90);
+  --input: oklch(0.95 0.003 90);
+  --ring: oklch(0.50 0.10 160);
+
+  --sidebar: oklch(0.98 0.002 90);
+  --sidebar-foreground: oklch(0.18 0 0);
+  --sidebar-border: oklch(0.92 0.004 90);
+
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius: 0.625rem;
+
+  /* ── Our custom tokens ───────────────────────────────── */
+  --pi-green: var(--primary);
+  --pi-green-light: oklch(0.45 0.12 160 / 0.08);
+  --pi-green-lighter: oklch(0.45 0.12 160 / 0.04);
+  --pi-surface: var(--sidebar);
+
+  --pi-surface-translucent: oklch(0.98 0.002 90 / 0.85);
+  --pi-divider: 1px solid oklch(0 0 0 / 0.06);
+  --pi-inner-bg: oklch(0.99 0.002 90);
+
+  /* ── Pill tokens — shared across all card-like components ── */
+  --pill-radius: 14px;
+  --pill-border-width: 1px;
+  --pill-border: var(--pill-border-width) solid oklch(0 0 0 / 0.08);
+  --pill-bg: oklch(1 0 0 / 0.85);
+  --pill-shadow: 0 1px 4px oklch(0 0 0 / 0.04), inset 0 1px 0 0 oklch(1 0 0 / 0.5);
+  --pill-hover-border: oklch(0 0 0 / 0.12);
+  /* Layout — asymmetric inset for user vs assistant alignment */
+  --pill-inset: 15%;
+  /* Header sizing */
+  --pill-padding-x: 12px;
+  --pill-padding-y: 9px;
+  /* Prose indent — aligns assistant text with pill header text */
+  --pill-text-indent: calc(var(--pill-border-width) + var(--pill-padding-x));
+  /* Green tint — complete tools, tool groups, thinking */
+  --pill-green-border: var(--pill-border-width) solid oklch(0.45 0.12 160 / 0.10);
+  --pill-green-bg: oklch(0.45 0.12 160 / 0.04);
+  --pill-green-hover-border: oklch(0.45 0.12 160 / 0.18);
+  /* Red tint — error tools */
+  --pill-red-border: var(--pill-border-width) solid oklch(0.55 0.22 25 / 0.10);
+  --pill-red-bg: oklch(0.55 0.22 25 / 0.04);
+  --pill-red-hover-border: oklch(0.55 0.22 25 / 0.18);
+
+  /* ── Liquid Glass tokens ────────────────────────────── */
+  /* Light blur + brightness/saturate for refraction feel */
+  --glass-blur: blur(3px) saturate(1.6) brightness(1.04);
+  /* Heavier blur for backdrops/overlays where content should be obscured */
+  --glass-blur-heavy: blur(10px) saturate(1.5) brightness(1.02);
+  /* Surface: semi-transparent white */
+  --glass-bg: oklch(1 0 0 / 0.55);
+  --glass-bg-solid: oklch(1 0 0 / 0.78);
+  /* Specular edge highlight — bright white top/left */
+  --glass-highlight: inset 0 1px 0 0 oklch(1 0 0 / 0.7), inset 1px 0 0 0 oklch(1 0 0 / 0.4);
+  /* Inner depth shadow — bottom/right */
+  --glass-inner-shadow: inset 0 -1px 0 0 oklch(0 0 0 / 0.04), inset -1px 0 0 0 oklch(0 0 0 / 0.02);
+  /* Outer drop shadow */
+  --glass-shadow: 0 2px 8px oklch(0 0 0 / 0.06), 0 0.5px 0 oklch(0 0 0 / 0.04);
+  /* Outer drop shadow — elevated (dialogs, overlays) */
+  --glass-shadow-lg: 0 12px 40px oklch(0 0 0 / 0.10), 0 2px 6px oklch(0 0 0 / 0.06);
+  /* Border: subtle, semi-transparent */
+  --glass-border: 1px solid oklch(1 0 0 / 0.5);
+}

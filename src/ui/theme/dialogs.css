@@ -1,0 +1,114 @@
+/* ═══════════════════════════════════════════════════════
+   12. DIALOGS — ModelSelector, ApiKeyPrompt
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Shared backdrop + card ── */
+
+:is(agent-model-selector, api-key-prompt-dialog, agent-api-key-dialog, agent-settings-dialog) .fixed.inset-0 {
+  background: oklch(0 0 0 / 0.25) !important;
+  backdrop-filter: var(--glass-blur-heavy) !important;
+  -webkit-backdrop-filter: var(--glass-blur-heavy) !important;
+}
+
+:is(agent-model-selector, api-key-prompt-dialog, agent-api-key-dialog, agent-settings-dialog) .fixed.z-50 {
+  width: min(340px, 92vw) !important;
+  border-radius: 20px !important;
+  box-shadow: var(--glass-shadow-lg) !important;
+  border: var(--glass-border) !important;
+  background: var(--glass-bg-solid) !important;
+}
+
+/* Save/primary button — teal */
+:is(api-key-prompt-dialog, agent-api-key-dialog) button[class*="bg-primary"] {
+  background: var(--pi-green) !important;
+  border-radius: 9px !important;
+}
+
+/* ── ModelSelector specifics ── */
+
+agent-model-selector .fixed.z-50 {
+  height: min(500px, 78vh) !important;
+}
+
+/* Font consistency — DM Sans everywhere */
+agent-model-selector {
+  font-family: var(--font-sans) !important;
+}
+
+/* Title — smaller, match our weight */
+agent-model-selector h2 {
+  font-family: var(--font-sans) !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+}
+
+/* Header section — tighter padding for sidebar width */
+agent-model-selector .border-b.flex-shrink-0 {
+  padding: 16px 16px 12px !important;
+  gap: 12px !important;
+}
+
+/* Search input — softer focus ring, match our input card style */
+agent-model-selector input {
+  font-family: var(--font-sans) !important;
+  font-size: 13px !important;
+  border-radius: 10px !important;
+}
+agent-model-selector input:focus-visible {
+  border-color: oklch(0.45 0.12 160 / 0.22) !important;
+  box-shadow: 0 0 0 2px oklch(0.45 0.12 160 / 0.08) !important;
+}
+
+/* Hide filter pills (Thinking / Vision) — we don't need them */
+agent-model-selector .border-b.flex-shrink-0 > .flex.gap-2 {
+  display: none !important;
+}
+
+/* Close button — softer */
+agent-model-selector .absolute.top-4.right-4 {
+  top: 16px !important;
+  right: 16px !important;
+}
+
+/* Model items — tighter, softer dividers */
+agent-model-selector [data-model-item] {
+  padding: 10px 16px !important;
+  border-color: oklch(0 0 0 / 0.04) !important;
+}
+agent-model-selector [data-model-item]:hover,
+agent-model-selector [data-model-item].bg-accent {
+  background: var(--pi-green-lighter) !important;
+}
+
+/* Model ID — our mono font */
+agent-model-selector [data-model-item] .text-sm.font-medium {
+  font-family: var(--font-mono) !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+}
+
+/* Provider badge — subtle tinted pill instead of stark outline */
+agent-model-selector [data-model-item] .rounded-md.border {
+  font-family: var(--font-mono) !important;
+  font-size: 10px !important;
+  border-color: oklch(0 0 0 / 0.06) !important;
+  background: oklch(0 0 0 / 0.03) !important;
+  border-radius: 6px !important;
+  letter-spacing: 0.01em;
+}
+
+/* Hide capability icons (brain/vision) in model detail row */
+agent-model-selector [data-model-item] .text-xs .gap-2 > span:has(svg) {
+  display: none !important;
+}
+
+/* Hide cost column */
+agent-model-selector [data-model-item] .text-xs.text-muted-foreground > span:last-child {
+  display: none !important;
+}
+
+/* Context info — our mono font, smaller */
+agent-model-selector [data-model-item] .text-xs {
+  font-family: var(--font-mono) !important;
+  font-size: 10.5px !important;
+}
