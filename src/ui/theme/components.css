@@ -462,7 +462,11 @@ pi-working-indicator {
   opacity: 0;
   transition: opacity 0.2s, transform 0.2s;
   pointer-events: none;
-  white-space: nowrap;
+  max-width: calc(100vw - 24px);
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .pi-toast.visible {
   opacity: 1;
