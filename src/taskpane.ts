@@ -11,6 +11,9 @@
 // MUST be first
 import "./boot.js";
 
+// Register third-party web components we rely on.
+import "./ui/register-components.js";
+
 // Custom tool + message renderers (Excel tools return markdown)
 import "./ui/tool-renderers.js";
 import "./ui/message-renderers.js";

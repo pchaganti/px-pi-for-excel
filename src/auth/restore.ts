@@ -7,10 +7,11 @@
  */
 
 import type { OAuthCredentials, OAuthProviderInterface } from "@mariozechner/pi-ai";
-import type { ProviderKeysStore } from "@mariozechner/pi-web-ui";
+import type { ProviderKeysStore } from "@mariozechner/pi-web-ui/dist/storage/stores/provider-keys-store.js";
 
 import { originalFetch } from "./cors-proxy.js";
 import { mapToApiProvider, BROWSER_OAUTH_PROVIDERS } from "./provider-map.js";
+import { getOAuthProvider } from "./oauth-provider-registry.js";
 import { getErrorMessage } from "../utils/errors.js";
 import { isRecord } from "../utils/type-guards.js";
 
@@ -58,8 +59,6 @@ function isOAuthCredentials(value: unknown): value is OAuthCredentials {
  * Populates the ProviderKeysStore so ChatPanel can make API calls.
  */
 export async function restoreCredentials(providerKeys: ProviderKeysStore): Promise<void> {
-  const { getOAuthProvider } = await import("@mariozechner/pi-ai");
-
   // 1. Try pi's auth.json (dev server only)
   if (await restoreFromPiAuth(providerKeys, getOAuthProvider)) {
     return;

@@ -10,7 +10,7 @@
  *   (<proxy>/?url=<target>) so browser OAuth flows work in Office webviews.
  */
 
-import { getAppStorage } from "@mariozechner/pi-web-ui";
+import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
 import { validateOfficeProxyUrl } from "./proxy-validation.js";
 

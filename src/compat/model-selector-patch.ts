@@ -9,7 +9,7 @@
  */
 
 import type { Api, Model } from "@mariozechner/pi-ai";
-import { ModelSelector } from "@mariozechner/pi-web-ui";
+import { ModelSelector } from "@mariozechner/pi-web-ui/dist/dialogs/ModelSelector.js";
 
 import {
   compareModels as compareModelRefs,

@@ -7,7 +7,9 @@
 
 import { html, render } from "lit";
 import { Agent } from "@mariozechner/pi-agent-core";
-import { ApiKeyPromptDialog, ModelSelector, getAppStorage } from "@mariozechner/pi-web-ui";
+import { ApiKeyPromptDialog } from "@mariozechner/pi-web-ui/dist/dialogs/ApiKeyPromptDialog.js";
+import { ModelSelector } from "@mariozechner/pi-web-ui/dist/dialogs/ModelSelector.js";
+import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
 import { createOfficeStreamFn } from "../auth/stream-proxy.js";
 import { restoreCredentials } from "../auth/restore.js";

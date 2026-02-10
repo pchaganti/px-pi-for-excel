@@ -3,7 +3,7 @@
  */
 
 import type { Agent } from "@mariozechner/pi-agent-core";
-import { ModelSelector } from "@mariozechner/pi-web-ui";
+import { ModelSelector } from "@mariozechner/pi-web-ui/dist/dialogs/ModelSelector.js";
 
 import type { SlashCommand } from "../types.js";
 

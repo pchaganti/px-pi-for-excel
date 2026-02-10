@@ -8,7 +8,8 @@
 import { html } from "lit";
 import { createRef, ref } from "lit/directives/ref.js";
 import { Archive } from "lucide";
-import { registerMessageRenderer, renderCollapsibleHeader } from "@mariozechner/pi-web-ui";
+import { registerMessageRenderer } from "@mariozechner/pi-web-ui/dist/components/message-renderer-registry.js";
+import { renderCollapsibleHeader } from "@mariozechner/pi-web-ui/dist/tools/renderer-registry.js";
 
 import type { CompactionSummaryMessage } from "../messages/compaction.js";
 

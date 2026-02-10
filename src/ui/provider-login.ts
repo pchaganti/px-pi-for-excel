@@ -7,7 +7,9 @@
  * - API key input + Save button
  */
 
-import { getAppStorage, isCorsError } from "@mariozechner/pi-web-ui";
+import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
+import { isCorsError } from "@mariozechner/pi-web-ui/dist/utils/proxy-utils.js";
+import { getOAuthProvider } from "../auth/oauth-provider-registry.js";
 import { getErrorMessage } from "../utils/errors.js";
 
 export interface ProviderDef {
@@ -305,14 +307,17 @@ export function buildProviderRow(
       oauthBtn.textContent = "Opening login…";
       oauthBtn.style.opacity = "0.7";
       void (async () => {
-      errorEl.style.display = "none";
-      try {
-        const { getOAuthProvider } = await import("@mariozechner/pi-ai");
-        if (!oauth) {
-          throw new Error("OAuth provider id missing");
-        }
-        const oauthProvider = getOAuthProvider(oauth);
-        if (oauthProvider) {
+        errorEl.style.display = "none";
+        try {
+          if (!oauth) {
+            throw new Error("OAuth provider id missing");
+          }
+
+          const oauthProvider = getOAuthProvider(oauth);
+          if (!oauthProvider) {
+            throw new Error(`OAuth provider not supported: ${oauth}`);
+          }
+
           const cred = await oauthProvider.login({
             onAuth: (info) => {
               // Prevent the OAuth page from gaining a handle to the add-in window.
@@ -340,6 +345,7 @@ export function buildProviderRow(
             },
             onProgress: (msg) => { oauthBtn.textContent = msg; },
           });
+
           const apiKey = oauthProvider.getApiKey(cred);
           await storage.providerKeys.set(id, apiKey);
           localStorage.setItem(`oauth_${id}`, JSON.stringify(cred));
@@ -347,28 +353,27 @@ export function buildProviderRow(
           onConnected(row, id, label);
           detail.style.display = "none";
           expandedRef.current = null;
-        }
-      } catch (err: unknown) {
-        if (err instanceof PromptCancelledError) {
-          // User cancelled the prompt; leave UI unchanged.
-          return;
-        }
+        } catch (err: unknown) {
+          if (err instanceof PromptCancelledError) {
+            // User cancelled the prompt; leave UI unchanged.
+            return;
+          }
 
-        const msg = getErrorMessage(err);
-        const isLikelyCors =
-          isCorsError(err) ||
-          (typeof msg === "string" && /load failed|failed to fetch|cors|cross-origin|networkerror/i.test(msg));
+          const msg = getErrorMessage(err);
+          const isLikelyCors =
+            isCorsError(err) ||
+            (typeof msg === "string" && /load failed|failed to fetch|cors|cross-origin|networkerror/i.test(msg));
 
-        if (isLikelyCors) {
-          errorEl.textContent = "Login was blocked by browser CORS. Start the local HTTPS proxy (npm run proxy:https) and enable it (Proxy toggle above, or /settings → Proxy).";
-        } else {
-          errorEl.textContent = msg || "Login failed";
+          if (isLikelyCors) {
+            errorEl.textContent = "Login was blocked by browser CORS. Start the local HTTPS proxy (npm run proxy:https) and enable it (Proxy toggle above, or /settings → Proxy).";
+          } else {
+            errorEl.textContent = msg || "Login failed";
+          }
+          errorEl.style.display = "block";
+        } finally {
+          oauthBtn.textContent = `Login with ${label}`;
+          oauthBtn.style.opacity = "1";
         }
-        errorEl.style.display = "block";
-      } finally {
-        oauthBtn.textContent = `Login with ${label}`;
-        oauthBtn.style.opacity = "1";
-      }
       })();
     });
   }
