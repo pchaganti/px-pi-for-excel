@@ -8,17 +8,27 @@
  */
 
 import type { Agent } from "@mariozechner/pi-agent-core";
-import type { SessionsStore } from "@mariozechner/pi-web-ui";
+import type { SessionsStore, SettingsStore } from "@mariozechner/pi-web-ui";
 
 import type { PiSidebar } from "../ui/pi-sidebar.js";
 import { extractTextFromContent } from "../utils/content.js";
+import { getWorkbookContext } from "../workbook/context.js";
+import {
+  getLatestSessionForWorkbook,
+  linkSessionToWorkbook,
+  setLatestSessionForWorkbook,
+} from "../workbook/session-association.js";
 
 export async function setupSessionPersistence(opts: {
   agent: Agent;
   sidebar: PiSidebar;
   sessions: SessionsStore;
+  settings: SettingsStore;
 }): Promise<void> {
-  const { agent, sidebar, sessions } = opts;
+  const { agent, sidebar, sessions, settings } = opts;
+
+  const workbookCtx = await getWorkbookContext().catch(() => ({ workbookId: null, source: "unknown" as const }));
+  const workbookId = workbookCtx.workbookId;
 
   let sessionId: string = crypto.randomUUID();
   let sessionTitle = "";
@@ -115,6 +125,15 @@ export async function setupSessionPersistence(opts: {
         },
         sessionTitle,
       );
+
+      if (workbookId) {
+        try {
+          await linkSessionToWorkbook(settings, sessionId, workbookId);
+          await setLatestSessionForWorkbook(settings, workbookId, sessionId);
+        } catch (err) {
+          console.warn("[pi] Workbook/session association update failed:", err);
+        }
+      }
     } catch (err) {
       console.warn("[pi] Session save failed:", err);
     }
@@ -134,27 +153,39 @@ export async function setupSessionPersistence(opts: {
     }
   });
 
-  // Auto-restore latest session
+  // Auto-restore latest session (prefer workbook-scoped "latest" when available)
   try {
-    const latestId = await sessions.getLatestSessionId();
-    if (latestId) {
-      const sessionData = await sessions.loadSession(latestId);
-      if (sessionData && sessionData.messages.length > 0) {
-        sessionId = sessionData.id;
-        sessionTitle = sessionData.title || "";
-        sessionCreatedAt = sessionData.createdAt;
-        firstAssistantSeen = true;
-        agent.replaceMessages(sessionData.messages);
-        if (sessionData.model) {
-          agent.setModel(sessionData.model);
-        }
-        if (sessionData.thinkingLevel) {
-          agent.setThinkingLevel(sessionData.thinkingLevel);
-        }
-        // Force sidebar to pick up restored messages
-        sidebar.syncFromAgent();
-        console.log(`[pi] Restored session: ${sessionTitle || latestId}`);
-      }
+    const candidates: string[] = [];
+
+    if (workbookId) {
+      const wbLatest = await getLatestSessionForWorkbook(settings, workbookId);
+      if (wbLatest) candidates.push(wbLatest);
+    }
+
+    const globalLatest = await sessions.getLatestSessionId();
+    if (globalLatest) candidates.push(globalLatest);
+
+    const seen = new Set<string>();
+    for (const id of candidates) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+
+      const sessionData = await sessions.loadSession(id);
+      if (!sessionData || sessionData.messages.length === 0) continue;
+
+      sessionId = sessionData.id;
+      sessionTitle = sessionData.title || "";
+      sessionCreatedAt = sessionData.createdAt;
+      firstAssistantSeen = true;
+
+      agent.replaceMessages(sessionData.messages);
+      if (sessionData.model) agent.setModel(sessionData.model);
+      if (sessionData.thinkingLevel) agent.setThinkingLevel(sessionData.thinkingLevel);
+
+      // Force sidebar to pick up restored messages
+      sidebar.syncFromAgent();
+      console.log(`[pi] Restored session: ${sessionTitle || id}`);
+      break;
     }
   } catch (err) {
     console.warn("[pi] Session restore failed:", err);
@@ -175,10 +206,22 @@ export async function setupSessionPersistence(opts: {
   document.addEventListener(
     "pi:session-resumed",
     ((e: CustomEvent<ResumeDetail>) => {
-      sessionId = e.detail?.id || sessionId;
+      const id = e.detail?.id || sessionId;
+      sessionId = id;
       sessionTitle = e.detail?.title || "";
       sessionCreatedAt = e.detail?.createdAt || new Date().toISOString();
       firstAssistantSeen = true;
+
+      if (workbookId) {
+        void (async () => {
+          try {
+            await linkSessionToWorkbook(settings, id, workbookId);
+            await setLatestSessionForWorkbook(settings, workbookId, id);
+          } catch (err) {
+            console.warn("[pi] Workbook/session association update failed:", err);
+          }
+        })();
+      }
     }) as EventListener,
   );
 }

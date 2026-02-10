@@ -66,7 +66,7 @@ export async function initTaskpane(opts: {
   const changeTracker = new ChangeTracker();
 
   // 1. Storage
-  const { providerKeys, sessions } = initAppStorage();
+  const { providerKeys, sessions, settings } = initAppStorage();
 
   // 2. Restore auth
   await restoreCredentials(providerKeys);
@@ -225,7 +225,7 @@ export async function initTaskpane(opts: {
   });
 
   // ── Session persistence ──
-  await setupSessionPersistence({ agent, sidebar, sessions });
+  await setupSessionPersistence({ agent, sidebar, sessions, settings });
 
   // ── Register slash commands + extensions ──
   registerBuiltins(agent);
