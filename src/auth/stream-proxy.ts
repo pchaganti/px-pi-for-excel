@@ -52,22 +52,48 @@ function applyProxy(model: Model<Api>, proxyUrl: string): Model<Api> {
 }
 
 /**
+ * Should tool schemas be included in this LLM call?
+ *
+ * We only send tools on the first call after a user message.
+ * Tool-result continuations (the model processing results from a previous
+ * round of tool calls) get no tool schemas — the model must respond with
+ * text, not chain further tool calls.
+ *
+ * This keeps tool definitions (~8.7K chars) out of follow-up calls,
+ * reducing context pollution. Multi-step tasks still work because the
+ * model can issue parallel tool calls in a single response, and the user
+ * can confirm between rounds.
+ *
+ * See: https://github.com/tmustier/pi-for-excel/issues/14
+ */
+function isToolContinuation(messages: Context["messages"]): boolean {
+  if (messages.length === 0) return false;
+  const last = messages[messages.length - 1];
+  return last.role === "toolResult";
+}
+
+/**
  * Create a StreamFn compatible with Agent that proxies provider base URLs when needed.
  */
 export function createOfficeStreamFn(getProxyUrl: GetProxyUrl) {
   return async (model: Model<Api>, context: Context, options?: StreamOptions) => {
+    // Strip tools on tool-result continuations (see #14).
+    const effectiveContext = isToolContinuation(context.messages)
+      ? { ...context, tools: undefined }
+      : context;
+
     const proxyUrl = await getProxyUrl();
     if (!proxyUrl) {
-      return streamSimple(model, context, options);
+      return streamSimple(model, effectiveContext, options);
     }
 
     if (!shouldProxyProvider(model.provider, options?.apiKey)) {
-      return streamSimple(model, context, options);
+      return streamSimple(model, effectiveContext, options);
     }
 
     // Guardrails: fail fast for known-bad proxy configs (e.g., HTTP proxy from HTTPS taskpane).
     const validated = validateOfficeProxyUrl(proxyUrl);
 
-    return streamSimple(applyProxy(model, validated), context, options);
+    return streamSimple(applyProxy(model, validated), effectiveContext, options);
   };
 }
