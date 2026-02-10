@@ -325,6 +325,14 @@ pi-working-indicator {
   font-weight: 600;
 }
 
+/* Debug token breakdown appended next to the context percentage. */
+.pi-status-ctx__debug {
+  margin-left: 6px;
+  opacity: 0.55;
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+}
+
 .pi-status-thinking {
   cursor: pointer;
   border-radius: 5px;
