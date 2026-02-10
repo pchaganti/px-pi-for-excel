@@ -18,9 +18,11 @@ import { createAllTools } from "../tools/index.js";
 import { loadExtension, createExtensionAPI } from "../commands/extension-api.js";
 import { registerBuiltins } from "../commands/builtins.js";
 import { wireCommandMenu } from "../commands/command-menu.js";
+import { commandRegistry } from "../commands/types.js";
 import { buildSystemPrompt } from "../prompt/system-prompt.js";
 import { initAppStorage } from "../storage/init-app-storage.js";
 import { renderError } from "../ui/loading.js";
+import { showToast } from "../ui/toast.js";
 import { PiSidebar } from "../ui/pi-sidebar.js";
 import { setActiveProviders } from "../compat/model-selector-patch.js";
 
@@ -200,7 +202,20 @@ export async function initTaskpane(opts: {
     ((e: CustomEvent<{ name?: string; args?: string }>) => {
       const name = e.detail?.name;
       if (!name) return;
-      actionQueue.enqueueCommand(name, e.detail?.args ?? "");
+
+      if (name === "compact") {
+        actionQueue.enqueueCommand(name, e.detail?.args ?? "");
+        return;
+      }
+
+      // Other commands: execute immediately if we're idle; otherwise block.
+      if (agent.state.isStreaming || actionQueue.isBusy()) {
+        showToast(`Can't run /${name} while Pi is busy`);
+        return;
+      }
+
+      const cmd = commandRegistry.get(name);
+      if (cmd) void cmd.execute(e.detail?.args ?? "");
     }) as EventListener,
   );
 

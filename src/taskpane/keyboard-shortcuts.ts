@@ -25,6 +25,7 @@ type QueueDisplay = {
 
 type ActionQueue = {
   enqueueCommand: (name: string, args: string) => void;
+  isBusy: () => boolean;
 };
 
 const THINKING_COLORS: Record<ThinkingLevel, string> = {
@@ -195,15 +196,29 @@ export function installKeyboardShortcuts(opts: {
       const args = spaceIdx > 0 ? val.slice(spaceIdx + 1) : "";
       const cmd = commandRegistry.get(cmdName);
       if (cmd) {
+        const busy = isStreaming || actionQueue.isBusy();
+
+        // Only queue `/compact` while busy for now. Other commands may be interactive
+        // (e.g. /snake) and should not be deferred.
+        if (busy && cmdName !== "compact") {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          showToast(`Can't run /${cmdName} while Pi is busy`);
+          return;
+        }
+
         e.preventDefault();
         e.stopImmediatePropagation();
         hideCommandMenu();
         const input = sidebar.getInput();
         if (input) input.clear();
 
-        // While streaming, queue slash commands instead of trying to run them.
-        // (Agent loop is busy; we want strict ordering.)
-        actionQueue.enqueueCommand(cmdName, args);
+        if (cmdName === "compact") {
+          actionQueue.enqueueCommand(cmdName, args);
+        } else {
+          void cmd.execute(args);
+        }
+
         return;
       }
     }

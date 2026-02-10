@@ -121,12 +121,25 @@ export class WorkingIndicator extends LitElement {
     const left = this.primaryText || this._whimsical;
     const right = this.hintText || HINTS[this._hintIndex];
 
+    const fixed = Boolean(this.primaryText || this.hintText);
+
     return html`
-      <div class="pi-working">
-        <span class="pi-working__text ${this.primaryText ? "" : (this._fadingWhimsical ? "pi-working--fading" : "")}">
-          ${left}
-        </span>
-        <span class="pi-working__hint ${this.hintText ? "" : (this._fadingHint ? "pi-working--fading" : "")}">
+      <div class="pi-working ${fixed ? "pi-working--fixed" : ""}">
+        ${fixed
+          ? html`
+            <span class="pi-working__pill">
+              <span class="pi-working__spinner" aria-hidden="true"></span>
+              ${left}
+            </span>
+          `
+          : html`
+            <span class="pi-working__text ${this._fadingWhimsical ? "pi-working--fading" : ""}">
+              ${left}
+            </span>
+          `
+        }
+
+        <span class="pi-working__hint ${fixed ? "" : (this._fadingHint ? "pi-working--fading" : "")}">
           ${right}
         </span>
       </div>

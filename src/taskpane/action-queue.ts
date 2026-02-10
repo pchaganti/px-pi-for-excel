@@ -50,7 +50,10 @@ export function createActionQueue(opts: {
 
     // Special-case: show an explicit non-streaming indicator for compaction.
     if (name === "compact") {
-      sidebar.setBusyIndicator("Compacting context…", "press Enter to queue");
+      sidebar.setBusyIndicator(
+        "Compacting context…",
+        "Send messages and Pi will see them after compaction",
+      );
       try {
         await cmd.execute(args);
       } finally {

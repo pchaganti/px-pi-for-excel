@@ -138,6 +138,7 @@ function renderMenu(): void {
           textarea.value = "";
           textarea.dispatchEvent(new Event("input", { bubbles: true }));
         }
+
         document.dispatchEvent(
           new CustomEvent("pi:command-run", { detail: { name: cmd.name, args: "" } }),
         );
