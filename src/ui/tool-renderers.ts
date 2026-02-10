@@ -19,22 +19,10 @@ import { Code } from "lucide";
 import { cellRefs } from "./cell-link.js";
 import { humanizeToolInput } from "./humanize-params.js";
 import { humanizeColorsInText } from "./color-names.js";
+import { CORE_TOOL_NAMES, type CoreToolName } from "../tools/registry.js";
 
 // Ensure <markdown-block> custom element is registered before we render it.
 import "@mariozechner/mini-lit/dist/MarkdownBlock.js";
-
-const EXCEL_TOOL_NAMES = [
-  "get_workbook_overview",
-  "read_range",
-  "write_cells",
-  "fill_formula",
-  "search_workbook",
-  "modify_structure",
-  "format_cells",
-  "conditional_format",
-  "trace_dependencies",
-  "view_settings",
-] as const;
 
 type ToolState = "inprogress" | "complete" | "error";
 
@@ -383,8 +371,29 @@ function describeToolCall(toolName: string, params: unknown, resultText?: string
       const cell = (p.cell ?? p.range) as string | undefined;
       return { action: "Trace", detail: cell ?? "dependencies", address: cell };
     }
-    case "get_recent_changes":
-      return { action: "Recent", detail: "changes" };
+    case "comments": {
+      const op = p.action as string | undefined;
+      const addr = range ? compactRange(range) : "range";
+
+      switch (op) {
+        case "read":
+          return { action: "Comments", detail: addr, address: range };
+        case "add":
+          return { action: "Add", detail: `comment ${addr}`, address: range };
+        case "update":
+          return { action: "Update", detail: `comment ${addr}`, address: range };
+        case "reply":
+          return { action: "Reply", detail: addr, address: range };
+        case "delete":
+          return { action: "Delete", detail: `comment ${addr}`, address: range };
+        case "resolve":
+          return { action: "Resolve", detail: addr, address: range };
+        case "reopen":
+          return { action: "Reopen", detail: addr, address: range };
+        default:
+          return { action: "Comment", detail: addr, address: range };
+      }
+    }
     default: {
       if (resultText) { const s = resultSummary(resultText); if (s) return splitFirstWord(s); }
       return { action: toolName.replace(/_/g, " "), detail: "" };
@@ -394,7 +403,7 @@ function describeToolCall(toolName: string, params: unknown, resultText?: string
 
 /* ── Renderer ───────────────────────────────────────────────── */
 
-function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, unknown> {
+function createExcelMarkdownRenderer(toolName: CoreToolName): ToolRenderer<unknown, unknown> {
   return {
     render(
       params: unknown,
@@ -523,6 +532,6 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
   };
 }
 
-for (const name of EXCEL_TOOL_NAMES) {
+for (const name of CORE_TOOL_NAMES) {
   registerToolRenderer(name, createExcelMarkdownRenderer(name));
 }

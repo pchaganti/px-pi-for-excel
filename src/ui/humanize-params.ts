@@ -9,6 +9,7 @@
 import { html, nothing, type TemplateResult } from "lit";
 import { cellRef, cellRefs } from "./cell-link.js";
 import { formatColorLabel } from "./color-names.js";
+import type { CoreToolName } from "../tools/registry.js";
 
 /* ── Types ──────────────────────────────────────────────────── */
 
@@ -514,6 +515,26 @@ function humanizeTraceDependencies(p: Record<string, unknown>): ParamItem[] {
   return items;
 }
 
+function humanizeComments(p: Record<string, unknown>): ParamItem[] {
+  const items: ParamItem[] = [];
+
+  if (p.action) {
+    items.push({ label: "Action", value: str(p.action) });
+  }
+
+  if (p.range) {
+    const rd = formatRangeForDisplay(str(p.range));
+    if (rd.sheet) items.push({ label: "Sheet", value: rd.sheet });
+    items.push({ label: "Range", value: cellRefs(str(p.range), Infinity) });
+  }
+
+  if (p.content) {
+    items.push({ label: "Content", value: formulaSnippet(str(p.content)) });
+  }
+
+  return items;
+}
+
 function humanizeViewSettings(p: Record<string, unknown>): ParamItem[] {
   const items: ParamItem[] = [];
   const action = str(p.action);
@@ -614,10 +635,9 @@ function humanizeOperator(op: string): string {
 
 /* ── Registry ───────────────────────────────────────────────── */
 
-const HUMANIZERS: Record<
-  string,
-  (p: Record<string, unknown>) => ParamItem[]
-> = {
+type HumanizerFn = (p: Record<string, unknown>) => ParamItem[];
+
+const HUMANIZERS: Record<string, HumanizerFn> = {
   format_cells: humanizeFormatCells,
   write_cells: humanizeWriteCells,
   read_range: humanizeReadRange,
@@ -628,7 +648,8 @@ const HUMANIZERS: Record<
   trace_dependencies: humanizeTraceDependencies,
   view_settings: humanizeViewSettings,
   get_workbook_overview: humanizeGetWorkbookOverview,
-};
+  comments: humanizeComments,
+} satisfies Record<CoreToolName, HumanizerFn>;
 
 /* ── Public API ─────────────────────────────────────────────── */
 
