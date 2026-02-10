@@ -1,73 +1,66 @@
 /**
- * Clickable cell references — navigate to a cell/range in Excel
- * and flash a brief glow to draw the user's eye.
+ * Clickable cell references — navigate to a cell/range in Excel.
+ *
+ * Uses native selection (activate sheet + select range) which
+ * scrolls the viewport and highlights with Excel's blue selection
+ * chrome. No fill mutation → no undo pollution, no CF conflicts,
+ * no race conditions on rapid clicks.
  */
 
 import { html, type TemplateResult } from "lit";
 import { excelRun, parseRangeRef } from "../excel/helpers.js";
 
-/* ── Design tokens (match theme.css --pi-green) ─────────────── */
+/* ── Debounce guard ─────────────────────────────────────────── */
 
-/** Glow color — light teal matching the app accent. */
-const GLOW_COLOR = "#C8F0DF";
-/** Duration of the glow flash in ms. */
-const GLOW_MS = 1200;
+/** Minimum ms between navigation actions. */
+const DEBOUNCE_MS = 300;
+let lastNavTime = 0;
 
 /* ── Excel navigation ───────────────────────────────────────── */
 
 /**
- * Navigate Excel to the given address, select it, and flash a
- * brief teal glow so the user can spot it.
+ * Extract the first sub-range from a comma-separated address.
+ *   "D18:H18, D28:H28, D31:H31" → "D18:H18"
+ * Keeps any sheet qualifier intact.
+ */
+function firstSubRange(address: string): string {
+  const parsed = parseRangeRef(address);
+  const first = parsed.address.split(",")[0].trim();
+  return parsed.sheet ? `${parsed.sheet}!${first}` : first;
+}
+
+/**
+ * Navigate Excel to the given address and select it.
  *
- * Safe to call on any well-formed reference — sheet-qualified or
- * relative to the active sheet.
+ * For multi-ranges (comma-separated), navigates to the first
+ * sub-range — you can't scroll to disjoint areas simultaneously.
  *
- * Glow restore uses a second `Excel.run` to avoid holding the
- * context open during the timeout.
+ * Activates the target sheet (switching tabs if needed), then
+ * selects the range which scrolls the viewport and applies
+ * Excel's native blue selection highlight.
  */
 async function navigateToRange(address: string): Promise<void> {
-  // Phase 1 — navigate + apply glow
-  const restoreInfo = await excelRun(async (ctx) => {
-    const parsed = parseRangeRef(address);
+  const now = Date.now();
+  if (now - lastNavTime < DEBOUNCE_MS) return;
+  lastNavTime = now;
+
+  const target = firstSubRange(address);
+  const parsed = parseRangeRef(target);
+
+  await excelRun(async (ctx) => {
     const ws = parsed.sheet
       ? ctx.workbook.worksheets.getItem(parsed.sheet)
       : ctx.workbook.worksheets.getActiveWorksheet();
-    const range = ws.getRange(parsed.address);
 
-    // Activate sheet (scrolls & tabs)
+    // Activate sheet first (switches tab, ensures correct context)
     ws.activate();
+    await ctx.sync();
+
+    // Select range (scrolls viewport + native highlight)
+    const range = ws.getRange(parsed.address);
     range.select();
-
-    // Read the current fill to restore later
-    range.format.fill.load("color");
     await ctx.sync();
-
-    const origColor = range.format.fill.color;
-
-    // Apply glow
-    range.format.fill.color = GLOW_COLOR;
-    await ctx.sync();
-
-    return { address: parsed.address, sheet: parsed.sheet, origColor };
   });
-
-  // Phase 2 — restore after delay
-  setTimeout(() => {
-    void excelRun(async (ctx) => {
-      const ws = restoreInfo.sheet
-        ? ctx.workbook.worksheets.getItem(restoreInfo.sheet)
-        : ctx.workbook.worksheets.getActiveWorksheet();
-      const range = ws.getRange(restoreInfo.address);
-
-      // Restore — empty/white means "no fill"
-      if (!restoreInfo.origColor || restoreInfo.origColor === "#FFFFFF") {
-        range.format.fill.clear();
-      } else {
-        range.format.fill.color = restoreInfo.origColor;
-      }
-      await ctx.sync();
-    });
-  }, GLOW_MS);
 }
 
 /* ── Lit template helper ────────────────────────────────────── */
