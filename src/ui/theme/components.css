@@ -283,7 +283,7 @@ pi-working-indicator {
   opacity: 0.7;
   transition: background 0.15s, color 0.15s, opacity 0.15s;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 .pi-status-model:hover {
   background: var(--pi-green-lighter);
@@ -314,6 +314,15 @@ pi-working-indicator {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex-shrink: 0;
+  transition: color 0.3s ease;
+}
+.pi-status-ctx--yellow {
+  color: var(--pi-yellow, #e5a100);
+  font-weight: 600;
+}
+.pi-status-ctx--red {
+  color: var(--destructive, #e5484d);
+  font-weight: 600;
 }
 
 .pi-status-thinking {
@@ -364,7 +373,7 @@ pi-working-indicator {
 .pi-status-bar [data-tooltip]:hover::after {
   opacity: 1;
 }
-/* Keep tooltips inside the sidebar */
+/* Keep data-tooltips inside the sidebar */
 .pi-status-bar [data-tooltip]:first-child::after {
   left: 0;
   transform: none;
@@ -373,6 +382,53 @@ pi-working-indicator {
   left: auto;
   right: 0;
   transform: none;
+}
+
+/* DOM-based rich tooltips (supports HTML / colored lines) */
+.pi-status-bar .has-tooltip {
+  position: relative;
+}
+.pi-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  white-space: normal;
+  width: max-content;
+  max-width: 200px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  border: 1px solid var(--border);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 200;
+}
+.pi-tooltip--left  { left: 0; transform: none; }
+.pi-tooltip--right { left: auto; right: 0; transform: none; }
+.has-tooltip:hover > .pi-tooltip {
+  opacity: 1;
+}
+
+/* Colored warning line inside tooltip */
+.pi-tooltip__warn {
+  display: block;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border);
+}
+.pi-tooltip__warn--yellow {
+  color: var(--pi-yellow, #e5a100);
+}
+.pi-tooltip__warn--red {
+  color: var(--destructive, #e5484d);
 }
 
 
