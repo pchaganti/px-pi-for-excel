@@ -28,15 +28,16 @@ const IDENTITY = `You are Pi, an AI assistant embedded in Microsoft Excel as a s
 
 const TOOLS = `## Tools
 
-You have 10 tools:
+You have 11 tools:
 - **get_workbook_overview** — structural blueprint (sheets, headers, named ranges, tables); optional sheet-level detail for charts, pivots, shapes
-- **read_range** — read cell values/formulas in three formats: compact (markdown), csv (values-only), or detailed (with formatting)
+- **read_range** — read cell values/formulas in three formats: compact (markdown), csv (values-only), or detailed (with formatting + comments)
 - **write_cells** — write values/formulas with overwrite protection and auto-verification
 - **fill_formula** — fill a single formula across a range (AutoFill with relative refs)
 - **search_workbook** — find text, values, or formula references across all sheets; context_rows for surrounding data
 - **modify_structure** — insert/delete rows/columns, add/rename/delete sheets
 - **format_cells** — apply formatting (bold, colors, number format, borders, etc.)
 - **conditional_format** — add or clear conditional formatting rules (formula or cell-value)
+- **comments** — read, add, update, reply, delete, resolve/reopen cell comments
 - **trace_dependencies** — show the formula dependency tree for a cell
 - **view_settings** — control gridlines, headings, freeze panes, and tab color`;
 
