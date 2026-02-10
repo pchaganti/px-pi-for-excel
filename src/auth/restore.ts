@@ -1,15 +1,17 @@
 /**
- * Auto-restore auth credentials from pi's auth.json (dev) or localStorage (browser OAuth).
+ * Auto-restore auth credentials from pi's auth.json (dev) or browser storage (OAuth).
  *
  * Priority:
  * 1. pi's ~/.pi/agent/auth.json (served by Vite plugin at /__pi-auth)
- * 2. localStorage (credentials from in-browser OAuth flows)
+ * 2. IndexedDB SettingsStore (migrated from legacy localStorage oauth_<providerId>)
  */
 
 import type { OAuthCredentials, OAuthProviderInterface } from "@mariozechner/pi-ai";
 import type { ProviderKeysStore } from "@mariozechner/pi-web-ui/dist/storage/stores/provider-keys-store.js";
+import type { SettingsStore } from "@mariozechner/pi-web-ui/dist/storage/stores/settings-store.js";
 
 import { originalFetch } from "./cors-proxy.js";
+import { loadOAuthCredentials, saveOAuthCredentials } from "./oauth-storage.js";
 import { mapToApiProvider, BROWSER_OAUTH_PROVIDERS } from "./provider-map.js";
 import { getOAuthProvider } from "./oauth-provider-registry.js";
 import { getErrorMessage } from "../utils/errors.js";
@@ -45,27 +47,21 @@ function isOAuthCredential(value: unknown): value is OAuthCredential {
   );
 }
 
-function isOAuthCredentials(value: unknown): value is OAuthCredentials {
-  return (
-    isRecord(value) &&
-    typeof value.refresh === "string" &&
-    typeof value.access === "string" &&
-    typeof value.expires === "number"
-  );
-}
-
 /**
  * Restore credentials from all available sources.
  * Populates the ProviderKeysStore so ChatPanel can make API calls.
  */
-export async function restoreCredentials(providerKeys: ProviderKeysStore): Promise<void> {
+export async function restoreCredentials(
+  providerKeys: ProviderKeysStore,
+  settings: SettingsStore,
+): Promise<void> {
   // 1. Try pi's auth.json (dev server only)
   if (await restoreFromPiAuth(providerKeys, getOAuthProvider)) {
     return;
   }
 
-  // 2. Fallback: localStorage (browser OAuth sessions)
-  await restoreFromLocalStorage(providerKeys, getOAuthProvider);
+  // 2. Browser OAuth sessions (IndexedDB; migrated from legacy localStorage)
+  await restoreFromBrowserOAuthStorage(providerKeys, settings, getOAuthProvider);
 }
 
 async function restoreFromPiAuth(
@@ -125,21 +121,16 @@ async function restoreFromPiAuth(
   }
 }
 
-async function restoreFromLocalStorage(
+async function restoreFromBrowserOAuthStorage(
   providerKeys: ProviderKeysStore,
+  settings: SettingsStore,
   getOAuthProvider: GetOAuthProvider,
 ): Promise<void> {
   for (const providerId of BROWSER_OAUTH_PROVIDERS) {
-    const stored = localStorage.getItem(`oauth_${providerId}`);
-    if (!stored) continue;
+    const credentials = await loadOAuthCredentials(settings, providerId);
+    if (!credentials) continue;
 
     try {
-      const parsed: unknown = JSON.parse(stored);
-      if (!isOAuthCredentials(parsed)) {
-        continue;
-      }
-
-      const credentials = parsed;
       const provider = getOAuthProvider(providerId);
       if (!provider) continue;
 
@@ -148,15 +139,15 @@ async function restoreFromLocalStorage(
       if (Date.now() >= credentials.expires) {
         try {
           const refreshed = await provider.refreshToken(credentials);
-          localStorage.setItem(`oauth_${providerId}`, JSON.stringify(refreshed));
+          await saveOAuthCredentials(settings, providerId, refreshed);
           await providerKeys.set(apiProvider, provider.getApiKey(refreshed));
-          console.log(`[auth] ${provider.name}: token refreshed from localStorage`);
+          console.log(`[auth] ${provider.name}: token refreshed from IndexedDB`);
         } catch (e: unknown) {
           console.warn(`[auth] ${provider.name}: refresh failed (${getErrorMessage(e)}), please login again`);
         }
       } else {
         await providerKeys.set(apiProvider, provider.getApiKey(credentials));
-        console.log(`[auth] ${provider.name}: session restored from localStorage`);
+        console.log(`[auth] ${provider.name}: session restored from IndexedDB`);
       }
     } catch (e: unknown) {
       console.warn(`[auth] ${providerId}: failed to restore (${getErrorMessage(e)})`);

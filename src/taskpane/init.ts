@@ -82,7 +82,7 @@ export async function initTaskpane(opts: {
   }
 
   // 2. Restore auth
-  await restoreCredentials(providerKeys);
+  await restoreCredentials(providerKeys, settings);
 
   // 2b. Welcome/login if no providers
   const configuredProviders = await providerKeys.list();

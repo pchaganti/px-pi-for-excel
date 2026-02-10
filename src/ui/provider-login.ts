@@ -10,6 +10,7 @@
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 import { isCorsError } from "@mariozechner/pi-web-ui/dist/utils/proxy-utils.js";
 import { getOAuthProvider } from "../auth/oauth-provider-registry.js";
+import { saveOAuthCredentials } from "../auth/oauth-storage.js";
 import { getErrorMessage } from "../utils/errors.js";
 
 export interface ProviderDef {
@@ -336,7 +337,7 @@ export function buildProviderRow(
 
           const apiKey = oauthProvider.getApiKey(cred);
           await storage.providerKeys.set(id, apiKey);
-          localStorage.setItem(`oauth_${id}`, JSON.stringify(cred));
+          await saveOAuthCredentials(storage.settings, id, cred);
           markConnected(row);
           onConnected(row, id, label);
           detail.style.display = "none";
