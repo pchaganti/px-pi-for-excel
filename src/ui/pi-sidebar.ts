@@ -7,10 +7,12 @@
  */
 
 import { html, LitElement, nothing, type PropertyValues } from "lit";
+import { icon } from "@mariozechner/mini-lit";
 import { customElement, property, query, state } from "lit/decorators.js";
 import type { Agent, AgentEvent } from "@mariozechner/pi-agent-core";
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
 import type { StreamingMessageContainer } from "@mariozechner/pi-web-ui/dist/components/StreamingMessageContainer.js";
+import { ChevronRight } from "lucide";
 import "./pi-input.js";
 import "./working-indicator.js";
 import { initToolGrouping } from "./tool-grouping.js";
@@ -37,6 +39,7 @@ export class PiSidebar extends LitElement {
   @state() private _busyLabel: string | null = null;
   @state() private _busyHint: string | null = null;
   @state() private _payloadStats: PayloadStats | null = null;
+  @state() private _contextPillExpanded = false;
 
   @query(".pi-messages") private _scrollContainer?: HTMLElement;
   @query("streaming-message-container") private _streamingContainer?: StreamingMessageContainer;
@@ -246,19 +249,8 @@ export class PiSidebar extends LitElement {
     `;
   }
 
-  private _onContextPillClick() {
-    const ctx = getLastContext();
-    const ps = getPayloadStats();
-    if (!ctx) {
-      console.log("[payload] No context captured yet.");
-      return;
-    }
-    console.group(`[payload] LLM call #${ps.calls} — full context`);
-    console.log("System prompt:", ctx.systemPrompt);
-    console.log("Tools:", ctx.tools ?? "(stripped)");
-    console.log("Messages:", ctx.messages);
-    console.log(`Sizes — sys:${ps.systemChars} tools:${ps.toolSchemaChars} msgs:${ps.messageChars} total:${ps.systemChars + ps.toolSchemaChars + ps.messageChars}`);
-    console.groupEnd();
+  private _toggleContextPill() {
+    this._contextPillExpanded = !this._contextPillExpanded;
   }
 
   private _renderContextPill() {
@@ -267,36 +259,57 @@ export class PiSidebar extends LitElement {
 
     const fmtK = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
     const total = ps.systemChars + ps.toolSchemaChars + ps.messageChars;
-    const toolsLabel = ps.toolCount > 0
-      ? `${ps.toolCount} tools (${fmtK(ps.toolSchemaChars)})`
-      : "tools stripped";
+    const expanded = this._contextPillExpanded;
+
+    // Build expanded body content from the last captured context
+    const ctx = getLastContext();
+    const systemPreview = ctx?.systemPrompt
+      ? (ctx.systemPrompt.length > 2000
+        ? ctx.systemPrompt.slice(0, 2000) + "\n\n… (truncated)"
+        : ctx.systemPrompt)
+      : "(none)";
+
+    const toolNames = ctx?.tools
+      ? ctx.tools.map((t) => `${t.name} (${JSON.stringify(t).length} chars)`).join("\n")
+      : "(stripped on this call)";
+
+    const body = [
+      `## Call #${ps.calls}`,
+      "",
+      `| | chars |`,
+      `|---|---|`,
+      `| System prompt | ${ps.systemChars.toLocaleString()} |`,
+      `| Tool schemas (${ps.toolCount}) | ${ps.toolSchemaChars.toLocaleString()} |`,
+      `| Messages (${ps.messageCount}) | ${ps.messageChars.toLocaleString()} |`,
+      `| **Total context** | **${total.toLocaleString()}** |`,
+      "",
+      "### System prompt",
+      "```",
+      systemPreview,
+      "```",
+      "",
+      "### Tools",
+      "```",
+      toolNames,
+      "```",
+    ].join("\n");
 
     return html`
-      <div class="pi-context-pill" @click=${this._onContextPillClick}>
-        <span class="pi-context-pill__label">Context sent to model</span>
-        <div class="pi-context-pill__row">
-          <span class="pi-context-pill__item">
-            <span class="pi-context-pill__key">call</span>
-            <span class="pi-context-pill__val">#${ps.calls}</span>
-          </span>
-          <span class="pi-context-pill__item">
-            <span class="pi-context-pill__key">sys</span>
-            <span class="pi-context-pill__val">${fmtK(ps.systemChars)}</span>
-          </span>
-          <span class="pi-context-pill__item">
-            <span class="pi-context-pill__key">tools</span>
-            <span class="pi-context-pill__val">${toolsLabel}</span>
-          </span>
-          <span class="pi-context-pill__item">
-            <span class="pi-context-pill__key">msgs</span>
-            <span class="pi-context-pill__val">${ps.messageCount} (${fmtK(ps.messageChars)})</span>
-          </span>
-          <span class="pi-context-pill__item pi-context-pill__total">
-            <span class="pi-context-pill__key">total</span>
-            <span class="pi-context-pill__val">${fmtK(total)} chars</span>
-          </span>
+      <div class="px-4">
+        <div class="pi-context-pill">
+          <div
+            class="pi-context-pill__header"
+            @click=${this._toggleContextPill}
+          >
+            <span>Context · call #${ps.calls} · ${fmtK(total)} chars</span>
+            <span class="pi-context-pill__chevron ${expanded ? "pi-context-pill__chevron--open" : ""}">${icon(ChevronRight, "sm")}</span>
+          </div>
+          ${expanded ? html`
+            <div class="pi-context-pill__body">
+              <markdown-block .content=${body}></markdown-block>
+            </div>
+          ` : nothing}
         </div>
-        <span class="pi-context-pill__hint">Click to log full context to console</span>
       </div>
     `;
   }

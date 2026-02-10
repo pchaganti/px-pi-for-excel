@@ -368,53 +368,48 @@ pi-working-indicator {
   font-family: var(--font-mono);
 }
 
-/* Context debug pill — inline card in chat area showing LLM payload breakdown. */
+/* Context debug pill — collapsible block matching thinking-block style. */
 .pi-context-pill {
-  margin: 8px 16px;
-  padding: 8px 10px;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  border-radius: var(--pill-radius);
+  border: var(--pill-green-border);
+  background: var(--pill-green-bg);
+  overflow: hidden;
+  font-size: 13.5px;
+  font-family: var(--font-sans);
 }
-.pi-context-pill:hover {
-  border-color: var(--foreground);
-  background: var(--muted, rgba(255,255,255,0.03));
-}
-.pi-context-pill__label {
-  display: block;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  opacity: 0.5;
-  margin-bottom: 4px;
-}
-.pi-context-pill__row {
+.pi-context-pill__header {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--pill-padding-y) var(--pill-padding-x);
+  cursor: pointer;
+  user-select: none;
+  font-size: 13.5px;
+  color: var(--muted-foreground);
+  transition: color 0.15s;
 }
-.pi-context-pill__item {
-  display: inline-flex;
-  gap: 3px;
-}
-.pi-context-pill__key {
-  opacity: 0.5;
-}
-.pi-context-pill__val {
+.pi-context-pill__header:hover {
   color: var(--foreground);
 }
-.pi-context-pill__total {
-  font-weight: 600;
+.pi-context-pill__chevron {
+  transition: transform 0.15s;
 }
-.pi-context-pill__hint {
+.pi-context-pill__chevron--open {
+  transform: rotate(90deg);
+}
+.pi-context-pill__body {
+  padding: 0 8px 8px;
+}
+.pi-context-pill__body markdown-block {
   display: block;
-  font-size: 9.5px;
-  opacity: 0.35;
-  margin-top: 4px;
+  padding: 10px 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--pi-inner-bg);
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .pi-status-thinking {
