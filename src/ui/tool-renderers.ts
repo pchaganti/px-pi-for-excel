@@ -123,7 +123,7 @@ function looksLikeMarkdown(text: string): boolean {
   // Horizontal rules: "---" or "***" or "___" (alone on a line)
   if (/^[-*_]{3,}\s*$/m.test(text)) return true;
   // Common sentinels our tools emit (emoji prefixes)
-  if (/^[✅⛔⚠️ℹ️📊📋🔍]/m.test(text)) return true;
+  if (/^(?:✅|⛔|⚠️|ℹ️|📊|📋|🔍)/m.test(text)) return true;
 
   return false;
 }

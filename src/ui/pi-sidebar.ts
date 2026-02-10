@@ -17,10 +17,17 @@ import "./working-indicator.js";
 import { initToolGrouping } from "./tool-grouping.js";
 import type { PiInput } from "./pi-input.js";
 
+export interface EmptyHint {
+  /** Short text shown on the button. */
+  label: string;
+  /** Full prompt sent when the button is clicked. */
+  prompt: string;
+}
+
 @customElement("pi-sidebar")
 export class PiSidebar extends LitElement {
   @property({ attribute: false }) agent?: Agent;
-  @property({ attribute: false }) emptyHints: string[] = [];
+  @property({ attribute: false }) emptyHints: EmptyHint[] = [];
   @property({ attribute: false }) onSend?: (text: string) => void;
   @property({ attribute: false }) onAbort?: () => void;
 
@@ -213,12 +220,12 @@ export class PiSidebar extends LitElement {
       <div class="pi-empty">
         <div class="pi-empty__logo">π</div>
         <p class="pi-empty__tagline">
-          Your AI assistant for Excel.<br/>Ask anything about your spreadsheet.
+          Reads your cells, writes formulas, formats ranges, and analyzes data.
         </p>
         <div class="pi-empty__hints">
           ${this.emptyHints.map(hint => html`
-            <button class="pi-empty__hint" @click=${() => this.sendMessage(hint)}>
-              ${hint}
+            <button class="pi-empty__hint" @click=${() => this.sendMessage(hint.prompt)}>
+              ${hint.label}
             </button>
           `)}
         </div>

@@ -14,10 +14,11 @@ import { createTraceDependenciesTool } from "./trace-dependencies.js";
 import { createConditionalFormatTool } from "./conditional-format.js";
 import { createFillFormulaTool } from "./fill-formula.js";
 import { createViewSettingsTool } from "./view-settings.js";
+import { createCommentsTool } from "./comments.js";
 
 type AnyTool = AgentTool<TSchema, unknown>;
 
-/** Create all 10 Excel tools */
+/** Create all 11 Excel tools */
 export function createAllTools(): AnyTool[] {
   return [
     createGetWorkbookOverviewTool(),
@@ -30,5 +31,6 @@ export function createAllTools(): AnyTool[] {
     createConditionalFormatTool(),
     createTraceDependenciesTool(),
     createViewSettingsTool(),
+    createCommentsTool(),
   ] as unknown as AnyTool[];
 }

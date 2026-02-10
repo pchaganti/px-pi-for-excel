@@ -147,7 +147,20 @@ export async function initTaskpane(opts: {
   // 7. Create and mount PiSidebar
   const sidebar = new PiSidebar();
   sidebar.agent = agent;
-  sidebar.emptyHints = ["Summarize this sheet", "Add a VLOOKUP formula", "Format as a table"];
+  sidebar.emptyHints = [
+    {
+      label: "Analyze this data",
+      prompt: "Look at the data on the active sheet. Summarize the key trends, flag any outliers or blanks, and add a short analysis in a new column to the right.",
+    },
+    {
+      label: "Format as a report",
+      prompt: "Format the active sheet as a clean report: bold the header row, add alternating row colors, auto-fit column widths, and freeze the top row.",
+    },
+    {
+      label: "Build a formula",
+      prompt: "Look at the column headers on this sheet and suggest a useful formula — for example a SUMIFS, VLOOKUP, or conditional — then write it into the first empty column with a header explaining what it calculates.",
+    },
+  ];
 
   const openModelSelector = (): void => {
     void ModelSelector.open(agent.state.model, (model) => {

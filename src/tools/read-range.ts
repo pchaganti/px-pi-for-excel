@@ -32,6 +32,14 @@ const schema = Type.Object({
 
 type Params = Static<typeof schema>;
 
+interface CommentSummary {
+  cell: string;
+  content: string;
+  author: string;
+  resolved: boolean;
+  replyCount: number;
+}
+
 interface ReadRangeResult {
   sheetName: string;
   address: string;
@@ -40,6 +48,7 @@ interface ReadRangeResult {
   values: unknown[][];
   formulas: unknown[][];
   numberFormats: unknown[][];
+  comments: CommentSummary[];
 }
 
 export function createReadRangeTool(): AgentTool<typeof schema> {
@@ -57,11 +66,51 @@ export function createReadRangeTool(): AgentTool<typeof schema> {
       params: Params,
     ): Promise<AgentToolResult<undefined>> => {
       try {
+        const mode = params.mode || "compact";
+
         const result = await excelRun<ReadRangeResult>(async (context) => {
           const { sheet, range } = getRange(context, params.range);
           range.load("values,formulas,numberFormat,address,rowCount,columnCount");
           sheet.load("name");
+
+          // Pre-load comments collection for detailed mode
+          const loadComments = mode === "detailed";
+          const commentsCol = loadComments ? sheet.comments : undefined;
+          if (commentsCol) {
+            commentsCol.load("items");
+          }
+
           await context.sync();
+
+          // Collect comments within the range (detailed mode only)
+          const comments: CommentSummary[] = [];
+          if (commentsCol && commentsCol.items.length > 0) {
+            const entries = commentsCol.items.map((comment) => {
+              comment.load("content,authorName,resolved");
+              const location = comment.getLocation();
+              location.load("address");
+              const replyCount = comment.replies.getCount();
+              return { comment, location, replyCount };
+            });
+            await context.sync();
+
+            const rangeAddr = range.address;
+            for (const { comment, location, replyCount } of entries) {
+              const locCell = location.address.includes("!")
+                ? location.address.split("!")[1]
+                : location.address;
+              if (isCellInRange(locCell, rangeAddr)) {
+                comments.push({
+                  cell: locCell,
+                  content: comment.content,
+                  author: comment.authorName,
+                  resolved: comment.resolved,
+                  replyCount: replyCount.value,
+                });
+              }
+            }
+          }
+
           return {
             sheetName: sheet.name,
             address: range.address,
@@ -70,6 +119,7 @@ export function createReadRangeTool(): AgentTool<typeof schema> {
             values: range.values,
             formulas: range.formulas,
             numberFormats: range.numberFormat,
+            comments,
           };
         });
 
@@ -77,8 +127,6 @@ export function createReadRangeTool(): AgentTool<typeof schema> {
         // Extract just the cell part (without sheet!) for offset calculations
         const cellPart = result.address.includes("!") ? result.address.split("!")[1] : result.address;
         const startCell = cellPart.split(":")[0];
-
-        const mode = params.mode || "compact";
 
         if (mode === "compact") {
           return formatCompact(fullAddress, result, startCell);
@@ -95,6 +143,21 @@ export function createReadRangeTool(): AgentTool<typeof schema> {
       }
     },
   };
+}
+
+/** Check if a cell address falls within a range address (both without sheet prefix). */
+function isCellInRange(cellAddr: string, rangeAddr: string): boolean {
+  const clean = rangeAddr.includes("!") ? rangeAddr.split("!")[1] : rangeAddr;
+  const parts = clean.includes(":") ? clean.split(":") : [clean, clean];
+  const start = parseCell(parts[0]);
+  const end = parseCell(parts[1]);
+  const cell = parseCell(cellAddr);
+  return (
+    cell.col >= start.col &&
+    cell.col <= end.col &&
+    cell.row >= start.row &&
+    cell.row <= end.row
+  );
 }
 
 function hasAnyNonEmptyCell(values: unknown[][]): boolean {
@@ -231,6 +294,17 @@ function formatDetailed(
     lines.push("### ⚠️ Errors");
     for (const e of errors) {
       lines.push(`- ${e.address}: ${e.error}`);
+    }
+  }
+
+  // Comments (only when present)
+  if (result.comments.length > 0) {
+    lines.push("");
+    lines.push("### Comments");
+    for (const c of result.comments) {
+      const resolved = c.resolved ? " ✓" : "";
+      const replies = c.replyCount > 0 ? ` (${c.replyCount} ${c.replyCount === 1 ? "reply" : "replies"})` : "";
+      lines.push(`- **${c.cell}**: "${c.content}" — *${c.author}*${resolved}${replies}`);
     }
   }
 

@@ -1017,7 +1017,6 @@ assistant-message .px-4 > markdown-block { margin-left: var(--pill-text-indent);
 }
 .pi-tool-card__markdown td {
   padding: 3px 8px;
-  white-space: nowrap;
 }
 
 /* Plain text fallback (no markdown syntax detected) */
