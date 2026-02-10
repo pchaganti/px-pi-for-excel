@@ -11,5 +11,7 @@ import "@mariozechner/pi-web-ui/app.css";
 import "./ui/theme.css";
 
 import { installLitClassFieldShadowingPatch } from "./compat/lit-class-field-shadowing.js";
+import { installMarkedSafetyPatch } from "./compat/marked-safety.js";
 
 installLitClassFieldShadowingPatch();
+installMarkedSafetyPatch();

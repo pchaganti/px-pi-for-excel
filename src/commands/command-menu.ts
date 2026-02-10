@@ -7,6 +7,8 @@
 
 import { commandRegistry, type SlashCommand } from "./types.js";
 
+import { escapeHtml } from "../utils/html.js";
+
 const SOURCE_BADGES: Record<string, string> = {
   builtin: "",
   extension: "ext",
@@ -115,9 +117,9 @@ function renderMenu(): void {
     const isSelected = i === selectedIndex;
     return `
       <div class="pi-cmd-item ${isSelected ? "selected" : ""}" data-index="${i}">
-        <span class="pi-cmd-name">/${cmd.name}</span>
-        ${badge ? `<span class="pi-cmd-badge">${badge}</span>` : ""}
-        <span class="pi-cmd-desc">${cmd.description}</span>
+        <span class="pi-cmd-name">/${escapeHtml(cmd.name)}</span>
+        ${badge ? `<span class="pi-cmd-badge">${escapeHtml(badge)}</span>` : ""}
+        <span class="pi-cmd-desc">${escapeHtml(cmd.description)}</span>
       </div>
     `;
   }).join("");
