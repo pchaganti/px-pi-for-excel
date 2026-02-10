@@ -20,6 +20,11 @@ import { cellRefs } from "./cell-link.js";
 import { humanizeToolInput } from "./humanize-params.js";
 import { humanizeColorsInText } from "./color-names.js";
 import { CORE_TOOL_NAMES, type CoreToolName } from "../tools/registry.js";
+import {
+  isFillFormulaDetails,
+  isFormatCellsDetails,
+  isWriteCellsDetails,
+} from "../tools/tool-details.js";
 
 // Ensure <markdown-block> custom element is registered before we render it.
 import "@mariozechner/mini-lit/dist/MarkdownBlock.js";
@@ -287,7 +292,25 @@ function resultSummary(text: string): string | null {
 }
 
 /** Append error / blocked badge to the detail string. */
-function badge(resultText?: string): string {
+function badge(
+  toolName: CoreToolName,
+  resultText: string | undefined,
+  details: unknown,
+): string {
+  if (toolName === "write_cells" && isWriteCellsDetails(details)) {
+    if (details.blocked) return " — blocked";
+    const n = details.formulaErrorCount ?? 0;
+    if (n > 0) return ` — ${n} error${n !== 1 ? "s" : ""}`;
+    return "";
+  }
+
+  if (toolName === "fill_formula" && isFillFormulaDetails(details)) {
+    if (details.blocked) return " — blocked";
+    const n = details.formulaErrorCount ?? 0;
+    if (n > 0) return ` — ${n} error${n !== 1 ? "s" : ""}`;
+    return "";
+  }
+
   if (!resultText) return "";
   if (isBlocked(resultText)) return " — blocked";
   const n = countResultErrors(resultText);
@@ -313,7 +336,12 @@ function splitFirstWord(text: string): ToolDesc {
 }
 
 /** Structured description: bold action + normal-weight detail. */
-function describeToolCall(toolName: string, params: unknown, resultText?: string): ToolDesc {
+function describeToolCall(
+  toolName: CoreToolName,
+  params: unknown,
+  resultText: string | undefined,
+  details: unknown,
+): ToolDesc {
   const p = safeParseParams(params);
   const range = p.range as string | undefined;
   const startCell = p.start_cell as string | undefined;
@@ -332,21 +360,38 @@ function describeToolCall(toolName: string, params: unknown, resultText?: string
 
     // ── Write tools ──
     case "write_cells": {
+      const b = badge(toolName, resultText, details);
+
+      if (isWriteCellsDetails(details) && details.address) {
+        const action = details.blocked ? "Write" : "Edit";
+        return { action, detail: details.address + b, address: details.address };
+      }
+
       const addr = resultText ? extractWrittenAddress(resultText) : null;
       return addr
-        ? { action: "Edit", detail: addr + badge(resultText), address: addr }
-        : { action: "Write", detail: (startCell ?? "cells") + badge(resultText), address: startCell };
+        ? { action: "Edit", detail: addr + b, address: addr }
+        : { action: "Write", detail: (startCell ?? "cells") + b, address: startCell };
     }
     case "fill_formula": {
+      const b = badge(toolName, resultText, details);
+
+      if (isFillFormulaDetails(details) && details.address) {
+        const action = details.blocked ? "Fill" : "Filled";
+        return { action, detail: details.address + b, address: details.address };
+      }
+
       const addr = resultText ? extractWrittenAddress(resultText) : null;
       return addr
-        ? { action: "Filled", detail: addr + badge(resultText), address: addr }
-        : { action: "Fill", detail: (range ? compactRange(range) : "formula") + badge(resultText), address: range };
+        ? { action: "Filled", detail: addr + b, address: addr }
+        : { action: "Fill", detail: (range ? compactRange(range) : "formula") + b, address: range };
     }
 
     // ── Format tools ──
-    case "format_cells":
-      return { action: "Format", detail: range ? compactRange(range) : "cells", address: range };
+    case "format_cells": {
+      const addr = isFormatCellsDetails(details) ? details.address : undefined;
+      const resolved = addr ?? range;
+      return { action: "Format", detail: resolved ? compactRange(resolved) : "cells", address: resolved };
+    }
     case "conditional_format":
       return { action: "Cond. format", detail: range ? compactRange(range) : "cells", address: range };
 
@@ -424,7 +469,7 @@ function createExcelMarkdownRenderer(toolName: CoreToolName): ToolRenderer<unkno
       const defaultExpanded = false;
 
       const resultText = result ? splitToolResultContent(result).text : undefined;
-      const desc = describeToolCall(toolName, params, resultText);
+      const desc = describeToolCall(toolName, params, resultText, result?.details);
       const detailContent = desc.address
         ? cellRefs(desc.address)
         : desc.detail;
