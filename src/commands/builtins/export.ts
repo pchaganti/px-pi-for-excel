@@ -146,7 +146,7 @@ export function createCompactCommands(agent: Agent): SlashCommand[] {
           showToast("Too few messages to compact");
           return;
         }
-        showToast("Compacting…");
+        showToast("Compacting to free up context");
 
         try {
           // Serialize conversation for summarization
@@ -212,7 +212,7 @@ export function createCompactCommands(agent: Agent): SlashCommand[] {
           const iface = document.querySelector<PiSidebar>("pi-sidebar");
           iface?.requestUpdate();
 
-          showToast(`Compacted ${msgs.length} messages → summary`);
+          showToast(`Summarized ${msgs.length} messages`);
         } catch (e: unknown) {
           showToast(`Compact failed: ${getErrorMessage(e)}`);
         }

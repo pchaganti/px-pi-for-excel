@@ -22,8 +22,7 @@ registerMessageRenderer("compactionSummary", {
 
     const title = html`
       <span class="pi-tool-card__title">
-        <strong>Compacted</strong>
-        <span class="pi-tool-card__detail-text">${message.messageCountBefore} messages</span>
+        <strong>Summarized ${message.messageCountBefore} messages</strong>
       </span>
     `;
 
