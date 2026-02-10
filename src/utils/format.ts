@@ -103,6 +103,11 @@ export function countNonEmpty(values: unknown[][]): number {
   return count;
 }
 
+/** True for Excel error values like #REF!, #VALUE!, #N/A, etc. */
+export function isExcelError(value: unknown): value is string {
+  return typeof value === "string" && /^#\w+!?$/.test(value);
+}
+
 /**
  * Truncate text to approximate token limit.
  * Rough heuristic: 1 token ≈ 4 characters.

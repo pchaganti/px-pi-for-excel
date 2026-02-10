@@ -273,6 +273,236 @@ assistant-message > div > div.px-4 > markdown-block {
   font-size: 10.5px;
 }
 
+/* ── CSV table (read_range mode=csv) ───────────────── */
+
+.pi-csv-table {
+  position: relative;
+}
+
+/* Toolbar — copy button aligned right */
+.pi-csv-table__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
+.pi-csv-table__copy {
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.pi-csv-table__copy:hover {
+  background: var(--pi-green-lighter, oklch(0.45 0.12 160 / 0.08));
+  color: var(--foreground);
+  border-color: oklch(0.45 0.12 160 / 0.2);
+}
+.pi-csv-table__copy--done {
+  color: var(--pi-green);
+  border-color: oklch(0.45 0.12 160 / 0.3);
+}
+
+/* Scrollable wrapper for wide tables */
+.pi-csv-table__scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* The data grid */
+.pi-csv-table__grid {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.35;
+  border-collapse: collapse;
+  white-space: nowrap;
+  width: max-content;
+  min-width: 100%;
+}
+
+/* Column headers (A, B, C…) */
+.pi-csv-table__col-hdr {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  text-align: center;
+  padding: 2px 8px 4px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--pi-inner-bg, white);
+}
+
+/* Row headers (1, 2, 3…) */
+.pi-csv-table__row-hdr {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  text-align: right;
+  padding: 2px 6px 2px 0;
+  border-right: 1px solid var(--border);
+  position: sticky;
+  left: 0;
+  background: var(--pi-inner-bg, white);
+  user-select: none;
+}
+
+/* Corner cell (intersection of row/col headers) */
+.pi-csv-table__corner {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  background: var(--pi-inner-bg, white);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+/* Data cells */
+.pi-csv-table__grid td {
+  padding: 2px 8px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--foreground);
+}
+
+/* Numeric cells — right-aligned */
+.pi-csv-table__num {
+  text-align: right;
+}
+
+/* Error cells — red */
+.pi-csv-table__err {
+  color: var(--destructive, #e5484d);
+  font-weight: 500;
+}
+
+/* Subtle row hover */
+.pi-csv-table__grid tbody tr:hover td {
+  background: oklch(0 0 0 / 0.02);
+}
+
+/* Alternating row stripes — very subtle */
+.pi-csv-table__grid tbody tr:nth-child(even) td {
+  background: oklch(0 0 0 / 0.015);
+}
+.pi-csv-table__grid tbody tr:nth-child(even):hover td {
+  background: oklch(0 0 0 / 0.035);
+}
+
+/* ── Dependency tree (trace_dependencies) ──────────── */
+
+.pi-dep-tree {
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.pi-dep-node {
+  padding: 4px 0 2px;
+}
+
+.pi-dep-node--root {
+  padding-top: 0;
+}
+
+/* Value + address row */
+.pi-dep-node__row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Value — primary element, prominent through position + mono */
+.pi-dep-node__val {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--foreground);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Error values — red */
+.pi-dep-node__val--err {
+  color: var(--destructive, #e5484d);
+}
+
+/* Cell address — secondary, small, muted */
+.pi-dep-node__addr {
+  font-size: 10px;
+  opacity: 0.45;
+}
+.pi-dep-node__addr .pi-cell-ref {
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+
+/* Formula — subtle code style, truncated with hover tooltip */
+.pi-dep-node__formula {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--muted-foreground);
+  opacity: 0.5;
+  margin: 1px 0 2px 0;
+  padding: 1px 5px;
+  background: oklch(0 0 0 / 0.02);
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: fit-content;
+  max-width: 100%;
+}
+
+/* ── Tree connectors ─────────────────────────────────── */
+
+/* Children container — vertical line via border-left */
+.pi-dep-node__children {
+  margin-left: 6px;
+  padding-left: 16px;
+  border-left: 1.5px solid oklch(0 0 0 / 0.12);
+  margin-top: 2px;
+}
+
+/* Each child gets a horizontal connector to the vertical line */
+.pi-dep-node__children > .pi-dep-node {
+  position: relative;
+}
+.pi-dep-node__children > .pi-dep-node::before {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: 11px;
+  width: 12px;
+  border-top: 1.5px solid oklch(0 0 0 / 0.12);
+}
+
+/* Last child — mask the vertical line below its connector */
+.pi-dep-node__children > .pi-dep-node:last-child::after {
+  content: "";
+  position: absolute;
+  left: -17px;
+  top: 12.5px;
+  bottom: -3px;
+  width: 3px;
+  background: var(--pi-inner-bg, white);
+}
+
+/* Leaf nodes — dimmer address */
+.pi-dep-node--leaf > .pi-dep-node__row > .pi-cell-ref {
+  opacity: 0.7;
+}
+
 /* ── Markdown in tool cards ────────────────────────────── */
 
 /* Scrollable container for wide markdown tables */

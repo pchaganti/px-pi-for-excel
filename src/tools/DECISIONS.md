@@ -86,3 +86,15 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Unknown formats:** displayed as raw strings (no change from before).
 - **Implementation:** `src/conventions/humanize.ts` pre-generates a lookup table from all preset+dp+symbol combinations.
 - **Rationale:** raw format strings in read-back are opaque; labels make them immediately understandable.
+
+## CSV table rendering (`read_range` mode=csv)
+- **UI:** CSV results are rendered as an HTML table with Excel-style column letters (A, B, …) and row numbers, plus a "Copy CSV" button.
+- **Agent text:** unchanged — still the markdown code-fenced CSV block.
+- **Implementation:** `ReadRangeCsvDetails` passes `values[][]`, `startCol`, `startRow`, and `csv` string to the UI. `src/ui/render-csv-table.ts` renders the table.
+- **Rationale:** the syntax-highlighted code block (language "csv") produced garbled output with numbers in red and keywords in blue. A proper table with row/column headers is immediately readable.
+
+## Dependency tree rendering (`trace_dependencies`)
+- **UI:** dependency trees are rendered as structured HTML with clickable cell refs, code-styled formulas, and thread-style left-border indentation.
+- **Agent text:** unchanged — still the ASCII tree with `├──`/`└──`/`│` connectors.
+- **Implementation:** `TraceDependenciesDetails` passes the `DepNodeDetail` tree to the UI. `src/ui/render-dep-tree.ts` renders the visual tree.
+- **Rationale:** ASCII art rendered via `<markdown-block>` lacked interactivity and visual hierarchy. Clickable addresses + clean CSS indentation is much more usable.

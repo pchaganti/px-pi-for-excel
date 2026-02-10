@@ -13,6 +13,7 @@ import { excelRun, getRange, qualifiedAddress, parseCell, colToLetter } from "..
 import { formatAsMarkdownTable, extractFormulas, findErrors } from "../utils/format.js";
 import { getErrorMessage } from "../utils/errors.js";
 import { humanizeFormat } from "../conventions/index.js";
+import type { ReadRangeCsvDetails } from "./tool-details.js";
 
 const schema = Type.Object({
   range: Type.String({
@@ -64,7 +65,7 @@ export function createReadRangeTool(): AgentTool<typeof schema> {
     execute: async (
       _toolCallId: string,
       params: Params,
-    ): Promise<AgentToolResult<undefined>> => {
+    ): Promise<AgentToolResult<ReadRangeCsvDetails | undefined>> => {
       try {
         const mode = params.mode || "compact";
 
@@ -131,7 +132,7 @@ export function createReadRangeTool(): AgentTool<typeof schema> {
         if (mode === "compact") {
           return formatCompact(fullAddress, result, startCell);
         } else if (mode === "csv") {
-          return formatCsvOutput(fullAddress, result);
+          return formatCsvOutput(fullAddress, result, startCell);
         } else {
           return formatDetailed(fullAddress, result, startCell);
         }
@@ -333,7 +334,8 @@ function valuesToCsv(values: unknown[][]): string {
 function formatCsvOutput(
   address: string,
   result: ReadRangeResult,
-): AgentToolResult<undefined> {
+  startCell: string,
+): AgentToolResult<ReadRangeCsvDetails | undefined> {
   const lines: string[] = [];
   lines.push(`**${address}** (${result.rows}×${result.cols})`);
   lines.push("");
@@ -341,11 +343,22 @@ function formatCsvOutput(
   const csv = valuesToCsv(result.values);
   if (!csv) {
     lines.push("(empty)");
-  } else {
-    lines.push("```csv");
-    lines.push(csv);
-    lines.push("```");
+    return { content: [{ type: "text", text: lines.join("\n") }], details: undefined };
   }
 
-  return { content: [{ type: "text", text: lines.join("\n") }], details: undefined };
+  lines.push("```csv");
+  lines.push(csv);
+  lines.push("```");
+
+  const start = parseCell(startCell);
+  return {
+    content: [{ type: "text", text: lines.join("\n") }],
+    details: {
+      kind: "read_range_csv",
+      startCol: start.col,
+      startRow: start.row,
+      values: result.values,
+      csv,
+    },
+  };
 }

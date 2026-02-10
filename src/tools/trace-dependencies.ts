@@ -12,6 +12,7 @@ import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun, getRange, qualifiedAddress, getDirectPrecedentsSafe } from "../excel/helpers.js";
 import { getErrorMessage } from "../utils/errors.js";
+import type { DepNodeDetail, TraceDependenciesDetails } from "./tool-details.js";
 
 const schema = Type.Object({
   cell: Type.String({
@@ -26,13 +27,6 @@ const schema = Type.Object({
 
 type Params = Static<typeof schema>;
 
-interface DepNode {
-  address: string;
-  value: unknown;
-  formula?: string;
-  precedents: DepNode[];
-}
-
 export function createTraceDependenciesTool(): AgentTool<typeof schema> {
   return {
     name: "trace_dependencies",
@@ -45,7 +39,7 @@ export function createTraceDependenciesTool(): AgentTool<typeof schema> {
     execute: async (
       _toolCallId: string,
       params: Params,
-    ): Promise<AgentToolResult<undefined>> => {
+    ): Promise<AgentToolResult<TraceDependenciesDetails | undefined>> => {
       try {
         if (params.cell.includes(":")) {
           return {
@@ -56,7 +50,7 @@ export function createTraceDependenciesTool(): AgentTool<typeof schema> {
 
         const maxDepth = Math.min(params.depth || 2, 5);
 
-        const tree = await excelRun(async (context) => {
+        const tree: DepNodeDetail | null = await excelRun(async (context) => {
           return await traceCell(context, params.cell, maxDepth, 0, new Set());
         });
 
@@ -74,7 +68,10 @@ export function createTraceDependenciesTool(): AgentTool<typeof schema> {
 
         return {
           content: [{ type: "text", text: lines.join("\n") }],
-          details: undefined,
+          details: {
+            kind: "trace_dependencies",
+            root: tree,
+          },
         };
       } catch (e: unknown) {
         return {
@@ -92,19 +89,22 @@ async function traceCell(
   maxDepth: number,
   currentDepth: number,
   visited: Set<string>,
-): Promise<DepNode | null> {
+): Promise<DepNodeDetail | null> {
   const { sheet, range } = getRange(context, cellRef);
-  range.load("values,formulas,address");
+  range.load("values,formulas,address,numberFormat");
   sheet.load("name");
   await context.sync();
 
   const fullAddr = qualifiedAddress(sheet.name, range.address);
+  const rawFmt: unknown = range.numberFormat[0][0];
+  const numberFormat = typeof rawFmt === "string" && rawFmt !== "" ? rawFmt : undefined;
 
   // Avoid cycles
   if (visited.has(fullAddr)) {
     return {
       address: fullAddr,
       value: range.values[0][0],
+      numberFormat,
       formula: "(circular reference — already visited)",
       precedents: [],
     };
@@ -119,9 +119,10 @@ async function traceCell(
     return null;
   }
 
-  const node: DepNode = {
+  const node: DepNodeDetail = {
     address: fullAddr,
     value,
+    numberFormat,
     formula,
     precedents: [],
   };
@@ -144,12 +145,14 @@ async function traceCell(
         } else {
           // Leaf value — still show it
           const { sheet: childSheet, range: childRange } = getRange(context, singleCell);
-          childRange.load("values,address");
+          childRange.load("values,address,numberFormat");
           childSheet.load("name");
           await context.sync();
+          const childFmt: unknown = childRange.numberFormat[0][0];
           node.precedents.push({
             address: qualifiedAddress(childSheet.name, childRange.address),
             value: childRange.values[0][0],
+            numberFormat: typeof childFmt === "string" && childFmt !== "" ? childFmt : undefined,
             precedents: [],
           });
         }
@@ -165,12 +168,14 @@ async function traceCell(
           node.precedents.push(child);
         } else {
           const { sheet: childSheet, range: childRange } = getRange(context, ref);
-          childRange.load("values,address");
+          childRange.load("values,address,numberFormat");
           childSheet.load("name");
           await context.sync();
+          const childFmt2: unknown = childRange.numberFormat[0][0];
           node.precedents.push({
             address: qualifiedAddress(childSheet.name, childRange.address),
             value: childRange.values[0][0],
+            numberFormat: typeof childFmt2 === "string" && childFmt2 !== "" ? childFmt2 : undefined,
             precedents: [],
           });
         }
@@ -215,7 +220,7 @@ function parseFormulaRefs(formula: string, currentSheet: string): string[] {
 }
 
 /** Render the dependency tree as an indented text tree */
-function renderTree(node: DepNode, lines: string[], prefix: string, isLast: boolean): void {
+function renderTree(node: DepNodeDetail, lines: string[], prefix: string, isLast: boolean): void {
   const connector = isLast ? "└── " : "├── ";
   const rawVal = node.value;
   const valueStr = rawVal !== "" && rawVal !== null && rawVal !== undefined
