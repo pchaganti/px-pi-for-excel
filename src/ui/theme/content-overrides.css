@@ -1,0 +1,477 @@
+/* ═══════════════════════════════════════════════════════
+   11. PI-WEB-UI CONTENT OVERRIDES
+   Targeted overrides for message components at sidebar width.
+   ═══════════════════════════════════════════════════════ */
+
+/* User message — teal tint instead of orange gradient */
+/* User message — white card, right-aligned */
+user-message .mx-4 {
+  margin-left: 8px !important;
+  margin-right: 8px !important;
+  justify-content: flex-end !important;
+}
+.user-message-container {
+  background: var(--pill-bg) !important;
+  border: var(--pill-border) !important;
+  border-radius: var(--pill-radius) !important;
+  box-shadow: var(--pill-shadow);
+  max-width: calc(100% - var(--pill-inset));
+  margin-left: var(--pill-inset) !important;
+}
+assistant-message .px-4 { padding-left: 12px !important; padding-right: 12px !important; }
+assistant-message { margin-right: var(--pill-inset); }
+/* Indent prose so it aligns with pill header text */
+assistant-message .px-4 > markdown-block { margin-left: var(--pill-text-indent); }
+
+/* ── Tool cards — compact, collapsed by default ──────────── */
+
+/* Card base — used for inprogress + error; complete overrides below */
+.pi-tool-card {
+  border-radius: var(--pill-radius);
+  border: var(--pill-border);
+  background: var(--pill-bg);
+  box-shadow: var(--pill-shadow);
+  overflow: hidden;
+  min-width: 0;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.pi-tool-card:hover {
+  border-color: var(--pill-hover-border);
+}
+/* Error state — red tint */
+.pi-tool-card[data-state="error"] {
+  border: var(--pill-red-border);
+  background: var(--pill-red-bg);
+}
+.pi-tool-card[data-state="error"]:hover {
+  border-color: var(--pill-red-hover-border);
+}
+
+/* Complete standalone — green tint */
+.pi-tool-card[data-state="complete"] {
+  border: var(--pill-green-border);
+  background: var(--pill-green-bg);
+  box-shadow: none;
+}
+.pi-tool-card[data-state="complete"]:hover {
+  border-color: var(--pill-green-hover-border);
+}
+.pi-tool-card[data-state="complete"] .pi-tool-card__header > button {
+  padding: var(--pill-padding-y) var(--pill-padding-x) !important;
+}
+
+/* Complete inside group — strip card chrome (group provides the container) */
+.pi-tool-group .pi-tool-card[data-state="complete"] {
+  border: none;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  margin-right: 0;
+}
+.pi-tool-group .pi-tool-card[data-state="complete"]:hover {
+  border-color: transparent;
+}
+.pi-tool-group .pi-tool-card[data-state="complete"] .pi-tool-card__header > button {
+  padding: 2px 4px !important;
+}
+/* Grouped: inner pill needs top-margin since card chrome is stripped */
+.pi-tool-group .pi-tool-card[data-state="complete"] .pi-tool-card__inner {
+  margin-top: 4px;
+}
+
+/* Header — the clickable toggle row from pi-web-ui */
+.pi-tool-card__header > button {
+  padding: var(--pill-padding-y) var(--pill-padding-x) !important;
+  gap: 7px !important;
+  font-size: 13px !important;
+  min-width: 0 !important;
+  overflow: hidden;
+}
+.pi-tool-card__header > button > div {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Hide static tool icon — the title is enough; keep spinner visible */
+.pi-tool-card__header > button > div > span.inline-block:not(.animate-spin) {
+  display: none;
+}
+
+/* Title — match thinking block: same font, muted → foreground on hover */
+.pi-tool-card__title {
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 400;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  transition: color 0.15s;
+}
+.pi-tool-card__header > button:hover .pi-tool-card__title {
+  color: var(--foreground);
+}
+.pi-tool-card__title strong {
+  font-weight: 400;
+}
+.pi-tool-card__detail-text {
+  font-size: 12px;
+  opacity: 0.7;
+}
+.pi-tool-card[data-state="complete"] .pi-tool-card__title {
+  color: var(--muted-foreground);
+}
+.pi-tool-card[data-state="error"] .pi-tool-card__title {
+  color: var(--destructive);
+}
+
+/* Body — revealed on expand.
+   pi-web-ui toggles max-h-0 ↔ max-h-[2000px] + overflow-hidden.
+   We override to make long results scrollable instead of clipped. */
+.pi-tool-card__body {
+  overflow-y: auto !important;
+  scrollbar-width: thin;
+}
+/* pi-web-ui adds mt-3 when expanded; keep our card tight */
+.pi-tool-card__body.mt-3 {
+  margin-top: 0 !important;
+}
+/* Inner pill — white content area nested inside green/white outer pill */
+.pi-tool-card__inner {
+  padding: 10px 14px 14px;
+  margin: 0 8px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--pi-inner-bg);
+}
+
+/* Tool identifier — subtle mono label */
+.pi-tool-card__detail {
+  padding: 8px 0 2px;
+}
+.pi-tool-card__tool-id {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted-foreground);
+  opacity: 0.55;
+  letter-spacing: 0.02em;
+}
+
+/* Sections (Input / Output) */
+.pi-tool-card__section {
+  margin-top: 10px;
+}
+.pi-tool-card__section-label {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+/* ── Humanized param list ─────────────────────────────────── */
+
+.pi-params {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 10px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  padding: 2px 0;
+}
+
+.pi-params__row {
+  display: contents;
+}
+
+.pi-params__label {
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+  white-space: nowrap;
+  padding-top: 1px;
+}
+
+.pi-params__value {
+  color: var(--foreground);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pi-params__more {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.pi-params__code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  background: var(--muted);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* Color chip — small inline circle swatch */
+.pi-color-chip {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid oklch(0 0 0 / 0.15);
+  vertical-align: middle;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.pi-color-chip-label {
+  vertical-align: middle;
+}
+
+/* Clickable cell references — navigate to the range in Excel */
+.pi-cell-ref {
+  cursor: pointer;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: oklch(0.45 0.12 160 / 0.35);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: text-decoration-color 0.15s, color 0.15s;
+}
+.pi-cell-ref:hover {
+  color: var(--pi-green);
+  text-decoration-color: oklch(0.45 0.12 160 / 0.6);
+}
+
+/* Data preview — mini table for write_cells values */
+.pi-data-preview {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border-collapse: collapse;
+  margin-top: 3px;
+  line-height: 1.4;
+}
+
+.pi-data-preview td {
+  padding: 1px 8px 1px 0;
+  white-space: nowrap;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pi-data-preview__fade {
+  color: var(--muted-foreground);
+  font-style: italic;
+  font-size: 10.5px;
+}
+
+/* ── Markdown in tool cards ────────────────────────────── */
+
+/* Scrollable container for wide markdown tables */
+.pi-tool-card__markdown {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Tighter typography inside tool result cards */
+.pi-tool-card__markdown markdown-block { font-size: 12.5px; line-height: 1.5; }
+.pi-tool-card__markdown markdown-block p { font-size: 12.5px; margin: 0 0 6px; }
+
+/* Tables: compact sizing for sidebar width */
+.pi-tool-card__markdown table {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  line-height: 1.35;
+}
+.pi-tool-card__markdown th {
+  font-size: 11px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.pi-tool-card__markdown td {
+  padding: 3px 8px;
+}
+
+/* Plain text fallback (no markdown syntax detected) */
+.pi-tool-card__plain-text {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--foreground);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* Echo result — redundant success message replaced with compact "✓ Done" */
+.pi-tool-card__echo-result {
+  color: var(--pi-green);
+  font-weight: 500;
+  white-space: normal;
+}
+
+/* Flex overflow fix for tool cards */
+tool-message {
+  min-width: 0;
+}
+
+/* ── Tool group wrapper ───────────────────────────────── */
+
+.pi-tool-group {
+  display: flex;
+  flex-direction: column;
+  background: var(--pill-green-bg);
+  border: var(--pill-green-border);
+  border-radius: var(--pill-radius);
+}
+
+/* Rows inside group */
+.pi-tool-group > tool-message {
+  padding: 1px 6px;
+}
+
+/* Divider between rows */
+.pi-tool-group > tool-message + tool-message {
+  border-top: 1px solid oklch(0.45 0.12 160 / 0.07);
+}
+
+/* Fallback: hide pi-web-ui default wrapper if it appears */
+tool-message > div.border {
+  border: 1px solid var(--border) !important;
+  background: var(--pi-inner-bg) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 1px 3px oklch(0 0 0 / 0.04);
+}
+
+/* Markdown — readable at sidebar width */
+markdown-block { line-height: 1.6; }
+markdown-block p { margin: 0 0 10px; font-size: 13.5px; }
+markdown-block p:last-child { margin-bottom: 0; }
+markdown-block ul, markdown-block ol { margin: 0 0 10px; padding-left: 20px; }
+markdown-block li { margin-bottom: 4px; }
+markdown-block code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--muted);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+markdown-block pre {
+  background: oklch(0.97 0.002 90) !important;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Code blocks */
+code-block { font-size: 12px !important; border-radius: 8px !important; }
+
+/* Thinking blocks — green card matching tool cards, left-aligned */
+thinking-block {
+  font-size: 13.5px;
+  font-family: var(--font-sans);
+}
+thinking-block .thinking-block {
+  border-radius: var(--pill-radius);
+  border: var(--pill-green-border);
+  background: var(--pill-green-bg);
+  overflow: hidden;
+}
+thinking-block .thinking-header {
+  font-size: 13.5px !important;
+  width: 100%;
+  padding: var(--pill-padding-y) var(--pill-padding-x) !important;
+  justify-content: space-between;
+}
+
+/* Move chevron to the right to match tool cards */
+thinking-block .thinking-header > span:first-child { order: 2; }
+thinking-block .thinking-header > span:last-child { order: 1; }
+
+/* Expanded body — white inner pill matching tool card __inner */
+thinking-block markdown-block {
+  display: block;
+  padding: 10px 14px 14px;
+  margin: 0 8px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--pi-inner-bg);
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* Make shimmer more prominent — faster + higher-contrast gradient */
+thinking-block .thinking-header > .animate-shimmer {
+  animation-duration: 1.2s !important;
+  --tw-gradient-from: oklch(0.55 0 0) !important;
+  --tw-gradient-via: oklch(0.15 0 0) !important;
+  --tw-gradient-to: oklch(0.55 0 0) !important;
+}
+
+/* Spinner on thinking header while streaming.
+   .animate-shimmer only exists on the text span during active streaming,
+   so no :has() needed — target the class directly via ::before.
+   Uses the same Lucide Loader icon as tool cards (via CSS mask). */
+thinking-block .thinking-header > .animate-shimmer::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-right: 6px;
+  vertical-align: middle;
+  background-color: var(--foreground);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2v4'/%3E%3Cpath d='m16.2 7.8 2.9-2.9'/%3E%3Cpath d='M18 12h4'/%3E%3Cpath d='m16.2 16.2 2.9 2.9'/%3E%3Cpath d='M12 18v4'/%3E%3Cpath d='m4.9 19.1 2.9-2.9'/%3E%3Cpath d='M2 12h4'/%3E%3Cpath d='m4.9 4.9 2.9 2.9'/%3E%3C/svg%3E");
+  -webkit-mask-size: contain;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2v4'/%3E%3Cpath d='m16.2 7.8 2.9-2.9'/%3E%3Cpath d='M18 12h4'/%3E%3Cpath d='m16.2 16.2 2.9 2.9'/%3E%3Cpath d='M12 18v4'/%3E%3Cpath d='m4.9 19.1 2.9-2.9'/%3E%3Cpath d='M2 12h4'/%3E%3Cpath d='m4.9 4.9 2.9 2.9'/%3E%3C/svg%3E");
+  mask-size: contain;
+  animation: pi-think-spin 0.7s linear infinite;
+}
+@keyframes pi-think-spin {
+  to { transform: rotate(360deg); }
+}
+
+
+/* Ctrl+O toggle — thinking blocks: strip card chrome like complete tool cards */
+.pi-hide-internals thinking-block .thinking-block {
+  border: none;
+  background: none;
+  border-radius: 0;
+}
+.pi-hide-internals thinking-block .thinking-header {
+  padding: 2px 4px !important;
+  opacity: 0.55;
+}
+
+/* Ctrl+O toggle — tool cards: keep normal card styling.
+   (We collapse/expand the tool body by toggling max-h-* classes in JS.) */
+
+/* Reduce vertical gaps between blocks when internals are hidden */
+.pi-hide-internals assistant-message .px-4.flex.flex-col.gap-3 {
+  gap: 8px !important;
+}
+
+/* Usage/cost — hidden (context % in status bar is enough) */
+assistant-message .text-xs.text-muted-foreground {
+  display: none !important;
+}
+
+/* Abort message — indent to align with content */
+assistant-message .text-destructive {
+  font-size: 12.5px !important;
+  color: var(--muted-foreground) !important;
+  font-style: italic;
+  padding-left: 12px !important;
+}
+
+/* Streaming cursor — hidden; the pi-working indicator already signals activity */
+streaming-message-container .animate-pulse {
+  display: none !important;
+}
+
