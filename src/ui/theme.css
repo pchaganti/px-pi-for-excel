@@ -969,6 +969,21 @@ assistant-message .px-4 > markdown-block { margin-left: var(--pill-text-indent);
   vertical-align: middle;
 }
 
+/* Clickable cell references — navigate to the range in Excel */
+.pi-cell-ref {
+  cursor: pointer;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: oklch(0.45 0.12 160 / 0.35);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: text-decoration-color 0.15s, color 0.15s;
+}
+.pi-cell-ref:hover {
+  color: var(--pi-green);
+  text-decoration-color: oklch(0.45 0.12 160 / 0.6);
+}
+
 /* Data preview — mini table for write_cells values */
 .pi-data-preview {
   font-family: var(--font-mono);

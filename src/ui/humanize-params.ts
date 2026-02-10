@@ -7,6 +7,7 @@
  */
 
 import { html, nothing, type TemplateResult } from "lit";
+import { cellRef } from "./cell-link.js";
 import { formatColorLabel } from "./color-names.js";
 
 /* ── Types ──────────────────────────────────────────────────── */
@@ -211,7 +212,7 @@ function humanizeFormatCells(p: Record<string, unknown>): ParamItem[] {
   if (p.range) {
     const rd = formatRangeForDisplay(str(p.range));
     if (rd.sheet) items.push({ label: "Sheet", value: rd.sheet });
-    items.push({ label: "Range", value: rd.display });
+    items.push({ label: "Range", value: cellRef(str(p.range)) });
   }
 
   // Named styles
@@ -295,7 +296,7 @@ function humanizeWriteCells(p: Record<string, unknown>): ParamItem[] {
   const items: ParamItem[] = [];
 
   if (p.start_cell) {
-    items.push({ label: "Start", value: str(p.start_cell) });
+    items.push({ label: "Start", value: cellRef(str(p.start_cell)) });
   }
 
   const rawValues = p.values;
@@ -323,7 +324,7 @@ function humanizeReadRange(p: Record<string, unknown>): ParamItem[] {
   if (p.range) {
     const rd = formatRangeForDisplay(str(p.range));
     if (rd.sheet) items.push({ label: "Sheet", value: rd.sheet });
-    items.push({ label: "Range", value: rd.display });
+    items.push({ label: "Range", value: cellRef(str(p.range)) });
   }
   if (p.mode && p.mode !== "compact") {
     items.push({ label: "Mode", value: str(p.mode) });
@@ -338,7 +339,7 @@ function humanizeFillFormula(p: Record<string, unknown>): ParamItem[] {
   if (p.range) {
     const rd = formatRangeForDisplay(str(p.range));
     if (rd.sheet) items.push({ label: "Sheet", value: rd.sheet });
-    items.push({ label: "Range", value: rd.display });
+    items.push({ label: "Range", value: cellRef(str(p.range)) });
   }
   if (p.formula) {
     items.push({ label: "Formula", value: formulaSnippet(str(p.formula)) });
@@ -469,7 +470,7 @@ function humanizeConditionalFormat(p: Record<string, unknown>): ParamItem[] {
   if (p.range) {
     const rd = formatRangeForDisplay(str(p.range));
     if (rd.sheet) items.push({ label: "Sheet", value: rd.sheet });
-    items.push({ label: "Range", value: rd.display });
+    items.push({ label: "Range", value: cellRef(str(p.range)) });
   }
 
   // Rule details
@@ -500,7 +501,7 @@ function humanizeTraceDependencies(p: Record<string, unknown>): ParamItem[] {
   const items: ParamItem[] = [];
 
   if (p.cell) {
-    items.push({ label: "Cell", value: str(p.cell) });
+    items.push({ label: "Cell", value: cellRef(str(p.cell)) });
   }
   const depth = num(p.depth);
   if (depth !== undefined && depth !== 2) {

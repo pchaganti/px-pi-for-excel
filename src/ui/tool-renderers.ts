@@ -16,6 +16,7 @@ import {
 import { html, type TemplateResult } from "lit";
 import { createRef, ref } from "lit/directives/ref.js";
 import { Code } from "lucide";
+import { cellRefDisplay } from "./cell-link.js";
 import { humanizeToolInput } from "./humanize-params.js";
 import { humanizeColorsInText } from "./color-names.js";
 
@@ -290,6 +291,8 @@ interface ToolDesc {
   action: string;
   /** Normal-weight rest, e.g. "Costs!A1:C19" */
   detail: string;
+  /** Raw Excel address for click-to-navigate. Omit for non-range details. */
+  address?: string;
 }
 
 /** Split a result-text summary line into action (first word) + rest. */
@@ -311,7 +314,7 @@ function describeToolCall(toolName: string, params: unknown, resultText?: string
     case "read_range": {
       const mode = p.mode as string | undefined;
       const label = mode === "csv" ? "Export" : "Read";
-      return { action: label, detail: range ? compactRange(range) + (mode === "csv" ? " (CSV)" : "") : "range" };
+      return { action: label, detail: range ? compactRange(range) + (mode === "csv" ? " (CSV)" : "") : "range", address: range };
     }
     case "get_workbook_overview": {
       const sheet = p.sheet as string | undefined;
@@ -322,21 +325,21 @@ function describeToolCall(toolName: string, params: unknown, resultText?: string
     case "write_cells": {
       const addr = resultText ? extractWrittenAddress(resultText) : null;
       return addr
-        ? { action: "Edit", detail: addr + badge(resultText) }
-        : { action: "Write", detail: (startCell ?? "cells") + badge(resultText) };
+        ? { action: "Edit", detail: addr + badge(resultText), address: addr }
+        : { action: "Write", detail: (startCell ?? "cells") + badge(resultText), address: startCell };
     }
     case "fill_formula": {
       const addr = resultText ? extractWrittenAddress(resultText) : null;
       return addr
-        ? { action: "Filled", detail: addr + badge(resultText) }
-        : { action: "Fill", detail: (range ? compactRange(range) : "formula") + badge(resultText) };
+        ? { action: "Filled", detail: addr + badge(resultText), address: addr }
+        : { action: "Fill", detail: (range ? compactRange(range) : "formula") + badge(resultText), address: range };
     }
 
     // ── Format tools ──
     case "format_cells":
-      return { action: "Format", detail: range ? compactRange(range) : "cells" };
+      return { action: "Format", detail: range ? compactRange(range) : "cells", address: range };
     case "conditional_format":
-      return { action: "Cond. format", detail: range ? compactRange(range) : "cells" };
+      return { action: "Cond. format", detail: range ? compactRange(range) : "cells", address: range };
 
     // ── Result-text tools (split first word as action) ──
     case "modify_structure": {
@@ -357,7 +360,7 @@ function describeToolCall(toolName: string, params: unknown, resultText?: string
     // ── Other tools ──
     case "trace_dependencies": {
       const cell = (p.cell ?? p.range) as string | undefined;
-      return { action: "Trace", detail: cell ?? "dependencies" };
+      return { action: "Trace", detail: cell ?? "dependencies", address: cell };
     }
     case "get_recent_changes":
       return { action: "Recent", detail: "changes" };
@@ -392,7 +395,10 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
 
       const resultText = result ? splitToolResultContent(result).text : undefined;
       const desc = describeToolCall(toolName, params, resultText);
-      const title = html`<span class="pi-tool-card__title"><strong>${desc.action}</strong>${desc.detail ? html` <span class="pi-tool-card__detail-text">${desc.detail}</span>` : ""}</span>`;
+      const detailContent = desc.address
+        ? cellRefDisplay(desc.detail, desc.address)
+        : desc.detail;
+      const title = html`<span class="pi-tool-card__title"><strong>${desc.action}</strong>${desc.detail ? html` <span class="pi-tool-card__detail-text">${detailContent}</span>` : ""}</span>`;
 
       // ── With result ─────────────────────────────────────
       if (result) {
