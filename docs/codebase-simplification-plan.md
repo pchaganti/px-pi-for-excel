@@ -236,6 +236,70 @@ It works, but it’s harder to refactor and easy to duplicate styling/behavior.
 
 ---
 
+## Concrete implementation plan (PR-sized slices)
+
+This section translates the phases above into PR-sized work items with clear boundaries.
+
+### PR 1 — Phase 0 + Phase 1: eliminate drift + introduce a capability registry (extension-ready)
+
+**Goal:** fix existing drift bugs and make “what tools exist” a single source of truth.
+
+**Scope (expected files):**
+- `src/tools/registry.ts` *(new)*
+  - exports `CORE_TOOL_NAMES` (canonical list)
+  - exports `CoreToolName` type
+  - exports `createCoreTools()` (canonical core tool creation)
+- `src/tools/index.ts`
+  - becomes a thin adapter around `createCoreTools()`
+  - fixes the “10 tools” comment
+- `src/ui/tool-renderers.ts`
+  - imports `CORE_TOOL_NAMES` (removes local `EXCEL_TOOL_NAMES`)
+  - includes `comments` automatically
+  - removes stale `get_recent_changes` reference in `describeToolCall()`
+- `src/ui/humanize-params.ts`
+  - adds a `comments` input humanizer
+  - types the humanizer registry as `Record<CoreToolName, …>` so missing tools fail fast at compile time
+
+**Design constraint:** keep the registry **UI-free** (no Lit/renderer types in `src/tools/*`). UI imports the canonical names/type.
+
+**DoD:**
+- `comments` tool is rendered + humanized in the UI.
+- No remaining “removed tool” references.
+- Only one canonical list of core tool names.
+
+### PR 2 — Phase 2: structured tool results via `ToolResultMessage.details` (additive, no text changes)
+
+**Agreement:** Phase 2 should be **additive metadata only** — do not change the human-readable markdown output, only add stable `details` fields.
+
+**Scope:**
+- Add minimal `details` payloads to:
+  - `write_cells`
+  - `fill_formula`
+  - `format_cells`
+- Update `src/ui/tool-renderers.ts` to prefer `result.details` for:
+  - written/fill address
+  - blocked state
+  - formula error counts
+- Keep a fallback path for older persisted sessions that have no `details`.
+
+**DoD:** renderer no longer needs regex parsing for those fields when `details` is present.
+
+### PR 3 — Phase 1.5: workbook context primitive + session/workbook association (foundation)
+
+**Goal:** create a single place to answer “which workbook is this?” and support workbook-scoped UX later.
+
+**Scope (draft):**
+- Add `src/workbook/context.ts` (or similar) returning a best-effort:
+  - `{ workbookId, workbookName?, workbookUrl? }`
+- **Workbook identity (default):** local-only by default.
+  - Use `Office.context.document.url` when present, but store a **hash** (never persist raw paths/URLs).
+  - If URL is absent, identity is ephemeral.
+- **Manual linking (FYI, future):** support a mechanism where the assistant can *suggest* a link, and the user can manually link/unlink sessions ↔ workbook.
+  - “Save As” should carry the link by default, but it can be manually overwritten.
+- Storage note: `SessionsStore` metadata schema is fixed (from `pi-web-ui`), so session↔workbook mapping likely lives alongside sessions (e.g. `SettingsStore` key prefix `session.workbook.<sessionId>`), not inside metadata.
+
+---
+
 ## Verification checklist (every phase)
 - `npm run check`
 - `npm run build`
