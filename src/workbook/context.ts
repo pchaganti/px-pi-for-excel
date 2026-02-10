@@ -1,0 +1,87 @@
+/**
+ * Workbook context primitives.
+ *
+ * This module centralizes "which workbook is this?" in a way that is:
+ * - best-effort (works when Office.js is available)
+ * - privacy-preserving (never persists raw URLs; callers should persist only workbookId)
+ * - forward-compatible with future manual link/unlink (where workbookId may come from the workbook itself)
+ */
+
+export interface WorkbookContext {
+  /**
+   * A stable, local-only identifier when available.
+   *
+   * Current strategy:
+   * - if `Office.context.document.url` exists, return a SHA-256 hash of it
+   * - otherwise return null (ephemeral/unknown)
+   */
+  workbookId: string | null;
+
+  /** Where the identity came from (useful for debugging / future migration). */
+  source: "document.url" | "unknown";
+}
+
+function getOfficeDocumentUrl(): string | null {
+  try {
+    const office: unknown = (globalThis as { Office?: unknown }).Office;
+    if (!office || typeof office !== "object") return null;
+
+    const ctx = (office as { context?: unknown }).context;
+    if (!ctx || typeof ctx !== "object") return null;
+
+    const doc = (ctx as { document?: unknown }).document;
+    if (!doc || typeof doc !== "object") return null;
+
+    const url = (doc as { url?: unknown }).url;
+    return typeof url === "string" && url.trim().length > 0 ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+function bufferToHex(buf: ArrayBuffer): string {
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function fnv1a32Hex(bytes: Uint8Array): string {
+  let hash = 0x811c9dc5;
+  for (const b of bytes) {
+    hash ^= b;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const bytes = new TextEncoder().encode(input);
+
+  // WebCrypto SHA-256 (preferred)
+  const subtle = globalThis.crypto?.subtle;
+  if (subtle?.digest) {
+    try {
+      const buf = await subtle.digest("SHA-256", bytes);
+      return bufferToHex(buf);
+    } catch {
+      // fall through to FNV-1a
+    }
+  }
+
+  // Fallback: non-cryptographic but stable hash. Only used when WebCrypto is unavailable.
+  return fnv1a32Hex(bytes);
+}
+
+/**
+ * Best-effort workbook context.
+ *
+ * IMPORTANT: callers should persist only `workbookId` (the hash), never the raw URL.
+ */
+export async function getWorkbookContext(): Promise<WorkbookContext> {
+  const url = getOfficeDocumentUrl();
+  if (!url) return { workbookId: null, source: "unknown" };
+
+  const hash = await sha256Hex(url);
+  return {
+    workbookId: `url_sha256:${hash}`,
+    source: "document.url",
+  };
+}
