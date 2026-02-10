@@ -53,7 +53,14 @@ export function installModelSelectorPatch(): void {
   }
 
   modelSelectorProto.getFilteredModels = function (this: ModelSelector): ModelSelectorItem[] {
+    // Upstream bug: search tokens aren't lowercased while the target text is,
+    // so matching is accidentally case-sensitive.  Temporarily lowercase the
+    // query so the original filter compares apples-to-apples.
+    const savedQuery = this.searchQuery;
+    this.searchQuery = savedQuery.toLowerCase();
     const all = orig.call(this);
+    this.searchQuery = savedQuery;
+
     let filtered = all;
 
     const active = _activeProviders;
