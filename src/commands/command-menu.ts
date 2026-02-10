@@ -82,7 +82,9 @@ export function handleCommandMenuKey(e: KeyboardEvent): boolean {
         textarea.value = "";
         textarea.dispatchEvent(new Event("input", { bubbles: true }));
       }
-      void cmd.execute("");
+      document.dispatchEvent(
+        new CustomEvent("pi:command-run", { detail: { name: cmd.name, args: "" } }),
+      );
     }
     return true;
   }
@@ -136,7 +138,9 @@ function renderMenu(): void {
           textarea.value = "";
           textarea.dispatchEvent(new Event("input", { bubbles: true }));
         }
-        void cmd.execute("");
+        document.dispatchEvent(
+          new CustomEvent("pi:command-run", { detail: { name: cmd.name, args: "" } }),
+        );
       }
     });
     item.addEventListener("mouseenter", () => {

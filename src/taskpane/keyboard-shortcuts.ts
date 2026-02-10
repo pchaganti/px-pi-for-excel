@@ -23,6 +23,10 @@ type QueueDisplay = {
   add: (type: "steer" | "follow-up", text: string) => void;
 };
 
+type ActionQueue = {
+  enqueueCommand: (name: string, args: string) => void;
+};
+
 const THINKING_COLORS: Record<ThinkingLevel, string> = {
   off: "#a0a0a0",
   minimal: "#767676",
@@ -121,9 +125,10 @@ export function installKeyboardShortcuts(opts: {
   agent: Agent;
   sidebar: PiSidebar;
   queueDisplay: QueueDisplay;
+  actionQueue: ActionQueue;
   markUserAborted: () => void;
 }): () => void {
-  const { agent, sidebar, queueDisplay, markUserAborted } = opts;
+  const { agent, sidebar, queueDisplay, actionQueue, markUserAborted } = opts;
 
   const onKeyDown = (e: KeyboardEvent) => {
     // Command menu takes priority
@@ -182,8 +187,7 @@ export function installKeyboardShortcuts(opts: {
       textarea &&
       e.key === "Enter" &&
       !e.shiftKey &&
-      textarea.value.startsWith("/") &&
-      !isStreaming
+      textarea.value.startsWith("/")
     ) {
       const val = textarea.value.trim();
       const spaceIdx = val.indexOf(" ");
@@ -196,7 +200,10 @@ export function installKeyboardShortcuts(opts: {
         hideCommandMenu();
         const input = sidebar.getInput();
         if (input) input.clear();
-        void cmd.execute(args);
+
+        // While streaming, queue slash commands instead of trying to run them.
+        // (Agent loop is busy; we want strict ordering.)
+        actionQueue.enqueueCommand(cmdName, args);
         return;
       }
     }

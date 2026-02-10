@@ -12,8 +12,10 @@ import type { PiSidebar } from "../ui/pi-sidebar.js";
 import { extractTextFromContent } from "../utils/content.js";
 
 export type QueuedMessageType = "steer" | "follow-up";
+export type QueuedActionType = "prompt" | "command";
 
 type QueuedItem = { type: QueuedMessageType; text: string };
+type QueuedActionItem = { type: QueuedActionType; label: string; text: string };
 
 function renderQueuedItem({ type, text }: QueuedItem): HTMLElement {
   const itemEl = document.createElement("div");
@@ -35,20 +37,24 @@ function renderQueuedItem({ type, text }: QueuedItem): HTMLElement {
   return itemEl;
 }
 
+export type QueueDisplay = {
+  add: (type: QueuedMessageType, text: string) => void;
+  clear: () => void;
+  setActionQueue: (items: Array<{ type: QueuedActionType; label: string; text: string }>) => void;
+};
+
 export function createQueueDisplay(opts: {
   agent: Agent;
   sidebar: PiSidebar;
-}): {
-  add: (type: QueuedMessageType, text: string) => void;
-  clear: () => void;
-} {
+}): QueueDisplay {
   const { agent, sidebar } = opts;
 
   const queued: QueuedItem[] = [];
+  let queuedActions: QueuedActionItem[] = [];
 
   function updateQueueDisplay() {
     let container = document.getElementById("pi-queue-display");
-    if (queued.length === 0) {
+    if (queued.length === 0 && queuedActions.length === 0) {
       container?.remove();
       return;
     }
@@ -68,9 +74,28 @@ export function createQueueDisplay(opts: {
     }
 
     const fragment = document.createDocumentFragment();
+
     for (const item of queued) {
       fragment.appendChild(renderQueuedItem(item));
     }
+
+    for (const action of queuedActions) {
+      const itemEl = document.createElement("div");
+      itemEl.className = "pi-queue__item";
+
+      const labelEl = document.createElement("span");
+      labelEl.className = "pi-queue__label pi-queue__label--action";
+      labelEl.textContent = action.label;
+
+      const truncated = action.text.length > 50 ? action.text.slice(0, 47) + "…" : action.text;
+      const textEl = document.createElement("span");
+      textEl.className = "pi-queue__text";
+      textEl.textContent = truncated;
+
+      itemEl.append(labelEl, textEl);
+      fragment.appendChild(itemEl);
+    }
+
     container.replaceChildren(fragment);
   }
 
@@ -81,6 +106,11 @@ export function createQueueDisplay(opts: {
 
   function clear() {
     queued.length = 0;
+    updateQueueDisplay();
+  }
+
+  function setActionQueue(items: QueuedActionItem[]) {
+    queuedActions = items;
     updateQueueDisplay();
   }
 
@@ -96,8 +126,9 @@ export function createQueueDisplay(opts: {
       }
     }
 
+    // Only clear steer/follow-up on agent end. Action queue is owned elsewhere.
     if (ev.type === "agent_end" && queued.length > 0) clear();
   });
 
-  return { add, clear };
+  return { add, clear, setActionQueue };
 }

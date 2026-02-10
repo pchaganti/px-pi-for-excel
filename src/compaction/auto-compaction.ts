@@ -11,7 +11,6 @@
 
 import type { Agent } from "@mariozechner/pi-agent-core";
 
-import { commandRegistry } from "../commands/types.js";
 import { estimateContextTokens, estimateTextTokens } from "../utils/context-tokens.js";
 
 import { effectiveReserveTokens } from "./defaults.js";
@@ -20,8 +19,9 @@ export async function maybeAutoCompactBeforePrompt(args: {
   agent: Agent;
   nextUserText: string;
   enabled: boolean;
+  runCompact: () => Promise<void>;
 }): Promise<boolean> {
-  const { agent, nextUserText, enabled } = args;
+  const { agent, nextUserText, enabled, runCompact } = args;
 
   if (!enabled) return false;
   if (agent.state.isStreaming) return false;
@@ -41,9 +41,8 @@ export async function maybeAutoCompactBeforePrompt(args: {
   // Nothing to summarize / no room to improve.
   if (agent.state.messages.length < 4) return false;
 
-  const compactCmd = commandRegistry.get("compact");
-  if (!compactCmd) return false;
-
-  await compactCmd.execute("");
+  // Delegate compaction execution to the caller so UI can show indicators and
+  // to ensure we respect any ordered action queue.
+  await runCompact();
   return true;
 }

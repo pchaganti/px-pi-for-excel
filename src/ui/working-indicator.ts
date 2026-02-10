@@ -24,6 +24,12 @@ const HINTS: string[] = [
 export class WorkingIndicator extends LitElement {
   @property({ type: Boolean }) active = false;
 
+  /** Optional fixed label (disables whimsical rotation). */
+  @property({ type: String }) primaryText?: string;
+
+  /** Optional fixed hint (disables hint rotation). */
+  @property({ type: String }) hintText?: string;
+
   @state() private _whimsical = "Working…";
   @state() private _hintIndex = 0;
   @state() private _fadingWhimsical = false;
@@ -43,7 +49,7 @@ export class WorkingIndicator extends LitElement {
   }
 
   override updated(changed: Map<string, unknown>) {
-    if (changed.has("active")) {
+    if (changed.has("active") || changed.has("primaryText") || changed.has("hintText")) {
       if (this.active) this._startRotation();
       else this._stopRotation();
     }
@@ -55,6 +61,16 @@ export class WorkingIndicator extends LitElement {
   }
 
   private _startRotation() {
+    // If we're in fixed-text mode, don't start timers.
+    if (this.primaryText || this.hintText) {
+      this._stopRotation();
+      this._fadingWhimsical = false;
+      this._fadingHint = false;
+      this._whimsical = this.primaryText || "Working…";
+      this._hintIndex = 0;
+      return;
+    }
+
     // Idempotent — safe to call from both connectedCallback and updated
     if (this._hintTimer) return;
     this._stopRotation();
@@ -101,13 +117,17 @@ export class WorkingIndicator extends LitElement {
 
   override render() {
     if (!this.active) return html``;
+
+    const left = this.primaryText || this._whimsical;
+    const right = this.hintText || HINTS[this._hintIndex];
+
     return html`
       <div class="pi-working">
-        <span class="pi-working__text ${this._fadingWhimsical ? "pi-working--fading" : ""}">
-          ${this._whimsical}
+        <span class="pi-working__text ${this.primaryText ? "" : (this._fadingWhimsical ? "pi-working--fading" : "")}">
+          ${left}
         </span>
-        <span class="pi-working__hint ${this._fadingHint ? "pi-working--fading" : ""}">
-          ${HINTS[this._hintIndex]}
+        <span class="pi-working__hint ${this.hintText ? "" : (this._fadingHint ? "pi-working--fading" : "")}">
+          ${right}
         </span>
       </div>
     `;
