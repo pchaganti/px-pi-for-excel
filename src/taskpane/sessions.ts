@@ -42,8 +42,16 @@ export async function setupSessionPersistence(opts: {
 
       let preview = "";
       for (const m of messages) {
-        if (m.role !== "user" && m.role !== "assistant") continue;
-        const text = extractTextFromContent(m.content);
+        let text = "";
+
+        if (m.role === "compactionSummary") {
+          text = m.summary;
+        } else if (m.role === "user" || m.role === "assistant") {
+          text = extractTextFromContent(m.content);
+        } else {
+          continue;
+        }
+
         preview += text + "\n";
         if (preview.length > 2048) {
           preview = preview.slice(0, 2048);

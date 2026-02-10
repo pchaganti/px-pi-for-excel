@@ -11,8 +11,9 @@
 // MUST be first
 import "./boot.js";
 
-// Custom tool renderers (Excel tools return markdown)
+// Custom tool + message renderers (Excel tools return markdown)
 import "./ui/tool-renderers.js";
+import "./ui/message-renderers.js";
 
 import { bootstrapTaskpane } from "./taskpane/bootstrap.js";
 

@@ -13,6 +13,7 @@ import { createOfficeStreamFn } from "../auth/stream-proxy.js";
 import { restoreCredentials } from "../auth/restore.js";
 import { getBlueprint } from "../context/blueprint.js";
 import { ChangeTracker } from "../context/change-tracker.js";
+import { convertToLlm } from "../messages/convert-to-llm.js";
 import { createAllTools } from "../tools/index.js";
 import { loadExtension, createExtensionAPI } from "../commands/extension-api.js";
 import { registerBuiltins } from "../commands/builtins.js";
@@ -119,6 +120,7 @@ export async function initTaskpane(opts: {
       messages: [],
       tools: createAllTools(),
     },
+    convertToLlm,
     transformContext: createContextInjector(changeTracker),
     streamFn,
   });

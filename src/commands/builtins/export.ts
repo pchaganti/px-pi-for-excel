@@ -2,18 +2,15 @@
  * Builtin export/compaction commands.
  */
 
-import type {
-  AssistantMessage,
-  StopReason,
-  Usage,
-  UserMessage,
-} from "@mariozechner/pi-ai";
+import type { Api, Model, StopReason, Usage } from "@mariozechner/pi-ai";
 import type { Agent, AgentMessage } from "@mariozechner/pi-agent-core";
 
 import type { SlashCommand } from "../types.js";
 import { showToast } from "../../ui/toast.js";
+import { createCompactionSummaryMessage } from "../../messages/compaction.js";
 import { getErrorMessage } from "../../utils/errors.js";
 import { extractTextBlocks, summarizeContentForTranscript } from "../../utils/content.js";
+import { isRecord } from "../../utils/type-guards.js";
 import type { PiSidebar } from "../../ui/pi-sidebar.js";
 
 type TranscriptEntry = {
@@ -23,26 +20,49 @@ type TranscriptEntry = {
   stopReason?: StopReason;
 };
 
-const ZERO_USAGE: Usage = {
-  input: 0,
-  output: 0,
-  cacheRead: 0,
-  cacheWrite: 0,
-  totalTokens: 0,
-  cost: {
-    input: 0,
-    output: 0,
-    cacheRead: 0,
-    cacheWrite: 0,
-    total: 0,
-  },
-};
+
+function isApiModel(model: unknown): model is Model<Api> {
+  if (!isRecord(model)) return false;
+
+  return (
+    typeof model.id === "string" &&
+    typeof model.name === "string" &&
+    typeof model.provider === "string" &&
+    typeof model.api === "string"
+  );
+}
+
+function hasContent(message: AgentMessage): message is AgentMessage & { content: unknown } {
+  return isRecord(message) && "content" in message;
+}
+
+function messageToTranscriptText(message: AgentMessage): string {
+  if (message.role === "compactionSummary") return message.summary;
+  if (hasContent(message)) return summarizeContentForTranscript(message.content);
+  return "";
+}
 
 function conversationToText(messages: AgentMessage[]): string {
   return messages
     .map((m) => {
-      const role = m.role === "user" ? "User" : m.role === "assistant" ? "Assistant" : "Tool";
-      const text = extractTextBlocks(m.content);
+      const role =
+        m.role === "user"
+          ? "User"
+          : m.role === "assistant"
+            ? "Assistant"
+            : m.role === "toolResult"
+              ? "Tool"
+              : m.role === "compactionSummary"
+                ? "Compaction"
+                : m.role;
+
+      const text =
+        m.role === "compactionSummary"
+          ? m.summary
+          : hasContent(m)
+            ? extractTextBlocks(m.content)
+            : "";
+
       return `${role}: ${text}`;
     })
     .join("\n\n");
@@ -62,7 +82,7 @@ export function createExportCommands(agent: Agent): SlashCommand[] {
         }
 
         const transcript: TranscriptEntry[] = msgs.map((m) => {
-          const text = summarizeContentForTranscript(m.content);
+          const text = messageToTranscriptText(m);
           if (m.role === "assistant") {
             return {
               role: m.role,
@@ -129,56 +149,65 @@ export function createCompactCommands(agent: Agent): SlashCommand[] {
         showToast("Compacting…");
 
         try {
-          const { completeSimple } = await import("@mariozechner/pi-ai");
-
           // Serialize conversation for summarization
           const convo = conversationToText(msgs);
 
-          const result = await completeSimple(agent.state.model, {
-            systemPrompt:
-              "You are a conversation summarizer. Summarize the following conversation concisely, preserving key decisions, facts, and context. Output ONLY the summary, no preamble.",
-            messages: [
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: `Summarize this conversation:\n\n${convo}`,
-                  },
-                ],
-                timestamp: Date.now(),
-              },
-            ],
-          });
+          const now = Date.now();
+          const model = agent.state.model;
+          if (!isApiModel(model)) {
+            showToast("No model configured for compaction");
+            return;
+          }
+
+          // IMPORTANT: use the agent's configured streamFn + api key resolver.
+          // Calling pi-ai's completeSimple() directly bypasses:
+          // - our CORS proxy logic (streamFn)
+          // - our API key/OAuth resolution (agent.getApiKey)
+          // and can crash in browser WebViews due to env key fallbacks using `process`.
+          const apiKey = agent.getApiKey ? await agent.getApiKey(model.provider) : undefined;
+          if (!apiKey) {
+            showToast(`No API key available for ${model.provider}. Use /login or /settings.`);
+            return;
+          }
+
+          const stream = await agent.streamFn(
+            model,
+            {
+              systemPrompt:
+                "You are a conversation summarizer. Summarize the following conversation concisely, preserving key decisions, facts, and context. Output ONLY the summary, no preamble.",
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    {
+                      type: "text",
+                      text: `Summarize this conversation:\n\n${convo}`,
+                    },
+                  ],
+                  timestamp: now,
+                },
+              ],
+            },
+            {
+              apiKey,
+              sessionId: agent.sessionId,
+              // Keep summaries short-ish by default.
+              maxTokens: 1200,
+              temperature: 0.2,
+            },
+          );
+
+          const result = await stream.result();
 
           const summary = extractTextBlocks(result.content) || "Summary unavailable";
 
-          const now = Date.now();
-          const model = agent.state.model;
-
-          const marker: UserMessage = {
-            role: "user",
-            content: [{ type: "text", text: "[This conversation was compacted]" }],
+          const compacted = createCompactionSummaryMessage({
+            summary,
+            messageCountBefore: msgs.length,
             timestamp: now,
-          };
+          });
 
-          const summaryMessage: AssistantMessage = {
-            role: "assistant",
-            content: [
-              {
-                type: "text",
-                text: `**Session Summary (compacted)**\n\n${summary}`,
-              },
-            ],
-            api: model.api as string,
-            provider: model.provider,
-            model: model.id,
-            usage: ZERO_USAGE,
-            stopReason: "stop",
-            timestamp: now,
-          };
-
-          agent.replaceMessages([marker, summaryMessage]);
+          agent.replaceMessages([compacted]);
 
           const iface = document.querySelector<PiSidebar>("pi-sidebar");
           iface?.requestUpdate();
