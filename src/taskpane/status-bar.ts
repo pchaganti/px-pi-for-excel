@@ -77,17 +77,26 @@ export function updateStatusBar(agent: Agent): void {
   if (debugOn) {
     const ps = getPayloadStats();
     if (ps.calls > 0) {
-      const sysK = ps.systemChars >= 1000 ? `${(ps.systemChars / 1000).toFixed(1)}k` : String(ps.systemChars);
-      const toolK = ps.toolSchemaChars >= 1000 ? `${(ps.toolSchemaChars / 1000).toFixed(1)}k` : String(ps.toolSchemaChars);
-      const toolsLabel = ps.toolCount > 0 ? `${ps.toolCount}t:${toolK}` : "no tools";
-      const pillText = `calls:${ps.calls} sys:${sysK} ${toolsLabel} msgs:${ps.messageCount}`;
-      const tooltip = `LLM requests this agent run: ${ps.calls}&#10;System prompt: ${ps.systemChars.toLocaleString()} chars&#10;Tool schemas: ${ps.toolCount} tools, ${ps.toolSchemaChars.toLocaleString()} chars&#10;Messages: ${ps.messageCount}&#10;&#10;Tools are stripped on continuation calls (call #2+).`;
-      payloadPill = `<span class="pi-status-ctx__debug pi-status-payload has-tooltip">${escapeHtml(pillText)}<span class="pi-tooltip pi-tooltip--left">${tooltip}</span></span>`;
+      const fmtK = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+      const total = ps.systemChars + ps.toolSchemaChars + ps.messageChars;
+      const toolsLine = ps.toolCount > 0
+        ? `Tools: ${ps.toolCount} (${ps.toolSchemaChars.toLocaleString()} chars)`
+        : `Tools: stripped`;
+      const tooltip = [
+        `LLM call #${ps.calls}`,
+        `System: ${ps.systemChars.toLocaleString()} chars`,
+        toolsLine,
+        `Messages: ${ps.messageCount} (${ps.messageChars.toLocaleString()} chars)`,
+        `Total context: ~${total.toLocaleString()} chars`,
+        ``,
+        `Click to log full context to console.`,
+      ].join("&#10;");
+      payloadPill = `<span class="pi-status-payload" data-tooltip="${tooltip}">#${ps.calls} ${fmtK(total)}</span>`;
     }
   }
 
   el.innerHTML = `
-    <span class="pi-status-ctx has-tooltip"><span class="${ctxColor}">${pct}%</span> / ${ctxLabel}${usageDebug}${payloadPill}<span class="pi-tooltip pi-tooltip--left">${ctxBaseTooltip}${ctxWarning}</span></span>
+    <span class="pi-status-ctx has-tooltip"><span class="${ctxColor}">${pct}%</span> / ${ctxLabel}${usageDebug}<span class="pi-tooltip pi-tooltip--left">${ctxBaseTooltip}${ctxWarning}</span></span>${payloadPill}
     <button class="pi-status-model" data-tooltip="Switch the AI model powering this session">
       <span class="pi-status-model__mark">π</span>
       <span class="pi-status-model__name">${modelAliasEscaped}</span>

@@ -10,6 +10,7 @@
 
 import { streamSimple, type Api, type Context, type Model, type StreamOptions } from "@mariozechner/pi-ai";
 
+import { isDebugEnabled } from "../debug/debug.js";
 import { normalizeProxyUrl, validateOfficeProxyUrl } from "./proxy-validation.js";
 
 export type GetProxyUrl = () => Promise<string | undefined>;
@@ -87,12 +88,23 @@ export interface PayloadStats {
   toolCount: number;
   /** Number of messages on last call. */
   messageCount: number;
+  /** Total chars of all messages (JSON-serialized) on last call. */
+  messageChars: number;
 }
 
-const stats: PayloadStats = { calls: 0, systemChars: 0, toolSchemaChars: 0, toolCount: 0, messageCount: 0 };
+const stats: PayloadStats = {
+  calls: 0, systemChars: 0, toolSchemaChars: 0, toolCount: 0, messageCount: 0, messageChars: 0,
+};
+
+/** Snapshot of the last LLM context (only kept when debug is on). */
+let lastContext: Context | undefined;
 
 export function getPayloadStats(): Readonly<PayloadStats> {
   return stats;
+}
+
+export function getLastContext(): Context | undefined {
+  return lastContext;
 }
 
 export function resetPayloadStats(): void {
@@ -101,12 +113,24 @@ export function resetPayloadStats(): void {
   stats.toolSchemaChars = 0;
   stats.toolCount = 0;
   stats.messageCount = 0;
+  stats.messageChars = 0;
+  lastContext = undefined;
+}
+
+function formatK(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
 }
 
 function recordCall(context: Context): void {
   stats.calls += 1;
   stats.systemChars = context.systemPrompt?.length ?? 0;
   stats.messageCount = context.messages.length;
+
+  let msgChars = 0;
+  for (const m of context.messages) msgChars += JSON.stringify(m).length;
+  stats.messageChars = msgChars;
+
   if (context.tools) {
     stats.toolCount = context.tools.length;
     let chars = 0;
@@ -116,6 +140,17 @@ function recordCall(context: Context): void {
     stats.toolCount = 0;
     stats.toolSchemaChars = 0;
   }
+
+  if (isDebugEnabled()) {
+    lastContext = context;
+    const toolsLabel = context.tools
+      ? `${stats.toolCount} tools (${formatK(stats.toolSchemaChars)} chars)`
+      : "no tools (stripped)";
+    console.log(
+      `[LLM call #${stats.calls}] sys:${formatK(stats.systemChars)} | ${toolsLabel} | ${stats.messageCount} msgs (${formatK(stats.messageChars)} chars) | total context: ${formatK(stats.systemChars + stats.toolSchemaChars + stats.messageChars)} chars`,
+    );
+  }
+
   document.dispatchEvent(new Event("pi:status-update"));
 }
 

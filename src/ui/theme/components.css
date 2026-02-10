@@ -368,10 +368,21 @@ pi-working-indicator {
   font-family: var(--font-mono);
 }
 
-/* Payload stats pill — shows LLM call count + payload sizes when /debug is on. */
+/* Payload debug pill — compact badge showing LLM call count + total context size. */
 .pi-status-payload {
-  border-left: 1px solid var(--border);
-  padding-left: 6px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  opacity: 0.6;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--muted, #2a2a2a);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.pi-status-payload:hover {
+  opacity: 1;
+  background: var(--accent, #3a3a3a);
 }
 
 .pi-status-thinking {
