@@ -3,25 +3,33 @@
    Targeted overrides for message components at sidebar width.
    ═══════════════════════════════════════════════════════ */
 
-/* User message — teal tint instead of orange gradient */
 /* User message — white card, right-aligned */
-user-message .mx-4 {
-  margin-left: 8px !important;
-  margin-right: 8px !important;
-  justify-content: flex-end !important;
+user-message > div {
+  margin-left: 8px;
+  margin-right: 8px;
+  justify-content: flex-end;
 }
+
 .user-message-container {
-  background: var(--pill-bg) !important;
-  border: var(--pill-border) !important;
-  border-radius: var(--pill-radius) !important;
+  background: var(--pill-bg);
+  border: var(--pill-border);
+  border-radius: var(--pill-radius);
   box-shadow: var(--pill-shadow);
   max-width: calc(100% - var(--pill-inset));
-  margin-left: var(--pill-inset) !important;
+  margin-left: var(--pill-inset);
 }
-assistant-message .px-4 { padding-left: 12px !important; padding-right: 12px !important; }
+
 assistant-message { margin-right: var(--pill-inset); }
+
+assistant-message > div > div.px-4 {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
 /* Indent prose so it aligns with pill header text */
-assistant-message .px-4 > markdown-block { margin-left: var(--pill-text-indent); }
+assistant-message > div > div.px-4 > markdown-block {
+  margin-left: var(--pill-text-indent);
+}
 
 /* ── Tool cards — compact, collapsed by default ──────────── */
 
@@ -56,9 +64,6 @@ assistant-message .px-4 > markdown-block { margin-left: var(--pill-text-indent);
 .pi-tool-card[data-state="complete"]:hover {
   border-color: var(--pill-green-hover-border);
 }
-.pi-tool-card[data-state="complete"] .pi-tool-card__header > button {
-  padding: var(--pill-padding-y) var(--pill-padding-x) !important;
-}
 
 /* Complete inside group — strip card chrome (group provides the container) */
 .pi-tool-group .pi-tool-card[data-state="complete"] {
@@ -72,7 +77,7 @@ assistant-message .px-4 > markdown-block { margin-left: var(--pill-text-indent);
   border-color: transparent;
 }
 .pi-tool-group .pi-tool-card[data-state="complete"] .pi-tool-card__header > button {
-  padding: 2px 4px !important;
+  padding: 2px 4px;
 }
 /* Grouped: inner pill needs top-margin since card chrome is stripped */
 .pi-tool-group .pi-tool-card[data-state="complete"] .pi-tool-card__inner {
@@ -81,10 +86,10 @@ assistant-message .px-4 > markdown-block { margin-left: var(--pill-text-indent);
 
 /* Header — the clickable toggle row from pi-web-ui */
 .pi-tool-card__header > button {
-  padding: var(--pill-padding-y) var(--pill-padding-x) !important;
-  gap: 7px !important;
-  font-size: 13px !important;
-  min-width: 0 !important;
+  padding: var(--pill-padding-y) var(--pill-padding-x);
+  gap: 7px;
+  font-size: 13px;
+  min-width: 0;
   overflow: hidden;
 }
 .pi-tool-card__header > button > div {
@@ -130,12 +135,12 @@ assistant-message .px-4 > markdown-block { margin-left: var(--pill-text-indent);
    pi-web-ui toggles max-h-0 ↔ max-h-[2000px] + overflow-hidden.
    We override to make long results scrollable instead of clipped. */
 .pi-tool-card__body {
-  overflow-y: auto !important;
+  overflow-y: auto;
   scrollbar-width: thin;
 }
 /* pi-web-ui adds mt-3 when expanded; keep our card tight */
 .pi-tool-card__body.mt-3 {
-  margin-top: 0 !important;
+  margin-top: 0;
 }
 /* Inner pill — white content area nested inside green/white outer pill */
 .pi-tool-card__inner {
@@ -338,9 +343,9 @@ tool-message {
 
 /* Fallback: hide pi-web-ui default wrapper if it appears */
 tool-message > div.border {
-  border: 1px solid var(--border) !important;
-  background: var(--pi-inner-bg) !important;
-  border-radius: 10px !important;
+  border: 1px solid var(--border);
+  background: var(--pi-inner-bg);
+  border-radius: 10px;
   box-shadow: 0 1px 3px oklch(0 0 0 / 0.04);
 }
 
@@ -368,7 +373,9 @@ markdown-block pre {
 }
 
 /* Code blocks */
-code-block { font-size: 12px !important; border-radius: 8px !important; }
+code-block > div {
+  border-radius: 8px;
+}
 
 /* Thinking blocks — green card matching tool cards, left-aligned */
 thinking-block {
@@ -382,9 +389,9 @@ thinking-block .thinking-block {
   overflow: hidden;
 }
 thinking-block .thinking-header {
-  font-size: 13.5px !important;
+  font-size: 13.5px;
   width: 100%;
-  padding: var(--pill-padding-y) var(--pill-padding-x) !important;
+  padding: var(--pill-padding-y) var(--pill-padding-x);
   justify-content: space-between;
 }
 
@@ -408,10 +415,10 @@ thinking-block markdown-block {
 
 /* Make shimmer more prominent — faster + higher-contrast gradient */
 thinking-block .thinking-header > .animate-shimmer {
-  animation-duration: 1.2s !important;
-  --tw-gradient-from: oklch(0.55 0 0) !important;
-  --tw-gradient-via: oklch(0.15 0 0) !important;
-  --tw-gradient-to: oklch(0.55 0 0) !important;
+  animation-duration: 1.2s;
+  --tw-gradient-from: oklch(0.55 0 0);
+  --tw-gradient-via: oklch(0.15 0 0);
+  --tw-gradient-to: oklch(0.55 0 0);
 }
 
 /* Spinner on thinking header while streaming.
@@ -445,7 +452,7 @@ thinking-block .thinking-header > .animate-shimmer::before {
   border-radius: 0;
 }
 .pi-hide-internals thinking-block .thinking-header {
-  padding: 2px 4px !important;
+  padding: 2px 4px;
   opacity: 0.55;
 }
 
@@ -453,25 +460,25 @@ thinking-block .thinking-header > .animate-shimmer::before {
    (We collapse/expand the tool body by toggling max-h-* classes in JS.) */
 
 /* Reduce vertical gaps between blocks when internals are hidden */
-.pi-hide-internals assistant-message .px-4.flex.flex-col.gap-3 {
-  gap: 8px !important;
+.pi-hide-internals assistant-message > div > div.px-4.flex {
+  gap: 8px;
 }
 
 /* Usage/cost — hidden (context % in status bar is enough) */
-assistant-message .text-xs.text-muted-foreground {
-  display: none !important;
+assistant-message > div > div.px-4.mt-2.text-xs.text-muted-foreground {
+  display: none;
 }
 
 /* Abort message — indent to align with content */
-assistant-message .text-destructive {
-  font-size: 12.5px !important;
-  color: var(--muted-foreground) !important;
+assistant-message > div > span.text-destructive {
+  font-size: 12.5px;
+  color: var(--muted-foreground);
   font-style: italic;
-  padding-left: 12px !important;
+  padding-left: 12px;
 }
 
 /* Streaming cursor — hidden; the pi-working indicator already signals activity */
 streaming-message-container .animate-pulse {
-  display: none !important;
+  display: none;
 }
 

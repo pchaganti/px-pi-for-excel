@@ -231,7 +231,7 @@ pi-working-indicator {
 
 /* Crossfade: fade out, swap text, fade in */
 .pi-working--fading {
-  opacity: 0 !important;
+  opacity: 0;
 }
 
 
@@ -259,11 +259,13 @@ pi-working-indicator {
   letter-spacing: 0.01em;
   color: var(--muted-foreground);
   flex-wrap: nowrap;
-  overflow: hidden;
+  overflow: visible;
   min-width: 0;
+  position: relative;
+  z-index: 20;
 }
 
-/* Model picker — left side */
+/* Model picker — center, absorbs leftover space */
 .pi-status-model {
   display: inline-flex;
   align-items: center;
@@ -273,6 +275,7 @@ pi-working-indicator {
   cursor: pointer;
   padding: 2px 6px;
   margin: -2px 0;
+  margin-left: auto;
   border-radius: 5px;
   font-family: var(--font-mono);
   font-size: 11.5px;
@@ -306,9 +309,8 @@ pi-working-indicator {
   opacity: 0.6;
 }
 
-/* Context usage — pushed right */
+/* Context usage — left side */
 .pi-status-ctx {
-  margin-left: auto;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex-shrink: 0;
@@ -329,6 +331,48 @@ pi-working-indicator {
 .pi-status-thinking:hover {
   background: var(--pi-green-lighter);
   color: var(--foreground);
+}
+
+/* Status-bar tooltips */
+.pi-status-bar [data-tooltip] {
+  position: relative;
+}
+.pi-status-bar [data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  white-space: normal;
+  width: max-content;
+  max-width: 200px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  border: 1px solid var(--border);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 200;
+}
+.pi-status-bar [data-tooltip]:hover::after {
+  opacity: 1;
+}
+/* Keep tooltips inside the sidebar */
+.pi-status-bar [data-tooltip]:first-child::after {
+  left: 0;
+  transform: none;
+}
+.pi-status-bar [data-tooltip]:last-child::after {
+  left: auto;
+  right: 0;
+  transform: none;
 }
 
 
