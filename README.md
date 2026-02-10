@@ -25,17 +25,20 @@ Existing AI add-ins for Excel are closed-source, locked to a single model, and c
 | **Change tracking** | No awareness of what you edited between messages. | **Automatic change tracking** — the agent sees your edits and adapts. |
 | **Models** | Locked to one provider and model. | **Any model** — swap between Opus, Sonnet, GPT, Gemini, Codex, or local models mid-conversation. |
 | **Cost** | $20+/month per seat. | **Free.** Bring your own API key. |
-| **Tool overhead** | Separate tools for compact vs. detailed reads — the model often picks the wrong one. | **10 tools, one per verb.** `read_range` has a `mode` param (compact/csv/detailed). Less overhead, fewer wasted calls. |
+| **Tool overhead** | Separate tools for compact vs. detailed reads — the model often picks the wrong one. | **11 tools, one per verb.** `read_range` has a `mode` param (compact/csv/detailed). Less overhead, fewer wasted calls. |
 | **Writes** | Overwrite protection, but no verification. | **Auto-verification** — reads back written cells to check for `#REF!`, `#VALUE!`, and other errors. |
 
 ## Features
 
-- **10 Excel tools** — `get_workbook_overview`, `read_range`, `write_cells`, `fill_formula`, `search_workbook`, `modify_structure`, `format_cells`, `conditional_format`, `trace_dependencies`, `view_settings`
+- **11 Excel tools** — `get_workbook_overview`, `read_range`, `write_cells`, `fill_formula`, `search_workbook`, `modify_structure`, `format_cells`, `conditional_format`, `comments`, `trace_dependencies`, `view_settings`
+- **Composable cell styles** — named format presets (`"currency"`, `"percent"`, `"integer"`) and structural styles (`"header"`, `"total-row"`, `"input"`) that compose like CSS classes: `style: ["currency", "total-row"]`
 - **Auto-context injection** — automatically reads around your selection and tracks changes between messages
-- **Workbook blueprint** — sends a structural overview of your workbook to the LLM at session start
+- **Workbook blueprint** — sends a structural overview of your workbook to the LLM at session start (auto-invalidates after structural changes)
 - **Multi-provider auth** — API keys, OAuth (Anthropic, OpenAI, Google, GitHub Copilot, Antigravity), or reuse credentials from Pi TUI
 - **Persistent sessions** — conversations auto-save to IndexedDB and survive sidebar close/reopen. Resume any previous session with `/resume`
 - **Write verification** — automatically checks formula results after writing
+- **Clickable cell references** — cell addresses in assistant messages navigate to the range with a highlight glow
+- **Markdown tool cards** — tool outputs render as formatted markdown (tables, lists, headers) instead of raw text
 - **Slash commands** — type `/` to browse all available commands with fuzzy search
 - **Extensions** — modular extension system with slash commands and inline widget UI (e.g., `/snake`)
 - **Keyboard shortcuts** — `Escape` to interrupt, `Shift+Tab` to cycle thinking depth (incl. **max** / `xhigh` effort on Opus 4.6+), `Ctrl+O` to hide/show thinking + tool details
@@ -146,7 +149,8 @@ src/
 │   └── context-injection.ts
 ├── excel/helpers.ts         # Office.js wrappers + edge-case guards
 ├── auth/                    # CORS proxy, credential restore, provider mapping
-├── tools/                   # Excel tools (read, write, search, format, etc.)
+├── tools/                   # Excel tools (read, write, search, format, comments, etc.)
+├── conventions/             # Composable cell styles, format presets, style resolver
 ├── context/                 # Blueprint, selection auto-read, change tracker
 ├── prompt/system-prompt.ts  # Model-agnostic system prompt builder
 ├── commands/                # Slash command registry + extensions
@@ -233,24 +237,36 @@ API-key based providers often work without a proxy; OAuth-based logins typically
 - [x] Full ESLint upgrade — type-aware `recommendedTypeChecked` preset, 0 errors/warnings
 - [x] Architecture: modularized taskpane into 8 focused modules, builtins split by domain
 
+### Shipped in v0.3.0-pre
+- [x] Composable cell styles — 6 format presets + 5 structural styles, CSS-like composition ([#1](https://github.com/tmustier/pi-for-excel/issues/1))
+- [x] `comments` tool — read, add, update, reply, delete, resolve/reopen cell comments ([#2](https://github.com/tmustier/pi-for-excel/issues/2))
+- [x] `read_range` detailed mode surfaces comments within range
+- [x] `format_cells` gains `style`, `number_format_dp`, `currency_symbol`, `border_color`, individual border edges
+- [x] Markdown rendering in tool output cards ([#15](https://github.com/tmustier/pi-for-excel/issues/15))
+- [x] Clickable cell references — navigate to range with highlight glow ([#6](https://github.com/tmustier/pi-for-excel/issues/6) partial)
+- [x] Revised welcome copy + expandable hint prompts ([#11](https://github.com/tmustier/pi-for-excel/issues/11))
+- [x] Humanized tool card inputs/outputs (color names, format labels)
+- [x] Blueprint invalidation after structural changes
+- [x] UI polish: queue layout, thinking/tool card styling, case-insensitive model search
+
 ### Up next
-- [ ] Progressive disclosure infrastructure ([#14](https://github.com/tmustier/pi-for-excel/issues/14) §A) — on-demand tool injection via keyword scanning in `transformContext`
-- [ ] New tools: charts, tables, data validation ([#18](https://github.com/tmustier/pi-for-excel/issues/18)) — as on-demand tier 1
-- [ ] Spreadsheet conventions ([#1](https://github.com/tmustier/pi-for-excel/issues/1)) — user-configurable, not hardcoded in system prompt
-- [ ] Auto context management ([#14](https://github.com/tmustier/pi-for-excel/issues/14) §D) — blueprint refresh after structural changes, auto-compact
+- [ ] New tools: charts, tables, data validation ([#18](https://github.com/tmustier/pi-for-excel/issues/18))
+- [ ] Progressive disclosure ([#18](https://github.com/tmustier/pi-for-excel/issues/18)) — on-demand tool injection as tool count grows
+- [ ] Conventions Phase 2 ([#1](https://github.com/tmustier/pi-for-excel/issues/1)) — user-configurable via settings UI, workbook-scoped
+- [ ] Native Excel styles vs. custom style system ([#19](https://github.com/tmustier/pi-for-excel/issues/19))
+- [ ] Auto-compaction ([#20](https://github.com/tmustier/pi-for-excel/issues/20)) — context window budget management for long conversations
+- [ ] Change approval UI ([#6](https://github.com/tmustier/pi-for-excel/issues/6)) — structured approval flow for overwrites
 - [ ] Header bar UX ([#12](https://github.com/tmustier/pi-for-excel/issues/12)) — session switcher, workbook indicator
-- [ ] Welcome copy and example prompts ([#11](https://github.com/tmustier/pi-for-excel/issues/11))
-- [ ] Change approval UI + clickable cell citations ([#6](https://github.com/tmustier/pi-for-excel/issues/6))
 - [ ] Extension API build-out ([#13](https://github.com/tmustier/pi-for-excel/issues/13)) — dynamic loading, tool registration, sandboxing
-- [ ] Comment support — read/write cell comments ([#2](https://github.com/tmustier/pi-for-excel/issues/2))
 
 ### Future
 - [ ] Production CORS solution ([#4](https://github.com/tmustier/pi-for-excel/issues/4)) — service worker or hosted relay
+- [ ] Distribution: non-technical install ([#16](https://github.com/tmustier/pi-for-excel/issues/16)) — hosted build + production manifest
 - [ ] Tmux tool via local bridge ([#3](https://github.com/tmustier/pi-for-excel/issues/3)) — terminal access from the add-in
 - [ ] Python code execution via Pyodide
 - [ ] SpreadsheetBench evaluation (target >43%)
 - [ ] Per-workbook instructions (like AGENTS.md)
-- [ ] On-demand tier 2 tools: named ranges, comments, protection, page layout, images, hyperlinks
+- [ ] On-demand tier 2 tools: named ranges, protection, page layout, images, hyperlinks
 - [ ] Pivot tables and slicers
 - [ ] Pi TUI ↔ Excel session import/export
 
