@@ -6,6 +6,7 @@
 
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
+import type { FillFormulaDetails } from "./tool-details.js";
 import { excelRun, getRange, qualifiedAddress } from "../excel/helpers.js";
 import { countOccupiedCells, validateFormula } from "./write-cells.js";
 import { findErrors } from "../utils/format.js";
@@ -47,7 +48,7 @@ type FillFormulaResult =
     readBackFormulas: unknown[][];
   };
 
-export function createFillFormulaTool(): AgentTool<typeof schema> {
+export function createFillFormulaTool(): AgentTool<typeof schema, FillFormulaDetails> {
   return {
     name: "fill_formula",
     label: "Fill Formula",
@@ -55,12 +56,12 @@ export function createFillFormulaTool(): AgentTool<typeof schema> {
       "Fill a single formula across a range using Excel's AutoFill. " +
       "Relative references adjust automatically. Use this instead of building large formula arrays.",
     parameters: schema,
-    execute: async (_toolCallId: string, params: Params): Promise<AgentToolResult<undefined>> => {
+    execute: async (_toolCallId: string, params: Params): Promise<AgentToolResult<FillFormulaDetails>> => {
       try {
         if (!params.formula.startsWith("=")) {
           return {
             content: [{ type: "text", text: "Error: formula must start with '='." }],
-            details: undefined,
+            details: { kind: "fill_formula", blocked: false },
           };
         }
 
@@ -68,14 +69,14 @@ export function createFillFormulaTool(): AgentTool<typeof schema> {
         if (invalid) {
           return {
             content: [{ type: "text", text: `Error: invalid formula (${invalid}).` }],
-            details: undefined,
+            details: { kind: "fill_formula", blocked: false },
           };
         }
 
         if (/[;,]/.test(params.range)) {
           return {
             content: [{ type: "text", text: "Error: fill_formula only supports a single contiguous range." }],
-            details: undefined,
+            details: { kind: "fill_formula", blocked: false },
           };
         }
 
@@ -132,7 +133,12 @@ export function createFillFormulaTool(): AgentTool<typeof schema> {
                   "To overwrite, confirm with the user and retry with `allow_overwrite: true`.",
               },
             ],
-            details: undefined,
+            details: {
+              kind: "fill_formula",
+              blocked: true,
+              address: fullAddr,
+              existingCount: result.existingCount,
+            },
           };
         }
 
@@ -160,11 +166,18 @@ export function createFillFormulaTool(): AgentTool<typeof schema> {
           }
         }
 
-        return { content: [{ type: "text", text: lines.join("\n") }], details: undefined };
+        const details: FillFormulaDetails = {
+          kind: "fill_formula",
+          blocked: false,
+          address: fullAddr,
+          formulaErrorCount: errors.length,
+        };
+
+        return { content: [{ type: "text", text: lines.join("\n") }], details };
       } catch (e: unknown) {
         return {
           content: [{ type: "text", text: `Error filling formula: ${getErrorMessage(e)}` }],
-          details: undefined,
+          details: { kind: "fill_formula", blocked: false },
         };
       }
     },
