@@ -12,6 +12,7 @@ import { getErrorMessage } from "../../utils/errors.js";
 import { extractTextBlocks, summarizeContentForTranscript } from "../../utils/content.js";
 import { isRecord } from "../../utils/type-guards.js";
 import type { PiSidebar } from "../../ui/pi-sidebar.js";
+import { effectiveKeepRecentTokens, effectiveReserveTokens } from "../../compaction/defaults.js";
 
 type TranscriptEntry = {
   role: AgentMessage["role"];
@@ -57,8 +58,6 @@ function countChatMessages(messages: AgentMessage[]): number {
 // =============================================================================
 
 // Mirrors pi-coding-agent defaults (see docs/compaction.md in pi-coding-agent).
-const DEFAULT_COMPACTION_RESERVE_TOKENS = 16_384;
-const DEFAULT_COMPACTION_KEEP_RECENT_TOKENS = 20_000;
 
 const SUMMARIZATION_SYSTEM_PROMPT =
   "You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.\n\n" +
@@ -436,16 +435,8 @@ export function createCompactCommands(agent: Agent): SlashCommand[] {
         const contextWindow = model.contextWindow || 200000;
 
         // Pi uses reserveTokens to ensure we don't run out of room for the model's response.
-        // We keep the same defaults, but clamp to smaller context windows.
-        const reserveTokens = Math.min(
-          DEFAULT_COMPACTION_RESERVE_TOKENS,
-          Math.max(256, Math.floor(contextWindow / 2)),
-        );
-
-        const keepRecentTokens = Math.min(
-          DEFAULT_COMPACTION_KEEP_RECENT_TOKENS,
-          Math.max(0, contextWindow - reserveTokens),
-        );
+        const reserveTokens = effectiveReserveTokens(contextWindow);
+        const keepRecentTokens = effectiveKeepRecentTokens(contextWindow, reserveTokens);
 
         const maxTokens = Math.max(
           256,

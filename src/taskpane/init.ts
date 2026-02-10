@@ -11,7 +11,7 @@ import { ApiKeyPromptDialog } from "@mariozechner/pi-web-ui/dist/dialogs/ApiKeyP
 import { ModelSelector } from "@mariozechner/pi-web-ui/dist/dialogs/ModelSelector.js";
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
-import { createOfficeStreamFn } from "../auth/stream-proxy.js";
+import { createOfficeStreamFn, resetPayloadStats } from "../auth/stream-proxy.js";
 import { restoreCredentials } from "../auth/restore.js";
 import { getBlueprint } from "../context/blueprint.js";
 import { ChangeTracker } from "../context/change-tracker.js";
@@ -20,9 +20,11 @@ import { createAllTools } from "../tools/index.js";
 import { loadExtension, createExtensionAPI } from "../commands/extension-api.js";
 import { registerBuiltins } from "../commands/builtins.js";
 import { wireCommandMenu } from "../commands/command-menu.js";
+import { commandRegistry } from "../commands/types.js";
 import { buildSystemPrompt } from "../prompt/system-prompt.js";
 import { initAppStorage } from "../storage/init-app-storage.js";
 import { renderError } from "../ui/loading.js";
+import { showToast } from "../ui/toast.js";
 import { PiSidebar } from "../ui/pi-sidebar.js";
 import { setActiveProviders } from "../compat/model-selector-patch.js";
 
@@ -30,6 +32,7 @@ import { createContextInjector } from "./context-injection.js";
 import { pickDefaultModel } from "./default-model.js";
 import { installKeyboardShortcuts, cycleThinkingLevel } from "./keyboard-shortcuts.js";
 import { createQueueDisplay } from "./queue-display.js";
+import { createActionQueue } from "./action-queue.js";
 import { setupSessionPersistence } from "./sessions.js";
 import { injectStatusBar, updateStatusBar } from "./status-bar.js";
 import { showWelcomeLogin } from "./welcome-login.js";
@@ -69,6 +72,14 @@ export async function initTaskpane(opts: {
 
   // 1. Storage
   const { providerKeys, sessions, settings } = initAppStorage();
+
+  // 1b. Auto-compaction (Pi defaults to enabled)
+  let autoCompactEnabled = true;
+  try {
+    autoCompactEnabled = (await settings.get<boolean>("compaction.enabled")) ?? true;
+  } catch {
+    autoCompactEnabled = true;
+  }
 
   // 2. Restore auth
   await restoreCredentials(providerKeys);
@@ -145,6 +156,10 @@ export async function initTaskpane(opts: {
     }
   };
 
+  // 6b. Register builtin slash commands early so the UI can queue/execute
+  // `/compact` even before the rest of init finishes.
+  registerBuiltins(agent);
+
   // ── Abort tracking (hoisted — used by onAbort + error handler below) ──
   let userAborted = false;
 
@@ -174,19 +189,41 @@ export async function initTaskpane(opts: {
     });
   };
 
+  // ── Queue display + ordered action queue ──
+  const queueDisplay = createQueueDisplay({ agent, sidebar });
+  const actionQueue = createActionQueue({
+    agent,
+    sidebar,
+    queueDisplay,
+    autoCompactEnabled,
+  });
+
+  // Slash commands chosen from the popup menu dispatch this event.
+  document.addEventListener(
+    "pi:command-run",
+    ((e: CustomEvent<{ name?: string; args?: string }>) => {
+      const name = e.detail?.name;
+      if (!name) return;
+
+      if (name === "compact") {
+        actionQueue.enqueueCommand(name, e.detail?.args ?? "");
+        return;
+      }
+
+      // Other commands: execute immediately if we're idle; otherwise block.
+      if (agent.state.isStreaming || actionQueue.isBusy()) {
+        showToast(`Can't run /${name} while Pi is busy`);
+        return;
+      }
+
+      const cmd = commandRegistry.get(name);
+      if (cmd) void cmd.execute(e.detail?.args ?? "");
+    }) as EventListener,
+  );
+
   sidebar.onSend = (text) => {
     clearErrorBanner(errorRoot);
-    agent.prompt(text).catch((e: unknown) => {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (isLikelyCorsErrorMessage(msg)) {
-        showErrorBanner(
-          errorRoot,
-          "Network error (likely CORS). Start the local HTTPS proxy (npm run proxy:https) and enable it in /settings → Proxy.",
-        );
-      } else {
-        showErrorBanner(errorRoot, `LLM error: ${msg}`);
-      }
-    });
+    actionQueue.enqueuePrompt(text);
   };
 
   sidebar.onAbort = () => {
@@ -197,8 +234,11 @@ export async function initTaskpane(opts: {
   appEl.innerHTML = "";
   appEl.appendChild(sidebar);
 
-  // 8. Error tracking
+  // 8. Error tracking + payload stats reset
   agent.subscribe((ev) => {
+    if (ev.type === "agent_start") {
+      resetPayloadStats();
+    }
     if (ev.type === "message_start" && ev.message.role === "user") {
       clearErrorBanner(errorRoot);
     }
@@ -229,8 +269,7 @@ export async function initTaskpane(opts: {
   // ── Session persistence ──
   await setupSessionPersistence({ agent, sidebar, sessions, settings });
 
-  // ── Register slash commands + extensions ──
-  registerBuiltins(agent);
+  // ── Register extensions ──
   const extensionAPI = createExtensionAPI(agent);
   const { activate: activateSnake } = await import("../extensions/snake.js");
   await loadExtension(extensionAPI, activateSnake);
@@ -242,14 +281,12 @@ export async function initTaskpane(opts: {
     })();
   });
 
-  // ── Queue display ──
-  const queueDisplay = createQueueDisplay({ agent, sidebar });
-
   // ── Keyboard shortcuts ──
   installKeyboardShortcuts({
     agent,
     sidebar,
     queueDisplay,
+    actionQueue,
     markUserAborted: () => {
       userAborted = true;
     },

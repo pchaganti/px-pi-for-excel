@@ -32,10 +32,38 @@ export interface FormatCellsDetails {
   warningsCount?: number;
 }
 
+export interface DepNodeDetail {
+  address: string;
+  value: unknown;
+  /** Excel number format string, e.g. "0.00%", "#,##0", "$#,##0.00". */
+  numberFormat?: string;
+  formula?: string;
+  precedents: DepNodeDetail[];
+}
+
+export interface TraceDependenciesDetails {
+  kind: "trace_dependencies";
+  root: DepNodeDetail;
+}
+
+export interface ReadRangeCsvDetails {
+  kind: "read_range_csv";
+  /** 0-indexed starting column (A=0, B=1, …) */
+  startCol: number;
+  /** 1-indexed starting row */
+  startRow: number;
+  /** Raw values grid from Excel */
+  values: unknown[][];
+  /** Pre-serialized CSV string for the copy button */
+  csv: string;
+}
+
 export type ExcelToolDetails =
   | WriteCellsDetails
   | FillFormulaDetails
-  | FormatCellsDetails;
+  | FormatCellsDetails
+  | TraceDependenciesDetails
+  | ReadRangeCsvDetails;
 
 function isOptionalString(value: unknown): value is string | undefined {
   return value === undefined || typeof value === "string";
@@ -80,4 +108,23 @@ export function isFormatCellsDetails(value: unknown): value is FormatCellsDetail
     isOptionalString(value.address) &&
     isOptionalNumber(value.warningsCount)
   );
+}
+
+export function isReadRangeCsvDetails(value: unknown): value is ReadRangeCsvDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "read_range_csv") return false;
+  return (
+    typeof value.startCol === "number" &&
+    typeof value.startRow === "number" &&
+    Array.isArray(value.values) &&
+    typeof value.csv === "string"
+  );
+}
+
+export function isTraceDependenciesDetails(value: unknown): value is TraceDependenciesDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "trace_dependencies") return false;
+  if (!isRecord(value.root)) return false;
+  const root = value.root;
+  return typeof root.address === "string" && Array.isArray(root.precedents);
 }

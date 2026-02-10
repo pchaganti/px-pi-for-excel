@@ -23,6 +23,11 @@ type QueueDisplay = {
   add: (type: "steer" | "follow-up", text: string) => void;
 };
 
+type ActionQueue = {
+  enqueueCommand: (name: string, args: string) => void;
+  isBusy: () => boolean;
+};
+
 const THINKING_COLORS: Record<ThinkingLevel, string> = {
   off: "#a0a0a0",
   minimal: "#767676",
@@ -121,9 +126,10 @@ export function installKeyboardShortcuts(opts: {
   agent: Agent;
   sidebar: PiSidebar;
   queueDisplay: QueueDisplay;
+  actionQueue: ActionQueue;
   markUserAborted: () => void;
 }): () => void {
-  const { agent, sidebar, queueDisplay, markUserAborted } = opts;
+  const { agent, sidebar, queueDisplay, actionQueue, markUserAborted } = opts;
 
   const onKeyDown = (e: KeyboardEvent) => {
     // Command menu takes priority
@@ -182,8 +188,7 @@ export function installKeyboardShortcuts(opts: {
       textarea &&
       e.key === "Enter" &&
       !e.shiftKey &&
-      textarea.value.startsWith("/") &&
-      !isStreaming
+      textarea.value.startsWith("/")
     ) {
       const val = textarea.value.trim();
       const spaceIdx = val.indexOf(" ");
@@ -191,12 +196,29 @@ export function installKeyboardShortcuts(opts: {
       const args = spaceIdx > 0 ? val.slice(spaceIdx + 1) : "";
       const cmd = commandRegistry.get(cmdName);
       if (cmd) {
+        const busy = isStreaming || actionQueue.isBusy();
+
+        // Only queue `/compact` while busy for now. Other commands may be interactive
+        // (e.g. /snake) and should not be deferred.
+        if (busy && cmdName !== "compact") {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          showToast(`Can't run /${cmdName} while Pi is busy`);
+          return;
+        }
+
         e.preventDefault();
         e.stopImmediatePropagation();
         hideCommandMenu();
         const input = sidebar.getInput();
         if (input) input.clear();
-        void cmd.execute(args);
+
+        if (cmdName === "compact") {
+          actionQueue.enqueueCommand(cmdName, args);
+        } else {
+          void cmd.execute(args);
+        }
+
         return;
       }
     }

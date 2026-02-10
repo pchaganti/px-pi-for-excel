@@ -59,7 +59,7 @@ export class PiInput extends LitElement {
   };
 
   private _onKeydown = (e: KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.altKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       if (this.isStreaming) return;
       if (!this._value.trim()) return;
       if (this._value.startsWith("/")) return;

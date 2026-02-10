@@ -32,6 +32,7 @@
 }
 .pi-queue__label--steer { color: oklch(0.55 0.15 250); }
 .pi-queue__label--followup { color: oklch(0.55 0.12 170); }
+.pi-queue__label--action { color: oklch(0.55 0.13 210); }
 
 .pi-queue__text {
   color: var(--muted-foreground);

@@ -38,6 +38,7 @@ export async function setupSessionPersistence(opts: {
   }
 
   let sessionId: string = crypto.randomUUID();
+  agent.sessionId = sessionId;
   let sessionTitle = "";
   let sessionCreatedAt = new Date().toISOString();
   let firstAssistantSeen = false;
@@ -151,6 +152,7 @@ export async function setupSessionPersistence(opts: {
 
   function startNewSession() {
     sessionId = crypto.randomUUID();
+    agent.sessionId = sessionId;
     sessionTitle = "";
     sessionCreatedAt = new Date().toISOString();
     firstAssistantSeen = false;
@@ -185,6 +187,7 @@ export async function setupSessionPersistence(opts: {
       if (!sessionData || sessionData.messages.length === 0) continue;
 
       sessionId = sessionData.id;
+      agent.sessionId = sessionId;
       sessionTitle = sessionData.title || "";
       sessionCreatedAt = sessionData.createdAt;
       firstAssistantSeen = true;
@@ -219,6 +222,7 @@ export async function setupSessionPersistence(opts: {
     ((e: CustomEvent<ResumeDetail>) => {
       const id = e.detail?.id || sessionId;
       sessionId = id;
+      agent.sessionId = sessionId;
       sessionTitle = e.detail?.title || "";
       sessionCreatedAt = e.detail?.createdAt || new Date().toISOString();
       firstAssistantSeen = true;

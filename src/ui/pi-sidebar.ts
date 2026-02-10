@@ -32,6 +32,8 @@ export class PiSidebar extends LitElement {
 
   @state() private _hasMessages = false;
   @state() private _isStreaming = false;
+  @state() private _busyLabel: string | null = null;
+  @state() private _busyHint: string | null = null;
 
   @query(".pi-messages") private _scrollContainer?: HTMLElement;
   @query("streaming-message-container") private _streamingContainer?: StreamingMessageContainer;
@@ -51,6 +53,16 @@ export class PiSidebar extends LitElement {
     if (!this.agent) return;
     this._hasMessages = this.agent.state.messages.length > 0;
     this._isStreaming = this.agent.state.isStreaming;
+    this.requestUpdate();
+  }
+
+  /**
+   * Show a non-streaming busy indicator (e.g. while `/compact` runs).
+   * Pass `null` to clear.
+   */
+  setBusyIndicator(label: string | null, hint?: string | null): void {
+    this._busyLabel = label;
+    this._busyHint = hint ?? null;
     this.requestUpdate();
   }
 
@@ -201,7 +213,11 @@ export class PiSidebar extends LitElement {
         </div>
         ${!hasMessages ? this._renderEmptyState() : ""}
       </div>
-      <pi-working-indicator .active=${this._isStreaming}></pi-working-indicator>
+      <pi-working-indicator
+        .active=${this._isStreaming || this._busyLabel !== null}
+        .primaryText=${this._isStreaming ? undefined : (this._busyLabel ?? undefined)}
+        .hintText=${this._isStreaming ? undefined : (this._busyHint ?? undefined)}
+      ></pi-working-indicator>
       <div id="pi-widget-slot" class="pi-widget-slot" style="display:none"></div>
       <div class="pi-input-area">
         <pi-input

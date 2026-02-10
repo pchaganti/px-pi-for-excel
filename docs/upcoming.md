@@ -113,7 +113,7 @@ https://github.com/tmustier/pi-for-excel/issues/20
 
 **What it’s asking:** token budgeting + automatic compaction; preserve a “tail” window; keep archived messages available in UI without re-entering LLM context.
 
-**Status note:** `/compact` has been upgraded recently (now a dedicated compaction card message + uses agent streamFn/api key resolution correctly). Auto-trigger + budgeting still TBD.
+**Status note:** `/compact` has been upgraded recently (now a dedicated compaction card message + uses agent streamFn/api key resolution correctly). Auto-trigger + token budgeting are now implemented (Pi-style threshold). Archived-history UX is still TBD.
 
 **Implication:**
 - pushes toward tracking per-message cost/tokens and storing an “archived history” separately from the active LLM context

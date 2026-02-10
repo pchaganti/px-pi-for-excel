@@ -22,8 +22,12 @@ import { CORE_TOOL_NAMES, type CoreToolName } from "../tools/registry.js";
 import {
   isFillFormulaDetails,
   isFormatCellsDetails,
+  isReadRangeCsvDetails,
+  isTraceDependenciesDetails,
   isWriteCellsDetails,
 } from "../tools/tool-details.js";
+import { renderCsvTable } from "./render-csv-table.js";
+import { renderDepTree } from "./render-dep-tree.js";
 
 // Ensure <markdown-block> custom element is registered before we render it.
 import "@mariozechner/mini-lit/dist/MarkdownBlock.js";
@@ -481,6 +485,12 @@ function createExcelMarkdownRenderer(toolName: CoreToolName): ToolRenderer<unkno
         const json = tryFormatJsonOutput(text);
         const humanizedText = compactRangesInMarkdown(humanizeColorsInText(text));
         const useMarkdown = !json.isJson && looksLikeMarkdown(text);
+        const csvTable = isReadRangeCsvDetails(result.details)
+          ? renderCsvTable(result.details)
+          : null;
+        const depTree = isTraceDependenciesDetails(result.details)
+          ? renderDepTree(result.details.root)
+          : null;
 
         return {
           content: html`
@@ -502,8 +512,12 @@ function createExcelMarkdownRenderer(toolName: CoreToolName): ToolRenderer<unkno
                     </div>
                   ` : ""}
                   <div class="pi-tool-card__section">
-                    <div class="pi-tool-card__section-label">Result</div>
-                    ${isEchoResult(toolName, text)
+                    <div class="pi-tool-card__section-label">${depTree !== null ? "Dependencies" : csvTable !== null ? "Data" : "Result"}</div>
+                    ${csvTable !== null
+                      ? csvTable
+                      : depTree !== null
+                      ? depTree
+                      : isEchoResult(toolName, text)
                       ? html`<div class="pi-tool-card__plain-text pi-tool-card__echo-result">✓ Done</div>`
                       : standaloneImagePath
                       ? html`
