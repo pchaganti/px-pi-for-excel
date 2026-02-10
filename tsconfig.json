@@ -18,7 +18,8 @@
     "outDir": "./dist",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@mariozechner/pi-web-ui/dist/*": ["node_modules/@mariozechner/pi-web-ui/dist/*"]
     }
   },
   "include": ["src/**/*.ts"],

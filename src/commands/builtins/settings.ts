@@ -2,7 +2,7 @@
  * Builtin settings/auth commands.
  */
 
-import { ApiKeysTab, ProxyTab, SettingsDialog } from "@mariozechner/pi-web-ui";
+import { ApiKeysTab, ProxyTab, SettingsDialog } from "@mariozechner/pi-web-ui/dist/dialogs/SettingsDialog.js";
 
 import type { SlashCommand } from "../types.js";
 import { showProviderPicker } from "./overlays.js";

@@ -7,7 +7,7 @@
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { Message } from "@mariozechner/pi-ai";
-import { defaultConvertToLlm } from "@mariozechner/pi-web-ui";
+import { defaultConvertToLlm } from "@mariozechner/pi-web-ui/dist/components/Messages.js";
 
 import { compactionSummaryToUserMessage } from "./compaction.js";
 

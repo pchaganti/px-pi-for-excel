@@ -3,7 +3,7 @@
  */
 
 import type { Agent } from "@mariozechner/pi-agent-core";
-import { getAppStorage } from "@mariozechner/pi-web-ui";
+import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
 import { showToast } from "../../ui/toast.js";
 import type { PiSidebar } from "../../ui/pi-sidebar.js";

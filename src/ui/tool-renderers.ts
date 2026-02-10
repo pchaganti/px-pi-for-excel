@@ -10,9 +10,8 @@ import {
   registerToolRenderer,
   renderCollapsibleHeader,
   renderHeader,
-  type ToolRenderer,
-  type ToolRenderResult,
-} from "@mariozechner/pi-web-ui";
+} from "@mariozechner/pi-web-ui/dist/tools/renderer-registry.js";
+import type { ToolRenderer, ToolRenderResult } from "@mariozechner/pi-web-ui/dist/tools/types.js";
 import { html, type TemplateResult } from "lit";
 import { createRef, ref } from "lit/directives/ref.js";
 import { Code } from "lucide";

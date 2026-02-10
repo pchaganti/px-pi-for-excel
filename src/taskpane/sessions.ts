@@ -8,7 +8,8 @@
  */
 
 import type { Agent } from "@mariozechner/pi-agent-core";
-import type { SessionsStore, SettingsStore } from "@mariozechner/pi-web-ui";
+import type { SessionsStore } from "@mariozechner/pi-web-ui/dist/storage/stores/sessions-store.js";
+import type { SettingsStore } from "@mariozechner/pi-web-ui/dist/storage/stores/settings-store.js";
 
 import type { PiSidebar } from "../ui/pi-sidebar.js";
 import { extractTextFromContent } from "../utils/content.js";

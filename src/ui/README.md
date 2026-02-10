@@ -5,7 +5,7 @@
 The sidebar UI has two layers:
 
 1. **Our components** (`pi-sidebar.ts`, `pi-input.ts`, `header.ts`) — own the layout shell (scroll area, input footer, header bar). Purpose-built for ~350px.
-2. **pi-web-ui content components** — render message internals (markdown, code blocks, tool cards, thinking blocks). Imported via `@mariozechner/pi-web-ui` side-effect registration.
+2. **pi-web-ui content components** — render message internals (markdown, code blocks, tool cards, thinking blocks). Registered via `src/ui/register-components.ts` (deep imports from `@mariozechner/pi-web-ui/dist/*`).
 
 ```
 ┌─ pi-sidebar ──────────────────────────────────────┐

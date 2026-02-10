@@ -89,6 +89,94 @@ function stubBedrockProviderPlugin(): Plugin {
   };
 }
 
+/**
+ * Stub out pi-ai's OAuth index in browser builds.
+ *
+ * pi-ai's main entrypoint re-exports the OAuth index, which includes Node-only
+ * side effects and CLI-only providers. The Excel add-in uses a small, local
+ * OAuth implementation and should not bundle these flows.
+ */
+function stubPiAiOAuthIndexPlugin(): Plugin {
+  const stubPath = path.resolve(__dirname, "src/stubs/pi-ai-oauth.ts");
+
+  return {
+    name: "stub-pi-ai-oauth-index",
+    enforce: "pre",
+    resolveId(id, importer) {
+      const cleanId = id.split("?")[0];
+      const cleanImporter = importer?.split("?")[0];
+
+      // pi-ai's dist/index.js re-exports the OAuth index via a relative path.
+      if (
+        cleanId === "./utils/oauth/index.js" &&
+        cleanImporter &&
+        cleanImporter.includes("/node_modules/@mariozechner/pi-ai/") &&
+        cleanImporter.endsWith("/dist/index.js")
+      ) {
+        return stubPath;
+      }
+
+      // Safety: catch resolved ids too.
+      if (cleanId.includes("/node_modules/@mariozechner/pi-ai/") && cleanId.endsWith("/dist/utils/oauth/index.js")) {
+        return stubPath;
+      }
+
+      return null;
+    },
+  };
+}
+
+/**
+ * Stub out pi-web-ui tool modules we don't ship in the Excel add-in.
+ *
+ * pi-web-ui's tools/index.js auto-imports optional tools (document extraction,
+ * JavaScript REPL) to register their renderers. Those pull heavy dependencies
+ * (pdfjs-dist, docx-preview, xlsx) that bloat the taskpane bundle.
+ */
+function stubPiWebUiBuiltinToolsPlugin(): Plugin {
+  const stubExtractDocumentPath = path.resolve(__dirname, "src/stubs/pi-web-ui-extract-document.ts");
+  const stubJavascriptReplPath = path.resolve(__dirname, "src/stubs/pi-web-ui-javascript-repl.ts");
+  const stubAttachmentUtilsPath = path.resolve(__dirname, "src/stubs/pi-web-ui-attachment-utils.ts");
+  const stubAttachmentOverlayPath = path.resolve(__dirname, "src/stubs/pi-web-ui-attachment-overlay.ts");
+  const stubArtifactsPanelPath = path.resolve(__dirname, "src/stubs/pi-web-ui-artifacts-panel.ts");
+  const stubArtifactsToolRendererPath = path.resolve(__dirname, "src/stubs/pi-web-ui-artifacts-tool-renderer.ts");
+
+  const norm = (p: string): string => p.split("?")[0].replaceAll("\\", "/");
+
+  return {
+    name: "stub-pi-web-ui-builtin-tools",
+    enforce: "pre",
+    resolveId(id, importer) {
+      const cleanId = norm(id);
+      const cleanImporter = importer ? norm(importer) : "";
+
+      const importerIsPiWebUi = cleanImporter.includes("@mariozechner/pi-web-ui");
+      if (!importerIsPiWebUi) return null;
+
+      // ── Tools (pi-web-ui ships them, but Excel add-in does not) ──
+      if (cleanImporter.endsWith("/dist/tools/index.js")) {
+        // tools/index.js imports these via relative paths.
+        if (cleanId === "./extract-document.js") return stubExtractDocumentPath;
+        if (cleanId === "./javascript-repl.js") return stubJavascriptReplPath;
+      }
+
+      // index.js re-exports these via ./tools/*
+      if (cleanId.endsWith("tools/extract-document.js")) return stubExtractDocumentPath;
+      if (cleanId.endsWith("tools/javascript-repl.js")) return stubJavascriptReplPath;
+
+      // ── Attachments (heavy deps: pdfjs-dist, docx-preview, xlsx) ──
+      if (cleanId.endsWith("utils/attachment-utils.js")) return stubAttachmentUtilsPath;
+      if (cleanId.endsWith("dialogs/AttachmentOverlay.js")) return stubAttachmentOverlayPath;
+
+      // ── Artifacts (pull in PDF/DOCX/XLSX renderers) ──
+      if (cleanId.endsWith("tools/artifacts/artifacts.js")) return stubArtifactsPanelPath;
+      if (cleanId.endsWith("tools/artifacts/artifacts-tool-renderer.js")) return stubArtifactsToolRendererPath;
+
+      return null;
+    },
+  };
+}
+
 // ============================================================================
 // Proxy helper — strips browser headers so APIs don't treat requests as CORS
 // ============================================================================
@@ -129,7 +217,12 @@ const certPath = path.resolve(__dirname, "cert.pem");
 const hasHttpsCerts = fs.existsSync(keyPath) && fs.existsSync(certPath);
 
 export default defineConfig({
-  plugins: [piAuthPlugin(), stubBedrockProviderPlugin()],
+  plugins: [
+    piAuthPlugin(),
+    stubBedrockProviderPlugin(),
+    stubPiAiOAuthIndexPlugin(),
+    stubPiWebUiBuiltinToolsPlugin(),
+  ],
 
   server: {
     // Must stay on :3000 because manifest hardcodes it.
@@ -167,6 +260,11 @@ export default defineConfig({
   resolve: {
     alias: {
       stream: path.resolve(__dirname, "src/stubs/stream.ts"),
+
+      // pi-web-ui only exports "." + "./app.css". We deep-import from its dist
+      // modules to avoid pulling the entire barrel (ChatPanel, artifacts, etc.).
+      // This alias bypasses package.json "exports" restrictions.
+      "@mariozechner/pi-web-ui/dist": path.resolve(__dirname, "node_modules/@mariozechner/pi-web-ui/dist"),
     },
   },
 
