@@ -212,7 +212,7 @@ function humanizeFormatCells(p: Record<string, unknown>): ParamItem[] {
   if (p.range) {
     const rd = formatRangeForDisplay(str(p.range));
     if (rd.sheet) items.push({ label: "Sheet", value: rd.sheet });
-    items.push({ label: "Range", value: cellRefs(str(p.range)) });
+    items.push({ label: "Range", value: cellRefs(str(p.range), Infinity) });
   }
 
   // Named styles
@@ -324,7 +324,7 @@ function humanizeReadRange(p: Record<string, unknown>): ParamItem[] {
   if (p.range) {
     const rd = formatRangeForDisplay(str(p.range));
     if (rd.sheet) items.push({ label: "Sheet", value: rd.sheet });
-    items.push({ label: "Range", value: cellRefs(str(p.range)) });
+    items.push({ label: "Range", value: cellRefs(str(p.range), Infinity) });
   }
   if (p.mode && p.mode !== "compact") {
     items.push({ label: "Mode", value: str(p.mode) });
@@ -339,7 +339,7 @@ function humanizeFillFormula(p: Record<string, unknown>): ParamItem[] {
   if (p.range) {
     const rd = formatRangeForDisplay(str(p.range));
     if (rd.sheet) items.push({ label: "Sheet", value: rd.sheet });
-    items.push({ label: "Range", value: cellRefs(str(p.range)) });
+    items.push({ label: "Range", value: cellRefs(str(p.range), Infinity) });
   }
   if (p.formula) {
     items.push({ label: "Formula", value: formulaSnippet(str(p.formula)) });
@@ -470,7 +470,7 @@ function humanizeConditionalFormat(p: Record<string, unknown>): ParamItem[] {
   if (p.range) {
     const rd = formatRangeForDisplay(str(p.range));
     if (rd.sheet) items.push({ label: "Sheet", value: rd.sheet });
-    items.push({ label: "Range", value: cellRefs(str(p.range)) });
+    items.push({ label: "Range", value: cellRefs(str(p.range), Infinity) });
   }
 
   // Rule details

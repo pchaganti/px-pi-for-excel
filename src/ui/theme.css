@@ -775,7 +775,6 @@ assistant-message .px-4 > markdown-block { margin-left: var(--pill-text-indent);
   box-shadow: var(--pill-shadow);
   overflow: hidden;
   min-width: 0;
-  margin-right: var(--pill-inset);
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 .pi-tool-card:hover {
@@ -817,11 +816,8 @@ assistant-message .px-4 > markdown-block { margin-left: var(--pill-text-indent);
 .pi-tool-group .pi-tool-card[data-state="complete"] .pi-tool-card__header > button {
   padding: 2px 4px !important;
 }
-/* Expanded body gets its own container when card chrome is gone (grouped only) */
+/* Grouped: inner pill needs top-margin since card chrome is stripped */
 .pi-tool-group .pi-tool-card[data-state="complete"] .pi-tool-card__inner {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: oklch(0.99 0.002 90);
   margin-top: 4px;
 }
 
@@ -880,9 +876,13 @@ assistant-message .px-4 > markdown-block { margin-left: var(--pill-text-indent);
 .pi-tool-card__body.mt-3 {
   margin-top: 0 !important;
 }
+/* Inner pill — white content area nested inside green/white outer pill */
 .pi-tool-card__inner {
-  padding: 2px 14px 14px;
-  border-top: 1px solid oklch(0 0 0 / 0.04);
+  padding: 10px 14px 14px;
+  margin: 0 8px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: oklch(0.99 0.002 90);
 }
 
 /* Tool identifier — subtle mono label */
@@ -1043,6 +1043,12 @@ assistant-message .px-4 > markdown-block { margin-left: var(--pill-text-indent);
   white-space: pre-wrap;
   word-break: break-word;
 }
+/* Echo result — redundant success message replaced with compact "✓ Done" */
+.pi-tool-card__echo-result {
+  color: var(--pi-green);
+  font-weight: 500;
+  white-space: normal;
+}
 
 /* Flex overflow fix for tool cards */
 tool-message {
@@ -1057,7 +1063,6 @@ tool-message {
   background: var(--pill-green-bg);
   border: var(--pill-green-border);
   border-radius: var(--pill-radius);
-  margin-right: var(--pill-inset);
 }
 
 /* Rows inside group */
@@ -1108,7 +1113,6 @@ code-block { font-size: 12px !important; border-radius: 8px !important; }
 thinking-block {
   font-size: 13.5px;
   font-family: var(--font-sans);
-  margin-right: var(--pill-inset);
 }
 thinking-block .thinking-block {
   border-radius: var(--pill-radius);
@@ -1127,11 +1131,14 @@ thinking-block .thinking-header {
 thinking-block .thinking-header > span:first-child { order: 2; }
 thinking-block .thinking-header > span:last-child { order: 1; }
 
-/* Expanded body — contained inside the card */
+/* Expanded body — white inner pill matching tool card __inner */
 thinking-block markdown-block {
   display: block;
-  padding: 0 14px 14px;
-  border-top: 1px solid oklch(0 0 0 / 0.04);
+  padding: 10px 14px 14px;
+  margin: 0 8px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: oklch(0.99 0.002 90);
   font-size: 12.5px;
   color: var(--muted-foreground);
   max-height: 300px;

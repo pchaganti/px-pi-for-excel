@@ -271,6 +271,27 @@ function isBlocked(text: string): boolean {
   return text.trimStart().startsWith("⛔");
 }
 
+/**
+ * Tools whose success result just echoes the Input section.
+ * For these, we show a compact "✓ Done" instead of the full text.
+ * Only applies when the result isn't an error/block/warning.
+ */
+const ECHO_RESULT_PATTERNS: Record<string, RegExp> = {
+  format_cells: /^Formatted\s+\*\*/,
+  conditional_format: /^(?:Added|Cleared) conditional format/,
+};
+
+/** True when the result is a redundant success echo of the input. */
+function isEchoResult(toolName: string, text: string): boolean {
+  const pattern = ECHO_RESULT_PATTERNS[toolName];
+  if (!pattern) return false;
+  const trimmed = text.trim();
+  // Don't suppress if there are warnings or errors
+  if (/⚠️|error|warning/i.test(trimmed)) return false;
+  if (isBlocked(trimmed)) return false;
+  return pattern.test(trimmed);
+}
+
 /** Result-aware summary for result text that is already user-friendly. */
 function resultSummary(text: string): string | null {
   const line = extractSummaryLine(text);
@@ -429,7 +450,9 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
                   ` : ""}
                   <div class="pi-tool-card__section">
                     <div class="pi-tool-card__section-label">Result</div>
-                    ${standaloneImagePath
+                    ${isEchoResult(toolName, text)
+                      ? html`<div class="pi-tool-card__plain-text pi-tool-card__echo-result">✓ Done</div>`
+                      : standaloneImagePath
                       ? html`
                         <div class="text-sm">
                           <div>Image:
