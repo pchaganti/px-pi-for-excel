@@ -105,6 +105,9 @@ const schema = Type.Object({
     [Type.Literal("thin"), Type.Literal("medium"), Type.Literal("thick"), Type.Literal("none")],
     { description: "Right border weight." },
   )),
+  border_color: Type.Optional(
+    Type.String({ description: 'Hex color for borders (e.g. "#000000"). Applies to all borders set in this call. Default: automatic (black).' }),
+  ),
   merge: Type.Optional(
     Type.Boolean({ description: "Merge the range into a single cell." }),
   ),
@@ -383,8 +386,9 @@ function toBorderWeight(weight: BorderWeight): "Thin" | "Medium" | "Thick" {
 /** Apply a single border edge. */
 function applyEdge(
   formatTarget: Excel.RangeFormat,
-  edge: "EdgeTop" | "EdgeBottom" | "EdgeLeft" | "EdgeRight",
+  edge: "EdgeTop" | "EdgeBottom" | "EdgeLeft" | "EdgeRight" | "InsideHorizontal" | "InsideVertical",
   weight: BorderWeight,
+  color?: string,
 ): void {
   const borderItem = formatTarget.borders.getItem(edge);
   if (weight === "none") {
@@ -392,6 +396,7 @@ function applyEdge(
   } else {
     borderItem.style = "Continuous";
     borderItem.weight = toBorderWeight(weight);
+    if (color) borderItem.color = color;
   }
 }
 
@@ -416,6 +421,8 @@ function applyBorders(
 
   if (!hasShorthand && !hasEdges && !hasStyleEdges) return;
 
+  const color = params.border_color;
+
   if (hasShorthand && !hasEdges && !hasStyleEdges) {
     // Pure shorthand — apply to all edges including inside (existing behavior)
     const borderIndexes = [
@@ -423,15 +430,9 @@ function applyBorders(
       "InsideHorizontal", "InsideVertical",
     ] as const;
     for (const border of borderIndexes) {
-      const borderItem = formatTarget.borders.getItem(border);
-      if (shorthand === "none") {
-        borderItem.style = "None";
-      } else {
-        borderItem.style = "Continuous";
-        borderItem.weight = toBorderWeight(shorthand);
-      }
+      applyEdge(formatTarget, border, shorthand, color);
     }
-    applied.push(`${shorthand} borders`);
+    applied.push(`${shorthand} borders${color ? ` (${color})` : ""}`);
     return;
   }
 
@@ -447,13 +448,13 @@ function applyBorders(
   for (const { edge, param, styleProp, label } of edges) {
     const weight = param ?? styleProp;
     if (weight !== undefined) {
-      applyEdge(formatTarget, edge, weight);
+      applyEdge(formatTarget, edge, weight, color);
       appliedEdges.push(`${label}:${weight}`);
     }
   }
 
   if (appliedEdges.length > 0) {
-    applied.push(`borders ${appliedEdges.join(", ")}`);
+    applied.push(`borders ${appliedEdges.join(", ")}${color ? ` (${color})` : ""}`);
   }
 }
 
