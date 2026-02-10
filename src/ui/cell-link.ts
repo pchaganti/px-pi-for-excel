@@ -103,3 +103,43 @@ export function cellRefDisplay(
     }}
   >${display}</a>`;
 }
+
+/**
+ * Render a potentially comma-separated range string as individually
+ * clickable links. Factors out a common sheet prefix and truncates
+ * after `maxShow` items.
+ *
+ *   "Summary!C10, Summary!C12, Summary!C14"
+ *   → [C10] , [C12] , [C14]   (each clickable, sheet shown separately)
+ *
+ *   "C10, C12"
+ *   → [C10] , [C12]
+ *
+ * For a single range (no commas), delegates to `cellRef()`.
+ */
+export function cellRefs(address: string, maxShow = 8): TemplateResult {
+  const parts = address.split(/\s*,\s*/).filter(Boolean);
+
+  if (parts.length <= 1) return cellRef(address);
+
+  // Find common sheet prefix
+  const parsed = parts.map((p) => parseRangeRef(p));
+  const sheets = [...new Set(parsed.map((p) => p.sheet).filter(Boolean))];
+  const commonSheet = sheets.length === 1 ? sheets[0] : undefined;
+
+  const shown = parts.slice(0, maxShow);
+  const more = parts.length - maxShow;
+
+  return html`${shown.map((part, i) => {
+    const p = parseRangeRef(part);
+    // Display: strip shared sheet prefix for readability
+    const display = commonSheet ? p.address : part;
+    // Navigation: ensure each part has the full sheet-qualified address
+    const nav = p.sheet
+      ? part
+      : commonSheet
+        ? `${commonSheet}!${p.address}`
+        : part;
+    return html`${i > 0 ? ", " : ""}${cellRefDisplay(display, nav)}`;
+  })}${more > 0 ? html`, <span class="pi-params__more">+${more} more</span>` : ""}`;
+}

@@ -16,7 +16,7 @@ import {
 import { html, type TemplateResult } from "lit";
 import { createRef, ref } from "lit/directives/ref.js";
 import { Code } from "lucide";
-import { cellRefDisplay } from "./cell-link.js";
+import { cellRefs } from "./cell-link.js";
 import { humanizeToolInput } from "./humanize-params.js";
 import { humanizeColorsInText } from "./color-names.js";
 
@@ -396,7 +396,7 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
       const resultText = result ? splitToolResultContent(result).text : undefined;
       const desc = describeToolCall(toolName, params, resultText);
       const detailContent = desc.address
-        ? cellRefDisplay(desc.detail, desc.address)
+        ? cellRefs(desc.address)
         : desc.detail;
       const title = html`<span class="pi-tool-card__title"><strong>${desc.action}</strong>${desc.detail ? html` <span class="pi-tool-card__detail-text">${detailContent}</span>` : ""}</span>`;
 
