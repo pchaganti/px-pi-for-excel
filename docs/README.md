@@ -11,6 +11,7 @@ Short, topic-based docs (mirrors Pi's layout). Keep deeper decisions close to th
 - [Rollout plan](./rollout-plan.md)
 - [Cleanup approach](./cleanup-approach.md)
 - [Codebase simplification plan](./codebase-simplification-plan.md)
+- [Compaction (`/compact`)](./compaction.md)
 - [Upcoming (open issues digest)](./upcoming.md)
 - [Model/dependency update playbook](./model-updates.md)
 - [UI architecture](../src/ui/README.md) — layout, styling, the `@layer` gotcha
