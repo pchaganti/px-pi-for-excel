@@ -2,10 +2,12 @@
  * Status bar rendering + thinking level flash.
  */
 
-import type { Agent } from "@mariozechner/pi-agent-core";
+import type { Usage } from "@mariozechner/pi-ai";
+import type { Agent, AgentMessage } from "@mariozechner/pi-agent-core";
 
 import { showToast } from "../ui/toast.js";
 import { escapeHtml } from "../utils/html.js";
+import { formatUsageDebug, isDebugEnabled } from "../debug/debug.js";
 
 export function injectStatusBar(agent: Agent): void {
   agent.subscribe(() => updateStatusBar(agent));
@@ -26,14 +28,112 @@ export function updateStatusBar(agent: Agent): void {
   const modelAliasEscaped = escapeHtml(modelAlias);
 
   // Context usage
+  //
+  // For providers with prompt caching (e.g. Anthropic), `usage.input` excludes cached
+  // prompt tokens. Cached tokens still count towards the model's context window.
+  //
+  // The most reliable signal we have in the UI is the last successful assistant
+  // turn's usage, which already reflects the prompt size.
   let totalTokens = 0;
-  for (const msg of state.messages) {
+  let lastUsage: Usage | null = null;
+  let lastUsageIndex: number | null = null;
+  let lastUsageTimestamp = 0;
+
+  const calculateContextTokens = (u: Usage): number =>
+    u.totalTokens || u.input + u.output + u.cacheRead + u.cacheWrite;
+
+  const estimateMessageTokens = (message: AgentMessage): number => {
+    // Conservative heuristic from pi-coding-agent: tokens ≈ chars / 4
+    const charsPerToken = 4;
+    let chars = 0;
+
+    if (message.role === "artifact") return 0;
+
+    if (message.role === "compactionSummary") {
+      return Math.ceil(message.summary.length / charsPerToken);
+    }
+
+    if (message.role === "user" || message.role === "user-with-attachments") {
+      const content = message.content;
+      if (typeof content === "string") {
+        chars += content.length;
+      } else {
+        for (const block of content) {
+          if (block.type === "text") chars += block.text.length;
+          if (block.type === "image") chars += 4800;
+        }
+      }
+      return Math.ceil(chars / charsPerToken);
+    }
+
+    if (message.role === "assistant") {
+      for (const block of message.content) {
+        if (block.type === "text") chars += block.text.length;
+        else if (block.type === "thinking") chars += block.thinking.length;
+        else if (block.type === "toolCall") {
+          chars += block.name.length;
+          try {
+            chars += JSON.stringify(block.arguments).length;
+          } catch {
+            // ignore
+          }
+        }
+      }
+      return Math.ceil(chars / charsPerToken);
+    }
+
+    if (message.role === "toolResult") {
+      for (const block of message.content) {
+        if (block.type === "text") chars += block.text.length;
+        if (block.type === "image") chars += 4800;
+      }
+      return Math.ceil(chars / charsPerToken);
+    }
+
+    return 0;
+  };
+
+  for (let i = state.messages.length - 1; i >= 0; i--) {
+    const msg = state.messages[i];
     if (msg.role !== "assistant") continue;
-    totalTokens += msg.usage.input + msg.usage.output;
+    if (msg.stopReason === "error") continue;
+
+    const t = calculateContextTokens(msg.usage);
+    if (t > 0) {
+      lastUsage = msg.usage;
+      lastUsageIndex = i;
+      lastUsageTimestamp = msg.timestamp;
+      break;
+    }
+  }
+
+  let lastCompactionTimestamp = 0;
+  for (let i = state.messages.length - 1; i >= 0; i--) {
+    const msg = state.messages[i];
+    if (msg.role === "compactionSummary") {
+      lastCompactionTimestamp = msg.timestamp;
+      break;
+    }
+  }
+
+  const usageIsStale = lastUsage !== null && lastCompactionTimestamp > lastUsageTimestamp;
+
+
+  if (lastUsage && lastUsageIndex !== null && !usageIsStale) {
+    totalTokens = calculateContextTokens(lastUsage);
+    for (let i = lastUsageIndex + 1; i < state.messages.length; i++) {
+      totalTokens += estimateMessageTokens(state.messages[i]);
+    }
+  } else {
+    // No reliable usage signal (or it became stale after /compact). Estimate from scratch.
+    totalTokens = Math.ceil(state.systemPrompt.length / 4);
+    for (const m of state.messages) {
+      totalTokens += estimateMessageTokens(m);
+    }
   }
 
   const contextWindow = state.model?.contextWindow || 200000;
-  const pct = Math.min(100, Math.round((totalTokens / contextWindow) * 100));
+  const pct = contextWindow > 0 ? Math.round((totalTokens / contextWindow) * 100) : 0;
   const ctxLabel = contextWindow >= 1_000_000
     ? `${(contextWindow / 1_000_000).toFixed(0)}M`
     : `${Math.round(contextWindow / 1000)}k`;
@@ -46,9 +146,12 @@ export function updateStatusBar(agent: Agent): void {
 
   // Context health: color + tooltip based on usage
   let ctxColor = "";
-  const ctxBaseTooltip = "How much of the model's context window has been used. As it fills up the model may lose track of earlier details — start a new chat if quality drops.";
+  const ctxBaseTooltip = `How much of the model's context window has been used (${totalTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tokens). As it fills up the model may lose track of earlier details — start a new chat if quality drops.`;
   let ctxWarning = "";
-  if (pct > 60) {
+  if (pct > 100) {
+    ctxColor = "pi-status-ctx--red";
+    ctxWarning = `<span class="pi-tooltip__warn pi-tooltip__warn--red">Context window exceeded — the next message will fail. Use /compact to free up some context, or /new to clear the chat.</span>`;
+  } else if (pct > 60) {
     ctxColor = "pi-status-ctx--red";
     ctxWarning = `<span class="pi-tooltip__warn pi-tooltip__warn--red">Context ${pct}% used up — quality will degrade. Use /compact to free up some context, or /new to clear the chat.</span>`;
   } else if (pct > 40) {
@@ -59,8 +162,12 @@ export function updateStatusBar(agent: Agent): void {
   const chevronSvg = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
   const brainSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg>`;
 
+  const usageDebug = isDebugEnabled() && lastUsage
+    ? `<span class="pi-status-ctx__debug">${escapeHtml(formatUsageDebug(lastUsage))}</span>`
+    : "";
+
   el.innerHTML = `
-    <span class="pi-status-ctx has-tooltip"><span class="${ctxColor}">${pct}%</span> / ${ctxLabel}<span class="pi-tooltip pi-tooltip--left">${ctxBaseTooltip}${ctxWarning}</span></span>
+    <span class="pi-status-ctx has-tooltip"><span class="${ctxColor}">${pct}%</span> / ${ctxLabel}${usageDebug}<span class="pi-tooltip pi-tooltip--left">${ctxBaseTooltip}${ctxWarning}</span></span>
     <button class="pi-status-model" data-tooltip="Switch the AI model powering this session">
       <span class="pi-status-model__mark">π</span>
       <span class="pi-status-model__name">${modelAliasEscaped}</span>
