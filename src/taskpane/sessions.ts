@@ -27,8 +27,14 @@ export async function setupSessionPersistence(opts: {
 }): Promise<void> {
   const { agent, sidebar, sessions, settings } = opts;
 
-  const workbookCtx = await getWorkbookContext().catch(() => ({ workbookId: null, source: "unknown" as const }));
-  const workbookId = workbookCtx.workbookId;
+  async function resolveWorkbookId(): Promise<string | null> {
+    try {
+      const ctx = await getWorkbookContext();
+      return ctx.workbookId;
+    } catch {
+      return null;
+    }
+  }
 
   let sessionId: string = crypto.randomUUID();
   let sessionTitle = "";
@@ -97,11 +103,13 @@ export async function setupSessionPersistence(opts: {
         costTotal += u.cost.total;
       }
 
+      const savedSessionId = sessionId;
+
       await sessions.saveSession(
-        sessionId,
+        savedSessionId,
         agent.state,
         {
-          id: sessionId,
+          id: savedSessionId,
           title: sessionTitle,
           createdAt: sessionCreatedAt,
           lastModified: now,
@@ -126,10 +134,11 @@ export async function setupSessionPersistence(opts: {
         sessionTitle,
       );
 
+      const workbookId = await resolveWorkbookId();
       if (workbookId) {
         try {
-          await linkSessionToWorkbook(settings, sessionId, workbookId);
-          await setLatestSessionForWorkbook(settings, workbookId, sessionId);
+          await linkSessionToWorkbook(settings, savedSessionId, workbookId);
+          await setLatestSessionForWorkbook(settings, workbookId, savedSessionId);
         } catch (err) {
           console.warn("[pi] Workbook/session association update failed:", err);
         }
@@ -157,6 +166,7 @@ export async function setupSessionPersistence(opts: {
   try {
     const candidates: string[] = [];
 
+    const workbookId = await resolveWorkbookId();
     if (workbookId) {
       const wbLatest = await getLatestSessionForWorkbook(settings, workbookId);
       if (wbLatest) candidates.push(wbLatest);
@@ -212,16 +222,17 @@ export async function setupSessionPersistence(opts: {
       sessionCreatedAt = e.detail?.createdAt || new Date().toISOString();
       firstAssistantSeen = true;
 
-      if (workbookId) {
-        void (async () => {
-          try {
-            await linkSessionToWorkbook(settings, id, workbookId);
-            await setLatestSessionForWorkbook(settings, workbookId, id);
-          } catch (err) {
-            console.warn("[pi] Workbook/session association update failed:", err);
-          }
-        })();
-      }
+      void (async () => {
+        const workbookId = await resolveWorkbookId();
+        if (!workbookId) return;
+
+        try {
+          await linkSessionToWorkbook(settings, id, workbookId);
+          await setLatestSessionForWorkbook(settings, workbookId, id);
+        } catch (err) {
+          console.warn("[pi] Workbook/session association update failed:", err);
+        }
+      })();
     }) as EventListener,
   );
 }
