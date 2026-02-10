@@ -9,7 +9,7 @@ import { html, render } from "lit";
 import { Agent } from "@mariozechner/pi-agent-core";
 import { ApiKeyPromptDialog, ModelSelector, getAppStorage } from "@mariozechner/pi-web-ui";
 
-import { createOfficeStreamFn } from "../auth/stream-proxy.js";
+import { createOfficeStreamFn, resetPayloadStats } from "../auth/stream-proxy.js";
 import { restoreCredentials } from "../auth/restore.js";
 import { getBlueprint } from "../context/blueprint.js";
 import { ChangeTracker } from "../context/change-tracker.js";
@@ -232,8 +232,11 @@ export async function initTaskpane(opts: {
   appEl.innerHTML = "";
   appEl.appendChild(sidebar);
 
-  // 8. Error tracking
+  // 8. Error tracking + payload stats reset
   agent.subscribe((ev) => {
+    if (ev.type === "agent_start") {
+      resetPayloadStats();
+    }
     if (ev.type === "message_start" && ev.message.role === "user") {
       clearErrorBanner(errorRoot);
     }

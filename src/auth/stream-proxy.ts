@@ -72,6 +72,53 @@ function isToolContinuation(messages: Context["messages"]): boolean {
   return last.role === "toolResult";
 }
 
+// ---------------------------------------------------------------------------
+// Payload stats — lightweight counters for debug pill in status bar.
+// ---------------------------------------------------------------------------
+
+export interface PayloadStats {
+  /** LLM calls since last reset (= turn count within an agent run). */
+  calls: number;
+  /** Chars of system prompt on last call. */
+  systemChars: number;
+  /** Chars of tool schemas (compact JSON) on last call, 0 if stripped. */
+  toolSchemaChars: number;
+  /** Number of tool definitions on last call, 0 if stripped. */
+  toolCount: number;
+  /** Number of messages on last call. */
+  messageCount: number;
+}
+
+const stats: PayloadStats = { calls: 0, systemChars: 0, toolSchemaChars: 0, toolCount: 0, messageCount: 0 };
+
+export function getPayloadStats(): Readonly<PayloadStats> {
+  return stats;
+}
+
+export function resetPayloadStats(): void {
+  stats.calls = 0;
+  stats.systemChars = 0;
+  stats.toolSchemaChars = 0;
+  stats.toolCount = 0;
+  stats.messageCount = 0;
+}
+
+function recordCall(context: Context): void {
+  stats.calls += 1;
+  stats.systemChars = context.systemPrompt?.length ?? 0;
+  stats.messageCount = context.messages.length;
+  if (context.tools) {
+    stats.toolCount = context.tools.length;
+    let chars = 0;
+    for (const t of context.tools) chars += JSON.stringify(t).length;
+    stats.toolSchemaChars = chars;
+  } else {
+    stats.toolCount = 0;
+    stats.toolSchemaChars = 0;
+  }
+  document.dispatchEvent(new Event("pi:status-update"));
+}
+
 /**
  * Create a StreamFn compatible with Agent that proxies provider base URLs when needed.
  */
@@ -81,6 +128,8 @@ export function createOfficeStreamFn(getProxyUrl: GetProxyUrl) {
     const effectiveContext = isToolContinuation(context.messages)
       ? { ...context, tools: undefined }
       : context;
+
+    recordCall(effectiveContext);
 
     const proxyUrl = await getProxyUrl();
     if (!proxyUrl) {
