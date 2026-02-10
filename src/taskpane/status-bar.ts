@@ -2,12 +2,12 @@
  * Status bar rendering + thinking level flash.
  */
 
-import type { Usage } from "@mariozechner/pi-ai";
-import type { Agent, AgentMessage } from "@mariozechner/pi-agent-core";
+import type { Agent } from "@mariozechner/pi-agent-core";
 
 import { showToast } from "../ui/toast.js";
 import { escapeHtml } from "../utils/html.js";
 import { formatUsageDebug, isDebugEnabled } from "../debug/debug.js";
+import { estimateContextTokens } from "../utils/context-tokens.js";
 
 export function injectStatusBar(agent: Agent): void {
   agent.subscribe(() => updateStatusBar(agent));
@@ -34,103 +34,7 @@ export function updateStatusBar(agent: Agent): void {
   //
   // The most reliable signal we have in the UI is the last successful assistant
   // turn's usage, which already reflects the prompt size.
-  let totalTokens = 0;
-  let lastUsage: Usage | null = null;
-  let lastUsageIndex: number | null = null;
-  let lastUsageTimestamp = 0;
-
-  const calculateContextTokens = (u: Usage): number =>
-    u.totalTokens || u.input + u.output + u.cacheRead + u.cacheWrite;
-
-  const estimateMessageTokens = (message: AgentMessage): number => {
-    // Conservative heuristic from pi-coding-agent: tokens ≈ chars / 4
-    const charsPerToken = 4;
-    let chars = 0;
-
-    if (message.role === "artifact") return 0;
-
-    if (message.role === "compactionSummary") {
-      return Math.ceil(message.summary.length / charsPerToken);
-    }
-
-    if (message.role === "user" || message.role === "user-with-attachments") {
-      const content = message.content;
-      if (typeof content === "string") {
-        chars += content.length;
-      } else {
-        for (const block of content) {
-          if (block.type === "text") chars += block.text.length;
-          if (block.type === "image") chars += 4800;
-        }
-      }
-      return Math.ceil(chars / charsPerToken);
-    }
-
-    if (message.role === "assistant") {
-      for (const block of message.content) {
-        if (block.type === "text") chars += block.text.length;
-        else if (block.type === "thinking") chars += block.thinking.length;
-        else if (block.type === "toolCall") {
-          chars += block.name.length;
-          try {
-            chars += JSON.stringify(block.arguments).length;
-          } catch {
-            // ignore
-          }
-        }
-      }
-      return Math.ceil(chars / charsPerToken);
-    }
-
-    if (message.role === "toolResult") {
-      for (const block of message.content) {
-        if (block.type === "text") chars += block.text.length;
-        if (block.type === "image") chars += 4800;
-      }
-      return Math.ceil(chars / charsPerToken);
-    }
-
-    return 0;
-  };
-
-  for (let i = state.messages.length - 1; i >= 0; i--) {
-    const msg = state.messages[i];
-    if (msg.role !== "assistant") continue;
-    if (msg.stopReason === "error") continue;
-
-    const t = calculateContextTokens(msg.usage);
-    if (t > 0) {
-      lastUsage = msg.usage;
-      lastUsageIndex = i;
-      lastUsageTimestamp = msg.timestamp;
-      break;
-    }
-  }
-
-  let lastCompactionTimestamp = 0;
-  for (let i = state.messages.length - 1; i >= 0; i--) {
-    const msg = state.messages[i];
-    if (msg.role === "compactionSummary") {
-      lastCompactionTimestamp = msg.timestamp;
-      break;
-    }
-  }
-
-  const usageIsStale = lastUsage !== null && lastCompactionTimestamp > lastUsageTimestamp;
-
-
-  if (lastUsage && lastUsageIndex !== null && !usageIsStale) {
-    totalTokens = calculateContextTokens(lastUsage);
-    for (let i = lastUsageIndex + 1; i < state.messages.length; i++) {
-      totalTokens += estimateMessageTokens(state.messages[i]);
-    }
-  } else {
-    // No reliable usage signal (or it became stale after /compact). Estimate from scratch.
-    totalTokens = Math.ceil(state.systemPrompt.length / 4);
-    for (const m of state.messages) {
-      totalTokens += estimateMessageTokens(m);
-    }
-  }
+  const { totalTokens, lastUsage } = estimateContextTokens(state);
 
   const contextWindow = state.model?.contextWindow || 200000;
   const pct = contextWindow > 0 ? Math.round((totalTokens / contextWindow) * 100) : 0;

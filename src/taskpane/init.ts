@@ -21,8 +21,10 @@ import { wireCommandMenu } from "../commands/command-menu.js";
 import { buildSystemPrompt } from "../prompt/system-prompt.js";
 import { initAppStorage } from "../storage/init-app-storage.js";
 import { renderError } from "../ui/loading.js";
+import { showToast } from "../ui/toast.js";
 import { PiSidebar } from "../ui/pi-sidebar.js";
 import { setActiveProviders } from "../compat/model-selector-patch.js";
+import { maybeAutoCompactBeforePrompt } from "../compaction/auto-compaction.js";
 
 import { createContextInjector } from "./context-injection.js";
 import { pickDefaultModel } from "./default-model.js";
@@ -67,6 +69,14 @@ export async function initTaskpane(opts: {
 
   // 1. Storage
   const { providerKeys, sessions, settings } = initAppStorage();
+
+  // 1b. Auto-compaction (Pi defaults to enabled)
+  let autoCompactEnabled = true;
+  try {
+    autoCompactEnabled = (await settings.get<boolean>("compaction.enabled")) ?? true;
+  } catch {
+    autoCompactEnabled = true;
+  }
 
   // 2. Restore auth
   await restoreCredentials(providerKeys);
@@ -146,6 +156,9 @@ export async function initTaskpane(opts: {
   // ── Abort tracking (hoisted — used by onAbort + error handler below) ──
   let userAborted = false;
 
+  // ── Send lock (prevents double-sends while auto-compaction runs) ──
+  let sendInFlight = false;
+
   // 7. Create and mount PiSidebar
   const sidebar = new PiSidebar();
   sidebar.agent = agent;
@@ -173,18 +186,41 @@ export async function initTaskpane(opts: {
   };
 
   sidebar.onSend = (text) => {
-    clearErrorBanner(errorRoot);
-    agent.prompt(text).catch((e: unknown) => {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (isLikelyCorsErrorMessage(msg)) {
-        showErrorBanner(
-          errorRoot,
-          "Network error (likely CORS). Start the local HTTPS proxy (npm run proxy:https) and enable it in /settings → Proxy.",
-        );
-      } else {
-        showErrorBanner(errorRoot, `LLM error: ${msg}`);
+    void (async () => {
+      if (sendInFlight) {
+        showToast("Still working — please wait");
+        return;
       }
-    });
+      if (agent.state.isStreaming) return;
+
+      sendInFlight = true;
+      clearErrorBanner(errorRoot);
+
+      try {
+        await maybeAutoCompactBeforePrompt({
+          agent,
+          nextUserText: text,
+          enabled: autoCompactEnabled,
+        });
+
+        await agent.prompt(text);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        const isAbort = userAborted || /abort/i.test(msg) || /cancel/i.test(msg);
+        if (isAbort) return;
+
+        if (isLikelyCorsErrorMessage(msg)) {
+          showErrorBanner(
+            errorRoot,
+            "Network error (likely CORS). Start the local HTTPS proxy (npm run proxy:https) and enable it in /settings → Proxy.",
+          );
+        } else {
+          showErrorBanner(errorRoot, `LLM error: ${msg}`);
+        }
+      } finally {
+        sendInFlight = false;
+      }
+    })();
   };
 
   sidebar.onAbort = () => {
