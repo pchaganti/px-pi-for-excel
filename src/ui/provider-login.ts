@@ -314,7 +314,11 @@ export function buildProviderRow(
         const oauthProvider = getOAuthProvider(oauth);
         if (oauthProvider) {
           const cred = await oauthProvider.login({
-            onAuth: (info) => { window.open(info.url, "_blank"); },
+            onAuth: (info) => {
+              // Prevent the OAuth page from gaining a handle to the add-in window.
+              const w = window.open(info.url, "_blank", "noopener,noreferrer");
+              if (w) w.opener = null;
+            },
             onPrompt: async (prompt) => {
               const helperText = id === "anthropic"
                 ? "After completing login, copy the authorization string from the browser. You can paste the full URL, or a CODE#STATE value."

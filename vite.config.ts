@@ -1,4 +1,5 @@
 import { defineConfig, type Plugin } from "vite";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -14,16 +15,39 @@ import os from "os";
  */
 function piAuthPlugin(): Plugin {
   const authPath = path.join(os.homedir(), ".pi", "agent", "auth.json");
+
+  const isLoopbackAddress = (addr: string | undefined): boolean => {
+    if (!addr) return false;
+    if (addr === "::1" || addr === "0:0:0:0:0:0:0:1") return true;
+    if (addr.startsWith("127.")) return true;
+    if (addr.startsWith("::ffff:127.")) return true;
+    return false;
+  };
+
   return {
     name: "pi-auth",
     configureServer(server) {
-      server.middlewares.use("/__pi-auth", (_req, res) => {
+      server.middlewares.use("/__pi-auth", (req: IncomingMessage, res: ServerResponse) => {
+        // SECURITY: auth.json can contain API keys + refresh tokens.
+        // Only serve it to loopback clients (Excel webviews, local browser).
+        const remote = req.socket?.remoteAddress;
+        if (!isLoopbackAddress(remote)) {
+          res.statusCode = 403;
+          res.setHeader("Content-Type", "application/json; charset=utf-8");
+          res.setHeader("Cache-Control", "no-store");
+          res.end(JSON.stringify({ error: "forbidden" }));
+          return;
+        }
+
         try {
           const data = fs.readFileSync(authPath, "utf-8");
-          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Content-Type", "application/json; charset=utf-8");
+          res.setHeader("Cache-Control", "no-store");
           res.end(data);
         } catch {
           res.statusCode = 404;
+          res.setHeader("Content-Type", "application/json; charset=utf-8");
+          res.setHeader("Cache-Control", "no-store");
           res.end(JSON.stringify({ error: "auth.json not found" }));
         }
       });

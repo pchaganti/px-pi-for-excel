@@ -2,6 +2,8 @@
  * Small DOM-only queue display for queued steering / follow-up messages.
  *
  * This intentionally stays as plain DOM manipulation (not Lit) for now.
+ *
+ * Security note: avoid `innerHTML` so queued text can't inject markup.
  */
 
 import type { Agent } from "@mariozechner/pi-agent-core";
@@ -10,6 +12,28 @@ import type { PiSidebar } from "../ui/pi-sidebar.js";
 import { extractTextFromContent } from "../utils/content.js";
 
 export type QueuedMessageType = "steer" | "follow-up";
+
+type QueuedItem = { type: QueuedMessageType; text: string };
+
+function renderQueuedItem({ type, text }: QueuedItem): HTMLElement {
+  const itemEl = document.createElement("div");
+  itemEl.className = "pi-queue__item";
+
+  const label = type === "steer" ? "Steering" : "Follow-up";
+  const cls = type === "steer" ? "pi-queue__label--steer" : "pi-queue__label--followup";
+
+  const labelEl = document.createElement("span");
+  labelEl.className = `pi-queue__label ${cls}`;
+  labelEl.textContent = label;
+
+  const truncated = text.length > 50 ? text.slice(0, 47) + "…" : text;
+  const textEl = document.createElement("span");
+  textEl.className = "pi-queue__text";
+  textEl.textContent = truncated;
+
+  itemEl.append(labelEl, textEl);
+  return itemEl;
+}
 
 export function createQueueDisplay(opts: {
   agent: Agent;
@@ -20,7 +44,6 @@ export function createQueueDisplay(opts: {
 } {
   const { agent, sidebar } = opts;
 
-  type QueuedItem = { type: QueuedMessageType; text: string };
   const queued: QueuedItem[] = [];
 
   function updateQueueDisplay() {
@@ -29,6 +52,7 @@ export function createQueueDisplay(opts: {
       container?.remove();
       return;
     }
+
     if (!container) {
       container = document.createElement("div");
       container.id = "pi-queue-display";
@@ -43,17 +67,11 @@ export function createQueueDisplay(opts: {
       }
     }
 
-    container.innerHTML = queued
-      .map(({ type, text }) => {
-        const label = type === "steer" ? "Steering" : "Follow-up";
-        const cls = type === "steer" ? "pi-queue__label--steer" : "pi-queue__label--followup";
-        const truncated = text.length > 50 ? text.slice(0, 47) + "…" : text;
-        return `<div class="pi-queue__item">
-        <span class="pi-queue__label ${cls}">${label}</span>
-        <span class="pi-queue__text">${truncated}</span>
-      </div>`;
-      })
-      .join("");
+    const fragment = document.createDocumentFragment();
+    for (const item of queued) {
+      fragment.appendChild(renderQueuedItem(item));
+    }
+    container.replaceChildren(fragment);
   }
 
   function add(type: QueuedMessageType, text: string) {

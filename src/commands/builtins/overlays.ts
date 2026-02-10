@@ -89,24 +89,36 @@ export async function showResumeDialog(agent: Agent): Promise<void> {
     return d.toLocaleDateString();
   };
 
+  // SECURITY: build the list via DOM APIs so session titles can't inject HTML.
   overlay.innerHTML = `
     <div class="pi-welcome-card" style="text-align: left; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
       <h2 style="font-size: 16px; font-weight: 600; margin: 0 0 12px; font-family: var(--font-sans); flex-shrink: 0;">Resume Session</h2>
-      <div class="pi-resume-list" style="overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
-        ${sessions
-          .slice(0, 20)
-          .map(
-            (s) => `
-          <button class="pi-welcome-provider pi-resume-item" data-id="${s.id}" style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
-            <span style="font-size: 13px; font-weight: 500;">${s.title || "Untitled"}</span>
-            <span style="font-size: 11px; color: var(--muted-foreground);">${s.messageCount || 0} messages · ${formatDate(s.lastModified)}</span>
-          </button>
-        `,
-          )
-          .join("")}
-      </div>
+      <div class="pi-resume-list" style="overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></div>
     </div>
   `;
+
+  const list = overlay.querySelector<HTMLDivElement>(".pi-resume-list");
+  if (!list) {
+    throw new Error("Resume list container not found");
+  }
+
+  for (const s of sessions.slice(0, 20)) {
+    const btn = document.createElement("button");
+    btn.className = "pi-welcome-provider pi-resume-item";
+    btn.dataset.id = s.id;
+    btn.style.cssText = "display: flex; flex-direction: column; align-items: flex-start; gap: 2px;";
+
+    const title = document.createElement("span");
+    title.style.cssText = "font-size: 13px; font-weight: 500;";
+    title.textContent = s.title || "Untitled";
+
+    const meta = document.createElement("span");
+    meta.style.cssText = "font-size: 11px; color: var(--muted-foreground);";
+    meta.textContent = `${s.messageCount || 0} messages · ${formatDate(s.lastModified)}`;
+
+    btn.append(title, meta);
+    list.appendChild(btn);
+  }
 
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) {

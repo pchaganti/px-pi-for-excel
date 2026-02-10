@@ -50,13 +50,25 @@ const MIME = {
   ".txt": "text/plain; charset=utf-8",
 };
 
+function isLoopbackAddress(addr) {
+  if (!addr) return false;
+  if (addr === "::1" || addr === "0:0:0:0:0:0:0:1") return true;
+  if (addr.startsWith("127.")) return true;
+  if (addr.startsWith("::ffff:127.")) return true;
+  return false;
+}
+
 function safeJoin(base, reqPath) {
   const decoded = decodeURIComponent(reqPath);
   const cleaned = decoded.replace(/^\/+/, "");
   const full = path.resolve(base, cleaned);
-  if (!full.startsWith(base)) {
+
+  // Prevent path traversal. String-prefix checks are insufficient (e.g. /dist2).
+  const rel = path.relative(base, full);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) {
     throw new Error("Path traversal");
   }
+
   return full;
 }
 
@@ -67,6 +79,15 @@ const server = https.createServer(
   },
   (req, res) => {
     try {
+      const remote = req.socket?.remoteAddress;
+      if (!isLoopbackAddress(remote)) {
+        res.statusCode = 403;
+        res.setHeader("content-type", "text/plain; charset=utf-8");
+        console.log(`[serve-dist-https] ${req.method || "GET"} ${req.url || "/"} -> 403 (remote ${remote || "unknown"})`);
+        res.end("forbidden");
+        return;
+      }
+
       const url = new URL(req.url || "/", `https://${HOST}:${PORT}`);
       let reqPath = url.pathname;
       if (reqPath === "/") reqPath = "/src/taskpane.html";

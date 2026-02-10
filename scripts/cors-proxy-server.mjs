@@ -52,6 +52,14 @@ const HOP_BY_HOP_HEADERS = new Set([
   "upgrade",
 ]);
 
+function isLoopbackAddress(addr) {
+  if (!addr) return false;
+  if (addr === "::1" || addr === "0:0:0:0:0:0:0:1") return true;
+  if (addr.startsWith("127.")) return true;
+  if (addr.startsWith("::ffff:127.")) return true;
+  return false;
+}
+
 function setCorsHeaders(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
@@ -112,6 +120,15 @@ function buildOutboundHeaders(inHeaders) {
 }
 
 const handler = async (req, res) => {
+  const remote = req.socket?.remoteAddress;
+  if (!isLoopbackAddress(remote)) {
+    res.statusCode = 403;
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.end("forbidden");
+    console.warn(`[proxy] blocked non-loopback client: ${remote || "unknown"}`);
+    return;
+  }
+
   setCorsHeaders(req, res);
 
   if (req.method === "OPTIONS") {
