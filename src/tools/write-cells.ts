@@ -9,6 +9,7 @@
 
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
+import type { WriteCellsDetails } from "./tool-details.js";
 import {
   excelRun, getRange, qualifiedAddress, parseCell,
   colToLetter, computeRangeAddress, padValues,
@@ -65,7 +66,7 @@ type WriteCellsResult =
 type BlockedWriteCellsResult = Extract<WriteCellsResult, { blocked: true }>;
 type SuccessWriteCellsResult = Extract<WriteCellsResult, { blocked: false }>;
 
-export function createWriteCellsTool(): AgentTool<typeof schema> {
+export function createWriteCellsTool(): AgentTool<typeof schema, WriteCellsDetails> {
   return {
     name: "write_cells",
     label: "Write Cells",
@@ -79,12 +80,12 @@ export function createWriteCellsTool(): AgentTool<typeof schema> {
     execute: async (
       _toolCallId: string,
       params: Params,
-    ): Promise<AgentToolResult<undefined>> => {
+    ): Promise<AgentToolResult<WriteCellsDetails>> => {
       try {
         if (!params.values || params.values.length === 0) {
           return {
             content: [{ type: "text", text: "Error: values array is empty." }],
-            details: undefined,
+            details: { kind: "write_cells", blocked: false },
           };
         }
 
@@ -97,7 +98,7 @@ export function createWriteCellsTool(): AgentTool<typeof schema> {
         if (startCellRef.includes(":")) {
           return {
             content: [{ type: "text", text: "Error: start_cell must be a single cell (e.g. \"A1\")." }],
-            details: undefined,
+            details: { kind: "write_cells", blocked: false },
           };
         }
 
@@ -107,7 +108,7 @@ export function createWriteCellsTool(): AgentTool<typeof schema> {
         } catch {
           return {
             content: [{ type: "text", text: `Error: invalid start_cell "${params.start_cell}".` }],
-            details: undefined,
+            details: { kind: "write_cells", blocked: false },
           };
         }
 
@@ -119,7 +120,10 @@ export function createWriteCellsTool(): AgentTool<typeof schema> {
           }
           lines.push("");
           lines.push("Fix the formulas and retry.");
-          return { content: [{ type: "text", text: lines.join("\n") }], details: undefined };
+          return {
+            content: [{ type: "text", text: lines.join("\n") }],
+            details: { kind: "write_cells", blocked: true },
+          };
         }
 
         const result = await excelRun<WriteCellsResult>(async (context) => {
@@ -171,7 +175,7 @@ export function createWriteCellsTool(): AgentTool<typeof schema> {
       } catch (e: unknown) {
         return {
           content: [{ type: "text", text: `Error writing cells: ${getErrorMessage(e)}` }],
-          details: undefined,
+          details: { kind: "write_cells", blocked: false },
         };
       }
     },
@@ -247,7 +251,7 @@ export function countOccupiedCells(values: unknown[][], formulas: unknown[][]): 
   return count;
 }
 
-function formatBlocked(result: BlockedWriteCellsResult): AgentToolResult<undefined> {
+function formatBlocked(result: BlockedWriteCellsResult): AgentToolResult<WriteCellsDetails> {
   const fullAddr = qualifiedAddress(result.sheetName, result.address);
   const lines: string[] = [];
 
@@ -266,10 +270,18 @@ function formatBlocked(result: BlockedWriteCellsResult): AgentToolResult<undefin
   lines.push(
     "To overwrite, confirm with the user and retry with `allow_overwrite: true`.",
   );
-  return { content: [{ type: "text", text: lines.join("\n") }], details: undefined };
+
+  const details: WriteCellsDetails = {
+    kind: "write_cells",
+    blocked: true,
+    address: fullAddr,
+    existingCount: result.existingCount,
+  };
+
+  return { content: [{ type: "text", text: lines.join("\n") }], details };
 }
 
-function formatSuccess(result: SuccessWriteCellsResult, rows: number, cols: number): AgentToolResult<undefined> {
+function formatSuccess(result: SuccessWriteCellsResult, rows: number, cols: number): AgentToolResult<WriteCellsDetails> {
   const fullAddr = qualifiedAddress(result.sheetName, result.address);
   const cellPart = result.address.includes("!") ? result.address.split("!")[1] : result.address;
   const startCell = cellPart.split(":")[0];
@@ -307,5 +319,12 @@ function formatSuccess(result: SuccessWriteCellsResult, rows: number, cols: numb
     lines.push(formatAsMarkdownTable(result.readBackValues));
   }
 
-  return { content: [{ type: "text", text: lines.join("\n") }], details: undefined };
+  const details: WriteCellsDetails = {
+    kind: "write_cells",
+    blocked: false,
+    address: fullAddr,
+    formulaErrorCount: errors.length,
+  };
+
+  return { content: [{ type: "text", text: lines.join("\n") }], details };
 }

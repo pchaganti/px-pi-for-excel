@@ -7,6 +7,7 @@
 
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
+import type { FormatCellsDetails } from "./tool-details.js";
 import { excelRun, getRange, parseRangeRef, qualifiedAddress } from "../excel/helpers.js";
 import { getErrorMessage } from "../utils/errors.js";
 import { resolveStyles } from "../conventions/index.js";
@@ -126,7 +127,7 @@ function isVerticalAlignment(value: string): value is VerticalAlignment {
   return value === "Top" || value === "Center" || value === "Bottom";
 }
 
-export function createFormatCellsTool(): AgentTool<typeof schema> {
+export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDetails> {
   return {
     name: "format_cells",
     label: "Format Cells",
@@ -139,7 +140,7 @@ export function createFormatCellsTool(): AgentTool<typeof schema> {
     execute: async (
       _toolCallId: string,
       params: Params,
-    ): Promise<AgentToolResult<undefined>> => {
+    ): Promise<AgentToolResult<FormatCellsDetails>> => {
       try {
         // ── Resolve styles + overrides into flat properties ──────────
         const styleResult = resolveStyles(params.style, {
@@ -364,12 +365,16 @@ export function createFormatCellsTool(): AgentTool<typeof schema> {
               text: `Formatted **${fullAddr}**: ${result.applied.join(", ")}.${warningText}`,
             },
           ],
-          details: undefined,
+          details: {
+            kind: "format_cells",
+            address: fullAddr,
+            warningsCount: result.warnings.length,
+          },
         };
       } catch (e: unknown) {
         return {
           content: [{ type: "text", text: `Error formatting: ${getErrorMessage(e)}` }],
-          details: undefined,
+          details: { kind: "format_cells", address: params.range },
         };
       }
     },
