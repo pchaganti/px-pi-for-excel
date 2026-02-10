@@ -6,7 +6,7 @@
  * components (message-list, streaming-message-container) for rendering.
  */
 
-import { html, LitElement, type PropertyValues } from "lit";
+import { html, LitElement, nothing, type PropertyValues } from "lit";
 import { customElement, property, query, state } from "lit/decorators.js";
 import type { Agent, AgentEvent } from "@mariozechner/pi-agent-core";
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
@@ -15,6 +15,8 @@ import "./pi-input.js";
 import "./working-indicator.js";
 import { initToolGrouping } from "./tool-grouping.js";
 import type { PiInput } from "./pi-input.js";
+import { isDebugEnabled } from "../debug/debug.js";
+import { getPayloadStats, getLastContext, type PayloadStats } from "../auth/stream-proxy.js";
 
 export interface EmptyHint {
   /** Short text shown on the button. */
@@ -34,6 +36,7 @@ export class PiSidebar extends LitElement {
   @state() private _isStreaming = false;
   @state() private _busyLabel: string | null = null;
   @state() private _busyHint: string | null = null;
+  @state() private _payloadStats: PayloadStats | null = null;
 
   @query(".pi-messages") private _scrollContainer?: HTMLElement;
   @query("streaming-message-container") private _streamingContainer?: StreamingMessageContainer;
@@ -44,6 +47,14 @@ export class PiSidebar extends LitElement {
   private _autoScroll = true;
   private _lastScrollTop = 0;
   private _resizeObserver?: ResizeObserver;
+  private _onPayloadUpdate = () => {
+    if (isDebugEnabled()) {
+      const s = getPayloadStats();
+      this._payloadStats = s.calls > 0 ? { ...s } : null;
+    } else {
+      this._payloadStats = null;
+    }
+  };
 
   getInput(): PiInput | undefined { return this._input ?? undefined; }
   getTextarea(): HTMLTextAreaElement | undefined { return this._input?.getTextarea(); }
@@ -82,6 +93,8 @@ export class PiSidebar extends LitElement {
     this.style.height = "100%";
     this.style.minHeight = "0";
     this.style.position = "relative";
+    document.addEventListener("pi:status-update", this._onPayloadUpdate);
+    document.addEventListener("pi:debug-changed", this._onPayloadUpdate);
   }
 
   override disconnectedCallback() {
@@ -91,6 +104,8 @@ export class PiSidebar extends LitElement {
     this._cleanupGrouping?.();
     this._cleanupGrouping = undefined;
     this._resizeObserver?.disconnect();
+    document.removeEventListener("pi:status-update", this._onPayloadUpdate);
+    document.removeEventListener("pi:debug-changed", this._onPayloadUpdate);
   }
 
   override willUpdate(changed: PropertyValues<this>) {
@@ -209,6 +224,7 @@ export class PiSidebar extends LitElement {
               .pendingToolCalls=${state.pendingToolCalls}
               .toolResultsById=${toolResultsById}
             ></streaming-message-container>
+            ${this._renderContextPill()}
           ` : ""}
         </div>
         ${!hasMessages ? this._renderEmptyState() : ""}
@@ -226,6 +242,61 @@ export class PiSidebar extends LitElement {
           @pi-abort=${this._onAbort}
         ></pi-input>
         <div id="pi-status-bar" class="pi-status-bar"></div>
+      </div>
+    `;
+  }
+
+  private _onContextPillClick() {
+    const ctx = getLastContext();
+    const ps = getPayloadStats();
+    if (!ctx) {
+      console.log("[payload] No context captured yet.");
+      return;
+    }
+    console.group(`[payload] LLM call #${ps.calls} — full context`);
+    console.log("System prompt:", ctx.systemPrompt);
+    console.log("Tools:", ctx.tools ?? "(stripped)");
+    console.log("Messages:", ctx.messages);
+    console.log(`Sizes — sys:${ps.systemChars} tools:${ps.toolSchemaChars} msgs:${ps.messageChars} total:${ps.systemChars + ps.toolSchemaChars + ps.messageChars}`);
+    console.groupEnd();
+  }
+
+  private _renderContextPill() {
+    const ps = this._payloadStats;
+    if (!ps) return nothing;
+
+    const fmtK = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+    const total = ps.systemChars + ps.toolSchemaChars + ps.messageChars;
+    const toolsLabel = ps.toolCount > 0
+      ? `${ps.toolCount} tools (${fmtK(ps.toolSchemaChars)})`
+      : "tools stripped";
+
+    return html`
+      <div class="pi-context-pill" @click=${this._onContextPillClick}>
+        <span class="pi-context-pill__label">Context sent to model</span>
+        <div class="pi-context-pill__row">
+          <span class="pi-context-pill__item">
+            <span class="pi-context-pill__key">call</span>
+            <span class="pi-context-pill__val">#${ps.calls}</span>
+          </span>
+          <span class="pi-context-pill__item">
+            <span class="pi-context-pill__key">sys</span>
+            <span class="pi-context-pill__val">${fmtK(ps.systemChars)}</span>
+          </span>
+          <span class="pi-context-pill__item">
+            <span class="pi-context-pill__key">tools</span>
+            <span class="pi-context-pill__val">${toolsLabel}</span>
+          </span>
+          <span class="pi-context-pill__item">
+            <span class="pi-context-pill__key">msgs</span>
+            <span class="pi-context-pill__val">${ps.messageCount} (${fmtK(ps.messageChars)})</span>
+          </span>
+          <span class="pi-context-pill__item pi-context-pill__total">
+            <span class="pi-context-pill__key">total</span>
+            <span class="pi-context-pill__val">${fmtK(total)} chars</span>
+          </span>
+        </div>
+        <span class="pi-context-pill__hint">Click to log full context to console</span>
       </div>
     `;
   }

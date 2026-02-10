@@ -11,7 +11,7 @@ import { ApiKeyPromptDialog } from "@mariozechner/pi-web-ui/dist/dialogs/ApiKeyP
 import { ModelSelector } from "@mariozechner/pi-web-ui/dist/dialogs/ModelSelector.js";
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
-import { createOfficeStreamFn, resetPayloadStats, getPayloadStats, getLastContext } from "../auth/stream-proxy.js";
+import { createOfficeStreamFn, resetPayloadStats } from "../auth/stream-proxy.js";
 import { restoreCredentials } from "../auth/restore.js";
 import { getBlueprint } from "../context/blueprint.js";
 import { ChangeTracker } from "../context/change-tracker.js";
@@ -319,23 +319,6 @@ export async function initTaskpane(opts: {
     // Thinking level toggle
     if (el.closest?.(".pi-status-thinking")) {
       cycleThinkingLevel(agent);
-      return;
-    }
-
-    // Payload debug — log full context to console
-    if (el.closest?.(".pi-status-payload")) {
-      const ctx = getLastContext();
-      const ps = getPayloadStats();
-      if (!ctx) {
-        console.log("[payload] No context captured yet — send a message with /debug on.");
-        return;
-      }
-      console.group(`[payload] LLM call #${ps.calls} — full context`);
-      console.log("System prompt:", ctx.systemPrompt);
-      console.log("Tools:", ctx.tools ?? "(stripped)");
-      console.log("Messages:", ctx.messages);
-      console.log(`Sizes — sys:${ps.systemChars} tools:${ps.toolSchemaChars} msgs:${ps.messageChars} total:${ps.systemChars + ps.toolSchemaChars + ps.messageChars}`);
-      console.groupEnd();
     }
   });
 

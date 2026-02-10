@@ -8,7 +8,8 @@ import { showToast } from "../ui/toast.js";
 import { escapeHtml } from "../utils/html.js";
 import { formatUsageDebug, isDebugEnabled } from "../debug/debug.js";
 import { estimateContextTokens } from "../utils/context-tokens.js";
-import { getPayloadStats } from "../auth/stream-proxy.js";
+// Payload stats are rendered as an inline pill in the chat area (pi-sidebar.ts),
+// not in the status bar. The status bar only shows the existing usage debug line.
 
 export function injectStatusBar(agent: Agent): void {
   agent.subscribe(() => updateStatusBar(agent));
@@ -73,30 +74,8 @@ export function updateStatusBar(agent: Agent): void {
     ? `<span class="pi-status-ctx__debug">${escapeHtml(formatUsageDebug(lastUsage))}</span>`
     : "";
 
-  let payloadPill = "";
-  if (debugOn) {
-    const ps = getPayloadStats();
-    if (ps.calls > 0) {
-      const fmtK = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-      const total = ps.systemChars + ps.toolSchemaChars + ps.messageChars;
-      const toolsLine = ps.toolCount > 0
-        ? `Tools: ${ps.toolCount} (${ps.toolSchemaChars.toLocaleString()} chars)`
-        : `Tools: stripped`;
-      const tooltip = [
-        `LLM call #${ps.calls}`,
-        `System: ${ps.systemChars.toLocaleString()} chars`,
-        toolsLine,
-        `Messages: ${ps.messageCount} (${ps.messageChars.toLocaleString()} chars)`,
-        `Total context: ~${total.toLocaleString()} chars`,
-        ``,
-        `Click to log full context to console.`,
-      ].join("&#10;");
-      payloadPill = `<span class="pi-status-payload" data-tooltip="${tooltip}">#${ps.calls} ${fmtK(total)}</span>`;
-    }
-  }
-
   el.innerHTML = `
-    <span class="pi-status-ctx has-tooltip"><span class="${ctxColor}">${pct}%</span> / ${ctxLabel}${usageDebug}<span class="pi-tooltip pi-tooltip--left">${ctxBaseTooltip}${ctxWarning}</span></span>${payloadPill}
+    <span class="pi-status-ctx has-tooltip"><span class="${ctxColor}">${pct}%</span> / ${ctxLabel}${usageDebug}<span class="pi-tooltip pi-tooltip--left">${ctxBaseTooltip}${ctxWarning}</span></span>
     <button class="pi-status-model" data-tooltip="Switch the AI model powering this session">
       <span class="pi-status-model__mark">π</span>
       <span class="pi-status-model__name">${modelAliasEscaped}</span>
