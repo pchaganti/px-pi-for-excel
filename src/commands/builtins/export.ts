@@ -68,6 +68,27 @@ function conversationToText(messages: AgentMessage[]): string {
     .join("\n\n");
 }
 
+function countChatMessagesSinceLastCompaction(messages: AgentMessage[]): number {
+  // Find last compaction marker (if any)
+  let lastCompactionIndex = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "compactionSummary") {
+      lastCompactionIndex = i;
+      break;
+    }
+  }
+
+  let count = 0;
+  for (let i = lastCompactionIndex + 1; i < messages.length; i++) {
+    const role = messages[i].role;
+    if (role === "user" || role === "assistant" || role === "user-with-attachments") {
+      count++;
+    }
+  }
+
+  return count;
+}
+
 export function createExportCommands(agent: Agent): SlashCommand[] {
   return [
     {
@@ -201,9 +222,11 @@ export function createCompactCommands(agent: Agent): SlashCommand[] {
 
           const summary = extractTextBlocks(result.content) || "Summary unavailable";
 
+          const summarizedCount = countChatMessagesSinceLastCompaction(msgs);
+
           const compacted = createCompactionSummaryMessage({
             summary,
-            messageCountBefore: msgs.length,
+            messageCountBefore: summarizedCount,
             timestamp: now,
           });
 
@@ -212,7 +235,7 @@ export function createCompactCommands(agent: Agent): SlashCommand[] {
           const iface = document.querySelector<PiSidebar>("pi-sidebar");
           iface?.requestUpdate();
 
-          showToast(`Summarized ${msgs.length} messages`);
+          showToast(`Summarized ${summarizedCount} messages`);
         } catch (e: unknown) {
           showToast(`Compact failed: ${getErrorMessage(e)}`);
         }
