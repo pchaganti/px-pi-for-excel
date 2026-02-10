@@ -992,6 +992,44 @@ assistant-message .px-4 > markdown-block { margin-left: var(--pill-text-indent);
   font-size: 10.5px;
 }
 
+/* ── Markdown in tool cards ────────────────────────────── */
+
+/* Scrollable container for wide markdown tables */
+.pi-tool-card__markdown {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Tighter typography inside tool result cards */
+.pi-tool-card__markdown markdown-block { font-size: 12.5px; line-height: 1.5; }
+.pi-tool-card__markdown markdown-block p { font-size: 12.5px; margin: 0 0 6px; }
+
+/* Tables: compact sizing for sidebar width */
+.pi-tool-card__markdown table {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  line-height: 1.35;
+}
+.pi-tool-card__markdown th {
+  font-size: 11px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.pi-tool-card__markdown td {
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+/* Plain text fallback (no markdown syntax detected) */
+.pi-tool-card__plain-text {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--foreground);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Flex overflow fix for tool cards */
 tool-message {
   min-width: 0;

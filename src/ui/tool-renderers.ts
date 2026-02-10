@@ -19,6 +19,9 @@ import { Code } from "lucide";
 import { humanizeToolInput } from "./humanize-params.js";
 import { humanizeColorsInText } from "./color-names.js";
 
+// Ensure <markdown-block> custom element is registered before we render it.
+import "@mariozechner/mini-lit/dist/MarkdownBlock.js";
+
 const EXCEL_TOOL_NAMES = [
   "get_workbook_overview",
   "read_range",
@@ -90,6 +93,39 @@ function tryFormatJsonOutput(text: string): { isJson: boolean; formatted: string
   } catch {
     return { isJson: false, formatted: text };
   }
+}
+
+/**
+ * Heuristic: does the text contain markdown syntax that benefits from
+ * rendering via `<markdown-block>` rather than plain text?
+ *
+ * Checks for: tables, headers, lists, bold/italic, links, code fences,
+ * blockquotes, horizontal rules, and emoji sentinels (✅ ⛔ etc.).
+ */
+function looksLikeMarkdown(text: string): boolean {
+  // Table rows: "| ... | ... |"
+  if (/^\s*\|.+\|/m.test(text)) return true;
+  // ATX headers: "# ", "## ", etc.
+  if (/^#{1,6}\s+\S/m.test(text)) return true;
+  // Unordered list items: "- item" or "* item"
+  if (/^[ \t]*[-*]\s+\S/m.test(text)) return true;
+  // Ordered list items: "1. item"
+  if (/^[ \t]*\d+\.\s+\S/m.test(text)) return true;
+  // Bold / italic
+  if (/\*\*[^*]+\*\*/.test(text)) return true;
+  if (/__[^_]+__/.test(text)) return true;
+  // Links: [text](url)
+  if (/\[[^\]]+\]\([^)]+\)/.test(text)) return true;
+  // Fenced code blocks
+  if (/^```/m.test(text)) return true;
+  // Blockquotes: "> "
+  if (/^>\s+\S/m.test(text)) return true;
+  // Horizontal rules: "---" or "***" or "___" (alone on a line)
+  if (/^[-*_]{3,}\s*$/m.test(text)) return true;
+  // Common sentinels our tools emit (emoji prefixes)
+  if (/^[✅⛔⚠️ℹ️📊📋🔍]/m.test(text)) return true;
+
+  return false;
 }
 
 function stripMarkdownInline(line: string): string {
@@ -363,6 +399,8 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
         const { text, images } = splitToolResultContent(result);
         const standaloneImagePath = detectStandaloneImagePath(text);
         const json = tryFormatJsonOutput(text);
+        const humanizedText = compactRangesInMarkdown(humanizeColorsInText(text));
+        const useMarkdown = !json.isJson && looksLikeMarkdown(text);
 
         return {
           content: html`
@@ -401,7 +439,9 @@ function createExcelMarkdownRenderer(toolName: string): ToolRenderer<unknown, un
                       `
                       : json.isJson
                         ? html`<code-block .code=${json.formatted} language="json"></code-block>`
-                        : html`<markdown-block .content=${compactRangesInMarkdown(humanizeColorsInText(text)) || "(no output)"}></markdown-block>`}
+                        : useMarkdown
+                          ? html`<div class="pi-tool-card__markdown"><markdown-block .content=${humanizedText || "(no output)"}></markdown-block></div>`
+                          : html`<div class="pi-tool-card__plain-text">${humanizedText || "(no output)"}</div>`}
                     ${renderImages(images)}
                   </div>
                 </div>
