@@ -492,7 +492,8 @@ export function createCompactCommands(agent: Agent): SlashCommand[] {
               apiKey,
               sessionId: agent.sessionId,
               maxTokens,
-              temperature: 0.2,
+              // Match pi-coding-agent: don't force temperature when using reasoning,
+              // since Anthropic requires temperature=1 when thinking is enabled.
               reasoning: "high",
             },
           );
