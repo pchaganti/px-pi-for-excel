@@ -154,10 +154,19 @@ function getLastUserPrompt(messages: Context["messages"]): string | null {
 
 function chooseBundle(prompt: string): ActiveToolBundleId {
   if (matchesAny(prompt, FULL_ACCESS_PATTERNS)) return "full";
-  if (matchesAny(prompt, COMMENT_PATTERNS)) return "comments";
-  if (matchesAny(prompt, DEPENDENCY_PATTERNS)) return "analysis";
-  if (matchesAny(prompt, STRUCTURE_PATTERNS)) return "structure";
-  if (matchesAny(prompt, FORMATTING_PATTERNS)) return "formatting";
+
+  const matchedBundles: ActiveToolBundleId[] = [];
+
+  if (matchesAny(prompt, COMMENT_PATTERNS)) matchedBundles.push("comments");
+  if (matchesAny(prompt, DEPENDENCY_PATTERNS)) matchedBundles.push("analysis");
+  if (matchesAny(prompt, STRUCTURE_PATTERNS)) matchedBundles.push("structure");
+  if (matchesAny(prompt, FORMATTING_PATTERNS)) matchedBundles.push("formatting");
+
+  // Mixed-intent requests (e.g. "insert a row and highlight it") need tools
+  // across categories. Fall back to full for the first call so continuation
+  // stripping doesn't block capabilities in the same turn.
+  if (matchedBundles.length > 1) return "full";
+  if (matchedBundles.length === 1) return matchedBundles[0];
   return "core";
 }
 
