@@ -23,18 +23,14 @@ These reflect current direction and may change as we prototype.
 ### #31 — Design: multi-workbook semantics + per-workbook chats
 https://github.com/tmustier/pi-for-excel/issues/31
 
-**What it’s asking:** define default behavior when multiple workbooks are opened. Today sessions are effectively global; this should become workbook-scoped.
+**Status:** closed (2026-02-11).
 
-**Key design needs:**
-- A stable **workbook identity** (survives restart/rename/move as much as possible).
-- Session UX that makes workbook association obvious (filtering, warnings on cross-workbook resume).
-
-**Status note:** baseline implementation is now in place:
+Implemented for this phase:
 - sidebar shows active workbook label (best-effort)
 - auto-restore is workbook-scoped when workbook identity is known (no global fallback)
-- resume dialog warns before loading a session linked to a different workbook
+- `/resume` supports cross-workbook workflows (all-workbooks toggle + warning before cross-workbook resume)
 
-**Implication:** workbook identity becomes a foundational primitive (also needed by #23, #30, #32).
+**Implication:** workbook identity is now a foundational primitive for remaining session/workbook work (#23, #30, #32).
 
 ---
 
@@ -116,13 +112,15 @@ https://github.com/tmustier/pi-for-excel/issues/62
 ### #20 — Auto-compaction: manage context window budget for long conversations
 https://github.com/tmustier/pi-for-excel/issues/20
 
-**What it’s asking:** token budgeting + automatic compaction; preserve a “tail” window; keep archived messages available in UI without re-entering LLM context.
+**Status:** closed (2026-02-11).
 
-**Status note:** `/compact` has been upgraded recently (now a dedicated compaction card message + uses agent streamFn/api key resolution correctly). Auto-trigger + token budgeting are now implemented (Pi-style threshold). Archived-history UX is still TBD.
+Completed for this phase:
+- token budgeting + auto-triggered compaction (Pi-style thresholds)
+- preserved recent tail context after compaction
+- archived pre-compaction history + “Show earlier messages” UX (from #41)
+- compaction queue/ordering + explicit compacting indicator UX (from #40)
 
-**Implication:**
-- pushes toward tracking per-message cost/tokens and storing an “archived history” separately from the active LLM context
-- interacts with artifacts (#32) because verbose reads could be persisted as artifacts rather than staying in LLM context
+**Implication:** further tuning (e.g., provider/model-family threshold adjustments) should be tracked as focused follow-up issues, not reopened umbrella scope.
 
 **Policy reference:** see [`docs/context-management-policy.md`](./context-management-policy.md) for the active cache-safe rollout slices (payload snapshots, progressive tool disclosure, tool-result shaping, workbook-context invalidation).
 
@@ -133,14 +131,16 @@ https://github.com/tmustier/pi-for-excel/issues/20
 ### #14 — Design: agent interface — tools, system prompt, context strategy
 https://github.com/tmustier/pi-for-excel/issues/14
 
-**What it’s asking:** a holistic design for what the model sees (tools, prompt strategy, context injection, progressive disclosure, compaction, blueprint refresh, conventions).
+**Status:** closed (2026-02-11) as an umbrella issue.
 
-**Status note (based on issue comments + current code):**
-- Tool consolidation + conventions module have shipped.
-- Blueprint invalidation after structural changes has shipped.
-- Auto-compaction and progressive disclosure are split into dedicated issues (#20, #18).
+**Scope moved to focused issues:**
+- #18 — tool inventory / progressive disclosure
+- #20 — context budget / compaction behavior
+- #30 + #1 — workbook instructions + conventions storage/exposure
+- #24 + #13 — skills/external tools and extension platform
+- #6 + #28 + #27 — planning/approval UX, auditability, and recovery safety
 
-**Implication:** treat #14 as an umbrella/architecture narrative issue; keep concrete work tracked in the more focused issues.
+**Implication:** treat those mapped issues as the source of truth for ongoing implementation.
 
 ---
 
