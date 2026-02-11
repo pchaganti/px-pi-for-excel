@@ -23,7 +23,15 @@ import http from "node:http";
 import https from "node:https";
 import fs from "node:fs";
 import path from "node:path";
+import { lookup as dnsLookup } from "node:dns/promises";
 import { Readable } from "node:stream";
+
+import {
+  evaluateTargetHostPolicy,
+  isIpLiteral,
+  normalizeHost,
+  parseAllowedTargetHosts,
+} from "./proxy-target-policy.mjs";
 
 const args = new Set(process.argv.slice(2));
 const useHttps = args.has("--https") || process.env.HTTPS === "1" || process.env.HTTPS === "true";
@@ -84,19 +92,23 @@ function isLoopbackAddress(addr) {
   return false;
 }
 
-const allowLoopbackTargets =
-  process.env.ALLOW_LOOPBACK_TARGETS === "1" ||
-  process.env.ALLOW_LOOPBACK_TARGETS === "true";
-
-function isLoopbackHostname(hostname) {
-  if (!hostname) return false;
-  const h = String(hostname).toLowerCase();
-  if (h === "localhost") return true;
-  if (h === "::1" || h === "0:0:0:0:0:0:0:1") return true;
-  if (h.startsWith("127.")) return true;
-  if (h.startsWith("::ffff:127.")) return true;
-  return false;
+function envFlag(name) {
+  const raw = process.env[name];
+  return raw === "1" || raw === "true";
 }
+
+const allowLoopbackTargets = envFlag("ALLOW_LOOPBACK_TARGETS");
+const allowPrivateTargets = envFlag("ALLOW_PRIVATE_TARGETS");
+const strictTargetResolution = envFlag("STRICT_TARGET_RESOLUTION");
+const allowedTargetHosts = parseAllowedTargetHosts(process.env.ALLOWED_TARGET_HOSTS);
+
+const TARGET_POLICY_MESSAGES = {
+  blocked_target_invalid_host: "Invalid target host",
+  blocked_target_not_allowlisted: "Target host is not in ALLOWED_TARGET_HOSTS",
+  blocked_target_loopback: "Loopback target URLs are blocked by default. Set ALLOW_LOOPBACK_TARGETS=1 to override.",
+  blocked_target_private_ip: "Private/local target URLs are blocked by default. Set ALLOW_PRIVATE_TARGETS=1 to override.",
+  blocked_target_resolution_failed: "Target hostname could not be resolved (STRICT_TARGET_RESOLUTION=1)",
+};
 
 function setCorsHeaders(req, res) {
   const origin = req.headers.origin;
@@ -112,6 +124,13 @@ function setCorsHeaders(req, res) {
   );
   res.setHeader("Access-Control-Expose-Headers", "*");
   res.setHeader("Access-Control-Max-Age", "86400");
+}
+
+function rejectWithReason(res, reason) {
+  const msg = TARGET_POLICY_MESSAGES[reason] || "forbidden";
+  res.statusCode = 403;
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.end(`${reason}: ${msg}`);
 }
 
 function extractTargetUrl(rawUrl) {
@@ -215,13 +234,37 @@ const handler = async (req, res) => {
     return;
   }
 
-  // SECURITY: prevent using this proxy to access other localhost services.
-  // This reduces SSRF impact if the add-in origin is ever compromised.
-  if (!allowLoopbackTargets && isLoopbackHostname(targetUrl.hostname)) {
-    res.statusCode = 403;
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.end("Loopback target URLs are blocked by default. Set ALLOW_LOOPBACK_TARGETS=1 to override.");
-    console.warn(`[proxy] blocked loopback target: ${targetUrl.hostname}`);
+  const targetHost = normalizeHost(targetUrl.hostname);
+  const safeTarget = `${targetUrl.origin}${targetUrl.pathname}`;
+
+  let resolvedIps = [];
+  if (!isIpLiteral(targetHost)) {
+    try {
+      const records = await dnsLookup(targetHost, { all: true, verbatim: true });
+      resolvedIps = records.map((r) => r.address);
+    } catch (err) {
+      const errorText = err instanceof Error ? err.message : String(err);
+      if (strictTargetResolution) {
+        rejectWithReason(res, "blocked_target_resolution_failed");
+        console.warn(`[proxy] blocked target (blocked_target_resolution_failed): ${safeTarget} (${errorText})`);
+        return;
+      }
+      console.warn(`[proxy] DNS lookup failed for ${targetHost}: ${errorText} (continuing)`);
+    }
+  }
+
+  const targetPolicy = evaluateTargetHostPolicy({
+    hostname: targetHost,
+    resolvedIps,
+    allowLoopbackTargets,
+    allowPrivateTargets,
+    allowedHosts: allowedTargetHosts,
+  });
+
+  if (!targetPolicy.allowed) {
+    const reason = targetPolicy.reason || "forbidden";
+    rejectWithReason(res, reason);
+    console.warn(`[proxy] blocked target (${reason}): ${safeTarget}`);
     return;
   }
 
@@ -242,7 +285,6 @@ const handler = async (req, res) => {
     });
 
     // Log without query string to avoid leaking tokens
-    const safeTarget = `${targetUrl.origin}${targetUrl.pathname}`;
     console.log(`[proxy] ${req.method || "GET"} ${safeTarget} -> ${upstream.status} (${Date.now() - startedAt}ms)`);
 
     res.statusCode = upstream.status;
@@ -308,4 +350,21 @@ server.listen(PORT, HOST, () => {
   const scheme = useHttps ? "https" : "http";
   console.log(`[pi-for-excel] CORS proxy listening on ${scheme}://${HOST}:${PORT}`);
   console.log(`[pi-for-excel] Format: ${scheme}://${HOST}:${PORT}/?url=<target-url>`);
+  console.log(`[pi-for-excel] Allowed origins: ${Array.from(allowedOrigins).join(", ")}`);
+
+  if (allowedTargetHosts.size > 0) {
+    console.log(`[pi-for-excel] Allowed target hosts: ${Array.from(allowedTargetHosts).join(", ")}`);
+  }
+
+  if (allowLoopbackTargets) {
+    console.log("[pi-for-excel] WARNING: loopback target blocking disabled (ALLOW_LOOPBACK_TARGETS=1)");
+  }
+
+  if (allowPrivateTargets) {
+    console.log("[pi-for-excel] WARNING: private/local target blocking disabled (ALLOW_PRIVATE_TARGETS=1)");
+  }
+
+  if (strictTargetResolution) {
+    console.log("[pi-for-excel] Strict DNS resolution enabled (STRICT_TARGET_RESOLUTION=1)");
+  }
 });
