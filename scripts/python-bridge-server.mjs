@@ -927,8 +927,16 @@ const handler = async (req, res) => {
 
     throw new HttpError(404, "Not found.");
   } catch (error) {
-    const status = error instanceof HttpError ? error.status : 500;
-    const message = error instanceof Error ? error.message : String(error);
+    const isHttpError = error instanceof HttpError;
+    const status = isHttpError ? error.status : 500;
+
+    if (!isHttpError) {
+      console.error("[pi-for-excel] Unhandled python bridge error:", error);
+    }
+
+    const message = isHttpError
+      ? error.message
+      : "Internal server error.";
 
     respondJson(res, status, {
       ok: false,
