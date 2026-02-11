@@ -61,7 +61,8 @@ function getWorkbookNameFromUrl(url: string): string | null {
 
   try {
     const parsed = new URL(url);
-    const fromPathname = parsed.pathname.split("/").at(-1);
+    const normalizedPathname = parsed.pathname.replace(/\\/g, "/");
+    const fromPathname = normalizedPathname.split("/").at(-1);
     if (fromPathname) {
       const name = readName(fromPathname);
       if (name) return name;
