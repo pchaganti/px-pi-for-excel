@@ -107,15 +107,6 @@ export function getLastContext(): Context | undefined {
   return lastContext;
 }
 
-export function resetPayloadStats(): void {
-  stats.calls = 0;
-  stats.systemChars = 0;
-  stats.toolSchemaChars = 0;
-  stats.toolCount = 0;
-  stats.messageCount = 0;
-  stats.messageChars = 0;
-  lastContext = undefined;
-}
 
 function recordCall(context: Context): void {
   stats.calls += 1;

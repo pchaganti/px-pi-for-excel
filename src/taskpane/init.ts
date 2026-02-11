@@ -11,7 +11,7 @@ import { ApiKeyPromptDialog } from "@mariozechner/pi-web-ui/dist/dialogs/ApiKeyP
 import { ModelSelector } from "@mariozechner/pi-web-ui/dist/dialogs/ModelSelector.js";
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
-import { createOfficeStreamFn, resetPayloadStats } from "../auth/stream-proxy.js";
+import { createOfficeStreamFn } from "../auth/stream-proxy.js";
 import { isLoopbackProxyUrl } from "../auth/proxy-validation.js";
 import { restoreCredentials } from "../auth/restore.js";
 import { getBlueprint } from "../context/blueprint.js";
@@ -251,11 +251,8 @@ export async function initTaskpane(opts: {
   appEl.innerHTML = "";
   appEl.appendChild(sidebar);
 
-  // 8. Error tracking + payload stats reset
+  // 8. Error tracking
   agent.subscribe((ev) => {
-    if (ev.type === "agent_start") {
-      resetPayloadStats();
-    }
     if (ev.type === "message_start" && ev.message.role === "user") {
       clearErrorBanner(errorRoot);
     }
