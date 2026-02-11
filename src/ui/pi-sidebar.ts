@@ -220,6 +220,7 @@ export class PiSidebar extends LitElement {
               .pendingToolCalls=${state.pendingToolCalls}
               .isStreaming=${state.isStreaming}
             ></message-list>
+            ${this._renderContextPill()}
             <streaming-message-container
               class="${state.isStreaming ? "" : "hidden"}"
               .tools=${state.tools}
@@ -227,7 +228,6 @@ export class PiSidebar extends LitElement {
               .pendingToolCalls=${state.pendingToolCalls}
               .toolResultsById=${toolResultsById}
             ></streaming-message-container>
-            ${this._renderContextPill()}
           ` : ""}
         </div>
         ${!hasMessages ? this._renderEmptyState() : ""}
