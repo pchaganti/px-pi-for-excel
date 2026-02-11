@@ -45,11 +45,16 @@ import { formatWorkbookLabel, getWorkbookContext } from "../workbook/context.js"
 
 import { createContextInjector } from "./context-injection.js";
 import { pickDefaultModel } from "./default-model.js";
-import { installKeyboardShortcuts, cycleThinkingLevel } from "./keyboard-shortcuts.js";
+import { getThinkingLevels, installKeyboardShortcuts } from "./keyboard-shortcuts.js";
 import { createQueueDisplay } from "./queue-display.js";
 import { createActionQueue } from "./action-queue.js";
 import { setupSessionPersistence } from "./sessions.js";
 import { injectStatusBar } from "./status-bar.js";
+import {
+  closeStatusPopover,
+  toggleContextPopover,
+  toggleThinkingPopover,
+} from "./status-popovers.js";
 import { showWelcomeLogin } from "./welcome-login.js";
 import { SessionRuntimeManager, type RuntimeTabSnapshot } from "./session-runtime-manager.js";
 import { isRecord } from "../utils/type-guards.js";
@@ -620,12 +625,18 @@ export async function initTaskpane(opts: {
   };
   requestAnimationFrame(wireTextarea);
 
+  const runSlashCommand = (name: string, args = ""): void => {
+    document.dispatchEvent(new CustomEvent("pi:command-run", { detail: { name, args } }));
+  };
+
   const openModelSelector = (): void => {
     const activeAgent = getActiveAgent();
     if (!activeAgent) {
       showToast("No active session");
       return;
     }
+
+    closeStatusPopover();
 
     void ModelSelector.open(activeAgent.state.model, (model) => {
       activeAgent.setModel(model);
@@ -634,21 +645,68 @@ export async function initTaskpane(opts: {
     });
   };
 
+  const openThinkingPopoverFrom = (target: Element): void => {
+    const trigger = target.closest(".pi-status-thinking");
+    if (!trigger) return;
+
+    const activeAgent = getActiveAgent();
+    if (!activeAgent) {
+      showToast("No active session");
+      return;
+    }
+
+    const description = trigger.getAttribute("data-tooltip") ?? "Choose how long the model thinks before responding.";
+
+    toggleThinkingPopover({
+      anchor: trigger,
+      description,
+      levels: getThinkingLevels(activeAgent),
+      activeLevel: activeAgent.state.thinkingLevel,
+      onSelectLevel: (level) => {
+        if (activeAgent.state.thinkingLevel === level) return;
+        activeAgent.setThinkingLevel(level);
+        document.dispatchEvent(new CustomEvent("pi:status-update"));
+      },
+    });
+  };
+
+  const openContextPopoverFrom = (target: Element): void => {
+    const trigger = target.closest(".pi-status-ctx--trigger");
+    if (!trigger) return;
+
+    const description = trigger.getAttribute("data-status-popover")
+      ?? trigger.querySelector(".pi-tooltip")?.textContent
+      ?? "How much of the model's context window has been used.";
+
+    toggleContextPopover({
+      anchor: trigger,
+      description,
+      onRunCommand: (command) => {
+        runSlashCommand(command);
+      },
+    });
+  };
+
   // ── Status bar click handlers ──
   document.addEventListener("click", (e) => {
     const target = e.target;
-    if (!(target instanceof HTMLElement)) return;
+    if (!(target instanceof Element)) return;
 
     const el = target;
 
+    if (el.closest(".pi-status-popover")) {
+      return;
+    }
+
     // Model picker
-    if (el.closest?.(".pi-status-model")) {
+    if (el.closest(".pi-status-model")) {
       openModelSelector();
       return;
     }
 
     // Instructions editor
-    if (el.closest?.(".pi-status-instructions")) {
+    if (el.closest(".pi-status-instructions")) {
+      closeStatusPopover();
       void showInstructionsDialog({
         onSaved: async () => {
           await refreshWorkbookState();
@@ -657,12 +715,19 @@ export async function initTaskpane(opts: {
       return;
     }
 
-    // Thinking level toggle
-    if (el.closest?.(".pi-status-thinking")) {
-      const activeAgent = getActiveAgent();
-      if (!activeAgent) return;
-      cycleThinkingLevel(activeAgent);
+    // Context quick actions
+    if (el.closest(".pi-status-ctx--trigger")) {
+      openContextPopoverFrom(el);
+      return;
     }
+
+    // Thinking level selector
+    if (el.closest(".pi-status-thinking")) {
+      openThinkingPopoverFrom(el);
+      return;
+    }
+
+    closeStatusPopover();
   });
 
   console.log("[pi] PiSidebar mounted");

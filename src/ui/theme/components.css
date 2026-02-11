@@ -476,6 +476,11 @@ pi-working-indicator {
   opacity: 0.6;
 }
 
+.pi-status-model svg,
+.pi-status-model svg * {
+  pointer-events: none;
+}
+
 /* Context usage — left side */
 .pi-status-ctx {
   font-variant-numeric: tabular-nums;
@@ -483,6 +488,19 @@ pi-working-indicator {
   flex-shrink: 0;
   transition: color 0.3s ease;
 }
+
+.pi-status-ctx--trigger {
+  cursor: pointer;
+  border-radius: 5px;
+  padding: 2px 4px;
+  margin: -2px 0;
+  transition: background 0.15s ease;
+}
+
+.pi-status-ctx--trigger:hover {
+  background: var(--pi-green-lighter);
+}
+
 .pi-status-ctx--yellow {
   color: var(--pi-yellow, #e5a100);
   font-weight: 600;
@@ -628,6 +646,11 @@ pi-working-indicator {
   flex-shrink: 0;
 }
 .pi-status-thinking svg { flex-shrink: 0; }
+
+.pi-status-thinking svg,
+.pi-status-thinking svg * {
+  pointer-events: none;
+}
 .pi-status-thinking:hover {
   background: var(--pi-green-lighter);
   color: var(--foreground);
@@ -720,6 +743,124 @@ pi-working-indicator {
 }
 .pi-tooltip__warn--red {
   color: var(--destructive, #e5484d);
+}
+
+/* Status-bar click popovers */
+.pi-status-popover {
+  position: fixed;
+  z-index: 220;
+  width: min(290px, calc(100vw - 16px));
+  border-radius: 12px;
+  border: 1px solid oklch(0 0 0 / 0.14);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 12px 24px oklch(0 0 0 / 0.2);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pi-status-popover__title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.pi-status-popover__description {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+
+.pi-status-popover__list,
+.pi-status-popover__commands {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.pi-status-popover__item,
+.pi-status-popover__command {
+  border: 1px solid oklch(0 0 0 / 0.10);
+  background: oklch(1 0 0 / 0.45);
+  border-radius: 8px;
+  color: var(--foreground);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.pi-status-popover__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  text-align: left;
+  font-family: var(--font-sans);
+}
+
+.pi-status-popover__item:hover,
+.pi-status-popover__command:hover {
+  background: oklch(0.45 0.12 160 / 0.08);
+  border-color: oklch(0.45 0.12 160 / 0.2);
+}
+
+.pi-status-popover__item.is-active {
+  border-color: oklch(0.45 0.12 160 / 0.36);
+  background: oklch(0.45 0.12 160 / 0.12);
+}
+
+.pi-status-popover__item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pi-status-popover__item-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pi-status-popover__item-hint {
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+}
+
+.pi-status-popover__item-marker {
+  width: 12px;
+  text-align: right;
+  color: var(--primary);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.pi-status-popover__command {
+  width: 100%;
+  padding: 8px 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+}
+
+.pi-status-popover__command-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.pi-status-popover__command-desc {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--muted-foreground);
 }
 
 
