@@ -28,6 +28,14 @@ type ActionQueue = {
   isBusy: () => boolean;
 };
 
+interface ReopenShortcutEventLike {
+  key: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+}
+
 const THINKING_COLORS: Record<ThinkingLevel, string> = {
   off: "#a0a0a0",
   minimal: "#767676",
@@ -37,7 +45,7 @@ const THINKING_COLORS: Record<ThinkingLevel, string> = {
   xhigh: "#8b008b",
 };
 
-const BUSY_ALLOWED_COMMANDS = new Set(["compact", "new"]);
+const BUSY_ALLOWED_COMMANDS = new Set(["compact", "new", "resume", "reopen"]);
 
 function setExcelToolCardsExpanded(expanded: boolean): void {
   const toolMessages = document.querySelectorAll("tool-message");
@@ -124,12 +132,20 @@ export function cycleThinkingLevel(agent: Agent): ThinkingLevel {
   return next;
 }
 
+export function isReopenLastClosedShortcut(event: ReopenShortcutEventLike): boolean {
+  if (!(event.metaKey || event.ctrlKey)) return false;
+  if (!event.shiftKey || event.altKey) return false;
+
+  return event.key.toLowerCase() === "t";
+}
+
 export function installKeyboardShortcuts(opts: {
   getActiveAgent: () => Agent | null;
   getActiveQueueDisplay: () => QueueDisplay | null;
   getActiveActionQueue: () => ActionQueue | null;
   sidebar: PiSidebar;
   markUserAborted: (agent: Agent) => void;
+  onReopenLastClosed?: () => void;
 }): () => void {
   const {
     getActiveAgent,
@@ -137,6 +153,7 @@ export function installKeyboardShortcuts(opts: {
     getActiveActionQueue,
     sidebar,
     markUserAborted,
+    onReopenLastClosed,
   } = opts;
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -165,6 +182,14 @@ export function installKeyboardShortcuts(opts: {
       e.preventDefault();
       markUserAborted(agent);
       agent.abort();
+      return;
+    }
+
+    // Cmd/Ctrl+Shift+T — reopen last closed tab/session
+    if (isReopenLastClosedShortcut(e)) {
+      if (!onReopenLastClosed) return;
+      e.preventDefault();
+      onReopenLastClosed();
       return;
     }
 

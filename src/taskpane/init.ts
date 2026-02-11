@@ -10,6 +10,7 @@ import { Agent } from "@mariozechner/pi-agent-core";
 import { ApiKeyPromptDialog } from "@mariozechner/pi-web-ui/dist/dialogs/ApiKeyPromptDialog.js";
 import { ModelSelector } from "@mariozechner/pi-web-ui/dist/dialogs/ModelSelector.js";
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
+import type { SessionData } from "@mariozechner/pi-web-ui/dist/storage/types.js";
 
 import { createOfficeStreamFn } from "../auth/stream-proxy.js";
 import { isLoopbackProxyUrl } from "../auth/proxy-validation.js";
@@ -26,6 +27,7 @@ import { applyExperimentalToolGates } from "../tools/experimental-tool-gates.js"
 import { withWorkbookCoordinator } from "../tools/with-workbook-coordinator.js";
 import { loadExtension, createExtensionAPI } from "../commands/extension-api.js";
 import { registerBuiltins } from "../commands/builtins.js";
+import type { ResumeDialogTarget } from "../commands/builtins/resume-target.js";
 import { showInstructionsDialog, showResumeDialog } from "../commands/builtins/overlays.js";
 import { wireCommandMenu } from "../commands/command-menu.js";
 import { commandRegistry } from "../commands/types.js";
@@ -37,7 +39,7 @@ import {
 import { buildSystemPrompt } from "../prompt/system-prompt.js";
 import { initAppStorage } from "../storage/init-app-storage.js";
 import { renderError } from "../ui/loading.js";
-import { showToast } from "../ui/toast.js";
+import { showActionToast, showToast } from "../ui/toast.js";
 import { PiSidebar } from "../ui/pi-sidebar.js";
 import { setActiveProviders } from "../compat/model-selector-patch.js";
 import { createWorkbookCoordinator } from "../workbook/coordinator.js";
@@ -48,6 +50,7 @@ import { pickDefaultModel } from "./default-model.js";
 import { getThinkingLevels, installKeyboardShortcuts } from "./keyboard-shortcuts.js";
 import { createQueueDisplay } from "./queue-display.js";
 import { createActionQueue } from "./action-queue.js";
+import { RecentlyClosedStack, type RecentlyClosedItem } from "./recently-closed.js";
 import { setupSessionPersistence } from "./sessions.js";
 import { injectStatusBar } from "./status-bar.js";
 import {
@@ -56,10 +59,14 @@ import {
   toggleThinkingPopover,
 } from "./status-popovers.js";
 import { showWelcomeLogin } from "./welcome-login.js";
-import { SessionRuntimeManager, type RuntimeTabSnapshot } from "./session-runtime-manager.js";
+import {
+  SessionRuntimeManager,
+  type RuntimeTabSnapshot,
+  type SessionRuntime,
+} from "./session-runtime-manager.js";
 import { isRecord } from "../utils/type-guards.js";
 
-const BUSY_ALLOWED_COMMANDS = new Set(["compact", "new", "instructions"]);
+const BUSY_ALLOWED_COMMANDS = new Set(["compact", "new", "instructions", "resume", "reopen"]);
 
 function showErrorBanner(errorRoot: HTMLElement, message: string): void {
   render(renderError(message), errorRoot);
@@ -233,12 +240,18 @@ export async function initTaskpane(opts: {
   const runtimeManager = new SessionRuntimeManager(sidebar);
   const abortedAgents = new WeakSet<Agent>();
   const runtimeToolRefreshers = new Map<string, () => Promise<void>>();
+  const recentlyClosed = new RecentlyClosedStack(10);
 
   const getActiveRuntime = () => runtimeManager.getActiveRuntime();
   const getActiveAgent = () => getActiveRuntime()?.agent ?? null;
   const getActiveQueueDisplay = () => getActiveRuntime()?.queueDisplay ?? null;
   const getActiveActionQueue = () => getActiveRuntime()?.actionQueue ?? null;
   const getActiveLockState = () => getActiveRuntime()?.lockState ?? "idle";
+
+  const formatSessionTitle = (title: string): string => {
+    const trimmed = title.trim();
+    return trimmed.length > 0 ? trimmed : "Untitled";
+  };
 
   let previousActiveRuntimeId: string | null = null;
 
@@ -454,6 +467,116 @@ export async function initTaskpane(opts: {
     return runtime;
   };
 
+  const syncRuntimeAfterSessionLoad = (runtime: SessionRuntime): void => {
+    runtime.queueDisplay.clear();
+    runtime.queueDisplay.setActionQueue([]);
+    sidebar.syncFromAgent();
+    sidebar.requestUpdate();
+    document.dispatchEvent(new CustomEvent("pi:model-changed"));
+    document.dispatchEvent(new CustomEvent("pi:status-update"));
+  };
+
+  const replaceActiveRuntimeSession = async (sessionData: SessionData): Promise<void> => {
+    const activeRuntime = getActiveRuntime();
+    if (!activeRuntime) {
+      showToast("No active session");
+      return;
+    }
+
+    const busy = activeRuntime.agent.state.isStreaming || activeRuntime.actionQueue.isBusy();
+    if (busy) {
+      showToast("Current tab is busy — use open in new tab or wait for it to finish");
+      return;
+    }
+
+    await activeRuntime.persistence.applyLoadedSession(sessionData);
+    syncRuntimeAfterSessionLoad(activeRuntime);
+  };
+
+  const openSessionInNewTab = async (sessionData: SessionData): Promise<SessionRuntime> => {
+    const runtime = await createRuntime({
+      activate: true,
+      autoRestoreLatest: false,
+    });
+
+    await runtime.persistence.applyLoadedSession(sessionData);
+    syncRuntimeAfterSessionLoad(runtime);
+    return runtime;
+  };
+
+  const reopenRecentlyClosedItem = async (item: RecentlyClosedItem): Promise<boolean> => {
+    try {
+      const sessionData = await sessions.loadSession(item.sessionId);
+      if (!sessionData) {
+        showToast("Couldn't reopen session");
+        return false;
+      }
+
+      await openSessionInNewTab(sessionData);
+      showToast(`Reopened: ${formatSessionTitle(item.title)}`);
+      return true;
+    } catch {
+      showToast("Couldn't reopen session");
+      return false;
+    }
+  };
+
+  const reopenLastClosed = async (): Promise<void> => {
+    const item = recentlyClosed.popMostRecent();
+    if (!item) {
+      showToast("No recently closed tab");
+      return;
+    }
+
+    await reopenRecentlyClosedItem(item);
+  };
+
+  const closeRuntimeWithRecovery = async (runtimeId: string): Promise<void> => {
+    if (runtimeManager.listRuntimes().length <= 1) {
+      showToast("Can't close the last tab");
+      return;
+    }
+
+    const runtime = runtimeManager.getRuntime(runtimeId);
+    if (!runtime) return;
+
+    if (runtime.lockState === "holding_lock") {
+      showToast("Wait for workbook changes to finish before closing this tab");
+      return;
+    }
+
+    if (runtime.agent.state.isStreaming) {
+      const proceed = window.confirm("Pi is still responding in this tab. Stop and close it?");
+      if (!proceed) return;
+
+      abortedAgents.add(runtime.agent);
+      runtime.agent.abort();
+    }
+
+    await runtime.persistence.saveSession({ force: true });
+
+    const closedItem: RecentlyClosedItem = {
+      sessionId: runtime.persistence.getSessionId(),
+      title: formatSessionTitle(runtime.persistence.getSessionTitle()),
+      closedAt: new Date().toISOString(),
+      workbookId: await resolveWorkbookId(),
+    };
+
+    runtimeManager.closeRuntime(runtimeId);
+    recentlyClosed.push(closedItem);
+
+    showActionToast({
+      message: `Closed ${closedItem.title}`,
+      actionLabel: "Undo",
+      duration: 9000,
+      onAction: () => {
+        const itemToRestore = recentlyClosed.removeBySessionId(closedItem.sessionId);
+        if (!itemToRestore) return;
+        void reopenRecentlyClosedItem(itemToRestore);
+      },
+    });
+  };
+
   workbookCoordinator.subscribe((event) => {
     if (event.operationType !== "write") return;
 
@@ -489,25 +612,18 @@ export async function initTaskpane(opts: {
     createRuntime: async () => {
       await createRuntime({ activate: true, autoRestoreLatest: false });
     },
-    resumeIntoActiveRuntime: async () => {
+    openResumeDialog: async (defaultTarget: ResumeDialogTarget = "new_tab") => {
       await showResumeDialog({
-        onResumeSession: async (sessionData) => {
-          const activeRuntime = getActiveRuntime();
-          if (!activeRuntime) {
-            showToast("No active session");
-            return;
-          }
-
-          await activeRuntime.persistence.applyLoadedSession(sessionData);
-          activeRuntime.queueDisplay.clear();
-          activeRuntime.queueDisplay.setActionQueue([]);
-          sidebar.syncFromAgent();
-          sidebar.requestUpdate();
-          document.dispatchEvent(new CustomEvent("pi:model-changed"));
-          document.dispatchEvent(new CustomEvent("pi:status-update"));
+        defaultTarget,
+        onOpenInNewTab: async (sessionData: SessionData) => {
+          await openSessionInNewTab(sessionData);
+        },
+        onReplaceCurrent: async (sessionData: SessionData) => {
+          await replaceActiveRuntimeSession(sessionData);
         },
       });
     },
+    reopenLastClosed,
     openInstructionsEditor: async () => {
       await showInstructionsDialog({
         onSaved: async () => {
@@ -574,11 +690,7 @@ export async function initTaskpane(opts: {
   };
 
   sidebar.onCloseTab = (runtimeId: string) => {
-    if (runtimeManager.listRuntimes().length <= 1) {
-      showToast("Can't close the last tab");
-      return;
-    }
-    runtimeManager.closeRuntime(runtimeId);
+    void closeRuntimeWithRecovery(runtimeId);
   };
 
   // Bootstrap first runtime (auto-restores latest session when available)
@@ -604,6 +716,9 @@ export async function initTaskpane(opts: {
     sidebar,
     markUserAborted: (agent: Agent) => {
       abortedAgents.add(agent);
+    },
+    onReopenLastClosed: () => {
+      void reopenLastClosed();
     },
   });
 

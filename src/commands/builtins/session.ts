@@ -3,12 +3,14 @@
  */
 
 import type { SlashCommand } from "../types.js";
+import type { ResumeDialogTarget } from "./resume-target.js";
 import { showToast } from "../../ui/toast.js";
 
 export interface SessionCommandActions {
   renameActiveSession: (title: string) => Promise<void>;
   createRuntime: () => Promise<void>;
-  resumeIntoActiveRuntime: () => Promise<void>;
+  openResumeDialog: (defaultTarget?: ResumeDialogTarget) => Promise<void>;
+  reopenLastClosed: () => Promise<void>;
 }
 
 export function createSessionIdentityCommands(actions: SessionCommandActions): SlashCommand[] {
@@ -52,10 +54,26 @@ export function createSessionLifecycleCommands(actions: SessionCommandActions): 
     },
     {
       name: "resume",
-      description: "Resume a previous session",
+      description: "Resume a previous session (opens in new tab)",
       source: "builtin",
       execute: async () => {
-        await actions.resumeIntoActiveRuntime();
+        await actions.openResumeDialog("new_tab");
+      },
+    },
+    {
+      name: "resume-here",
+      description: "Resume a previous session into the current tab",
+      source: "builtin",
+      execute: async () => {
+        await actions.openResumeDialog("replace_current");
+      },
+    },
+    {
+      name: "reopen",
+      description: "Reopen the most recently closed session tab",
+      source: "builtin",
+      execute: async () => {
+        await actions.reopenLastClosed();
       },
     },
   ];

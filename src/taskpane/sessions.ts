@@ -28,7 +28,7 @@ export interface SessionPersistenceController {
   renameSession: (title: string) => Promise<void>;
   applyLoadedSession: (sessionData: SessionData) => Promise<void>;
   restoreLatestSession: () => Promise<boolean>;
-  saveSession: () => Promise<void>;
+  saveSession: (opts?: { force?: boolean }) => Promise<void>;
   subscribe: (listener: () => void) => () => void;
   dispose: () => void;
 }
@@ -61,6 +61,14 @@ function normalizeSessionId(value: string | null): string | null {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+export function shouldPersistSession(opts: {
+  firstAssistantSeen: boolean;
+  force?: boolean;
+}): boolean {
+  if (opts.force) return true;
+  return opts.firstAssistantSeen;
 }
 
 export function getRestoreCandidateSessionIds(args: {
@@ -132,8 +140,8 @@ export async function setupSessionPersistence(opts: {
     }
   }
 
-  async function saveSession(): Promise<void> {
-    if (!firstAssistantSeen) return;
+  async function saveSession(optsForSave?: { force?: boolean }): Promise<void> {
+    if (!shouldPersistSession({ firstAssistantSeen, force: optsForSave?.force })) return;
 
     try {
       const now = new Date().toISOString();

@@ -386,6 +386,10 @@ export class PiSidebar extends LitElement {
                       event.stopPropagation();
                       this.onCloseTab?.(tab.runtimeId);
                     }}
+                    ?disabled=${tab.lockState === "holding_lock"}
+                    title=${tab.lockState === "holding_lock"
+                      ? "Wait for workbook changes to finish"
+                      : "Close tab"}
                     aria-label="Close tab"
                   >
                     ×

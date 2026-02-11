@@ -5,6 +5,11 @@
 import type { SessionData, SessionMetadata } from "@mariozechner/pi-web-ui/dist/storage/types.js";
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
+import {
+  getCrossWorkbookResumeConfirmMessage,
+  getResumeTargetLabel,
+  type ResumeDialogTarget,
+} from "./resume-target.js";
 import { showToast } from "../../ui/toast.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../../workbook/context.js";
 import {
@@ -127,7 +132,9 @@ function buildWorkbookFilterRow(opts: {
 }
 
 export async function showResumeDialog(opts: {
-  onResumeSession: (sessionData: SessionData) => Promise<void>;
+  defaultTarget?: ResumeDialogTarget;
+  onOpenInNewTab: (sessionData: SessionData) => Promise<void>;
+  onReplaceCurrent: (sessionData: SessionData) => Promise<void>;
 }): Promise<void> {
   const storage = getAppStorage();
   const allSessions = await storage.sessions.getAllMetadata();
@@ -159,6 +166,7 @@ export async function showResumeDialog(opts: {
   }
 
   let showAllWorkbooks = workbookId === null;
+  let selectedTarget: ResumeDialogTarget = opts.defaultTarget ?? "new_tab";
 
   const overlay = document.createElement("div");
   overlay.id = "pi-resume-overlay";
@@ -175,6 +183,60 @@ export async function showResumeDialog(opts: {
   title.textContent = "Resume Session";
 
   card.appendChild(title);
+
+  const targetControls = document.createElement("div");
+  targetControls.style.cssText = "display: flex; gap: 6px; margin: 0 0 8px;";
+
+  const openInNewTabButton = document.createElement("button");
+  openInNewTabButton.type = "button";
+  openInNewTabButton.style.cssText =
+    "padding: 6px 10px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08); background: oklch(0 0 0 / 0.02); cursor: pointer; font-size: 12px; font-family: var(--font-sans);";
+  openInNewTabButton.textContent = "Open in new tab";
+
+  const replaceCurrentButton = document.createElement("button");
+  replaceCurrentButton.type = "button";
+  replaceCurrentButton.style.cssText =
+    "padding: 6px 10px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08); background: oklch(0 0 0 / 0.02); cursor: pointer; font-size: 12px; font-family: var(--font-sans);";
+  replaceCurrentButton.textContent = "Replace current";
+
+  const targetHint = document.createElement("div");
+  targetHint.style.cssText = "font-size: 11px; color: var(--muted-foreground); margin: 0 0 10px;";
+
+  const syncTargetButtons = () => {
+    const isNewTab = selectedTarget === "new_tab";
+
+    openInNewTabButton.style.background = isNewTab
+      ? "oklch(0.57 0.15 165 / 0.16)"
+      : "oklch(0 0 0 / 0.02)";
+    openInNewTabButton.style.borderColor = isNewTab
+      ? "oklch(0.57 0.15 165 / 0.45)"
+      : "oklch(0 0 0 / 0.08)";
+
+    replaceCurrentButton.style.background = !isNewTab
+      ? "oklch(0.57 0.15 165 / 0.16)"
+      : "oklch(0 0 0 / 0.02)";
+    replaceCurrentButton.style.borderColor = !isNewTab
+      ? "oklch(0.57 0.15 165 / 0.45)"
+      : "oklch(0 0 0 / 0.08)";
+
+    openInNewTabButton.setAttribute("aria-pressed", String(isNewTab));
+    replaceCurrentButton.setAttribute("aria-pressed", String(!isNewTab));
+    targetHint.textContent = `Default action: ${getResumeTargetLabel(selectedTarget)}`;
+  };
+
+  openInNewTabButton.addEventListener("click", () => {
+    selectedTarget = "new_tab";
+    syncTargetButtons();
+  });
+
+  replaceCurrentButton.addEventListener("click", () => {
+    selectedTarget = "replace_current";
+    syncTargetButtons();
+  });
+
+  targetControls.append(openInNewTabButton, replaceCurrentButton);
+  card.append(targetControls, targetHint);
+  syncTargetButtons();
 
   const list = document.createElement("div");
   list.className = "pi-resume-list";
@@ -246,12 +308,12 @@ export async function showResumeDialog(opts: {
     if (!id) return;
 
     void (async () => {
+      const targetMode = selectedTarget;
+
       if (workbookId) {
         const linkedWorkbookId = await getSessionWorkbookId(storage.settings, id);
         if (linkedWorkbookId && linkedWorkbookId !== workbookId) {
-          const proceed = window.confirm(
-            "This session was created for a different workbook. Resume anyway and replace the current chat?",
-          );
+          const proceed = window.confirm(getCrossWorkbookResumeConfirmMessage(targetMode));
           if (!proceed) return;
         }
       }
@@ -263,9 +325,15 @@ export async function showResumeDialog(opts: {
         return;
       }
 
-      await opts.onResumeSession(sessionData);
+      if (targetMode === "replace_current") {
+        await opts.onReplaceCurrent(sessionData);
+      } else {
+        await opts.onOpenInNewTab(sessionData);
+      }
+
       overlay.remove();
-      showToast(`Resumed: ${sessionData.title || "Untitled"}`);
+      const resumedMode = targetMode === "replace_current" ? "current tab" : "new tab";
+      showToast(`Resumed in ${resumedMode}: ${sessionData.title || "Untitled"}`);
     })();
   });
 
@@ -281,6 +349,7 @@ export function showShortcutsDialog(): void {
     ["⌥Enter", "Queue follow-up message"],
     ["/", "Open command menu"],
     ["↑↓", "Navigate command menu"],
+    ["⌘/Ctrl+⇧T", "Reopen last closed tab"],
     ["F6", "Focus: Sheet ↔ Sidebar"],
     ["⇧F6", "Focus: reverse direction"],
   ];

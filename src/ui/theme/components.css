@@ -94,6 +94,16 @@
   color: var(--foreground);
 }
 
+.pi-session-tab__close:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pi-session-tab__close:disabled:hover {
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
 .pi-lock-notice {
   padding: 4px 12px;
   font-size: 11px;
@@ -887,14 +897,47 @@ pi-working-indicator {
   transition: opacity 0.2s, transform 0.2s;
   pointer-events: none;
   max-width: calc(100vw - 24px);
-  text-align: center;
+}
+
+.pi-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.pi-toast--action {
+  pointer-events: auto;
+}
+
+.pi-toast__content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: min(560px, calc(100vw - 48px));
+  text-align: left;
+}
+
+.pi-toast__message {
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
-.pi-toast.visible {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
+
+.pi-toast__action {
+  border: 1px solid oklch(1 0 0 / 0.35);
+  border-radius: 999px;
+  padding: 2px 9px;
+  background: oklch(1 0 0 / 0.12);
+  color: white;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pi-toast__action:hover {
+  background: oklch(1 0 0 / 0.2);
 }
 
 
