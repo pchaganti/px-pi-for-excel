@@ -72,7 +72,7 @@ export function toggleDebugEnabled(): boolean {
   return next;
 }
 
-function formatK(n: number): string {
+export function formatK(n: number): string {
   if (!Number.isFinite(n)) return "?";
   if (Math.abs(n) >= 100_000) return `${(n / 1000).toFixed(0)}k`;
   if (Math.abs(n) >= 10_000) return `${(n / 1000).toFixed(1)}k`;

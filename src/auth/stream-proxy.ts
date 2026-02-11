@@ -117,11 +117,6 @@ export function resetPayloadStats(): void {
   lastContext = undefined;
 }
 
-function formatK(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
-}
-
 function recordCall(context: Context): void {
   stats.calls += 1;
   stats.systemChars = context.systemPrompt?.length ?? 0;
@@ -143,12 +138,6 @@ function recordCall(context: Context): void {
 
   if (isDebugEnabled()) {
     lastContext = context;
-    const toolsLabel = context.tools
-      ? `${stats.toolCount} tools (${formatK(stats.toolSchemaChars)} chars)`
-      : "no tools (stripped)";
-    console.log(
-      `[LLM call #${stats.calls}] sys:${formatK(stats.systemChars)} | ${toolsLabel} | ${stats.messageCount} msgs (${formatK(stats.messageChars)} chars) | total context: ${formatK(stats.systemChars + stats.toolSchemaChars + stats.messageChars)} chars`,
-    );
   }
 
   document.dispatchEvent(new Event("pi:status-update"));

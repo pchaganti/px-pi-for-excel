@@ -8,8 +8,6 @@ import { showToast } from "../ui/toast.js";
 import { escapeHtml } from "../utils/html.js";
 import { formatUsageDebug, isDebugEnabled } from "../debug/debug.js";
 import { estimateContextTokens } from "../utils/context-tokens.js";
-// Payload stats are rendered as an inline pill in the chat area (pi-sidebar.ts),
-// not in the status bar. The status bar only shows the existing usage debug line.
 
 export function injectStatusBar(agent: Agent): void {
   agent.subscribe(() => updateStatusBar(agent));

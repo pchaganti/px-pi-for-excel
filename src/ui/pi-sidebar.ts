@@ -17,7 +17,7 @@ import "./pi-input.js";
 import "./working-indicator.js";
 import { initToolGrouping } from "./tool-grouping.js";
 import type { PiInput } from "./pi-input.js";
-import { isDebugEnabled } from "../debug/debug.js";
+import { isDebugEnabled, formatK } from "../debug/debug.js";
 import { getPayloadStats, getLastContext, type PayloadStats } from "../auth/stream-proxy.js";
 
 export interface EmptyHint {
@@ -264,10 +264,9 @@ export class PiSidebar extends LitElement {
     const ps = this._payloadStats;
     if (!ps) return nothing;
 
-    const fmtK = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
     const total = ps.systemChars + ps.toolSchemaChars + ps.messageChars;
     const expanded = this._contextPillExpanded;
-    const ctx = getLastContext();
+    const ctx = expanded ? getLastContext() : undefined;
 
     // Summary table
     const summaryMd = [
@@ -287,7 +286,7 @@ export class PiSidebar extends LitElement {
           ...ctx.tools.map((t) => {
             const schemaSize = JSON.stringify(t.parameters).length;
             const desc = t.description.split("\n")[0].slice(0, 80);
-            return `| \`${t.name}\` | ${desc} | ${fmtK(schemaSize)} |`;
+            return `| \`${t.name}\` | ${desc} | ${formatK(schemaSize)} |`;
           }),
         ].join("\n")
       : "*(stripped on this call)*";
@@ -302,7 +301,7 @@ export class PiSidebar extends LitElement {
             class="pi-context-pill__header"
             @click=${this._toggleContextPill}
           >
-            <span>Context · call #${ps.calls} · ${fmtK(total)} chars</span>
+            <span>Context · call #${ps.calls} · ${formatK(total)} chars</span>
             <span class="pi-context-pill__chevron ${expanded ? "pi-context-pill__chevron--open" : ""}">${icon(ChevronRight, "sm")}</span>
           </div>
           ${expanded ? html`
