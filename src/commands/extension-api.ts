@@ -23,8 +23,15 @@
  * ```
  */
 
-import { commandRegistry, type CommandSource } from "./types.js";
 import type { Agent, AgentEvent } from "@mariozechner/pi-agent-core";
+
+import {
+  ALLOW_REMOTE_EXTENSION_URLS_STORAGE_KEY,
+  classifyExtensionSource,
+  isRemoteExtensionOptIn,
+} from "./extension-source-policy.js";
+import { commandRegistry } from "./types.js";
+import { isRecord } from "../utils/type-guards.js";
 
 export interface ExtensionCommand {
   description: string;
@@ -67,7 +74,7 @@ export function createExtensionAPI(agent: Agent): ExcelExtensionAPI {
       commandRegistry.register({
         name,
         description: cmd.description,
-        source: "extension" as CommandSource,
+        source: "extension",
         execute: cmd.handler,
       });
     },
@@ -162,8 +169,45 @@ export function createExtensionAPI(agent: Agent): ExcelExtensionAPI {
   };
 }
 
+type ExtensionActivator = (api: ExcelExtensionAPI) => void | Promise<void>;
+
+function isExtensionActivator(value: unknown): value is ExtensionActivator {
+  return typeof value === "function";
+}
+
+function getRemoteExtensionOptInFromStorage(): boolean {
+  if (typeof localStorage === "undefined") return false;
+
+  try {
+    const raw = localStorage.getItem(ALLOW_REMOTE_EXTENSION_URLS_STORAGE_KEY);
+    return isRemoteExtensionOptIn(raw);
+  } catch {
+    return false;
+  }
+}
+
+function getExtensionActivator(mod: unknown): ExtensionActivator | null {
+  if (!isRecord(mod)) return null;
+
+  const activate = mod.activate;
+  if (isExtensionActivator(activate)) {
+    return activate;
+  }
+
+  const fallback = mod.default;
+  if (isExtensionActivator(fallback)) {
+    return fallback;
+  }
+
+  return null;
+}
+
 /**
- * Load and activate an extension from a URL or inline function.
+ * Load and activate an extension from an inline function or module specifier.
+ *
+ * Security default: remote http(s) module URLs are blocked unless the user
+ * explicitly opts in by setting localStorage key
+ * `pi.allowRemoteExtensionUrls` to `1` or `true`.
  */
 export async function loadExtension(
   api: ExcelExtensionAPI,
@@ -171,13 +215,33 @@ export async function loadExtension(
 ): Promise<void> {
   if (typeof source === "function") {
     await source(api);
-  } else {
-    // Dynamic import from URL — shape unknown at compile time
-    const mod: Record<string, unknown> = await import(/* @vite-ignore */ source) as Record<string, unknown>;
-    if (typeof mod.activate === "function") {
-      await (mod.activate as (api: ExcelExtensionAPI) => void | Promise<void>)(api);
-    } else if (typeof mod.default === "function") {
-      await (mod.default as (api: ExcelExtensionAPI) => void | Promise<void>)(api);
-    }
+    return;
   }
+
+  const specifier = source.trim();
+  const sourceKind = classifyExtensionSource(specifier);
+
+  if (sourceKind === "unsupported") {
+    throw new Error(
+      `Unsupported extension source "${specifier}". Only local module specifiers (./, ../, /) are allowed by default.`,
+    );
+  }
+
+  if (sourceKind === "remote-url" && !getRemoteExtensionOptInFromStorage()) {
+    throw new Error(
+      "Remote extension URL imports are disabled by default. " +
+      `Set localStorage['${ALLOW_REMOTE_EXTENSION_URLS_STORAGE_KEY}']='1' to opt in (unsafe).`,
+    );
+  }
+
+  if (sourceKind === "remote-url") {
+    console.warn(`[pi] WARNING: loading remote extension URL due to explicit opt-in: ${specifier}`);
+  }
+
+  const activate = getExtensionActivator(await import(/* @vite-ignore */ specifier));
+  if (!activate) {
+    throw new Error(`Extension module "${specifier}" must export an activate(api) function`);
+  }
+
+  await activate(api);
 }

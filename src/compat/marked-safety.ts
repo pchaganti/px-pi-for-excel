@@ -15,28 +15,13 @@
 
 import { marked, type Tokens } from "marked";
 
+import {
+  createMarkdownImageRenderPlan,
+  isAllowedMarkdownUrl,
+} from "./marked-safety-policy.js";
 import { escapeAttr, escapeHtml } from "../utils/html.js";
 
 let installed = false;
-
-const ALLOWED_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"]);
-
-function isAllowedUrl(raw: string, allowedProtocols: Set<string>): boolean {
-  const trimmed = raw.trim();
-  if (!trimmed) return false;
-
-  try {
-    // Support relative URLs by resolving against current page.
-    const base = typeof window !== "undefined" && window.location?.href
-      ? window.location.href
-      : "https://localhost/";
-
-    const u = new URL(trimmed, base);
-    return allowedProtocols.has(u.protocol);
-  } catch {
-    return false;
-  }
-}
 
 export function installMarkedSafetyPatch(): void {
   if (installed) return;
@@ -50,7 +35,7 @@ export function installMarkedSafetyPatch(): void {
     const href = typeof token.href === "string" ? token.href : "";
 
     // Block javascript:, data:, file:, etc.
-    if (!isAllowedUrl(href, ALLOWED_LINK_PROTOCOLS)) {
+    if (!isAllowedMarkdownUrl(href)) {
       // Render as plain text (do not emit a link tag).
       // token.text may contain nested markdown that is already rendered elsewhere;
       // here we keep it simple and escape.
@@ -70,15 +55,13 @@ export function installMarkedSafetyPatch(): void {
     // SECURITY: never render <img> from markdown.
     // Inline images cause automatic network requests which can be used for tracking
     // or exfiltration (e.g. embedding sensitive context into an image URL).
-    // We instead render a regular link (click-to-open).
-    if (isAllowedUrl(href, ALLOWED_LINK_PROTOCOLS)) {
-      const label = alt.trim().length > 0 ? `image: ${alt}` : "image";
-      return `<a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`;
+    // We instead render a regular link (click-to-open) or plain text fallback.
+    const plan = createMarkdownImageRenderPlan(href, alt);
+    if (plan.kind === "link") {
+      return `<a href="${escapeAttr(plan.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(plan.label)}</a>`;
     }
 
-    // If the URL itself is unsafe, fall back to plain text.
-    const label = alt.trim().length > 0 ? `image: ${alt}` : "image";
-    return escapeHtml(label);
+    return escapeHtml(plan.label);
 
     // Note: we intentionally do NOT call originalImage.
     // return originalImage.call(this, token);
