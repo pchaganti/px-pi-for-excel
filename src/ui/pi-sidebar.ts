@@ -261,36 +261,31 @@ export class PiSidebar extends LitElement {
     const total = ps.systemChars + ps.toolSchemaChars + ps.messageChars;
     const expanded = this._contextPillExpanded;
 
-    // Build expanded body content from the last captured context
+    // Build expanded body from the last captured context — show everything.
     const ctx = getLastContext();
-    const systemPreview = ctx?.systemPrompt
-      ? (ctx.systemPrompt.length > 2000
-        ? ctx.systemPrompt.slice(0, 2000) + "\n\n… (truncated)"
-        : ctx.systemPrompt)
-      : "(none)";
 
-    const toolNames = ctx?.tools
-      ? ctx.tools.map((t) => `${t.name} (${JSON.stringify(t).length} chars)`).join("\n")
+    const systemText = ctx?.systemPrompt ?? "(none)";
+
+    const toolsText = ctx?.tools
+      ? JSON.stringify(ctx.tools, null, 2)
       : "(stripped on this call)";
 
     const body = [
-      `## Call #${ps.calls}`,
-      "",
       `| | chars |`,
       `|---|---|`,
       `| System prompt | ${ps.systemChars.toLocaleString()} |`,
       `| Tool schemas (${ps.toolCount}) | ${ps.toolSchemaChars.toLocaleString()} |`,
       `| Messages (${ps.messageCount}) | ${ps.messageChars.toLocaleString()} |`,
-      `| **Total context** | **${total.toLocaleString()}** |`,
+      `| **Total** | **${total.toLocaleString()}** |`,
       "",
-      "### System prompt",
+      "**System prompt**",
       "```",
-      systemPreview,
+      systemText,
       "```",
       "",
-      "### Tools",
-      "```",
-      toolNames,
+      "**Tools**",
+      "```json",
+      toolsText,
       "```",
     ].join("\n");
 
