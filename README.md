@@ -242,6 +242,18 @@ API-key based providers often work without a proxy; OAuth-based logins typically
 
 Proxy rejections return reason codes in plaintext (e.g. `blocked_target_loopback`, `blocked_target_private_ip`, `blocked_target_not_allowlisted`).
 
+### Extension loading safety
+
+`loadExtension()` now blocks remote `http(s)` module URLs by default.
+
+- Allowed by default: local module specifiers (`./`, `../`, `/`) and inline function activators
+- Blocked by default: remote extension URLs
+- Temporary unsafe opt-in for local experiments:
+
+```js
+localStorage.setItem("pi.allowRemoteExtensionUrls", "1")
+```
+
 ## Roadmap
 
 ### Shipped in v0.1.0
