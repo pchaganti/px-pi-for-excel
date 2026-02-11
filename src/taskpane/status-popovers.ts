@@ -129,11 +129,15 @@ function mountPopover(kind: StatusPopoverKind, anchor: Element, popover: HTMLDiv
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key !== "Escape") return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
     closeStatusPopover();
   };
 
   document.addEventListener("mousedown", onMouseDown, true);
-  document.addEventListener("keydown", onKeyDown, true);
+  window.addEventListener("keydown", onKeyDown, true);
   window.addEventListener("resize", reposition);
   window.addEventListener("scroll", reposition, true);
 
@@ -143,7 +147,7 @@ function mountPopover(kind: StatusPopoverKind, anchor: Element, popover: HTMLDiv
     popover,
     cleanup: () => {
       document.removeEventListener("mousedown", onMouseDown, true);
-      document.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("resize", reposition);
       window.removeEventListener("scroll", reposition, true);
     },
