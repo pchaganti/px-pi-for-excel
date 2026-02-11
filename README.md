@@ -209,10 +209,23 @@ npx office-addin-manifest validate manifest.xml
    ALLOWED_ORIGINS="https://my-addin.example.com" npm run proxy:https
    ```
 
-   By default, the proxy also blocks **loopback target URLs** (e.g. `http://localhost:11434`) to reduce SSRF impact.
-   If you intentionally need to proxy to a local service, set:
+   By default, the proxy also blocks **loopback + private/local target URLs** to reduce SSRF impact:
+   - loopback: `localhost`, `127.0.0.1`, `::1`
+   - private/link-local: `10/8`, `172.16/12`, `192.168/16`, `169.254/16`, `fc00::/7`, `fe80::/10`
+
+   Override knobs:
    ```bash
+   # Allow loopback targets (legacy local-service behavior)
    ALLOW_LOOPBACK_TARGETS=1 npm run proxy:https
+
+   # Allow private/local targets broadly
+   ALLOW_PRIVATE_TARGETS=1 npm run proxy:https
+
+   # Allow only explicit hosts (exact host match, comma-separated)
+   ALLOWED_TARGET_HOSTS="api.openai.com,oauth2.googleapis.com" npm run proxy:https
+
+   # Fail closed when DNS lookup fails
+   STRICT_TARGET_RESOLUTION=1 npm run proxy:https
    ```
 
    If port 3001 is taken, pick another port:
@@ -226,6 +239,8 @@ npx office-addin-manifest validate manifest.xml
 Also: our mkcert cert is for `localhost` by default — `https://127.0.0.1:<port>` will fail unless you generate a cert that includes `127.0.0.1`.
 
 API-key based providers often work without a proxy; OAuth-based logins typically require one.
+
+Proxy rejections return reason codes in plaintext (e.g. `blocked_target_loopback`, `blocked_target_private_ip`, `blocked_target_not_allowlisted`).
 
 ## Roadmap
 
