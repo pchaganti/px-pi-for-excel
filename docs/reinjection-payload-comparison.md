@@ -20,10 +20,9 @@ A single user message can trigger **multiple LLM requests** via the tool-use loo
 Each call in the loop includes the full system prompt + tool schemas (stateless API).
 The number of calls per user message depends on how many tool-use rounds the model needs.
 
-**Pi-for-Excel optimization:** `isToolContinuation()` in `src/auth/stream-proxy.ts` strips
-tool schemas from calls #2+ in the loop. The model gets tools on the first call only and
-must respond with text after processing tool results. (Pi coding agent does not do this —
-tools are included on every call in the loop.)
+**Pi-for-Excel behavior:** tool bundles are selected deterministically on every call via
+`selectToolBundle()` in `src/auth/stream-proxy.ts`, including calls #2+ in the loop.
+This preserves full multi-step tool use while keeping schemas bounded to the chosen bundle.
 
 ---
 

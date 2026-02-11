@@ -54,20 +54,11 @@ function applyProxy(model: Model<Api>, proxyUrl: string): Model<Api> {
 }
 
 /**
- * Should tool schemas be included in this LLM call?
+ * Is this call a tool-result continuation?
  *
- * We only send tools on the first call after a user message.
- * On that first call we may send a deterministic subset (bundle) of tools.
- * Tool-result continuations (the model processing results from a previous
- * round of tool calls) get no tool schemas — the model must respond with
- * text, not chain further tool calls.
- *
- * This keeps tool definitions (~8.7K chars) out of follow-up calls,
- * reducing context pollution. Multi-step tasks still work because the
- * model can issue parallel tool calls in a single response, and the user
- * can confirm between rounds.
- *
- * See: https://github.com/tmustier/pi-for-excel/issues/14
+ * Used for debug/telemetry (payload snapshots and status pills), not for
+ * capability gating. Continuations still receive a deterministic tool bundle
+ * so the agent can complete multi-step tool loops in a single turn.
  */
 function isToolContinuation(messages: Context["messages"]): boolean {
   if (messages.length === 0) return false;
@@ -84,9 +75,9 @@ export interface PayloadStats {
   calls: number;
   /** Chars of system prompt on last call. */
   systemChars: number;
-  /** Chars of tool schemas (compact JSON) on last call, 0 if stripped. */
+  /** Chars of tool schemas (compact JSON) on last call, 0 if no tools. */
   toolSchemaChars: number;
-  /** Number of tool definitions on last call, 0 if stripped. */
+  /** Number of tool definitions on last call, 0 if no tools. */
   toolCount: number;
   /** Number of messages on last call. */
   messageCount: number;
@@ -346,12 +337,11 @@ function withPayloadHook(
  */
 export function createOfficeStreamFn(getProxyUrl: GetProxyUrl) {
   return async (model: Model<Api>, context: Context, options?: StreamOptions) => {
-    // Strip tools on tool-result continuations (see #14).
     const continuation = isToolContinuation(context.messages);
 
-    const toolSelection = continuation
-      ? { tools: undefined, bundleId: "none" as const }
-      : selectToolBundle(context);
+    // Always expose tools (via deterministic bundle selection), including
+    // continuation calls after tool results. This preserves full agent loops.
+    const toolSelection = selectToolBundle(context);
 
     const effectiveContext = toolSelection.tools === context.tools
       ? context
