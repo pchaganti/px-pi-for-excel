@@ -15,7 +15,8 @@ Vercel is a good default host because it’s free for OSS/hobby usage and handle
 
 This repo includes `vercel.json` with:
 - `outputDirectory: dist`
-- a header rule to disable caching for `/src/taskpane.html` to make updates propagate reliably.
+- a header rule to disable caching for `/src/taskpane.html` to make updates propagate reliably
+- `Content-Security-Policy-Report-Only` on `/src/taskpane.html` for staged CSP rollout (observe violations before enforcing).
 
 ## Production URL
 
