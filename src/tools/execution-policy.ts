@@ -13,6 +13,8 @@ const ALWAYS_READ_TOOLS = new Set<string>([
   "read_range",
   "search_workbook",
   "trace_dependencies",
+  // Instructions mutate local prompt state, not workbook cells/structure.
+  "instructions",
 ]);
 
 const ALWAYS_MUTATE_TOOLS = new Set<string>([

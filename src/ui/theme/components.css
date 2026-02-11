@@ -519,6 +519,24 @@ pi-working-indicator {
   background: oklch(0.45 0.12 160 / 0.12);
 }
 
+.pi-status-instructions {
+  border: 1px solid oklch(0.45 0.12 160 / 0.25);
+  background: oklch(0.45 0.12 160 / 0.08);
+  color: var(--primary);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  line-height: 1.4;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pi-status-instructions:hover {
+  background: oklch(0.45 0.12 160 / 0.14);
+}
+
 /* Context debug pill — collapsible block matching thinking-block style. */
 .pi-context-pill {
   border-radius: var(--pill-radius);

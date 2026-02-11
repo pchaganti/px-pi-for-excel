@@ -7,7 +7,11 @@ import { ApiKeysTab, ProxyTab, SettingsDialog } from "@mariozechner/pi-web-ui/di
 import type { SlashCommand } from "../types.js";
 import { showProviderPicker } from "./overlays.js";
 
-export function createSettingsCommands(): SlashCommand[] {
+export interface SettingsCommandActions {
+  openInstructionsEditor: () => Promise<void>;
+}
+
+export function createSettingsCommands(actions: SettingsCommandActions): SlashCommand[] {
   return [
     {
       name: "settings",
@@ -23,6 +27,14 @@ export function createSettingsCommands(): SlashCommand[] {
       source: "builtin",
       execute: async () => {
         await showProviderPicker();
+      },
+    },
+    {
+      name: "instructions",
+      description: "Edit persistent user/workbook instructions",
+      source: "builtin",
+      execute: async () => {
+        await actions.openInstructionsEditor();
       },
     },
   ];

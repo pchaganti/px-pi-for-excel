@@ -35,6 +35,11 @@ void test("classifies view_settings actions by mode and context impact", () => {
   assert.equal(getToolContextImpact("view_settings", { action: "set_standard_width" }), "content");
 });
 
+void test("classifies instructions as non-workbook read traffic", () => {
+  assert.equal(getToolExecutionMode("instructions", { action: "append", level: "user" }), "read");
+  assert.equal(getToolContextImpact("instructions", { action: "append", level: "user" }), "none");
+});
+
 void test("unknown tools default to mutate with content impact", () => {
   assert.equal(getToolExecutionMode("extension_tool", { any: true }), "mutate");
   assert.equal(getToolContextImpact("extension_tool", { any: true }), "content");

@@ -12,8 +12,13 @@ import type { RuntimeLockState } from "./session-runtime-manager.js";
 
 export type ActiveAgentProvider = () => Agent | null;
 export type ActiveLockStateProvider = () => RuntimeLockState;
+export type ActiveInstructionsProvider = () => boolean;
 
-function renderStatusBar(agent: Agent | null, lockState: RuntimeLockState): void {
+function renderStatusBar(
+  agent: Agent | null,
+  lockState: RuntimeLockState,
+  instructionsActive: boolean,
+): void {
   const el = document.getElementById("pi-status-bar");
   if (!el) return;
 
@@ -81,9 +86,14 @@ function renderStatusBar(agent: Agent | null, lockState: RuntimeLockState): void
     lockBadge = `<span class="pi-status-lock pi-status-lock--active" data-tooltip="This session currently holds the workbook write lock.">lock</span>`;
   }
 
+  const instructionsBadge = instructionsActive
+    ? `<button class="pi-status-instructions" data-tooltip="Persistent instructions are active. Click to edit.">📋 instr</button>`
+    : "";
+
   el.innerHTML = `
     <span class="pi-status-ctx has-tooltip"><span class="${ctxColor}">${pct}%</span> / ${ctxLabel}${usageDebug}<span class="pi-tooltip pi-tooltip--left">${ctxBaseTooltip}${ctxWarning}</span></span>
     ${lockBadge}
+    ${instructionsBadge}
     <button class="pi-status-model" data-tooltip="Switch the AI model powering this session">
       <span class="pi-status-model__mark">π</span>
       <span class="pi-status-model__name">${modelAliasEscaped}</span>
@@ -93,24 +103,31 @@ function renderStatusBar(agent: Agent | null, lockState: RuntimeLockState): void
   `;
 }
 
-export function updateStatusBarForAgent(agent: Agent, lockState: RuntimeLockState = "idle"): void {
-  renderStatusBar(agent, lockState);
+export function updateStatusBarForAgent(
+  agent: Agent,
+  lockState: RuntimeLockState = "idle",
+  instructionsActive = false,
+): void {
+  renderStatusBar(agent, lockState, instructionsActive);
 }
 
 export function updateStatusBar(
   getActiveAgent: ActiveAgentProvider,
   getLockState?: ActiveLockStateProvider,
+  getInstructionsActive?: ActiveInstructionsProvider,
 ): void {
   const activeAgent = getActiveAgent();
   const lockState = getLockState ? getLockState() : "idle";
-  renderStatusBar(activeAgent, lockState);
+  const instructionsActive = getInstructionsActive ? getInstructionsActive() : false;
+  renderStatusBar(activeAgent, lockState, instructionsActive);
 }
 
 export function injectStatusBar(opts: {
   getActiveAgent: ActiveAgentProvider;
   getLockState?: ActiveLockStateProvider;
+  getInstructionsActive?: ActiveInstructionsProvider;
 }): () => void {
-  const { getActiveAgent, getLockState } = opts;
+  const { getActiveAgent, getLockState, getInstructionsActive } = opts;
 
   let unsubscribeActiveAgent: (() => void) | undefined;
 
@@ -119,15 +136,17 @@ export function injectStatusBar(opts: {
 
     const activeAgent = getActiveAgent();
     if (activeAgent) {
-      unsubscribeActiveAgent = activeAgent.subscribe(() => updateStatusBar(getActiveAgent, getLockState));
+      unsubscribeActiveAgent = activeAgent.subscribe(
+        () => updateStatusBar(getActiveAgent, getLockState, getInstructionsActive),
+      );
     } else {
       unsubscribeActiveAgent = undefined;
     }
 
-    updateStatusBar(getActiveAgent, getLockState);
+    updateStatusBar(getActiveAgent, getLockState, getInstructionsActive);
   };
 
-  const onStatusUpdate = () => updateStatusBar(getActiveAgent, getLockState);
+  const onStatusUpdate = () => updateStatusBar(getActiveAgent, getLockState, getInstructionsActive);
 
   document.addEventListener("pi:status-update", onStatusUpdate);
   document.addEventListener("pi:active-runtime-changed", bindActiveAgent);

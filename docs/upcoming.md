@@ -48,12 +48,14 @@ https://github.com/tmustier/pi-for-excel/issues/30
 
 **What it’s asking:** a workbook-scoped instruction store (“conventions / do-don’t / assumptions”) with UI to edit + audit.
 
-**Key decision:** where it lives:
-- IndexedDB (local, private)
-- inside workbook (travels with file)
-- hybrid
+**Status note:** core implementation is now in place:
+- `/instructions` overlay with User + Workbook tabs
+- persistent storage (`user.instructions`, `workbook.instructions.v1.<workbookId>`)
+- new `instructions` tool (`append` / `replace`)
+- prompt integration every turn (user + workbook instructions sections)
+- status-bar indicator when instructions are active
 
-**Implication:** pushes us toward a general “workbook-scoped metadata store” abstraction.
+**Remaining follow-up (if needed):** workbook-attached opt-in storage (`workbook.settings`) and richer audit/history UX for instruction edits.
 
 ---
 

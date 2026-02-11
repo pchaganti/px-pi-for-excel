@@ -21,6 +21,7 @@ import { createConditionalFormatTool } from "./conditional-format.js";
 import { createTraceDependenciesTool } from "./trace-dependencies.js";
 import { createViewSettingsTool } from "./view-settings.js";
 import { createCommentsTool } from "./comments.js";
+import { createInstructionsTool } from "./instructions.js";
 
 /** Canonical list of core tool names (single source of truth). */
 export const CORE_TOOL_NAMES = [
@@ -35,6 +36,7 @@ export const CORE_TOOL_NAMES = [
   "trace_dependencies",
   "view_settings",
   "comments",
+  "instructions",
 ] as const;
 
 export type CoreToolName = (typeof CORE_TOOL_NAMES)[number];
@@ -57,5 +59,6 @@ export function createCoreTools(): AnyCoreTool[] {
     createTraceDependenciesTool(),
     createViewSettingsTool(),
     createCommentsTool(),
+    createInstructionsTool(),
   ] as unknown as AnyCoreTool[];
 }

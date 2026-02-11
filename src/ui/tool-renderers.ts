@@ -442,6 +442,18 @@ function describeToolCall(
           return { action: "Comment", detail: addr, address: range };
       }
     }
+    case "instructions": {
+      const level = p.level as string | undefined;
+      const action = p.action as string | undefined;
+      const scope = level ? `${level} instructions` : "instructions";
+      if (action === "replace") {
+        return { action: "Set", detail: scope };
+      }
+      if (action === "append") {
+        return { action: "Remember", detail: scope };
+      }
+      return { action: "Update", detail: scope };
+    }
     default: {
       if (resultText) { const s = resultSummary(resultText); if (s) return splitFirstWord(s); }
       return { action: toolName.replace(/_/g, " "), detail: "" };

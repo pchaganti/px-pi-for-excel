@@ -631,6 +631,26 @@ function humanizeGetWorkbookOverview(p: Record<string, unknown>): ParamItem[] {
   return items;
 }
 
+function humanizeInstructions(p: Record<string, unknown>): ParamItem[] {
+  const items: ParamItem[] = [];
+
+  if (p.level) {
+    items.push({ label: "Scope", value: str(p.level) });
+  }
+
+  if (p.action) {
+    items.push({ label: "Action", value: str(p.action) });
+  }
+
+  if (p.content) {
+    const text = str(p.content);
+    const compact = text.length > 120 ? `${text.slice(0, 117)}…` : text;
+    items.push({ label: "Content", value: compact });
+  }
+
+  return items;
+}
+
 /* ── Shared helpers ─────────────────────────────────────────── */
 
 /** Join an array of mixed text/TemplateResult with comma separators. */
@@ -671,6 +691,7 @@ const HUMANIZERS: Record<string, HumanizerFn> = {
   view_settings: humanizeViewSettings,
   get_workbook_overview: humanizeGetWorkbookOverview,
   comments: humanizeComments,
+  instructions: humanizeInstructions,
 } satisfies Record<CoreToolName, HumanizerFn>;
 
 /* ── Public API ─────────────────────────────────────────────── */

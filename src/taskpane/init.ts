@@ -21,9 +21,14 @@ import { createAllTools } from "../tools/index.js";
 import { withWorkbookCoordinator } from "../tools/with-workbook-coordinator.js";
 import { loadExtension, createExtensionAPI } from "../commands/extension-api.js";
 import { registerBuiltins } from "../commands/builtins.js";
-import { showResumeDialog } from "../commands/builtins/overlays.js";
+import { showInstructionsDialog, showResumeDialog } from "../commands/builtins/overlays.js";
 import { wireCommandMenu } from "../commands/command-menu.js";
 import { commandRegistry } from "../commands/types.js";
+import {
+  getUserInstructions,
+  getWorkbookInstructions,
+  hasAnyInstructions,
+} from "../instructions/store.js";
 import { buildSystemPrompt } from "../prompt/system-prompt.js";
 import { initAppStorage } from "../storage/init-app-storage.js";
 import { renderError } from "../ui/loading.js";
@@ -44,7 +49,7 @@ import { showWelcomeLogin } from "./welcome-login.js";
 import { SessionRuntimeManager, type RuntimeTabSnapshot } from "./session-runtime-manager.js";
 import { isRecord } from "../utils/type-guards.js";
 
-const BUSY_ALLOWED_COMMANDS = new Set(["compact", "new"]);
+const BUSY_ALLOWED_COMMANDS = new Set(["compact", "new", "instructions"]);
 
 function showErrorBanner(errorRoot: HTMLElement, message: string): void {
   render(renderError(message), errorRoot);
@@ -135,7 +140,6 @@ export async function initTaskpane(opts: {
 
   // 4. Shared runtime dependencies
   // Workbook structure context is injected separately by transformContext.
-  const systemPrompt = buildSystemPrompt();
   const availableProviders = await providerKeys.list();
   setActiveProviders(new Set(availableProviders));
   const defaultModel = pickDefaultModel(availableProviders);
@@ -179,28 +183,42 @@ export async function initTaskpane(opts: {
   appEl.innerHTML = "";
   appEl.appendChild(sidebar);
 
-  const refreshWorkbookLabel = async () => {
-    try {
-      const workbookContext = await getWorkbookContext();
-      sidebar.workbookLabel = formatWorkbookLabel(workbookContext);
-    } catch {
-      sidebar.workbookLabel = "Current workbook";
-    }
+  let instructionsActive = false;
 
-    sidebar.requestUpdate();
+  const setInstructionsActive = (next: boolean) => {
+    if (instructionsActive === next) return;
+    instructionsActive = next;
+    document.dispatchEvent(new CustomEvent("pi:status-update"));
   };
 
-  void refreshWorkbookLabel();
-
-  window.addEventListener("focus", () => {
-    void refreshWorkbookLabel();
-  });
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      void refreshWorkbookLabel();
+  const resolveWorkbookContext = async (): Promise<Awaited<ReturnType<typeof getWorkbookContext>>> => {
+    try {
+      return await getWorkbookContext();
+    } catch {
+      return {
+        workbookId: null,
+        workbookName: null,
+        source: "unknown",
+      };
     }
-  });
+  };
+
+  const resolveWorkbookId = async (): Promise<string | null> => {
+    const workbookContext = await resolveWorkbookContext();
+    return workbookContext.workbookId;
+  };
+
+  const buildRuntimeSystemPrompt = async (workbookId: string | null): Promise<string> => {
+    try {
+      const userInstructions = await getUserInstructions(settings);
+      const workbookInstructions = await getWorkbookInstructions(settings, workbookId);
+      setInstructionsActive(hasAnyInstructions({ userInstructions, workbookInstructions }));
+      return buildSystemPrompt({ userInstructions, workbookInstructions });
+    } catch {
+      setInstructionsActive(false);
+      return buildSystemPrompt();
+    }
+  };
 
   const runtimeManager = new SessionRuntimeManager(sidebar);
   const abortedAgents = new WeakSet<Agent>();
@@ -227,20 +245,47 @@ export async function initTaskpane(opts: {
     document.dispatchEvent(new CustomEvent("pi:status-update"));
   });
 
-  const resolveWorkbookId = async (): Promise<string | null> => {
-    try {
-      const workbookContext = await getWorkbookContext();
-      return workbookContext.workbookId;
-    } catch {
-      return null;
+  const refreshSystemPromptForAllRuntimes = async (workbookId: string | null) => {
+    const prompt = await buildRuntimeSystemPrompt(workbookId);
+
+    for (const runtime of runtimeManager.listRuntimes()) {
+      runtime.agent.setSystemPrompt(prompt);
     }
+
+    document.dispatchEvent(new CustomEvent("pi:status-update"));
   };
+
+  const refreshWorkbookState = async () => {
+    const workbookContext = await resolveWorkbookContext();
+    sidebar.workbookLabel = formatWorkbookLabel(workbookContext);
+    sidebar.requestUpdate();
+
+    await refreshSystemPromptForAllRuntimes(workbookContext.workbookId);
+  };
+
+  void refreshWorkbookState();
+
+  window.addEventListener("focus", () => {
+    void refreshWorkbookState();
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      void refreshWorkbookState();
+    }
+  });
+
+  document.addEventListener("pi:instructions-updated", () => {
+    void refreshWorkbookState();
+  });
 
   const createRuntime = async (optsForRuntime: {
     activate: boolean;
     autoRestoreLatest: boolean;
   }) => {
     const runtimeId = crypto.randomUUID();
+    const workbookId = await resolveWorkbookId();
+    const runtimeSystemPrompt = await buildRuntimeSystemPrompt(workbookId);
 
     let runtimeAgent: Agent | null = null;
 
@@ -261,7 +306,7 @@ export async function initTaskpane(opts: {
 
     const agent = new Agent({
       initialState: {
-        systemPrompt,
+        systemPrompt: runtimeSystemPrompt,
         model: defaultModel,
         thinkingLevel: "off",
         messages: [],
@@ -413,6 +458,13 @@ export async function initTaskpane(opts: {
         },
       });
     },
+    openInstructionsEditor: async () => {
+      await showInstructionsDialog({
+        onSaved: async () => {
+          await refreshWorkbookState();
+        },
+      });
+    },
   });
 
   // Slash commands chosen from the popup menu dispatch this event.
@@ -509,6 +561,7 @@ export async function initTaskpane(opts: {
   injectStatusBar({
     getActiveAgent,
     getLockState: getActiveLockState,
+    getInstructionsActive: () => instructionsActive,
   });
 
   // ── Wire command menu to textarea ──
@@ -546,6 +599,16 @@ export async function initTaskpane(opts: {
     // Model picker
     if (el.closest?.(".pi-status-model")) {
       openModelSelector();
+      return;
+    }
+
+    // Instructions editor
+    if (el.closest?.(".pi-status-instructions")) {
+      void showInstructionsDialog({
+        onSaved: async () => {
+          await refreshWorkbookState();
+        },
+      });
       return;
     }
 

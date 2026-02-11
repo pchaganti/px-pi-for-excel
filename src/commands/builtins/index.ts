@@ -5,14 +5,15 @@
 import { commandRegistry, type SlashCommand } from "../types.js";
 
 import { createModelCommands, type ActiveAgentProvider } from "./model.js";
-import { createSettingsCommands } from "./settings.js";
+import { createSettingsCommands, type SettingsCommandActions } from "./settings.js";
+import { createExperimentalCommands } from "./experimental.js";
 import { createDebugCommands } from "./debug.js";
 import { createClipboardCommands } from "./clipboard.js";
 import { createExportCommands, createCompactCommands } from "./export.js";
 import { createSessionIdentityCommands, createSessionLifecycleCommands, type SessionCommandActions } from "./session.js";
 import { createHelpCommands } from "./help.js";
 
-export interface BuiltinsContext extends SessionCommandActions {
+export interface BuiltinsContext extends SessionCommandActions, SettingsCommandActions {
   getActiveAgent: ActiveAgentProvider;
 }
 
@@ -21,7 +22,8 @@ export function registerBuiltins(context: BuiltinsContext): void {
   // Keep registration order stable: this is the order shown in the command menu.
   const builtins: SlashCommand[] = [
     ...createModelCommands(context.getActiveAgent),
-    ...createSettingsCommands(),
+    ...createSettingsCommands(context),
+    ...createExperimentalCommands(),
     ...createDebugCommands(),
     ...createClipboardCommands(context.getActiveAgent),
     ...createExportCommands(context.getActiveAgent),

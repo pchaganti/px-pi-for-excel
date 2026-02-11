@@ -16,7 +16,7 @@
     "lint": "eslint \"*.ts\" \"src/**/*.ts\" \"tests/**/*.ts\"",
     "lint:fix": "eslint \"*.ts\" \"src/**/*.ts\" \"tests/**/*.ts\" --fix",
     "test:models": "node --test --experimental-strip-types tests/model-ordering.test.ts",
-    "test:context": "node --test --experimental-strip-types --import ./scripts/register-test-ts-loader.mjs tests/tool-result-shaping.test.ts tests/context-injection.test.ts tests/execution-policy.test.ts tests/with-workbook-coordinator.test.ts tests/compaction-thresholds.test.ts tests/auto-compaction.test.ts tests/archived-history.test.ts tests/action-queue.test.ts tests/session-restore-selection.test.ts tests/workbook-context.test.ts",
+    "test:context": "node --test --experimental-strip-types --import ./scripts/register-test-ts-loader.mjs tests/tool-result-shaping.test.ts tests/context-injection.test.ts tests/execution-policy.test.ts tests/with-workbook-coordinator.test.ts tests/compaction-thresholds.test.ts tests/auto-compaction.test.ts tests/archived-history.test.ts tests/action-queue.test.ts tests/session-restore-selection.test.ts tests/workbook-context.test.ts tests/instructions-store.test.ts tests/system-prompt.test.ts",
     "test:security": "node --test --experimental-strip-types tests/proxy-target-policy.test.mjs tests/cors-proxy-server.security.test.mjs tests/extension-source-policy.test.ts tests/marked-safety-policy.test.ts tests/oauth-storage-security.test.ts",
     "validate": "npx office-addin-manifest validate manifest.xml",
     "sideload": "npx office-addin-debugging start manifest.xml desktop --app excel",

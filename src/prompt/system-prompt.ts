@@ -1,17 +1,52 @@
 /**
  * System prompt builder — constructs the Excel-aware system prompt.
  *
- * Kept concise (~400 tokens) because every token is paid on every turn.
+ * Kept concise because every token is paid on every turn.
  * The workbook blueprint is injected separately via transformContext.
  */
+
+export interface SystemPromptOptions {
+  userInstructions?: string | null;
+  workbookInstructions?: string | null;
+}
+
+function renderInstructionValue(value: string | null | undefined, fallback: string): string {
+  if (typeof value !== "string") return fallback;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+}
+
+function buildInstructionsSection(opts: SystemPromptOptions): string {
+  const userValue = renderInstructionValue(opts.userInstructions, "(No user instructions set.)");
+  const workbookValue = renderInstructionValue(
+    opts.workbookInstructions,
+    "(No workbook instructions set.)",
+  );
+
+  return `## Persistent Instructions
+
+You can maintain persistent guidance with the **instructions** tool:
+- **User instructions** are private (local to this machine). Update freely when the user expresses long-term preferences.
+- **Workbook instructions** apply to the active workbook. Always show the exact text and ask for explicit confirmation before updating.
+
+If user-level and workbook-level instructions conflict, ask the user to clarify instead of guessing precedence.
+
+### User
+${userValue}
+
+### Workbook
+${workbookValue}`;
+}
 
 /**
  * Build the system prompt.
  */
-export function buildSystemPrompt(): string {
+export function buildSystemPrompt(opts: SystemPromptOptions = {}): string {
   const sections: string[] = [];
 
   sections.push(IDENTITY);
+  sections.push(buildInstructionsSection(opts));
   sections.push(TOOLS);
   sections.push(WORKFLOW);
   sections.push(CONVENTIONS);
@@ -23,7 +58,7 @@ const IDENTITY = `You are Pi, an AI assistant embedded in Microsoft Excel as a s
 
 const TOOLS = `## Tools
 
-You have 11 tools:
+You have 12 tools:
 - **get_workbook_overview** — structural blueprint (sheets, headers, named ranges, tables); optional sheet-level detail for charts, pivots, shapes
 - **read_range** — read cell values/formulas in three formats: compact (markdown), csv (values-only), or detailed (with formatting + comments)
 - **write_cells** — write values/formulas with overwrite protection and auto-verification
@@ -34,7 +69,8 @@ You have 11 tools:
 - **conditional_format** — add or clear conditional formatting rules (formula or cell-value)
 - **comments** — read, add, update, reply, delete, resolve/reopen cell comments
 - **trace_dependencies** — show the formula dependency tree for a cell
-- **view_settings** — control gridlines, headings, freeze panes, tab color, sheet visibility, sheet activation, and standard width`;
+- **view_settings** — control gridlines, headings, freeze panes, tab color, sheet visibility, sheet activation, and standard width
+- **instructions** — update persistent user/workbook instructions (append or replace)`;
 
 const WORKFLOW = `## Workflow
 
