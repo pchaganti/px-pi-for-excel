@@ -148,6 +148,7 @@ void test("content-impact mutation tools do not trigger structure invalidation",
     { toolName: "format_cells", params: { range: "Sheet1!A1", format: { bold: true } } },
     { toolName: "comments", params: { action: "delete", range: "Sheet1!A1" } },
     { toolName: "view_settings", params: { action: "hide_gridlines" } },
+    { toolName: "view_settings", params: { action: "activate", sheet: "Sheet1" } },
   ];
 
   for (const item of cases) {
@@ -205,7 +206,6 @@ void test("read-only tool paths never emit mutation events", async (t) => {
     { toolName: "read_range", params: { range: "Sheet1!A1:B2" } },
     { toolName: "comments", params: { action: "read", range: "Sheet1!A1" } },
     { toolName: "view_settings", params: { action: "get" } },
-    { toolName: "view_settings", params: { action: "activate", sheet: "Sheet1" } },
   ];
 
   for (const item of cases) {

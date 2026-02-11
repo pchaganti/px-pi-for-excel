@@ -35,7 +35,7 @@ function getActionParam(params: unknown): string | null {
 
 function classifyViewSettings(params: unknown): ToolExecutionMode {
   const action = getActionParam(params);
-  return action === "get" || action === "activate" ? "read" : "mutate";
+  return action === "get" ? "read" : "mutate";
 }
 
 function classifyComments(params: unknown): ToolExecutionMode {

@@ -25,8 +25,8 @@ void test("classifies view_settings actions by mode and context impact", () => {
   assert.equal(getToolExecutionMode("view_settings", { action: "get" }), "read");
   assert.equal(getToolContextImpact("view_settings", { action: "get" }), "none");
 
-  assert.equal(getToolExecutionMode("view_settings", { action: "activate" }), "read");
-  assert.equal(getToolContextImpact("view_settings", { action: "activate" }), "none");
+  assert.equal(getToolExecutionMode("view_settings", { action: "activate" }), "mutate");
+  assert.equal(getToolContextImpact("view_settings", { action: "activate" }), "content");
 
   assert.equal(getToolExecutionMode("view_settings", { action: "hide_sheet" }), "mutate");
   assert.equal(getToolContextImpact("view_settings", { action: "hide_sheet" }), "structure");
