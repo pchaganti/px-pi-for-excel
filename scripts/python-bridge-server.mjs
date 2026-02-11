@@ -415,19 +415,18 @@ function probeBinary(command, args) {
   });
 
   if (probe.error) {
+    console.error(`[pi-for-excel] Failed to probe binary "${command}":`, probe.error);
     return {
       available: false,
-      error: probe.error.message,
+      error: "probe_failed",
       command,
     };
   }
 
   if (probe.status !== 0) {
-    const stderr = typeof probe.stderr === "string" ? probe.stderr.trim() : "";
-    const stdout = typeof probe.stdout === "string" ? probe.stdout.trim() : "";
     return {
       available: false,
-      error: stderr || stdout || `exit ${String(probe.status)}`,
+      error: `probe_exit_${String(probe.status)}`,
       command,
     };
   }
@@ -826,7 +825,7 @@ function createRealBackend() {
      */
     async handlePython(request) {
       if (!pythonInfo.available) {
-        throw new HttpError(501, pythonInfo.error || "python binary not available");
+        throw new HttpError(501, "python binary not available");
       }
 
       return runPython(request, { command: pythonInfo.command });
@@ -837,7 +836,7 @@ function createRealBackend() {
      */
     async handleLibreOffice(request) {
       if (!libreOfficeInfo.available) {
-        throw new HttpError(501, libreOfficeInfo.error || "libreoffice binary not available");
+        throw new HttpError(501, "libreoffice binary not available");
       }
 
       return runLibreOfficeConvert(request, { command: libreOfficeInfo.command });
