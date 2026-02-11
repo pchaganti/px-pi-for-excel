@@ -357,10 +357,6 @@ void test("/experimental tmux-status reports blocked state with hint", async () 
     isTmuxBridgeEnabled: () => false,
     getTmuxBridgeUrl: () => Promise.resolve(undefined),
     getTmuxBridgeToken: () => Promise.resolve(undefined),
-    evaluateTmuxBridgeGate: () => Promise.resolve({
-      allowed: false,
-      reason: "tmux_experiment_disabled",
-    }),
   });
 
   await command.execute("tmux-status");
@@ -383,10 +379,6 @@ void test("/experimental tmux-status reports healthy bridge details", async () =
     isTmuxBridgeEnabled: () => true,
     getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3337"),
     getTmuxBridgeToken: () => Promise.resolve("supersecrettoken"),
-    evaluateTmuxBridgeGate: () => Promise.resolve({
-      allowed: true,
-      bridgeUrl: "https://localhost:3337",
-    }),
     probeTmuxBridgeHealth: () => Promise.resolve({
       reachable: true,
       status: 200,
@@ -405,6 +397,36 @@ void test("/experimental tmux-status reports healthy bridge details", async () =
   assert.match(toasts[0], /gate: pass/u);
   assert.match(toasts[0], /health: reachable \(HTTP 200, mode=tmux, backend=tmux, sessions=2\)/u);
   assert.ok(!toasts[0].includes("supersecrettoken"));
+});
+
+void test("/experimental tmux-status uses a single health probe for gate + diagnostics", async () => {
+  const toasts: string[] = [];
+  let probeCount = 0;
+
+  const command = getExperimentalCommand({
+    showExperimentalDialog: () => {},
+    showToast: (message) => {
+      toasts.push(message);
+    },
+    isTmuxBridgeEnabled: () => true,
+    getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3337"),
+    getTmuxBridgeToken: () => Promise.resolve(undefined),
+    probeTmuxBridgeHealth: () => {
+      probeCount += 1;
+      return Promise.resolve({
+        reachable: false,
+        status: 503,
+        error: "bridge unavailable",
+      });
+    },
+  });
+
+  await command.execute("tmux-status");
+
+  assert.equal(probeCount, 1);
+  assert.equal(toasts.length, 1);
+  assert.match(toasts[0], /gate: blocked \(bridge_unreachable\)/u);
+  assert.match(toasts[0], /health: unreachable \(HTTP 503; bridge unavailable\)/u);
 });
 
 void test("/experimental tmux-status with extra args shows usage", async () => {

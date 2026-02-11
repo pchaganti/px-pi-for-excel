@@ -16,8 +16,8 @@ import { validateOfficeProxyUrl } from "../../auth/proxy-validation.js";
 import { dispatchExperimentalToolConfigChanged } from "../../experiments/events.js";
 import {
   buildTmuxBridgeGateErrorMessage,
-  evaluateTmuxBridgeGate,
   TMUX_BRIDGE_URL_SETTING_KEY,
+  type TmuxBridgeGateReason,
   type TmuxBridgeGateResult,
 } from "../../tools/experimental-tool-gates.js";
 import { TMUX_BRIDGE_TOKEN_SETTING_KEY } from "../../tools/tmux.js";
@@ -65,7 +65,6 @@ export interface ExperimentalCommandDependencies {
   clearTmuxBridgeToken?: () => Promise<void>;
   validateTmuxBridgeToken?: (token: string) => string;
   isTmuxBridgeEnabled?: () => boolean;
-  evaluateTmuxBridgeGate?: () => Promise<TmuxBridgeGateResult>;
   probeTmuxBridgeHealth?: (bridgeUrl: string) => Promise<TmuxBridgeHealthStatus>;
   notifyToolConfigChanged?: (configKey: string) => void;
 }
@@ -86,7 +85,6 @@ interface ResolvedExperimentalCommandDependencies {
   clearTmuxBridgeToken: () => Promise<void>;
   validateTmuxBridgeToken: (token: string) => string;
   isTmuxBridgeEnabled: () => boolean;
-  evaluateTmuxBridgeGate: () => Promise<TmuxBridgeGateResult>;
   probeTmuxBridgeHealth: (bridgeUrl: string) => Promise<TmuxBridgeHealthStatus>;
   notifyToolConfigChanged: (configKey: string) => void;
 }
@@ -241,7 +239,6 @@ function resolveDependencies(
     clearTmuxBridgeToken: dependencies.clearTmuxBridgeToken ?? defaultClearTmuxBridgeToken,
     validateTmuxBridgeToken: dependencies.validateTmuxBridgeToken ?? defaultValidateTmuxBridgeToken,
     isTmuxBridgeEnabled: dependencies.isTmuxBridgeEnabled ?? defaultIsTmuxBridgeEnabled,
-    evaluateTmuxBridgeGate: dependencies.evaluateTmuxBridgeGate ?? evaluateTmuxBridgeGate,
     probeTmuxBridgeHealth: dependencies.probeTmuxBridgeHealth ?? defaultProbeTmuxBridgeHealth,
     notifyToolConfigChanged: dependencies.notifyToolConfigChanged ?? ((configKey: string) => {
       dispatchExperimentalToolConfigChanged({ configKey });
@@ -401,7 +398,6 @@ async function handleTmuxStatusCommand(
   const featureEnabled = dependencies.isTmuxBridgeEnabled();
   const configuredBridgeUrl = await dependencies.getTmuxBridgeUrl();
   const configuredToken = await dependencies.getTmuxBridgeToken();
-  const gate = await dependencies.evaluateTmuxBridgeGate();
 
   let normalizedBridgeUrl: string | undefined;
   let bridgeUrlValidationError: string | undefined;
@@ -417,6 +413,28 @@ async function handleTmuxStatusCommand(
   const health = normalizedBridgeUrl
     ? await dependencies.probeTmuxBridgeHealth(normalizedBridgeUrl)
     : undefined;
+
+  let gateReason: TmuxBridgeGateReason | undefined;
+  if (!featureEnabled) {
+    gateReason = "tmux_experiment_disabled";
+  } else if (!configuredBridgeUrl) {
+    gateReason = "missing_bridge_url";
+  } else if (!normalizedBridgeUrl) {
+    gateReason = "invalid_bridge_url";
+  } else if (!health?.reachable) {
+    gateReason = "bridge_unreachable";
+  }
+
+  const gate: TmuxBridgeGateResult = gateReason
+    ? {
+      allowed: false,
+      reason: gateReason,
+      bridgeUrl: normalizedBridgeUrl,
+    }
+    : {
+      allowed: true,
+      bridgeUrl: normalizedBridgeUrl,
+    };
 
   const lines: string[] = ["Tmux bridge status:"];
   lines.push(`- feature flag (tmux-bridge): ${featureEnabled ? "enabled" : "disabled"}`);
