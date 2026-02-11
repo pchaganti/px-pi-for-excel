@@ -8,7 +8,6 @@
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun } from "../excel/helpers.js";
-import { invalidateBlueprint } from "../context/blueprint.js";
 import { getErrorMessage } from "../utils/errors.js";
 
 // Helper for string enum (TypeBox doesn't have a built-in StringEnum)
@@ -220,11 +219,6 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
               throw new Error(`Unknown action: ${String(action as string)}`);
           }
         });
-
-        // Structural change — invalidate workbook blueprint cache.
-        // Context injection watches this invalidation and refreshes workbook
-        // structure context on the next model call.
-        invalidateBlueprint();
 
         return {
           content: [{ type: "text", text: result }],

@@ -1,12 +1,12 @@
 /**
  * Tool execution policy.
  *
- * Classifies core tool calls as read-only vs workbook-mutating.
+ * Classifies core tool calls as read-only vs workbook-mutating,
+ * and whether a successful mutation should refresh workbook structure context.
  */
 
-import { isRecord } from "../utils/type-guards.js";
-
 export type ToolExecutionMode = "read" | "mutate";
+export type ToolContextImpact = "none" | "content" | "structure";
 
 const ALWAYS_READ_TOOLS = new Set<string>([
   "get_workbook_overview",
@@ -22,6 +22,10 @@ const ALWAYS_MUTATE_TOOLS = new Set<string>([
   "format_cells",
   "conditional_format",
 ]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
 
 function getActionParam(params: unknown): string | null {
   if (!isRecord(params)) return null;
@@ -57,4 +61,22 @@ export function getToolExecutionMode(toolName: string, params: unknown): ToolExe
   }
 
   return "mutate";
+}
+
+/**
+ * Return context impact for a tool call.
+ *
+ * Lean default:
+ * - only clearly structural mutations trigger workbook blueprint invalidation
+ * - data/format/comment/view mutations are treated as content-only
+ */
+export function getToolContextImpact(toolName: string, params: unknown): ToolContextImpact {
+  const mode = getToolExecutionMode(toolName, params);
+  if (mode === "read") return "none";
+
+  if (toolName === "modify_structure") {
+    return "structure";
+  }
+
+  return "content";
 }

@@ -14,6 +14,7 @@ import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.
 import { createOfficeStreamFn } from "../auth/stream-proxy.js";
 import { isLoopbackProxyUrl } from "../auth/proxy-validation.js";
 import { restoreCredentials } from "../auth/restore.js";
+import { invalidateBlueprint } from "../context/blueprint.js";
 import { ChangeTracker } from "../context/change-tracker.js";
 import { convertToLlm } from "../messages/convert-to-llm.js";
 import { createAllTools } from "../tools/index.js";
@@ -226,6 +227,12 @@ export async function initTaskpane(opts: {
       {
         getWorkbookId: resolveWorkbookId,
         getSessionId: () => runtimeAgent?.sessionId ?? runtimeId,
+      },
+      {
+        onWriteCommitted: (event) => {
+          if (event.impact !== "structure") return;
+          invalidateBlueprint(event.workbookId);
+        },
       },
     );
 

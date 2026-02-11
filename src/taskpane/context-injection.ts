@@ -74,7 +74,7 @@ export function createContextInjector(changeTracker: ChangeTracker) {
     try {
       const workbookCtx = await withTimeout(getWorkbookContext().catch(() => null), 1200);
       const workbookId = workbookCtx?.workbookId ?? null;
-      const currentRevision = getBlueprintRevision();
+      const currentRevision = getBlueprintRevision(workbookId);
       const hasWorkbookContextMessage = historyHasWorkbookContextRefresh(messages);
 
       const decision = decideWorkbookContextRefresh({
@@ -91,11 +91,11 @@ export function createContextInjector(changeTracker: ChangeTracker) {
       }
 
       if (decision.refreshReason) {
-        const blueprint = await withTimeout(getBlueprint().catch(() => null), 2500);
+        const blueprint = await withTimeout(getBlueprint(workbookId).catch(() => null), 2500);
         if (blueprint && blueprint.trim().length > 0) {
           injections.push(buildWorkbookContextSection(blueprint, decision.refreshReason));
           lastInjectedWorkbookId = workbookId;
-          lastInjectedBlueprintRevision = getBlueprintRevision();
+          lastInjectedBlueprintRevision = getBlueprintRevision(workbookId);
         }
       }
     } catch {

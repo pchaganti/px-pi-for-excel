@@ -8,16 +8,23 @@
 import { getWorkbookContext } from "../workbook/context.js";
 import { buildOverview } from "../tools/get-workbook-overview.js";
 
-interface BlueprintCacheEntry {
-  workbookId: string | null;
-  blueprint: string;
+const UNKNOWN_WORKBOOK_KEY = "__workbook_unknown__";
+
+const blueprintCacheByWorkbook = new Map<string, string>();
+const blueprintRevisionByWorkbook = new Map<string, number>();
+
+function normalizeWorkbookKey(workbookId: string | null): string {
+  return workbookId ?? UNKNOWN_WORKBOOK_KEY;
 }
 
-let cachedBlueprint: BlueprintCacheEntry | null = null;
-let blueprintRevision = 0;
+function getRevisionForKey(workbookKey: string): number {
+  return blueprintRevisionByWorkbook.get(workbookKey) ?? 0;
+}
 
-function bumpBlueprintRevision(): void {
-  blueprintRevision += 1;
+function bumpRevisionForKey(workbookKey: string): number {
+  const next = getRevisionForKey(workbookKey) + 1;
+  blueprintRevisionByWorkbook.set(workbookKey, next);
+  return next;
 }
 
 async function resolveWorkbookId(): Promise<string | null> {
@@ -30,41 +37,45 @@ async function resolveWorkbookId(): Promise<string | null> {
 }
 
 /**
- * Monotonic revision token for blueprint cache changes.
+ * Monotonic revision token for one workbook's blueprint cache.
  *
- * Intended for context injection logic: if this value changes, workbook
- * structure context should be considered stale and re-evaluated.
+ * Intended for context injection logic: if this value changes for the active
+ * workbook, workbook structure context should be considered stale.
  */
-export function getBlueprintRevision(): number {
-  return blueprintRevision;
+export function getBlueprintRevision(workbookId: string | null): number {
+  return getRevisionForKey(normalizeWorkbookKey(workbookId));
 }
 
 /** Get the workbook blueprint (cached per workbook identity when available). */
-export async function getBlueprint(): Promise<string> {
-  const workbookId = await resolveWorkbookId();
+export async function getBlueprint(workbookId?: string | null): Promise<string> {
+  const resolvedWorkbookId = workbookId === undefined
+    ? await resolveWorkbookId()
+    : workbookId;
+  const workbookKey = normalizeWorkbookKey(resolvedWorkbookId);
 
-  if (cachedBlueprint && cachedBlueprint.workbookId === workbookId) {
-    return cachedBlueprint.blueprint;
+  const cached = blueprintCacheByWorkbook.get(workbookKey);
+  if (cached !== undefined) {
+    return cached;
   }
 
   const blueprint = await buildOverview();
-  cachedBlueprint = {
-    workbookId,
-    blueprint,
-  };
-  bumpBlueprintRevision();
+  blueprintCacheByWorkbook.set(workbookKey, blueprint);
+  bumpRevisionForKey(workbookKey);
   return blueprint;
 }
 
 /** Force a fresh blueprint rebuild (e.g. after structural changes). */
-export async function refreshBlueprint(): Promise<string> {
-  // Keep invalidate behavior centralized so revision signaling stays consistent.
-  invalidateBlueprint();
-  return getBlueprint();
+export async function refreshBlueprint(workbookId?: string | null): Promise<string> {
+  const resolvedWorkbookId = workbookId === undefined
+    ? await resolveWorkbookId()
+    : workbookId;
+  invalidateBlueprint(resolvedWorkbookId);
+  return getBlueprint(resolvedWorkbookId);
 }
 
-/** Invalidate the cached blueprint. */
-export function invalidateBlueprint(): void {
-  cachedBlueprint = null;
-  bumpBlueprintRevision();
+/** Invalidate one workbook's cached blueprint. */
+export function invalidateBlueprint(workbookId: string | null): void {
+  const workbookKey = normalizeWorkbookKey(workbookId);
+  blueprintCacheByWorkbook.delete(workbookKey);
+  bumpRevisionForKey(workbookKey);
 }

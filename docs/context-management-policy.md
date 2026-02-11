@@ -116,7 +116,8 @@ This policy sets clear guardrails so we can improve context quality while preser
 - Compute workbook context hash/version from structural signals.
 - Reinject structural context on hash/version change, workbook switch, or explicit refresh.
 - Avoid re-sending large workbook snapshots every turn.
-- **Current rollout (v1):** workbook blueprint removed from base system prompt; injected via auto-context only on initial call, workbook switch, or blueprint invalidation (e.g. structure-changing tool ops).
+- **Current rollout (v1):** workbook blueprint removed from base system prompt; injected via auto-context only on initial call, workbook switch, blueprint invalidation, or when compaction removed prior workbook context.
+- **Lean invalidation policy:** only **structure-impact** tool writes invalidate blueprint context (centralized in `execution-policy` + coordinator wrapper), while value/format/comment/view writes do not.
 
 **Success:** fewer large context swings; better cache reuse.
 

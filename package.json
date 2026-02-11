@@ -16,7 +16,7 @@
     "lint": "eslint \"*.ts\" \"src/**/*.ts\" \"tests/**/*.ts\"",
     "lint:fix": "eslint \"*.ts\" \"src/**/*.ts\" \"tests/**/*.ts\" --fix",
     "test:models": "node --test --experimental-strip-types tests/model-ordering.test.ts",
-    "test:context": "node --test --experimental-strip-types tests/tool-result-shaping.test.ts tests/context-injection.test.ts",
+    "test:context": "node --test --experimental-strip-types tests/tool-result-shaping.test.ts tests/context-injection.test.ts tests/execution-policy.test.ts",
     "test:security": "node --test --experimental-strip-types tests/proxy-target-policy.test.mjs tests/cors-proxy-server.security.test.mjs tests/extension-source-policy.test.ts tests/marked-safety-policy.test.ts tests/oauth-storage-security.test.ts",
     "validate": "npx office-addin-manifest validate manifest.xml",
     "sideload": "npx office-addin-debugging start manifest.xml desktop --app excel",
