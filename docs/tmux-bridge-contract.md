@@ -5,20 +5,18 @@ Status:
 - Local bridge scaffold implemented in `scripts/tmux-bridge-server.mjs`
 
 The bridge supports two modes:
-- `stub` (default): in-memory tmux simulation for development/testing
+- `stub` (default): in-memory tmux simulation for development/testing (does not execute shell commands)
 - `tmux`: real tmux subprocess backend with guardrails
 
 ## Availability and gating
 
-The `tmux` tool is hidden unless all gates pass:
+The `tmux` tool remains registered (stable tool list / prompt caching), but execution is blocked unless all gates pass:
 
 1. `/experimental on tmux-bridge`
 2. `tmux.bridge.url` is configured (via `/experimental tmux-bridge-url <url>`)
 3. bridge `GET /health` returns success
 
-The gate is checked:
-- before tool exposure
-- again on each tool execution (defense in depth)
+The gate is checked on each tool execution (defense in depth).
 
 ## Local bridge quickstart
 
@@ -81,6 +79,8 @@ Optional auth header when configured:
 - `kill_session`: requires `session`
 - `send_keys`: requires `session` + at least one of (`text`, `keys`, `enter=true`)
 - `send_and_capture`: same as `send_keys`
+
+Tip: `send_keys` sends input only. Use `capture_pane` or `send_and_capture` when you need terminal output.
 
 ## Response schema
 

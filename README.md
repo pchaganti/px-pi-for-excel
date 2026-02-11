@@ -253,7 +253,7 @@ Proxy rejections return reason codes in plaintext (e.g. `blocked_target_loopback
 Start the local bridge:
 
 ```bash
-# Stub mode (safe default)
+# Stub mode (safe default, no real shell execution)
 npm run tmux:bridge:https
 
 # Real tmux mode

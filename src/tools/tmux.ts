@@ -1,9 +1,11 @@
 /**
  * tmux — Experimental local tmux bridge adapter.
  *
- * This tool is hidden behind experimental gates:
+ * This tool stays registered for a stable tool list/prompt cache,
+ * but execution is gated by:
  * - /experimental on tmux-bridge
  * - /experimental tmux-bridge-url https://localhost:<port>
+ * - reachable bridge health endpoint
  *
  * The local bridge contract (v1) is a POST JSON request to /v1/tmux.
  */
@@ -490,7 +492,15 @@ function formatBridgeSuccessText(
 
     case "send_keys": {
       const session = response.session ?? request.session ?? "(unknown session)";
-      return `Sent keys to tmux session \"${session}\".${renderOutputBlock(response.output)}`;
+      const outputBlock = renderOutputBlock(response.output);
+      if (outputBlock.length > 0) {
+        return `Sent keys to tmux session \"${session}\".${outputBlock}`;
+      }
+
+      return (
+        `Sent keys to tmux session \"${session}\". ` +
+        "Use send_and_capture or capture_pane to fetch terminal output."
+      );
     }
 
     case "capture_pane": {

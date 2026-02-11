@@ -925,5 +925,8 @@ server.listen(PORT, HOST, () => {
 
   if (backend.mode === "tmux") {
     console.log(`[pi-for-excel] tmux socket: ${socketPath}`);
+  } else {
+    console.log("[pi-for-excel] stub mode: commands are simulated and not executed in a real shell.");
+    console.log("[pi-for-excel] use TMUX_BRIDGE_MODE=tmux for real command output.");
   }
 });

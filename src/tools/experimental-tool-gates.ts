@@ -4,8 +4,9 @@
  * Security posture for local-bridge capabilities (tmux, future execution tools):
  * - capability must be explicitly enabled via /experimental
  * - local bridge URL must be configured
- * - bridge must be reachable before the tool is exposed
- * - execution performs a hard gate check again (defense in depth)
+ * - bridge must be reachable at execution time
+ * - tool remains registered (stable tool list / prompt caching)
+ * - execution performs a hard gate check (defense in depth)
  */
 
 import type { AgentTool } from "@mariozechner/pi-agent-core";
@@ -161,17 +162,16 @@ function wrapTmuxToolWithHardGate(
 }
 
 /**
- * Apply experimental gates to tool visibility and execution.
+ * Apply experimental gates to tool execution.
  *
  * Current rule:
- * - `tmux` is exposed only when the tmux experiment is enabled and bridge health passes
- * - `tmux` execution always re-checks the gate before running
+ * - `tmux` stays registered to keep the tool list stable
+ * - `tmux` execution always re-checks experiment flag, URL, and bridge health
  */
-export async function applyExperimentalToolGates(
+export function applyExperimentalToolGates(
   tools: AgentTool[],
   dependencies: TmuxBridgeGateDependencies = {},
 ): Promise<AgentTool[]> {
-  let tmuxGate: TmuxBridgeGateResult | null = null;
   const gatedTools: AgentTool[] = [];
 
   for (const tool of tools) {
@@ -180,16 +180,8 @@ export async function applyExperimentalToolGates(
       continue;
     }
 
-    if (tmuxGate === null) {
-      tmuxGate = await evaluateTmuxBridgeGate(dependencies);
-    }
-
-    if (!tmuxGate.allowed) {
-      continue;
-    }
-
     gatedTools.push(wrapTmuxToolWithHardGate(tool, dependencies));
   }
 
-  return gatedTools;
+  return Promise.resolve(gatedTools);
 }

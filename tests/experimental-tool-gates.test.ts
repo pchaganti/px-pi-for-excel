@@ -31,7 +31,7 @@ function createTestTool(
   };
 }
 
-void test("hides tmux tool when experiment is disabled", async () => {
+void test("keeps tmux tool registered when experiment is disabled", async () => {
   let probeCalled = false;
 
   const tools = [createTestTool("tmux"), createTestTool("read_range")];
@@ -45,31 +45,23 @@ void test("hides tmux tool when experiment is disabled", async () => {
     },
   });
 
-  assert.deepEqual(gated.map((tool) => tool.name), ["read_range"]);
+  assert.deepEqual(gated.map((tool) => tool.name), ["tmux", "read_range"]);
+  assert.equal(probeCalled, false);
+
+  const tmuxTool = gated.find((tool) => tool.name === "tmux");
+  assert.ok(tmuxTool);
+
+  await assert.rejects(
+    () => tmuxTool.execute("call-1", {}),
+    /\/experimental on tmux-bridge/,
+  );
+
   assert.equal(probeCalled, false);
 });
 
-void test("exposes tmux tool only when experiment + bridge health pass", async () => {
-  const tools = [createTestTool("tmux"), createTestTool("read_range")];
-
-  const hidden = await applyExperimentalToolGates(tools, {
-    isTmuxExperimentEnabled: () => true,
-    getTmuxBridgeUrl: () => Promise.resolve(undefined),
-    probeTmuxBridge: () => Promise.resolve(true),
-  });
-  assert.deepEqual(hidden.map((tool) => tool.name), ["read_range"]);
-
-  const exposed = await applyExperimentalToolGates(tools, {
-    isTmuxExperimentEnabled: () => true,
-    getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3337"),
-    validateBridgeUrl: () => "https://localhost:3337",
-    probeTmuxBridge: () => Promise.resolve(true),
-  });
-  assert.deepEqual(exposed.map((tool) => tool.name), ["tmux", "read_range"]);
-});
-
-void test("tmux hard gate re-checks execution even after tool exposure", async () => {
+void test("tmux hard gate re-checks execution on every call", async () => {
   let enabled = true;
+  let bridgeHealthy = true;
   let executeCount = 0;
 
   const [gatedTmux] = await applyExperimentalToolGates([createTestTool("tmux", () => {
@@ -78,7 +70,7 @@ void test("tmux hard gate re-checks execution even after tool exposure", async (
     isTmuxExperimentEnabled: () => enabled,
     getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3337"),
     validateBridgeUrl: () => "https://localhost:3337",
-    probeTmuxBridge: () => Promise.resolve(true),
+    probeTmuxBridge: () => Promise.resolve(bridgeHealthy),
   });
 
   assert.ok(gatedTmux);
@@ -91,6 +83,15 @@ void test("tmux hard gate re-checks execution even after tool exposure", async (
   await assert.rejects(
     () => gatedTmux.execute("call-2", {}),
     /\/experimental on tmux-bridge/,
+  );
+  assert.equal(executeCount, 1);
+
+  enabled = true;
+  bridgeHealthy = false;
+
+  await assert.rejects(
+    () => gatedTmux.execute("call-3", {}),
+    /not reachable/i,
   );
   assert.equal(executeCount, 1);
 });

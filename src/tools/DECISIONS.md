@@ -114,7 +114,7 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Rationale:** ASCII art rendered via `<markdown-block>` lacked interactivity and visual hierarchy. Clickable addresses + clean CSS indentation is much more usable.
 
 ## Experimental tmux bridge tool (`tmux`)
-- **Availability:** non-core experimental tool, hidden by default via `applyExperimentalToolGates()`.
+- **Availability:** non-core experimental tool, always registered via `createAllTools()`; execution is gated by `applyExperimentalToolGates()`.
 - **Gate model:** requires `tmux-bridge` experiment enabled, configured `tmux.bridge.url`, and successful bridge `/health` probe.
 - **Execution policy:** classified as `read/none` in workbook coordinator (no workbook lock writes or blueprint invalidation).
 - **Bridge implementation:** local helper script `scripts/tmux-bridge-server.mjs`.
