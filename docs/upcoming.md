@@ -119,6 +119,8 @@ https://github.com/tmustier/pi-for-excel/issues/20
 - pushes toward tracking per-message cost/tokens and storing an “archived history” separately from the active LLM context
 - interacts with artifacts (#32) because verbose reads could be persisted as artifacts rather than staying in LLM context
 
+**Policy reference:** see [`docs/context-management-policy.md`](./context-management-policy.md) for the active cache-safe rollout slices (payload snapshots, progressive tool disclosure, tool-result shaping, workbook-context invalidation).
+
 ---
 
 ## Agent interface / platform design
