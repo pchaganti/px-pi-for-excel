@@ -350,7 +350,7 @@ export async function initTaskpane(opts: {
       initialState: {
         systemPrompt: runtimeSystemPrompt,
         model: defaultModel,
-        thinkingLevel: "off",
+        thinkingLevel: defaultModel.reasoning ? "high" : "off",
         messages: [],
         tools,
       },
