@@ -7,11 +7,17 @@
 
 ## Why this exists
 
-We optimize for **answer quality and stability first**, then token/cost.
+We optimize for **answer quality and context headroom first**, then token/cost.
 
 In practice, quality drops when we repeatedly inject low-signal context (large tool schemas, stale tool outputs, oversized workbook snapshots), even if caching reduces billed tokens.
 
 This policy sets clear guardrails so we can improve context quality while preserving cache performance.
+
+### Critical clarification (cache vs context window)
+
+- Prompt caching helps **cost/latency** (prefill reuse), but does **not** increase available context window.
+- Cached tokens still count toward context occupancy for that request.
+- Optimization decisions must therefore target **context headroom first**, not billed input tokens alone.
 
 ---
 
@@ -21,7 +27,22 @@ This policy sets clear guardrails so we can improve context quality while preser
 - Tool bundles are selected deterministically on every call (including tool-result continuations) in `src/auth/stream-proxy.ts` (`selectToolBundle()`).
 - Session IDs are stable per chat runtime (`agent.sessionId`), which is used by providers for cache continuity.
 - Status/debug UI already shows payload composition counters (`systemChars`, `toolSchemaChars`, `messageChars`, call count).
+- Context window estimation uses provider usage anchored by `calculateContextTokens()` (`input + output + cacheRead + cacheWrite`) in `src/utils/context-tokens.ts`.
 - Auto-compaction now uses shared hard budgets (`getCompactionThresholds`) for earlier quality protection while preserving existing status-bar warning semantics.
+
+---
+
+## Request-level mental model
+
+For each LLM call, payload is rebuilt as:
+
+`systemPrompt + tools + messages`
+
+Implications:
+
+- Tool schemas are a **per-request fixed overhead** (not an ever-growing chat-history block).
+- If tool use must remain possible in a continuation call, tools must be present on that continuation request.
+- Keeping `systemPrompt` + tool bundles stable improves prompt-cache reuse across turns.
 
 ---
 
@@ -149,8 +170,9 @@ This policy sets clear guardrails so we can improve context quality while preser
 - `npm run test:models`
 - Manual Excel smoke test (read/write/format flow)
 - Real-session payload comparison with debug snapshots:
-  - tools included only where expected
+  - tools included where expected by bundle policy (including continuations)
   - `toolSchemaChars` down (target: meaningful reduction)
+  - context occupancy trends healthy (`calculateContextTokens`: input/output/cacheRead/cacheWrite)
   - cache usage remains healthy (`cacheRead`/`cacheWrite` trend not regressing)
 
 ---
