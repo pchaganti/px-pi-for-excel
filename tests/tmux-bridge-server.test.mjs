@@ -1,12 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import net from "node:net";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 
 const ORIGIN = "https://localhost:3000";
 const BRIDGE_SCRIPT_PATH = new URL("../scripts/tmux-bridge-server.mjs", import.meta.url).pathname;
+
+function hasTmuxBinary() {
+  const result = spawnSync("tmux", ["-V"], {
+    encoding: "utf8",
+  });
+
+  return !result.error && result.status === 0;
+}
 
 async function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -132,6 +140,36 @@ test("tmux bridge health endpoint responds in stub mode", async (t) => {
   assert.equal(payload.ok, true);
   assert.equal(payload.mode, "stub");
   assert.equal(payload.backend, "stub");
+});
+
+test("tmux mode health endpoint succeeds before any session exists", async (t) => {
+  if (!hasTmuxBinary()) {
+    t.skip("tmux binary is not available in this environment");
+    return;
+  }
+
+  const socketPath = `/tmp/pi-tmux-bridge-test-${Date.now()}-${Math.random().toString(16).slice(2)}.sock`;
+
+  const bridge = await startBridge({
+    TMUX_BRIDGE_MODE: "tmux",
+    TMUX_BRIDGE_SOCKET_PATH: socketPath,
+  });
+
+  t.after(async () => {
+    await bridge.stop();
+  });
+
+  const response = await fetch(`http://127.0.0.1:${bridge.port}/health`, {
+    headers: { Origin: ORIGIN },
+  });
+
+  assert.equal(response.status, 200);
+
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.mode, "tmux");
+  assert.equal(payload.backend, "tmux");
+  assert.equal(payload.sessions, 0);
 });
 
 test("tmux bridge blocks disallowed origins", async (t) => {

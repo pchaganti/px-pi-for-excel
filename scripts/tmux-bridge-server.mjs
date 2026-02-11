@@ -632,7 +632,13 @@ async function runTmuxCommand(commandArgs, options = {}) {
     .find((value) => value.length > 0) || `tmux command failed with code ${result.code}`;
 
   if (result.code !== 0) {
-    if (options.allowNoServer && /no server running on/i.test(message)) {
+    if (
+      options.allowNoServer && (
+        /no server running on/i.test(message)
+        || /error connecting to .*\((No such file or directory|Connection refused)\)/i.test(message)
+        || /failed to connect to server/i.test(message)
+      )
+    ) {
       return result;
     }
 
