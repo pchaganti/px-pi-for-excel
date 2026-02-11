@@ -93,16 +93,16 @@ https://github.com/tmustier/pi-for-excel/issues/27
 
 ---
 
-### #26 — Security: credential/token handling hardening
-https://github.com/tmustier/pi-for-excel/issues/26
+### #62 — Security follow-up: sunset legacy OAuth localStorage migration path
+https://github.com/tmustier/pi-for-excel/issues/62
 
-**What it’s asking:** threat model + hardening of credential storage/handling.
+**What it’s asking:** remove the remaining compatibility path for legacy OAuth `localStorage` migration.
 
 **Key hotspots:**
-- OAuth creds currently involve localStorage restore paths
-- proxy layers and logging need review
+- `src/auth/oauth-storage.ts` should read/write IndexedDB settings only
+- docs/comments should no longer describe a localStorage OAuth fallback
 
-**Implication:** any feature that adds external tools, local bridges, or filesystem access (#24, #25, #32, #3) increases the surface area; security decisions should be made *before* those ship.
+**Implication:** keep credential persistence simple and auditable before expanding higher-risk surfaces (#24, #25, #32, #3).
 
 ---
 

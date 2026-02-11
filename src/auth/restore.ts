@@ -3,7 +3,7 @@
  *
  * Priority:
  * 1. pi's ~/.pi/agent/auth.json (served by Vite plugin at /__pi-auth)
- * 2. IndexedDB SettingsStore (migrated from legacy localStorage oauth_<providerId>)
+ * 2. IndexedDB SettingsStore (`oauth.<providerId>`)
  */
 
 import type { OAuthCredentials, OAuthProviderInterface } from "@mariozechner/pi-ai";
@@ -60,7 +60,7 @@ export async function restoreCredentials(
     return;
   }
 
-  // 2. Browser OAuth sessions (IndexedDB; migrated from legacy localStorage)
+  // 2. Browser OAuth sessions (IndexedDB settings)
   await restoreFromBrowserOAuthStorage(providerKeys, settings, getOAuthProvider);
 }
 
