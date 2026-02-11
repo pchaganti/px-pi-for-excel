@@ -81,6 +81,10 @@ export class PiSidebar extends LitElement {
   @property({ attribute: false }) onCreateTab?: () => void;
   @property({ attribute: false }) onSelectTab?: (runtimeId: string) => void;
   @property({ attribute: false }) onCloseTab?: (runtimeId: string) => void;
+  @property({ attribute: false }) onOpenInstructions?: () => void;
+  @property({ attribute: false }) onOpenSettings?: () => void;
+  @property({ attribute: false }) onOpenResumePicker?: () => void;
+  @property({ attribute: false }) onOpenShortcuts?: () => void;
   @property({ attribute: false }) lockNotice: string | null = null;
   @property({ type: String }) workbookLabel: string | null = null;
 
@@ -91,6 +95,7 @@ export class PiSidebar extends LitElement {
   @state() private _payloadStats: PayloadStats | null = null;
   @state() private _payloadSnapshots: PayloadSnapshot[] = [];
   @state() private _contextPillExpanded = false;
+  @state() private _utilitiesMenuOpen = false;
 
   @query(".pi-messages") private _scrollContainer?: HTMLElement;
   @query("streaming-message-container") private _streamingContainer?: StreamingMessageContainer;
@@ -145,6 +150,12 @@ export class PiSidebar extends LitElement {
 
   protected override createRenderRoot() { return this; }
 
+  private _onEscapeKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape" && this._utilitiesMenuOpen) {
+      this._utilitiesMenuOpen = false;
+    }
+  };
+
   override connectedCallback() {
     super.connectedCallback();
     this.style.display = "flex";
@@ -154,6 +165,7 @@ export class PiSidebar extends LitElement {
     this.style.position = "relative";
     document.addEventListener("pi:status-update", this._onPayloadUpdate);
     document.addEventListener("pi:debug-changed", this._onPayloadUpdate);
+    document.addEventListener("keydown", this._onEscapeKey);
     this._onPayloadUpdate();
   }
 
@@ -166,6 +178,7 @@ export class PiSidebar extends LitElement {
     this._groupingRoot = undefined;
     this._resizeObserver?.disconnect();
     this._resizeObserver = undefined;
+    document.removeEventListener("keydown", this._onEscapeKey);
 
     if (this._scrollContainerEl && this._scrollListener) {
       this._scrollContainerEl.removeEventListener("scroll", this._scrollListener);
@@ -290,17 +303,6 @@ export class PiSidebar extends LitElement {
     return map;
   }
 
-  private _renderWorkbookLabel() {
-    if (!this.workbookLabel) return nothing;
-
-    return html`
-      <div class="pi-workbook-label" title=${this.workbookLabel}>
-        <span class="pi-workbook-label__hint">Workbook</span>
-        <span class="pi-workbook-label__name">${this.workbookLabel}</span>
-      </div>
-    `;
-  }
-
   override render() {
     const agent = this.agent;
     if (!agent) return html``;
@@ -316,7 +318,6 @@ export class PiSidebar extends LitElement {
       ${this.lockNotice
         ? html`<div class="pi-lock-notice">${this.lockNotice}</div>`
         : nothing}
-      ${this._renderWorkbookLabel()}
       <div class="pi-messages">
         <div class="pi-messages__inner">
           ${hasMessages ? html`
@@ -400,6 +401,55 @@ export class PiSidebar extends LitElement {
           `)}
         </div>
         <button class="pi-session-tabs__new" @click=${() => this.onCreateTab?.()} aria-label="New tab">+</button>
+        <div class="pi-utilities-anchor">
+          <button
+            class="pi-utilities-btn"
+            @click=${() => this._toggleUtilitiesMenu()}
+            aria-label="Menu"
+            title="Menu"
+          >⋯</button>
+          ${this._utilitiesMenuOpen ? this._renderUtilitiesMenu() : nothing}
+        </div>
+      </div>
+    `;
+  }
+
+  private _toggleUtilitiesMenu() {
+    this._utilitiesMenuOpen = !this._utilitiesMenuOpen;
+    if (this._utilitiesMenuOpen) {
+      requestAnimationFrame(() => {
+        const handler = (e: MouseEvent) => {
+          const anchor = this.querySelector(".pi-utilities-anchor");
+          if (anchor && !anchor.contains(e.target as Node)) {
+            this._utilitiesMenuOpen = false;
+            document.removeEventListener("click", handler, true);
+          }
+        };
+        document.addEventListener("click", handler, true);
+      });
+    }
+  }
+
+  private _closeUtilitiesMenu() {
+    this._utilitiesMenuOpen = false;
+  }
+
+  private _renderUtilitiesMenu() {
+    return html`
+      <div class="pi-utilities-menu">
+        <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenInstructions?.(); }}>
+          Instructions…
+        </button>
+        <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenSettings?.(); }}>
+          Settings…
+        </button>
+        <div class="pi-utilities-menu__divider"></div>
+        <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenResumePicker?.(); }}>
+          Resume session…
+        </button>
+        <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenShortcuts?.(); }}>
+          Keyboard shortcuts
+        </button>
       </div>
     `;
   }

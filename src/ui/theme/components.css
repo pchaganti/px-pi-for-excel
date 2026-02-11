@@ -2,16 +2,55 @@
    3. PI-SIDEBAR — tabs + messages area + input area
    ═══════════════════════════════════════════════════════ */
 
+/* ── Session tabs ── */
+
 .pi-session-tabs {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 7px 8px 6px;
-  border-bottom: var(--pi-divider);
-  background: var(--pi-surface-translucent);
-  backdrop-filter: blur(8px) saturate(1.2);
-  -webkit-backdrop-filter: blur(8px) saturate(1.2);
+  /* Reserve space for Office's ⓘ button (injected, ~36px wide, top-right) */
+  padding-right: 44px;
+
+  /* ── Liquid glass surface ── */
+  background:
+    /* Specular sheen — subtle top-to-bottom gradient simulating light across glass */
+    linear-gradient(
+      180deg,
+      oklch(1 0 0 / 0.18) 0%,
+      oklch(1 0 0 / 0.0) 50%,
+      oklch(0 0 0 / 0.02) 100%
+    ),
+    /* Base translucent fill */
+    oklch(1 0 0 / 0.60);
+  backdrop-filter: blur(20px) saturate(1.6) brightness(1.04);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6) brightness(1.04);
+  box-shadow:
+    /* Specular top edge — light catching the glass rim */
+    inset 0 1px 0 0 oklch(1 0 0 / 0.8),
+    /* Inner depth — bottom edge recedes */
+    inset 0 -1px 0 0 oklch(0 0 0 / 0.04);
+
   flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+
+/* Accent gradient line — teal light refracting along the bottom edge */
+.pi-session-tabs::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    oklch(0.50 0.14 155 / 0.40),
+    oklch(0.55 0.10 100 / 0.15),
+    transparent 75%
+  );
+  pointer-events: none;
 }
 
 .pi-session-tabs__scroller {
@@ -27,15 +66,49 @@
 .pi-session-tab {
   display: flex;
   align-items: center;
-  border: 1px solid oklch(0 0 0 / 0.08);
+  border: var(--glass-border);
   border-radius: 8px;
-  background: oklch(1 0 0 / 0.55);
+  background:
+    linear-gradient(
+      180deg,
+      oklch(1 0 0 / 0.15) 0%,
+      oklch(1 0 0 / 0.0) 100%
+    ),
+    var(--glass-bg);
+  box-shadow:
+    var(--glass-highlight),
+    var(--glass-inner-shadow),
+    /* Subtle lift — glass chip floating on the bar */
+    0 0.5px 2px oklch(0 0 0 / 0.06);
   min-width: 0;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.pi-session-tab:hover {
+  background:
+    linear-gradient(
+      180deg,
+      oklch(1 0 0 / 0.22) 0%,
+      oklch(1 0 0 / 0.0) 100%
+    ),
+    oklch(1 0 0 / 0.65);
 }
 
 .pi-session-tab.is-active {
-  border-color: oklch(0.45 0.12 160 / 0.3);
-  background: oklch(0.45 0.12 160 / 0.10);
+  border-color: oklch(0.45 0.12 160 / 0.25);
+  background:
+    linear-gradient(
+      180deg,
+      oklch(1 0 0 / 0.20) 0%,
+      oklch(0.45 0.12 160 / 0.04) 100%
+    ),
+    oklch(0.45 0.12 160 / 0.07);
+  box-shadow:
+    var(--glass-highlight),
+    var(--glass-inner-shadow),
+    /* Teal glow — active pane refracting accent color */
+    0 0 6px oklch(0.45 0.12 160 / 0.08),
+    0 0.5px 2px oklch(0 0 0 / 0.06);
 }
 
 .pi-session-tab__main {
@@ -86,12 +159,14 @@
   border-radius: 5px;
   cursor: pointer;
   flex-shrink: 0;
+  transition: background 0.12s, color 0.12s, box-shadow 0.12s;
 }
 
 .pi-session-tab__close:hover,
 .pi-session-tabs__new:hover {
-  background: oklch(0 0 0 / 0.06);
+  background: oklch(1 0 0 / 0.45);
   color: var(--foreground);
+  box-shadow: var(--glass-highlight), var(--glass-inner-shadow);
 }
 
 .pi-session-tab__close:disabled {
@@ -102,6 +177,97 @@
 .pi-session-tab__close:disabled:hover {
   background: transparent;
   color: var(--muted-foreground);
+}
+
+/* ── Utilities menu (⋯ in tab strip) ── */
+
+.pi-utilities-anchor {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.pi-utilities-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 15px;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s, box-shadow 0.12s;
+}
+
+.pi-utilities-btn:hover {
+  background: oklch(1 0 0 / 0.45);
+  color: var(--foreground);
+  box-shadow: var(--glass-highlight), var(--glass-inner-shadow);
+}
+
+.pi-utilities-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 50;
+  min-width: 190px;
+  margin-top: 6px;
+  padding: 4px;
+  border-radius: 14px;
+  border: var(--glass-border);
+  background:
+    linear-gradient(
+      180deg,
+      oklch(1 0 0 / 0.14) 0%,
+      oklch(1 0 0 / 0.0) 40%,
+      oklch(0 0 0 / 0.02) 100%
+    ),
+    var(--glass-bg-solid);
+  backdrop-filter: blur(20px) saturate(1.6) brightness(1.04);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6) brightness(1.04);
+  box-shadow: var(--glass-shadow-lg), var(--glass-highlight), var(--glass-inner-shadow);
+}
+
+.pi-utilities-menu__item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, box-shadow 0.1s;
+}
+
+.pi-utilities-menu__item:hover {
+  background:
+    linear-gradient(
+      180deg,
+      oklch(1 0 0 / 0.18) 0%,
+      oklch(1 0 0 / 0.0) 100%
+    ),
+    oklch(1 0 0 / 0.45);
+  box-shadow: var(--glass-highlight), var(--glass-inner-shadow);
+}
+
+.pi-utilities-menu__divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: linear-gradient(
+    90deg,
+    oklch(1 0 0 / 0.4),
+    oklch(0 0 0 / 0.06),
+    oklch(1 0 0 / 0.4)
+  );
 }
 
 .pi-lock-notice {

@@ -224,9 +224,13 @@ https://github.com/tmustier/pi-for-excel/issues/24
 ### #25 — Tools: Python runner + LibreOffice bridge
 https://github.com/tmustier/pi-for-excel/issues/25
 
-**What it’s asking:** add a Python/LibreOffice execution capability via a local bridge or remote service.
+**Status note:** initial local-bridge slice is now implemented behind `python-bridge` experiment:
+- gated tools: `python_run`, `libreoffice_convert`, `python_transform_range`
+- local helper: `scripts/python-bridge-server.mjs` (`stub` + `real` modes)
+- config: `/experimental python-bridge-url` + `/experimental python-bridge-token`
+- first-run approval prompt per bridge URL for Python/LibreOffice executions
 
-**Implication:** strongly coupled to #26 security + #32 artifacts (Python output likely becomes artifacts/files).
+**Remaining follow-up:** richer sandboxing controls, artifact-first workflows, and safer patch/apply patterns for structural workbook edits.
 
 ---
 
