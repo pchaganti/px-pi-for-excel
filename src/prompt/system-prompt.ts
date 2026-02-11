@@ -7,19 +7,14 @@
 
 /**
  * Build the system prompt.
- * @param blueprint - Workbook overview markdown (injected at start)
  */
-export function buildSystemPrompt(blueprint?: string): string {
+export function buildSystemPrompt(): string {
   const sections: string[] = [];
 
   sections.push(IDENTITY);
   sections.push(TOOLS);
   sections.push(WORKFLOW);
   sections.push(CONVENTIONS);
-
-  if (blueprint) {
-    sections.push(`## Current Workbook\n\n${blueprint}`);
-  }
 
   return sections.join("\n\n");
 }

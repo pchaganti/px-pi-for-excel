@@ -14,7 +14,6 @@ import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.
 import { createOfficeStreamFn } from "../auth/stream-proxy.js";
 import { isLoopbackProxyUrl } from "../auth/proxy-validation.js";
 import { restoreCredentials } from "../auth/restore.js";
-import { getBlueprint } from "../context/blueprint.js";
 import { ChangeTracker } from "../context/change-tracker.js";
 import { convertToLlm } from "../messages/convert-to-llm.js";
 import { createAllTools } from "../tools/index.js";
@@ -130,20 +129,12 @@ export async function initTaskpane(opts: {
     await showWelcomeLogin(providerKeys);
   }
 
-  // 3. Workbook blueprint
-  let blueprint: string | undefined;
-  try {
-    blueprint = await getBlueprint();
-    console.log("[pi] Workbook blueprint built");
-  } catch {
-    console.warn("[pi] Could not build blueprint (not in Excel?)");
-  }
-
-  // 4. Change tracker
+  // 3. Change tracker
   changeTracker.start().catch(() => {});
 
-  // 5. Shared runtime dependencies
-  const systemPrompt = buildSystemPrompt(blueprint);
+  // 4. Shared runtime dependencies
+  // Workbook structure context is injected separately by transformContext.
+  const systemPrompt = buildSystemPrompt();
   const availableProviders = await providerKeys.list();
   setActiveProviders(new Set(availableProviders));
   const defaultModel = pickDefaultModel(availableProviders);
@@ -167,7 +158,7 @@ export async function initTaskpane(opts: {
 
   const workbookCoordinator = createWorkbookCoordinator();
 
-  // 6. Create and mount PiSidebar
+  // 5. Create and mount PiSidebar
   const sidebar = new PiSidebar();
   sidebar.emptyHints = [
     {

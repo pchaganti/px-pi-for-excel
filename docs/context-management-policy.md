@@ -116,6 +116,7 @@ This policy sets clear guardrails so we can improve context quality while preser
 - Compute workbook context hash/version from structural signals.
 - Reinject structural context on hash/version change, workbook switch, or explicit refresh.
 - Avoid re-sending large workbook snapshots every turn.
+- **Current rollout (v1):** workbook blueprint removed from base system prompt; injected via auto-context only on initial call, workbook switch, or blueprint invalidation (e.g. structure-changing tool ops).
 
 **Success:** fewer large context swings; better cache reuse.
 

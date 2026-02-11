@@ -221,9 +221,9 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
           }
         });
 
-        // Structural change — invalidate cached blueprint so next getBlueprint() rebuilds.
-        // NOTE: the system prompt (which embeds the blueprint) is not yet auto-refreshed;
-        // the model can call get_workbook_overview to see the updated structure.
+        // Structural change — invalidate workbook blueprint cache.
+        // Context injection watches this invalidation and refreshes workbook
+        // structure context on the next model call.
         invalidateBlueprint();
 
         return {
