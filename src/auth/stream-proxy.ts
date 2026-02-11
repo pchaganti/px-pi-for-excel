@@ -126,6 +126,7 @@ const stats: PayloadStats = {
 };
 
 const MAX_PAYLOAD_SNAPSHOTS = 24;
+const MAX_SESSION_CONTEXTS = 24;
 const payloadSnapshots: PayloadSnapshot[] = [];
 
 /** Snapshot of the last LLM context (only kept when debug is on). */
@@ -207,6 +208,21 @@ function pushSnapshot(snapshot: PayloadSnapshot): void {
   }
 }
 
+function setSessionContext(sessionId: string, context: Context): void {
+  // Refresh insertion order to behave like an LRU cache.
+  if (lastContextBySession.has(sessionId)) {
+    lastContextBySession.delete(sessionId);
+  }
+  lastContextBySession.set(sessionId, context);
+
+  if (lastContextBySession.size <= MAX_SESSION_CONTEXTS) return;
+
+  const oldest = lastContextBySession.keys().next().value;
+  if (typeof oldest === "string") {
+    lastContextBySession.delete(oldest);
+  }
+}
+
 function upsertPayloadShape(call: number, payload: unknown): void {
   let index = -1;
   for (let i = payloadSnapshots.length - 1; i >= 0; i -= 1) {
@@ -257,7 +273,7 @@ function recordCall(
 
     const sessionId = getSessionId(options);
     if (sessionId) {
-      lastContextBySession.set(sessionId, context);
+      setSessionContext(sessionId, context);
     }
 
     const totalChars = stats.systemChars + stats.toolSchemaChars + stats.messageChars;

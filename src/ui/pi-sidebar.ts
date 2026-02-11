@@ -400,8 +400,7 @@ export class PiSidebar extends LitElement {
   }
 
   private _renderContextPill() {
-    const ps = this._payloadStats;
-    if (!ps) return nothing;
+    if (!this._payloadStats) return nothing;
 
     const sessionId = this.agent?.sessionId;
     const sessionSnapshots = sessionId
@@ -412,46 +411,70 @@ export class PiSidebar extends LitElement {
       ? sessionSnapshots[sessionSnapshots.length - 1]
       : null;
 
-    const call = latestSnapshot?.call ?? ps.calls;
-    const systemChars = latestSnapshot?.systemChars ?? ps.systemChars;
-    const toolSchemaChars = latestSnapshot?.toolSchemaChars ?? ps.toolSchemaChars;
-    const toolCount = latestSnapshot?.toolCount ?? ps.toolCount;
-    const messageCount = latestSnapshot?.messageCount ?? ps.messageCount;
-    const messageChars = latestSnapshot?.messageChars ?? ps.messageChars;
-    const total = latestSnapshot?.totalChars ?? (systemChars + toolSchemaChars + messageChars);
-
     const expanded = this._contextPillExpanded;
+
+    if (!latestSnapshot) {
+      const hintMd = [
+        "No payload snapshots for this session yet.",
+        "",
+        "Send a prompt in this tab to capture call-level context details.",
+      ].join("\n");
+
+      return html`
+        <div class="px-4">
+          <div class="pi-context-pill">
+            <div
+              class="pi-context-pill__header"
+              @click=${this._toggleContextPill}
+            >
+              <span>Context · no calls yet for this session</span>
+              <span class="pi-context-pill__chevron ${expanded ? "pi-context-pill__chevron--open" : ""}">${icon(ChevronRight, "sm")}</span>
+            </div>
+            ${expanded ? html`
+              <div class="pi-context-pill__body">
+                <div class="pi-context-pill__section">
+                  <markdown-block .content=${hintMd}></markdown-block>
+                </div>
+              </div>
+            ` : nothing}
+          </div>
+        </div>
+      `;
+    }
+
+    const call = latestSnapshot.call;
+    const systemChars = latestSnapshot.systemChars;
+    const toolSchemaChars = latestSnapshot.toolSchemaChars;
+    const toolCount = latestSnapshot.toolCount;
+    const messageCount = latestSnapshot.messageCount;
+    const messageChars = latestSnapshot.messageChars;
+    const total = latestSnapshot.totalChars;
+
     const ctx = expanded ? getLastContext(sessionId) : undefined;
 
-    // Summary table
     const summaryRows = [
       `| | value |`,
       `|---|---|`,
-      `| Call | #${call}${latestSnapshot ? (latestSnapshot.isToolContinuation ? " (continuation)" : " (first)") : ""} |`,
+      `| Call | #${call}${latestSnapshot.isToolContinuation ? " (continuation)" : " (first)"} |`,
       `| System prompt | ${systemChars.toLocaleString()} chars |`,
       `| Tool schemas (${toolCount}) | ${toolSchemaChars.toLocaleString()} chars |`,
       `| Messages (${messageCount}) | ${messageChars.toLocaleString()} chars |`,
       `| **Total** | **${total.toLocaleString()} chars** |`,
+      `| Provider/model | \`${latestSnapshot.provider}/${latestSnapshot.modelId}\` |`,
     ];
-
-    if (latestSnapshot) {
-      summaryRows.push(`| Provider/model | \`${latestSnapshot.provider}/${latestSnapshot.modelId}\` |`);
-    }
 
     const summaryMd = summaryRows.join("\n");
 
-    const recentMd = sessionSnapshots.length > 0
-      ? [
-          `| call | phase | tools | total chars | payload shape |`,
-          `|---|---|---|---|---|`,
-          ...sessionSnapshots.slice(-8).reverse().map((snapshot) => {
-            const phase = snapshot.isToolContinuation ? "continuation" : "first";
-            const tools = snapshot.toolsIncluded ? String(snapshot.toolCount) : "stripped";
-            const payloadShape = formatPayloadShape(snapshot.payloadShape);
-            return `| #${snapshot.call} | ${phase} | ${tools} | ${snapshot.totalChars.toLocaleString()} | ${payloadShape} |`;
-          }),
-        ].join("\n")
-      : "*(no snapshots captured for this session yet)*";
+    const recentMd = [
+      `| call | phase | tools | total chars | payload shape |`,
+      `|---|---|---|---|---|`,
+      ...sessionSnapshots.slice(-8).reverse().map((snapshot) => {
+        const phase = snapshot.isToolContinuation ? "continuation" : "first";
+        const tools = snapshot.toolsIncluded ? String(snapshot.toolCount) : "stripped";
+        const payloadShape = formatPayloadShape(snapshot.payloadShape);
+        return `| #${snapshot.call} | ${phase} | ${tools} | ${snapshot.totalChars.toLocaleString()} | ${payloadShape} |`;
+      }),
+    ].join("\n");
 
     // Tools table
     const toolsTableMd = ctx?.tools
@@ -469,9 +492,7 @@ export class PiSidebar extends LitElement {
     // System prompt rendered as markdown (not in a code fence)
     const systemMd = ctx?.systemPrompt ?? "*(none captured for this call)*";
 
-    const phaseLabel = latestSnapshot
-      ? latestSnapshot.isToolContinuation ? " · continuation" : " · first"
-      : "";
+    const phaseLabel = latestSnapshot.isToolContinuation ? " · continuation" : " · first";
 
     return html`
       <div class="px-4">
