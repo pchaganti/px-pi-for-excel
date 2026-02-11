@@ -458,6 +458,7 @@ export class PiSidebar extends LitElement {
       `| Call | #${call}${latestSnapshot.isToolContinuation ? " (continuation)" : " (first)"} |`,
       `| System prompt | ${systemChars.toLocaleString()} chars |`,
       `| Tool schemas (${toolCount}) | ${toolSchemaChars.toLocaleString()} chars |`,
+      `| Tool bundle | \`${latestSnapshot.toolBundle}\` |`,
       `| Messages (${messageCount}) | ${messageChars.toLocaleString()} chars |`,
       `| **Total** | **${total.toLocaleString()} chars** |`,
       `| Provider/model | \`${latestSnapshot.provider}/${latestSnapshot.modelId}\` |`,
@@ -466,13 +467,13 @@ export class PiSidebar extends LitElement {
     const summaryMd = summaryRows.join("\n");
 
     const recentMd = [
-      `| call | phase | tools | total chars | payload shape |`,
-      `|---|---|---|---|---|`,
+      `| call | phase | bundle | tools | total chars | payload shape |`,
+      `|---|---|---|---|---|---|`,
       ...sessionSnapshots.slice(-8).reverse().map((snapshot) => {
         const phase = snapshot.isToolContinuation ? "continuation" : "first";
         const tools = snapshot.toolsIncluded ? String(snapshot.toolCount) : "stripped";
         const payloadShape = formatPayloadShape(snapshot.payloadShape);
-        return `| #${snapshot.call} | ${phase} | ${tools} | ${snapshot.totalChars.toLocaleString()} | ${payloadShape} |`;
+        return `| #${snapshot.call} | ${phase} | \`${snapshot.toolBundle}\` | ${tools} | ${snapshot.totalChars.toLocaleString()} | ${payloadShape} |`;
       }),
     ].join("\n");
 
