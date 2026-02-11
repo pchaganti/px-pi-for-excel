@@ -78,7 +78,7 @@ function isToolContinuation(messages: Context["messages"]): boolean {
 // ---------------------------------------------------------------------------
 
 export interface PayloadStats {
-  /** LLM calls since last reset (= turn count within an agent run). */
+  /** LLM calls since app start. */
   calls: number;
   /** Chars of system prompt on last call. */
   systemChars: number;
@@ -92,23 +92,145 @@ export interface PayloadStats {
   messageChars: number;
 }
 
+export interface PayloadShapeSummary {
+  rootType: "object" | "array" | "primitive" | "null";
+  topLevelKeys: string[];
+  rootArrayLength?: number;
+  arrayFields: Array<{ key: string; length: number }>;
+}
+
+export interface PayloadSnapshot {
+  call: number;
+  timestamp: number;
+  sessionId?: string;
+  provider: string;
+  modelId: string;
+  isToolContinuation: boolean;
+  toolsIncluded: boolean;
+  systemChars: number;
+  toolSchemaChars: number;
+  messageChars: number;
+  totalChars: number;
+  toolCount: number;
+  messageCount: number;
+  payloadShape?: PayloadShapeSummary;
+}
+
 const stats: PayloadStats = {
-  calls: 0, systemChars: 0, toolSchemaChars: 0, toolCount: 0, messageCount: 0, messageChars: 0,
+  calls: 0,
+  systemChars: 0,
+  toolSchemaChars: 0,
+  toolCount: 0,
+  messageCount: 0,
+  messageChars: 0,
 };
+
+const MAX_PAYLOAD_SNAPSHOTS = 24;
+const payloadSnapshots: PayloadSnapshot[] = [];
 
 /** Snapshot of the last LLM context (only kept when debug is on). */
 let lastContext: Context | undefined;
+const lastContextBySession = new Map<string, Context>();
 
 export function getPayloadStats(): Readonly<PayloadStats> {
   return stats;
 }
 
-export function getLastContext(): Context | undefined {
+export function getPayloadSnapshots(): readonly PayloadSnapshot[] {
+  if (!isDebugEnabled()) return [];
+  return payloadSnapshots;
+}
+
+export function getLastContext(sessionId?: string): Context | undefined {
+  if (!isDebugEnabled()) return undefined;
+  if (sessionId) return lastContextBySession.get(sessionId);
   return lastContext;
 }
 
+function getSessionId(options: StreamOptions | undefined): string | undefined {
+  const sessionId = options?.sessionId;
+  if (typeof sessionId !== "string") return undefined;
+  if (sessionId.trim().length === 0) return undefined;
+  return sessionId;
+}
 
-function recordCall(context: Context): void {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function summarizePayloadShape(payload: unknown): PayloadShapeSummary {
+  if (payload === null) {
+    return {
+      rootType: "null",
+      topLevelKeys: [],
+      arrayFields: [],
+    };
+  }
+
+  if (Array.isArray(payload)) {
+    return {
+      rootType: "array",
+      topLevelKeys: [],
+      rootArrayLength: payload.length,
+      arrayFields: [],
+    };
+  }
+
+  if (!isRecord(payload)) {
+    return {
+      rootType: "primitive",
+      topLevelKeys: [],
+      arrayFields: [],
+    };
+  }
+
+  const entries = Object.entries(payload);
+  const arrayFields: Array<{ key: string; length: number }> = [];
+  for (const [key, value] of entries) {
+    if (Array.isArray(value)) {
+      arrayFields.push({ key, length: value.length });
+    }
+  }
+
+  return {
+    rootType: "object",
+    topLevelKeys: entries.map(([key]) => key).sort(),
+    arrayFields,
+  };
+}
+
+function pushSnapshot(snapshot: PayloadSnapshot): void {
+  payloadSnapshots.push(snapshot);
+  if (payloadSnapshots.length > MAX_PAYLOAD_SNAPSHOTS) {
+    const overflow = payloadSnapshots.length - MAX_PAYLOAD_SNAPSHOTS;
+    payloadSnapshots.splice(0, overflow);
+  }
+}
+
+function upsertPayloadShape(call: number, payload: unknown): void {
+  let index = -1;
+  for (let i = payloadSnapshots.length - 1; i >= 0; i -= 1) {
+    if (payloadSnapshots[i].call === call) {
+      index = i;
+      break;
+    }
+  }
+  if (index < 0) return;
+
+  payloadSnapshots[index] = {
+    ...payloadSnapshots[index],
+    payloadShape: summarizePayloadShape(payload),
+  };
+
+  document.dispatchEvent(new Event("pi:status-update"));
+}
+
+function recordCall(
+  model: Model<Api>,
+  context: Context,
+  options: StreamOptions | undefined,
+  continuation: boolean,
+): { call: number; captureSnapshot: boolean } {
   stats.calls += 1;
   stats.systemChars = context.systemPrompt?.length ?? 0;
   stats.messageCount = context.messages.length;
@@ -127,11 +249,56 @@ function recordCall(context: Context): void {
     stats.toolSchemaChars = 0;
   }
 
-  if (isDebugEnabled()) {
+  const call = stats.calls;
+  const captureSnapshot = isDebugEnabled();
+
+  if (captureSnapshot) {
     lastContext = context;
+
+    const sessionId = getSessionId(options);
+    if (sessionId) {
+      lastContextBySession.set(sessionId, context);
+    }
+
+    const totalChars = stats.systemChars + stats.toolSchemaChars + stats.messageChars;
+    pushSnapshot({
+      call,
+      timestamp: Date.now(),
+      sessionId,
+      provider: model.provider,
+      modelId: model.id,
+      isToolContinuation: continuation,
+      toolsIncluded: stats.toolCount > 0,
+      systemChars: stats.systemChars,
+      toolSchemaChars: stats.toolSchemaChars,
+      messageChars: stats.messageChars,
+      totalChars,
+      toolCount: stats.toolCount,
+      messageCount: stats.messageCount,
+    });
   }
 
   document.dispatchEvent(new Event("pi:status-update"));
+  return { call, captureSnapshot };
+}
+
+function withPayloadHook(
+  options: StreamOptions | undefined,
+  call: number,
+  captureSnapshot: boolean,
+): StreamOptions | undefined {
+  const originalOnPayload = options?.onPayload;
+  if (!captureSnapshot && !originalOnPayload) return options;
+
+  const onPayload = (payload: unknown) => {
+    if (captureSnapshot) {
+      upsertPayloadShape(call, payload);
+    }
+    originalOnPayload?.(payload);
+  };
+
+  if (options) return { ...options, onPayload };
+  return { onPayload };
 }
 
 /**
@@ -140,24 +307,26 @@ function recordCall(context: Context): void {
 export function createOfficeStreamFn(getProxyUrl: GetProxyUrl) {
   return async (model: Model<Api>, context: Context, options?: StreamOptions) => {
     // Strip tools on tool-result continuations (see #14).
-    const effectiveContext = isToolContinuation(context.messages)
+    const continuation = isToolContinuation(context.messages);
+    const effectiveContext = continuation
       ? { ...context, tools: undefined }
       : context;
 
-    recordCall(effectiveContext);
+    const callRecord = recordCall(model, effectiveContext, options, continuation);
+    const effectiveOptions = withPayloadHook(options, callRecord.call, callRecord.captureSnapshot);
 
     const proxyUrl = await getProxyUrl();
     if (!proxyUrl) {
-      return streamSimple(model, effectiveContext, options);
+      return streamSimple(model, effectiveContext, effectiveOptions);
     }
 
     if (!shouldProxyProvider(model.provider, options?.apiKey)) {
-      return streamSimple(model, effectiveContext, options);
+      return streamSimple(model, effectiveContext, effectiveOptions);
     }
 
     // Guardrails: fail fast for known-bad proxy configs (e.g., HTTP proxy from HTTPS taskpane).
     const validated = validateOfficeProxyUrl(proxyUrl);
 
-    return streamSimple(applyProxy(model, validated), effectiveContext, options);
+    return streamSimple(applyProxy(model, validated), effectiveContext, effectiveOptions);
   };
 }
