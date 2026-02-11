@@ -11,6 +11,7 @@
 import { streamSimple, type Api, type Context, type Model, type StreamOptions } from "@mariozechner/pi-ai";
 
 import { isDebugEnabled } from "../debug/debug.js";
+import { selectToolBundle, type ToolBundleId } from "../context/tool-disclosure.js";
 import { normalizeProxyUrl, validateOfficeProxyUrl } from "./proxy-validation.js";
 
 export type GetProxyUrl = () => Promise<string | undefined>;
@@ -56,6 +57,7 @@ function applyProxy(model: Model<Api>, proxyUrl: string): Model<Api> {
  * Should tool schemas be included in this LLM call?
  *
  * We only send tools on the first call after a user message.
+ * On that first call we may send a deterministic subset (bundle) of tools.
  * Tool-result continuations (the model processing results from a previous
  * round of tool calls) get no tool schemas — the model must respond with
  * text, not chain further tool calls.
@@ -106,6 +108,7 @@ export interface PayloadSnapshot {
   provider: string;
   modelId: string;
   isToolContinuation: boolean;
+  toolBundle: ToolBundleId;
   toolsIncluded: boolean;
   systemChars: number;
   toolSchemaChars: number;
@@ -265,6 +268,7 @@ function recordCall(
   context: Context,
   options: StreamOptions | undefined,
   continuation: boolean,
+  toolBundle: ToolBundleId,
 ): { call: number; captureSnapshot: boolean } {
   stats.calls += 1;
   stats.systemChars = context.systemPrompt?.length ?? 0;
@@ -303,6 +307,7 @@ function recordCall(
       provider: model.provider,
       modelId: model.id,
       isToolContinuation: continuation,
+      toolBundle,
       toolsIncluded: stats.toolCount > 0,
       systemChars: stats.systemChars,
       toolSchemaChars: stats.toolSchemaChars,
@@ -343,11 +348,22 @@ export function createOfficeStreamFn(getProxyUrl: GetProxyUrl) {
   return async (model: Model<Api>, context: Context, options?: StreamOptions) => {
     // Strip tools on tool-result continuations (see #14).
     const continuation = isToolContinuation(context.messages);
-    const effectiveContext = continuation
-      ? { ...context, tools: undefined }
-      : context;
 
-    const callRecord = recordCall(model, effectiveContext, options, continuation);
+    const toolSelection = continuation
+      ? { tools: undefined, bundleId: "none" as const }
+      : selectToolBundle(context);
+
+    const effectiveContext = toolSelection.tools === context.tools
+      ? context
+      : { ...context, tools: toolSelection.tools };
+
+    const callRecord = recordCall(
+      model,
+      effectiveContext,
+      options,
+      continuation,
+      toolSelection.bundleId,
+    );
     const effectiveOptions = withPayloadHook(options, callRecord.call, callRecord.captureSnapshot);
 
     const proxyUrl = await getProxyUrl();

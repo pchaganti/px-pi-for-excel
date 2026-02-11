@@ -87,6 +87,10 @@ This policy sets clear guardrails so we can improve context quality while preser
 - Define a few fixed tool bundles (example: `core`, `analysis`, `formatting`, `structure`).
 - Select bundle by intent/routing, but keep bundle definitions stable and deterministic.
 - Preserve a manual fallback to expose all tools.
+- **Current rollout (v1):** `core` (default), `analysis`, `formatting`, `structure`, `comments`, `full`.
+  - only applies when the active toolset is the built-in core set
+  - if non-core/extension tools are present, keep full tool visibility (`full`) to avoid accidental capability loss
+  - if a prompt matches multiple intent buckets, fall back to `full` on the first call to avoid capability gaps
 
 **Success:** lower average `toolSchemaChars` while maintaining stable cache patterns.
 
