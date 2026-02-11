@@ -14,6 +14,7 @@ void test("classifyExtensionSource allows only local module specifiers by defaul
 
   assert.equal(classifyExtensionSource("https://example.com/ext.js"), "remote-url");
   assert.equal(classifyExtensionSource("HTTP://example.com/ext.js"), "remote-url");
+  assert.equal(classifyExtensionSource("//attacker.example/ext.js"), "remote-url");
 
   assert.equal(classifyExtensionSource("blob:https://example.com/abc"), "unsupported");
   assert.equal(classifyExtensionSource("data:text/javascript,export%20default%20()=%3E{}"), "unsupported");

@@ -21,6 +21,9 @@ export function classifyExtensionSource(source: string): ExtensionSourceKind {
   const specifier = source.trim();
   if (specifier.length === 0) return "unsupported";
 
+  // `//host/path` is protocol-relative and resolves to a remote module URL.
+  if (specifier.startsWith("//")) return "remote-url";
+
   for (const prefix of LOCAL_SPECIFIER_PREFIXES) {
     if (specifier.startsWith(prefix)) return "local-module";
   }
