@@ -65,6 +65,9 @@ export class PiSidebar extends LitElement {
   private _autoScroll = true;
   private _lastScrollTop = 0;
   private _resizeObserver?: ResizeObserver;
+  private _scrollContainerEl?: HTMLElement;
+  private _scrollListener?: () => void;
+  private _groupingRoot?: HTMLElement;
   private _onPayloadUpdate = () => {
     if (isDebugEnabled()) {
       const s = getPayloadStats();
@@ -121,7 +124,16 @@ export class PiSidebar extends LitElement {
     this._unsubscribe = undefined;
     this._cleanupGrouping?.();
     this._cleanupGrouping = undefined;
+    this._groupingRoot = undefined;
     this._resizeObserver?.disconnect();
+    this._resizeObserver = undefined;
+
+    if (this._scrollContainerEl && this._scrollListener) {
+      this._scrollContainerEl.removeEventListener("scroll", this._scrollListener);
+    }
+    this._scrollContainerEl = undefined;
+    this._scrollListener = undefined;
+
     document.removeEventListener("pi:status-update", this._onPayloadUpdate);
     document.removeEventListener("pi:debug-changed", this._onPayloadUpdate);
   }
@@ -131,9 +143,11 @@ export class PiSidebar extends LitElement {
   }
 
   override firstUpdated() {
-    this._setupAutoScroll();
-    const inner = this.querySelector<HTMLElement>(".pi-messages__inner");
-    if (inner) this._cleanupGrouping = initToolGrouping(inner);
+    this._ensureMessageEnhancements();
+  }
+
+  override updated(_changed: PropertyValues<this>) {
+    this._ensureMessageEnhancements();
   }
 
   private _setupSubscription() {
@@ -177,25 +191,47 @@ export class PiSidebar extends LitElement {
     });
   }
 
+  private _ensureMessageEnhancements() {
+    this._setupAutoScroll();
+
+    const inner = this.querySelector<HTMLElement>(".pi-messages__inner");
+    if (!inner || this._groupingRoot === inner) return;
+
+    this._cleanupGrouping?.();
+    this._cleanupGrouping = initToolGrouping(inner);
+    this._groupingRoot = inner;
+  }
+
   private _setupAutoScroll() {
     const container = this._scrollContainer;
-    if (!container) return;
+    if (!container || this._scrollContainerEl === container) return;
+
+    this._resizeObserver?.disconnect();
+
+    if (this._scrollContainerEl && this._scrollListener) {
+      this._scrollContainerEl.removeEventListener("scroll", this._scrollListener);
+    }
+
+    this._scrollContainerEl = container;
+
     const content = container.querySelector(".pi-messages__inner");
     if (content) {
       this._resizeObserver = new ResizeObserver(() => {
-        if (this._autoScroll && this._scrollContainer) {
-          this._scrollContainer.scrollTop = this._scrollContainer.scrollHeight;
+        if (this._autoScroll && this._scrollContainerEl) {
+          this._scrollContainerEl.scrollTop = this._scrollContainerEl.scrollHeight;
         }
       });
       this._resizeObserver.observe(content);
     }
-    container.addEventListener("scroll", () => {
+
+    this._scrollListener = () => {
       const top = container.scrollTop;
       const distFromBottom = container.scrollHeight - top - container.clientHeight;
       if (top < this._lastScrollTop && distFromBottom > 50) this._autoScroll = false;
       else if (distFromBottom < 10) this._autoScroll = true;
       this._lastScrollTop = top;
-    });
+    };
+    container.addEventListener("scroll", this._scrollListener);
   }
 
   private _onSend = (e: CustomEvent<{ text: string }>) => {

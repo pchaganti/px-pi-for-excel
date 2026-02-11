@@ -26,6 +26,13 @@ function makeContext(args: {
   };
 }
 
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) return;
+
+  // Keep message text compatible with existing abort handling paths.
+  throw new Error("Aborted");
+}
+
 function wrapTool<TParameters extends TSchema, TDetails>(
   tool: AgentTool<TParameters, TDetails>,
   coordinator: WorkbookCoordinator,
@@ -42,13 +49,21 @@ function wrapTool<TParameters extends TSchema, TDetails>(
         toolName: tool.name,
       });
 
+      throwIfAborted(signal);
+
       if (mode === "read") {
-        return coordinator.runRead(context, () => tool.execute(toolCallId, params, signal, onUpdate));
+        return coordinator.runRead(context, () => {
+          throwIfAborted(signal);
+          return tool.execute(toolCallId, params, signal, onUpdate);
+        });
       }
 
       const out = await coordinator.runWrite(
         context,
-        () => tool.execute(toolCallId, params, signal, onUpdate),
+        () => {
+          throwIfAborted(signal);
+          return tool.execute(toolCallId, params, signal, onUpdate);
+        },
       );
       return out.result;
     },

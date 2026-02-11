@@ -327,6 +327,8 @@ export async function initTaskpane(opts: {
         lockState: "idle",
         dispose: () => {
           unsubscribeErrorTracking();
+          actionQueue.shutdown();
+          agent.abort();
           persistence.dispose();
         },
       },
