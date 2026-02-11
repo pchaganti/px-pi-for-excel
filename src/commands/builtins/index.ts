@@ -6,7 +6,6 @@ import { commandRegistry, type SlashCommand } from "../types.js";
 
 import { createModelCommands, type ActiveAgentProvider } from "./model.js";
 import { createSettingsCommands, type SettingsCommandActions } from "./settings.js";
-import { createExperimentalCommands } from "./experimental.js";
 import { createDebugCommands } from "./debug.js";
 import { createClipboardCommands } from "./clipboard.js";
 import { createExportCommands, createCompactCommands } from "./export.js";
@@ -23,7 +22,6 @@ export function registerBuiltins(context: BuiltinsContext): void {
   const builtins: SlashCommand[] = [
     ...createModelCommands(context.getActiveAgent),
     ...createSettingsCommands(context),
-    ...createExperimentalCommands(),
     ...createDebugCommands(),
     ...createClipboardCommands(context.getActiveAgent),
     ...createExportCommands(context.getActiveAgent),
