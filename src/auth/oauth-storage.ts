@@ -2,11 +2,11 @@
  * OAuth credential persistence for in-browser OAuth flows.
  *
  * Historically we persisted OAuth credentials in localStorage (oauth_<providerId>).
- * As part of #26 hardening, we now prefer IndexedDB via the app SettingsStore.
+ * We now prefer IndexedDB via SettingsStore to keep persistence in one backend and
+ * remove ad-hoc localStorage reads/writes from UI paths.
  *
- * NOTE: this is not a full mitigation for XSS (any in-page JS can still read
- * IndexedDB), but it reduces accidental exposure and keeps all persisted state
- * in one storage backend.
+ * Security note: this is storage hygiene, not an XSS boundary. Same-origin script
+ * execution can read both localStorage and IndexedDB.
  */
 
 import type { OAuthCredentials } from "@mariozechner/pi-ai";
