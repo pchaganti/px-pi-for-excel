@@ -10,7 +10,7 @@
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 import { isCorsError } from "@mariozechner/pi-web-ui/dist/utils/proxy-utils.js";
 import { getOAuthProvider } from "../auth/oauth-provider-registry.js";
-import { saveOAuthCredentials } from "../auth/oauth-storage.js";
+import { clearOAuthCredentials, saveOAuthCredentials } from "../auth/oauth-storage.js";
 import { getErrorMessage } from "../utils/errors.js";
 
 export interface ProviderDef {
@@ -38,6 +38,7 @@ export const ALL_PROVIDERS: ProviderDef[] = [
 
 export interface ProviderRowCallbacks {
   onConnected: (row: HTMLElement, id: string, label: string) => void;
+  onDisconnected?: (row: HTMLElement, id: string, label: string) => void;
 }
 
 class PromptCancelledError extends Error {
@@ -211,11 +212,10 @@ export function buildProviderRow(
   opts: {
     isActive: boolean;
     expandedRef: { current: HTMLElement | null };
-    onConnected: (row: HTMLElement, id: string, label: string) => void;
-  }
+  } & ProviderRowCallbacks,
 ): HTMLElement {
   const { id, label, oauth, desc } = provider;
-  const { isActive, expandedRef, onConnected } = opts;
+  const { isActive, expandedRef, onConnected, onDisconnected } = opts;
   const storage = getAppStorage();
 
   const keyPlaceholder = id === "anthropic"
@@ -235,6 +235,14 @@ export function buildProviderRow(
       </span>
     </button>
     <div class="pi-login-detail" style="display: none; padding: 8px 14px 12px; border: 1px solid oklch(0 0 0 / 0.05); border-top: none; border-radius: 0 0 10px 10px; margin-top: -1px; background: oklch(1 0 0 / 0.3);">
+      <button class="pi-login-disconnect" type="button" style="
+        width: 100%; padding: 8px 12px; margin-bottom: 8px;
+        background: oklch(0 0 0 / 0.03); color: var(--foreground);
+        border: 1px solid oklch(0 0 0 / 0.12);
+        border-radius: 9px; font-family: var(--font-sans);
+        font-size: 12px; font-weight: 500; cursor: pointer;
+        display: ${isActive ? "block" : "none"};
+      ">Disconnect ${label}</button>
       ${oauth ? `
         <button class="pi-login-oauth" style="
           width: 100%; padding: 9px 14px; margin-bottom: 8px;
@@ -274,7 +282,22 @@ export function buildProviderRow(
   const keyInput = row.querySelector(".pi-login-key") as HTMLInputElement;
   const saveBtn = row.querySelector(".pi-login-save") as HTMLButtonElement;
   const errorEl = row.querySelector(".pi-login-error") as HTMLElement;
+  const statusEl = row.querySelector<HTMLElement>(".pi-login-status");
   const oauthBtn = row.querySelector<HTMLButtonElement>(".pi-login-oauth");
+  const disconnectBtn = row.querySelector<HTMLButtonElement>(".pi-login-disconnect");
+
+  const setConnectedState = (connected: boolean): void => {
+    if (statusEl) {
+      statusEl.textContent = connected ? "✓ connected" : "set up →";
+      statusEl.style.color = connected ? "var(--pi-green)" : "var(--muted-foreground)";
+    }
+
+    if (disconnectBtn) {
+      disconnectBtn.style.display = connected ? "block" : "none";
+    }
+  };
+
+  setConnectedState(isActive);
 
   // Toggle expand
   headerBtn.addEventListener("click", () => {
@@ -338,7 +361,7 @@ export function buildProviderRow(
           const apiKey = oauthProvider.getApiKey(cred);
           await storage.providerKeys.set(id, apiKey);
           await saveOAuthCredentials(storage.settings, id, cred);
-          markConnected(row);
+          setConnectedState(true);
           onConnected(row, id, label);
           detail.style.display = "none";
           expandedRef.current = null;
@@ -367,6 +390,36 @@ export function buildProviderRow(
     });
   }
 
+  // Credential disconnect
+  if (disconnectBtn) {
+    disconnectBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      void (async () => {
+        disconnectBtn.textContent = "Disconnecting…";
+        disconnectBtn.disabled = true;
+        disconnectBtn.style.opacity = "0.7";
+        errorEl.style.display = "none";
+
+        try {
+          await storage.providerKeys.delete(id);
+          await clearOAuthCredentials(storage.settings, id);
+
+          setConnectedState(false);
+          keyInput.value = "";
+          onDisconnected?.(row, id, label);
+        } catch (err: unknown) {
+          const msg = getErrorMessage(err);
+          errorEl.textContent = msg ? `Failed to disconnect: ${msg}` : "Failed to disconnect";
+          errorEl.style.display = "block";
+        } finally {
+          disconnectBtn.textContent = `Disconnect ${label}`;
+          disconnectBtn.disabled = false;
+          disconnectBtn.style.opacity = "1";
+        }
+      })();
+    });
+  }
+
   // API key save
   saveBtn.addEventListener("click", () => { void (async () => {
     const rawKey = keyInput.value.trim();
@@ -385,7 +438,7 @@ export function buildProviderRow(
     errorEl.style.display = "none";
     try {
       await storage.providerKeys.set(id, key);
-      markConnected(row);
+      setConnectedState(true);
       onConnected(row, id, label);
       detail.style.display = "none";
       expandedRef.current = null;
@@ -405,12 +458,4 @@ export function buildProviderRow(
   });
 
   return row;
-}
-
-function markConnected(row: HTMLElement) {
-  const status = row.querySelector(".pi-login-status") as HTMLElement;
-  if (status) {
-    status.textContent = "✓ connected";
-    status.style.color = "var(--pi-green)";
-  }
 }

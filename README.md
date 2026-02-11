@@ -110,7 +110,7 @@ Type `/` in the message input to see all commands:
 | `/name <title>` | Rename the current session |
 | `/model` | Switch LLM model |
 | `/default-models` | Default model presets (currently opens the model selector) |
-| `/login` | Add or change API keys / OAuth |
+| `/login` | Add/change/disconnect API keys and OAuth providers |
 | `/settings` | Open settings dialog |
 | `/shortcuts` | Show keyboard shortcuts |
 | `/compact` | Summarize conversation to free context |
