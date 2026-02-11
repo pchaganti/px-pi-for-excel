@@ -41,8 +41,13 @@ Optional auth token:
 TMUX_BRIDGE_TOKEN=your-secret npm run tmux:bridge:https
 ```
 
-And store the same token for the tool adapter:
-- setting key: `tmux.bridge.token`
+Store the same token for the tool adapter:
+
+```bash
+/experimental tmux-bridge-token <token>
+```
+
+(setting key: `tmux.bridge.token`)
 
 ## Endpoints
 

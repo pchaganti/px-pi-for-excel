@@ -123,7 +123,9 @@ Type `/` in the message input to see all commands:
 Experimental examples:
 - `/experimental on tmux-bridge`
 - `/experimental tmux-bridge-url https://localhost:3337`
+- `/experimental tmux-bridge-token <token>`
 - `/experimental tmux-bridge-url clear`
+- `/experimental tmux-bridge-token clear`
 
 ## Keyboard Shortcuts
 
@@ -265,6 +267,8 @@ Then enable and configure in the add-in:
 ```bash
 /experimental on tmux-bridge
 /experimental tmux-bridge-url https://localhost:3337
+# optional, if bridge requires bearer auth
+/experimental tmux-bridge-token <token>
 ```
 
 Bridge endpoints:
@@ -323,6 +327,7 @@ See full request/response contract: [`docs/tmux-bridge-contract.md`](./docs/tmux
 - [x] Humanized tool card inputs/outputs (color names, format labels)
 - [x] Blueprint invalidation after structural changes
 - [x] UI polish: queue layout, thinking/tool card styling, case-insensitive model search
+- [x] Experimental tmux bridge: `/experimental` feature flags + local helper + gated `tmux` tool ([#3](https://github.com/tmustier/pi-for-excel/issues/3))
 
 ### Up next
 - [ ] New tools: charts, tables, data validation ([#18](https://github.com/tmustier/pi-for-excel/issues/18))
@@ -337,7 +342,6 @@ See full request/response contract: [`docs/tmux-bridge-contract.md`](./docs/tmux
 ### Future
 - [ ] Production CORS solution ([#4](https://github.com/tmustier/pi-for-excel/issues/4)) — service worker or hosted relay
 - [ ] Distribution: non-technical install ([#16](https://github.com/tmustier/pi-for-excel/issues/16)) — hosted build + production manifest
-- [ ] Tmux tool via local bridge ([#3](https://github.com/tmustier/pi-for-excel/issues/3)) — terminal access from the add-in
 - [ ] Python code execution via Pyodide
 - [ ] SpreadsheetBench evaluation (target >43%)
 - [ ] Per-workbook instructions (like AGENTS.md)
