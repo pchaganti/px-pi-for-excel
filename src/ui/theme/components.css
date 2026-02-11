@@ -104,6 +104,36 @@
   flex-shrink: 0;
 }
 
+.pi-workbook-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-bottom: var(--pi-divider);
+  background: oklch(0 0 0 / 0.02);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.pi-workbook-label__hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted-foreground);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.pi-workbook-label__name {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
 .pi-messages {
   flex: 1;
   overflow-y: auto;

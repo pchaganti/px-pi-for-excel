@@ -56,6 +56,39 @@ function isSessionId(value: string): value is SessionId {
   return value.split("-").length === 5;
 }
 
+function normalizeSessionId(value: string | null): string | null {
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export function getRestoreCandidateSessionIds(args: {
+  workbookId: string | null;
+  workbookLatestSessionId: string | null;
+  globalLatestSessionId: string | null;
+}): string[] {
+  const candidates: string[] = [];
+
+  const pushUnique = (sessionId: string | null) => {
+    if (!sessionId || candidates.includes(sessionId)) return;
+    candidates.push(sessionId);
+  };
+
+  const workbookLatest = normalizeSessionId(args.workbookLatestSessionId);
+  const globalLatest = normalizeSessionId(args.globalLatestSessionId);
+
+  if (args.workbookId) {
+    // Workbook is known: restore only the workbook-linked latest session.
+    pushUnique(workbookLatest);
+    return candidates;
+  }
+
+  // Workbook identity unavailable: fall back to global latest behavior.
+  pushUnique(globalLatest);
+  return candidates;
+}
+
 export async function setupSessionPersistence(opts: {
   agent: Agent;
   sessions: SessionsStore;
@@ -242,22 +275,19 @@ export async function setupSessionPersistence(opts: {
 
   async function restoreLatestSession(): Promise<boolean> {
     try {
-      const candidates: string[] = [];
-
       const workbookId = await resolveWorkbookId();
-      if (workbookId) {
-        const workbookLatest = await getLatestSessionForWorkbook(settings, workbookId);
-        if (workbookLatest) candidates.push(workbookLatest);
-      }
+      const workbookLatest = workbookId
+        ? await getLatestSessionForWorkbook(settings, workbookId)
+        : null;
+      const globalLatest = workbookId ? null : await sessions.getLatestSessionId();
 
-      const globalLatest = await sessions.getLatestSessionId();
-      if (globalLatest) candidates.push(globalLatest);
+      const candidates = getRestoreCandidateSessionIds({
+        workbookId,
+        workbookLatestSessionId: workbookLatest,
+        globalLatestSessionId: globalLatest,
+      });
 
-      const seen = new Set<string>();
       for (const candidateId of candidates) {
-        if (seen.has(candidateId)) continue;
-        seen.add(candidateId);
-
         const sessionData = await sessions.loadSession(candidateId);
         if (!sessionData || sessionData.messages.length === 0) continue;
 

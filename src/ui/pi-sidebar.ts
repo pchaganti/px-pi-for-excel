@@ -82,6 +82,7 @@ export class PiSidebar extends LitElement {
   @property({ attribute: false }) onSelectTab?: (runtimeId: string) => void;
   @property({ attribute: false }) onCloseTab?: (runtimeId: string) => void;
   @property({ attribute: false }) lockNotice: string | null = null;
+  @property({ type: String }) workbookLabel: string | null = null;
 
   @state() private _hasMessages = false;
   @state() private _isStreaming = false;
@@ -289,6 +290,17 @@ export class PiSidebar extends LitElement {
     return map;
   }
 
+  private _renderWorkbookLabel() {
+    if (!this.workbookLabel) return nothing;
+
+    return html`
+      <div class="pi-workbook-label" title=${this.workbookLabel}>
+        <span class="pi-workbook-label__hint">Workbook</span>
+        <span class="pi-workbook-label__name">${this.workbookLabel}</span>
+      </div>
+    `;
+  }
+
   override render() {
     const agent = this.agent;
     if (!agent) return html``;
@@ -304,6 +316,7 @@ export class PiSidebar extends LitElement {
       ${this.lockNotice
         ? html`<div class="pi-lock-notice">${this.lockNotice}</div>`
         : nothing}
+      ${this._renderWorkbookLabel()}
       <div class="pi-messages">
         <div class="pi-messages__inner">
           ${hasMessages ? html`
