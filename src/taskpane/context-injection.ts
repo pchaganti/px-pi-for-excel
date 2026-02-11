@@ -12,29 +12,55 @@ import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { ChangeTracker } from "../context/change-tracker.js";
 import { getBlueprint, getBlueprintRevision } from "../context/blueprint.js";
 import { readSelectionContext } from "../context/selection.js";
+import { extractTextFromContent } from "../utils/content.js";
 import { getWorkbookContext } from "../workbook/context.js";
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
-  let timeoutId: number | undefined;
-  const timeoutPromise = new Promise<null>((resolve) => {
-    timeoutId = window.setTimeout(() => resolve(null), timeoutMs);
-  });
-  return Promise.race([promise, timeoutPromise]).finally(() => {
-    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
-  }) as Promise<T | null>;
-}
+import {
+  decideWorkbookContextRefresh,
+  type BlueprintRefreshReason,
+} from "./context-refresh-decision.js";
 
-type BlueprintRefreshReason = "initial" | "workbook_switched" | "blueprint_invalidated";
+const AUTO_CONTEXT_PREFIX = "[Auto-context]";
+const WORKBOOK_CONTEXT_REFRESH_PREFIX = "[Workbook context refresh:";
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<null>((resolve) => {
+    timeoutId = setTimeout(() => resolve(null), timeoutMs);
+  });
+
+  const raced = Promise.race<T | null>([promise, timeoutPromise]);
+  return raced.finally(() => {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  });
+}
 
 function buildWorkbookContextSection(blueprint: string, reason: BlueprintRefreshReason): string {
   let reasonText = "initial";
   if (reason === "workbook_switched") reasonText = "workbook switched";
   if (reason === "blueprint_invalidated") reasonText = "workbook structure changed";
+  if (reason === "context_missing") reasonText = "context missing from history";
 
   return [
     `[Workbook context refresh: ${reasonText}]`,
     blueprint,
   ].join("\n\n");
+}
+
+function historyHasWorkbookContextRefresh(messages: readonly AgentMessage[]): boolean {
+  for (const message of messages) {
+    if (!(message.role === "user" || message.role === "user-with-attachments")) {
+      continue;
+    }
+
+    const text = extractTextFromContent(message.content);
+    if (!text.includes(AUTO_CONTEXT_PREFIX)) continue;
+    if (text.includes(WORKBOOK_CONTEXT_REFRESH_PREFIX)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function createContextInjector(changeTracker: ChangeTracker) {
@@ -49,20 +75,25 @@ export function createContextInjector(changeTracker: ChangeTracker) {
       const workbookCtx = await withTimeout(getWorkbookContext().catch(() => null), 1200);
       const workbookId = workbookCtx?.workbookId ?? null;
       const currentRevision = getBlueprintRevision();
+      const hasWorkbookContextMessage = historyHasWorkbookContextRefresh(messages);
 
-      let refreshReason: BlueprintRefreshReason | null = null;
-      if (lastInjectedWorkbookId === undefined) {
-        refreshReason = "initial";
-      } else if (lastInjectedWorkbookId !== workbookId) {
-        refreshReason = "workbook_switched";
-      } else if (currentRevision !== lastInjectedBlueprintRevision) {
-        refreshReason = "blueprint_invalidated";
+      const decision = decideWorkbookContextRefresh({
+        lastInjectedWorkbookId,
+        lastInjectedBlueprintRevision,
+        currentWorkbookId: workbookId,
+        currentBlueprintRevision: currentRevision,
+        hasWorkbookContextMessage,
+      });
+
+      if (decision.shouldBootstrap) {
+        lastInjectedWorkbookId = workbookId;
+        lastInjectedBlueprintRevision = currentRevision;
       }
 
-      if (refreshReason) {
+      if (decision.refreshReason) {
         const blueprint = await withTimeout(getBlueprint().catch(() => null), 2500);
         if (blueprint && blueprint.trim().length > 0) {
-          injections.push(buildWorkbookContextSection(blueprint, refreshReason));
+          injections.push(buildWorkbookContextSection(blueprint, decision.refreshReason));
           lastInjectedWorkbookId = workbookId;
           lastInjectedBlueprintRevision = getBlueprintRevision();
         }
@@ -85,7 +116,7 @@ export function createContextInjector(changeTracker: ChangeTracker) {
     const injection = injections.join("\n\n");
     const injectionMessage: AgentMessage = {
       role: "user",
-      content: [{ type: "text", text: `[Auto-context]\n${injection}` }],
+      content: [{ type: "text", text: `${AUTO_CONTEXT_PREFIX}\n${injection}` }],
       timestamp: Date.now(),
     };
 
