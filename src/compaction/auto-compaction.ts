@@ -1,19 +1,27 @@
 /**
  * Auto-compaction.
  *
- * Pi (TUI) triggers compaction when:
+ * Hard trigger:
+ *   projectedContextTokens > hardTriggerTokens
  *
- *   contextTokens > contextWindow - reserveTokens
- *
- * where reserveTokens defaults to 16,384 and keepRecentTokens defaults to 20,000.
- * See: /opt/homebrew/lib/node_modules/@mariozechner/pi-coding-agent/docs/compaction.md
+ * where hardTriggerTokens is derived from model context window and compaction
+ * defaults (see `getCompactionThresholds`).
  */
 
 import type { Agent } from "@mariozechner/pi-agent-core";
 
 import { estimateContextTokens, estimateTextTokens } from "../utils/context-tokens.js";
 
-import { effectiveReserveTokens } from "./defaults.js";
+import { getCompactionThresholds } from "./defaults.js";
+
+export function shouldAutoCompactForProjectedTokens(args: {
+  projectedTokens: number;
+  contextWindow: number;
+}): boolean {
+  const { projectedTokens, contextWindow } = args;
+  const { hardTriggerTokens } = getCompactionThresholds(contextWindow);
+  return projectedTokens > hardTriggerTokens;
+}
 
 export async function maybeAutoCompactBeforePrompt(args: {
   agent: Agent;
@@ -30,13 +38,13 @@ export async function maybeAutoCompactBeforePrompt(args: {
   if (!model) return false;
 
   const contextWindow = model.contextWindow || 200000;
-  const reserveTokens = effectiveReserveTokens(contextWindow);
-  const threshold = Math.max(0, contextWindow - reserveTokens);
 
   const { totalTokens } = estimateContextTokens(agent.state);
   const projectedTokens = totalTokens + estimateTextTokens(nextUserText);
 
-  if (projectedTokens <= threshold) return false;
+  if (!shouldAutoCompactForProjectedTokens({ projectedTokens, contextWindow })) {
+    return false;
+  }
 
   // Nothing to summarize / no room to improve.
   if (agent.state.messages.length < 4) return false;

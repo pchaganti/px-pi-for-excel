@@ -21,6 +21,7 @@ This policy sets clear guardrails so we can improve context quality while preser
 - Tool-result continuation calls strip `tools` in `src/auth/stream-proxy.ts` (`isToolContinuation()`).
 - Session IDs are stable per chat runtime (`agent.sessionId`), which is used by providers for cache continuity.
 - Status/debug UI already shows payload composition counters (`systemChars`, `toolSchemaChars`, `messageChars`, call count).
+- Auto-compaction now uses shared hard budgets (`getCompactionThresholds`) for earlier quality protection while preserving existing status-bar warning semantics.
 
 ---
 
@@ -130,6 +131,11 @@ This policy sets clear guardrails so we can improve context quality while preser
 - Tune soft/hard compaction thresholds for earlier quality protection.
 - Keep compaction summary compact and action-oriented.
 - Add easier “summarize + start fresh” flow for noisy sessions.
+- **Current rollout (v1):**
+  - hard trigger = `min(contextWindow - reserveTokens, qualityCap)`
+  - `qualityCap` = **88%** of context window for ≥128k models, **85%** for ≥200k models
+  - soft warning = max(70% of hard trigger, hard trigger − 5% of context window, min margin 2,048 tokens)
+  - auto-compaction uses hard trigger; status-bar warnings remain on the existing 40%/60% UX thresholds
 
 **Success:** fewer degraded late-thread responses.
 
@@ -161,4 +167,4 @@ This policy sets clear guardrails so we can improve context quality while preser
 1. Exact tool bundle definitions + routing heuristics.
 2. Tool-result shaping thresholds (size and recency).
 3. Workbook hash signal set (what counts as structural change).
-4. Soft/hard compaction thresholds by model family.
+4. Whether to tighten or relax v1 soft/hard compaction budgets by provider/model family after more live-session telemetry.
