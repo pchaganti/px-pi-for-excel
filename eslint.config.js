@@ -23,6 +23,7 @@ export default tseslint.config(
             "vite.config.ts",
             "eslint.config.js",
           ],
+          maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 16,
         },
         tsconfigRootDir: import.meta.dirname,
       },
