@@ -117,6 +117,9 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Availability:** non-core experimental tool, hidden by default via `applyExperimentalToolGates()`.
 - **Gate model:** requires `tmux-bridge` experiment enabled, configured `tmux.bridge.url`, and successful bridge `/health` probe.
 - **Execution policy:** classified as `read/none` in workbook coordinator (no workbook lock writes or blueprint invalidation).
+- **Bridge implementation:** local helper script `scripts/tmux-bridge-server.mjs`.
+  - default mode: `stub` (in-memory simulator)
+  - real mode: `TMUX_BRIDGE_MODE=tmux` (subprocess-backed tmux bridge)
 - **Bridge contract:** POST JSON to `https://localhost:<port>/v1/tmux` with actions:
   - `list_sessions`
   - `create_session`
@@ -124,5 +127,5 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
   - `capture_pane`
   - `send_and_capture`
   - `kill_session`
-- **Security posture:** local opt-in only; bridge URL validated via `validateOfficeProxyUrl`; tool execution re-checks gate before every call.
-- **Rationale:** establish a stable adapter contract now (for issue #3) while deferring full companion-daemon rollout.
+- **Security posture:** local opt-in only; bridge URL validated via `validateOfficeProxyUrl`; tool execution re-checks gate before every call; bridge enforces loopback+origin checks and optional bearer token.
+- **Rationale:** stable local adapter contract now (issue #3) with safe stub-first rollout and incremental hardening.

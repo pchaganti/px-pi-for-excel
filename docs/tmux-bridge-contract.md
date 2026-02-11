@@ -1,8 +1,12 @@
-# Experimental tmux bridge contract (v1 stub)
+# Experimental tmux bridge contract (v1)
 
-Status: implemented as an **experimental tool adapter stub** in the add-in (`src/tools/tmux.ts`).
+Status:
+- Add-in adapter implemented in `src/tools/tmux.ts`
+- Local bridge scaffold implemented in `scripts/tmux-bridge-server.mjs`
 
-This does **not** include a bundled local bridge daemon yet. It defines the request/response contract the future local helper should implement.
+The bridge supports two modes:
+- `stub` (default): in-memory tmux simulation for development/testing
+- `tmux`: real tmux subprocess backend with guardrails
 
 ## Availability and gating
 
@@ -16,9 +20,36 @@ The gate is checked:
 - before tool exposure
 - again on each tool execution (defense in depth)
 
-## Endpoint
+## Local bridge quickstart
 
-`POST {tmux.bridge.url}/v1/tmux`
+```bash
+# Stub mode (safe default)
+npm run tmux:bridge:https
+
+# Real tmux mode
+TMUX_BRIDGE_MODE=tmux npm run tmux:bridge:https
+```
+
+Then in the add-in:
+
+```bash
+/experimental on tmux-bridge
+/experimental tmux-bridge-url https://localhost:3337
+```
+
+Optional auth token:
+
+```bash
+TMUX_BRIDGE_TOKEN=your-secret npm run tmux:bridge:https
+```
+
+And store the same token for the tool adapter:
+- setting key: `tmux.bridge.token`
+
+## Endpoints
+
+- `GET /health`
+- `POST /v1/tmux`
 
 Content-Type: `application/json`
 
@@ -31,7 +62,7 @@ Optional auth header when configured:
 {
   "action": "list_sessions | create_session | send_keys | capture_pane | send_and_capture | kill_session",
   "session": "optional session name",
-  "cwd": "optional working directory (create_session)",
+  "cwd": "optional absolute working directory (create_session)",
   "text": "optional literal input (send_keys/send_and_capture)",
   "keys": ["optional key tokens, e.g. Enter, C-c"],
   "enter": true,
@@ -42,7 +73,7 @@ Optional auth header when configured:
 }
 ```
 
-### Action requirements enforced by the add-in
+### Action requirements enforced by the add-in/bridge
 
 - `list_sessions`: no required fields
 - `create_session`: no required fields
@@ -51,7 +82,7 @@ Optional auth header when configured:
 - `send_keys`: requires `session` + at least one of (`text`, `keys`, `enter=true`)
 - `send_and_capture`: same as `send_keys`
 
-## Response schema (expected)
+## Response schema
 
 ```json
 {
@@ -66,9 +97,22 @@ Optional auth header when configured:
 ```
 
 Notes:
-- Non-2xx HTTP responses are treated as errors.
-- `ok: false` is treated as an error.
+- Non-2xx HTTP responses are treated as errors by the adapter.
+- `ok: false` is treated as an error by the adapter.
 - Plain-text success responses are accepted as `output` fallback.
+
+## Real tmux guardrails (implemented)
+
+- Loopback client enforcement
+- Origin allowlist enforcement (`ALLOWED_ORIGINS`)
+- Optional bearer token auth (`TMUX_BRIDGE_TOKEN`)
+- Session name validation (strict regex)
+- Key token validation (strict regex)
+- `cwd` must be absolute and an existing directory
+- Bounded request size and input lengths
+- Bounded `lines` and `timeout_ms`
+- tmux calls executed via argv arrays (no shell interpolation)
+- tmux launched with `-f /dev/null` and fixed socket path
 
 ## Tool behavior in workbook runtime
 

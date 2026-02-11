@@ -248,6 +248,31 @@ API-key based providers often work without a proxy; OAuth-based logins typically
 
 Proxy rejections return reason codes in plaintext (e.g. `blocked_target_loopback`, `blocked_target_private_ip`, `blocked_target_not_allowlisted`).
 
+### Experimental tmux bridge (local helper)
+
+Start the local bridge:
+
+```bash
+# Stub mode (safe default)
+npm run tmux:bridge:https
+
+# Real tmux mode
+TMUX_BRIDGE_MODE=tmux npm run tmux:bridge:https
+```
+
+Then enable and configure in the add-in:
+
+```bash
+/experimental on tmux-bridge
+/experimental tmux-bridge-url https://localhost:3337
+```
+
+Bridge endpoints:
+- `GET /health`
+- `POST /v1/tmux`
+
+See full request/response contract: [`docs/tmux-bridge-contract.md`](./docs/tmux-bridge-contract.md)
+
 ### Extension loading safety
 
 `loadExtension()` now blocks remote `http(s)` module URLs by default.
