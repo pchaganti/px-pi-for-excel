@@ -1,5 +1,7 @@
 /**
- * view_settings — Control worksheet display: gridlines, headings, freeze panes, tab color.
+ * view_settings — Control worksheet display settings.
+ *
+ * Scope: on-screen worksheet view/navigation only (not print/page layout).
  */
 
 import { Type, type Static } from "@sinclair/typebox";
@@ -27,12 +29,19 @@ const schema = Type.Object({
       "freeze_at",
       "unfreeze",
       "set_tab_color",
+      "hide_sheet",
+      "show_sheet",
+      "very_hide_sheet",
+      "set_standard_width",
+      "activate",
     ],
     { description: "The view setting to read or change." },
   ),
   sheet: Type.Optional(
     Type.String({
-      description: "Target sheet name. Defaults to the active sheet.",
+      description:
+        "Target sheet name. Defaults to the active sheet for most actions. " +
+        "Required for hide/show/very_hide and activate.",
     }),
   ),
   count: Type.Optional(
@@ -52,17 +61,32 @@ const schema = Type.Object({
       description: "Tab color in #RRGGBB format (e.g. \"#FF6600\"). Use \"\" to clear.",
     }),
   ),
+  width: Type.Optional(
+    Type.Number({
+      description:
+        "Standard (default) column width for the worksheet, in Excel character-width units. " +
+        "Required for set_standard_width.",
+    }),
+  ),
 });
 
 type Params = Static<typeof schema>;
+
+function requireSheetName(action: string, sheet: string | undefined): string {
+  if (!sheet) {
+    throw new Error(`sheet is required for ${action}`);
+  }
+  return sheet;
+}
 
 export function createViewSettingsTool(): AgentTool<typeof schema> {
   return {
     name: "view_settings",
     label: "View Settings",
     description:
-      "Read or change worksheet view settings: gridlines, row/column headings, " +
-      "freeze panes, and tab color. Use \"get\" to inspect the current state first.",
+      "Read or change worksheet view/navigation settings: gridlines, row/column headings, " +
+      "freeze panes, tab color, sheet visibility, sheet activation, and standard width. " +
+      "Use \"get\" to inspect the current state first.",
     parameters: schema,
     execute: async (
       _toolCallId: string,
@@ -76,16 +100,18 @@ export function createViewSettingsTool(): AgentTool<typeof schema> {
 
           switch (params.action) {
             case "get": {
-              sheet.load("name, showGridlines, showHeadings, tabColor");
+              sheet.load("name, showGridlines, showHeadings, tabColor, visibility, standardWidth");
               const frozen = sheet.freezePanes.getLocationOrNullObject();
               frozen.load("address");
               await context.sync();
 
               const lines: string[] = [
                 `Sheet: "${sheet.name}"`,
+                `Visibility: ${sheet.visibility}`,
                 `Gridlines: ${sheet.showGridlines ? "visible" : "hidden"}`,
                 `Headings: ${sheet.showHeadings ? "visible" : "hidden"}`,
                 `Tab color: ${sheet.tabColor || "(none)"}`,
+                `Standard width: ${sheet.standardWidth}`,
                 `Frozen panes: ${frozen.isNullObject ? "none" : frozen.address}`,
               ];
               return lines.join("\n");
@@ -173,8 +199,51 @@ export function createViewSettingsTool(): AgentTool<typeof schema> {
                 : `Cleared tab color on "${sheet.name}".`;
             }
 
+            case "hide_sheet": {
+              const targetName = requireSheetName("hide_sheet", params.sheet);
+              const target = context.workbook.worksheets.getItem(targetName);
+              target.visibility = "Hidden";
+              await context.sync();
+              return `Set sheet "${targetName}" visibility to Hidden.`;
+            }
+
+            case "show_sheet": {
+              const targetName = requireSheetName("show_sheet", params.sheet);
+              const target = context.workbook.worksheets.getItem(targetName);
+              target.visibility = "Visible";
+              await context.sync();
+              return `Set sheet "${targetName}" visibility to Visible.`;
+            }
+
+            case "very_hide_sheet": {
+              const targetName = requireSheetName("very_hide_sheet", params.sheet);
+              const target = context.workbook.worksheets.getItem(targetName);
+              target.visibility = "VeryHidden";
+              await context.sync();
+              return `Set sheet "${targetName}" visibility to VeryHidden.`;
+            }
+
+            case "set_standard_width": {
+              if (params.width === undefined) {
+                throw new Error("width is required for set_standard_width");
+              }
+              sheet.standardWidth = params.width;
+              await context.sync();
+              sheet.load("name,standardWidth");
+              await context.sync();
+              return `Set standard width to ${sheet.standardWidth} on "${sheet.name}".`;
+            }
+
+            case "activate": {
+              const targetName = requireSheetName("activate", params.sheet);
+              const target = context.workbook.worksheets.getItem(targetName);
+              target.activate();
+              await context.sync();
+              return `Activated sheet "${targetName}".`;
+            }
+
             default:
-              throw new Error(`Unknown action: ${String(params.action as string)}`);
+              throw new Error(`Unknown action: ${String(params.action)}`);
           }
         });
 

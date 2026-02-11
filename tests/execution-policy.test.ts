@@ -21,6 +21,20 @@ void test("classifies comments read vs mutate actions", () => {
   assert.equal(getToolContextImpact("comments", { action: "delete" }), "content");
 });
 
+void test("classifies view_settings actions by mode and context impact", () => {
+  assert.equal(getToolExecutionMode("view_settings", { action: "get" }), "read");
+  assert.equal(getToolContextImpact("view_settings", { action: "get" }), "none");
+
+  assert.equal(getToolExecutionMode("view_settings", { action: "activate" }), "mutate");
+  assert.equal(getToolContextImpact("view_settings", { action: "activate" }), "content");
+
+  assert.equal(getToolExecutionMode("view_settings", { action: "hide_sheet" }), "mutate");
+  assert.equal(getToolContextImpact("view_settings", { action: "hide_sheet" }), "structure");
+
+  assert.equal(getToolExecutionMode("view_settings", { action: "set_standard_width" }), "mutate");
+  assert.equal(getToolContextImpact("view_settings", { action: "set_standard_width" }), "content");
+});
+
 void test("unknown tools default to mutate with content impact", () => {
   assert.equal(getToolExecutionMode("extension_tool", { any: true }), "mutate");
   assert.equal(getToolContextImpact("extension_tool", { any: true }), "content");

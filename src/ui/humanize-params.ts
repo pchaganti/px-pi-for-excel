@@ -586,6 +586,28 @@ function humanizeViewSettings(p: Record<string, unknown>): ParamItem[] {
         value: p.color ? html`Tab color ${colorChip(str(p.color))}` : "Clear tab color",
       });
       break;
+    case "hide_sheet":
+      items.push({ label: "Action", value: "Hide sheet" });
+      break;
+    case "show_sheet":
+      items.push({ label: "Action", value: "Show sheet" });
+      break;
+    case "very_hide_sheet":
+      items.push({ label: "Action", value: "Very hide sheet (VeryHidden)" });
+      break;
+    case "set_standard_width": {
+      const width = num(p.width);
+      items.push({
+        label: "Action",
+        value: width !== undefined
+          ? "Set standard width to " + String(width)
+          : "Set standard width",
+      });
+      break;
+    }
+    case "activate":
+      items.push({ label: "Action", value: "Activate sheet" });
+      break;
     default:
       items.push({ label: "Action", value: action.replace(/_/g, " ") });
   }

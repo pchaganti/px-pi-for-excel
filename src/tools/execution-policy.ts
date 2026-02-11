@@ -43,6 +43,11 @@ function classifyComments(params: unknown): ToolExecutionMode {
   return action === "read" ? "read" : "mutate";
 }
 
+function isViewSettingsStructureAction(params: unknown): boolean {
+  const action = getActionParam(params);
+  return action === "hide_sheet" || action === "show_sheet" || action === "very_hide_sheet";
+}
+
 /**
  * Return execution mode for a tool call.
  *
@@ -75,6 +80,10 @@ export function getToolContextImpact(toolName: string, params: unknown): ToolCon
   if (mode === "read") return "none";
 
   if (toolName === "modify_structure") {
+    return "structure";
+  }
+
+  if (toolName === "view_settings" && isViewSettingsStructureAction(params)) {
     return "structure";
   }
 

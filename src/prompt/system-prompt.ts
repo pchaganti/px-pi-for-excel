@@ -34,7 +34,7 @@ You have 11 tools:
 - **conditional_format** — add or clear conditional formatting rules (formula or cell-value)
 - **comments** — read, add, update, reply, delete, resolve/reopen cell comments
 - **trace_dependencies** — show the formula dependency tree for a cell
-- **view_settings** — control gridlines, headings, freeze panes, and tab color`;
+- **view_settings** — control gridlines, headings, freeze panes, tab color, sheet visibility, sheet activation, and standard width`;
 
 const WORKFLOW = `## Workflow
 

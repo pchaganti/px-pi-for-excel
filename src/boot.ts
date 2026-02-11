@@ -2,7 +2,8 @@
  * Boot — runs before any pi-web-ui components mount.
  *
  * 1. Imports Tailwind CSS (pi-web-ui/app.css)
- * 2. Patches Lit's ReactiveElement to fix tsgo class field shadowing
+ * 2. Installs compatibility patches (Lit class-field shadowing, markdown safety)
+ * 3. Installs a thinking-label patch ("Thinking…" → "Thought for …")
  *
  * MUST be imported as the first module in taskpane.ts.
  */
@@ -12,6 +13,8 @@ import "./ui/theme.css";
 
 import { installLitClassFieldShadowingPatch } from "./compat/lit-class-field-shadowing.js";
 import { installMarkedSafetyPatch } from "./compat/marked-safety.js";
+import { installThinkingDurationPatch } from "./compat/thinking-duration.js";
 
 installLitClassFieldShadowingPatch();
 installMarkedSafetyPatch();
+installThinkingDurationPatch();
