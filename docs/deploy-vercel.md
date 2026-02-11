@@ -16,7 +16,10 @@ Vercel is a good default host because it’s free for OSS/hobby usage and handle
 This repo includes `vercel.json` with:
 - `outputDirectory: dist`
 - a header rule to disable caching for `/src/taskpane.html` to make updates propagate reliably
-- `Content-Security-Policy-Report-Only` on `/src/taskpane.html` for staged CSP rollout (observe violations before enforcing).
+- an enforced `Content-Security-Policy` on `/src/taskpane.html` (Office.js + provider/auth endpoints + localhost proxy).
+
+If a host-specific regression appears, temporary rollback is a single-header change:
+`Content-Security-Policy` → `Content-Security-Policy-Report-Only`.
 
 ## Production URL
 
