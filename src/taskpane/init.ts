@@ -16,6 +16,10 @@ import { isLoopbackProxyUrl } from "../auth/proxy-validation.js";
 import { restoreCredentials } from "../auth/restore.js";
 import { invalidateBlueprint } from "../context/blueprint.js";
 import { ChangeTracker } from "../context/change-tracker.js";
+import {
+  PI_EXPERIMENTAL_FEATURE_CHANGED_EVENT,
+  PI_EXPERIMENTAL_TOOL_CONFIG_CHANGED_EVENT,
+} from "../experiments/events.js";
 import { convertToLlm } from "../messages/convert-to-llm.js";
 import { createAllTools } from "../tools/index.js";
 import { applyExperimentalToolGates } from "../tools/experimental-tool-gates.js";
@@ -223,6 +227,7 @@ export async function initTaskpane(opts: {
 
   const runtimeManager = new SessionRuntimeManager(sidebar);
   const abortedAgents = new WeakSet<Agent>();
+  const runtimeToolRefreshers = new Map<string, () => Promise<void>>();
 
   const getActiveRuntime = () => runtimeManager.getActiveRuntime();
   const getActiveAgent = () => getActiveRuntime()?.agent ?? null;
@@ -256,6 +261,23 @@ export async function initTaskpane(opts: {
     document.dispatchEvent(new CustomEvent("pi:status-update"));
   };
 
+  const refreshToolsForAllRuntimes = async () => {
+    const runtimes = runtimeManager.listRuntimes();
+
+    for (const runtime of runtimes) {
+      const refresh = runtimeToolRefreshers.get(runtime.runtimeId);
+      if (!refresh) continue;
+
+      try {
+        await refresh();
+      } catch (error: unknown) {
+        console.warn("[pi] Failed to refresh runtime tools:", error);
+      }
+    }
+
+    document.dispatchEvent(new CustomEvent("pi:status-update"));
+  };
+
   const refreshWorkbookState = async () => {
     const workbookContext = await resolveWorkbookContext();
     sidebar.workbookLabel = formatWorkbookLabel(workbookContext);
@@ -280,6 +302,14 @@ export async function initTaskpane(opts: {
     void refreshWorkbookState();
   });
 
+  document.addEventListener(PI_EXPERIMENTAL_FEATURE_CHANGED_EVENT, () => {
+    void refreshToolsForAllRuntimes();
+  });
+
+  document.addEventListener(PI_EXPERIMENTAL_TOOL_CONFIG_CHANGED_EVENT, () => {
+    void refreshToolsForAllRuntimes();
+  });
+
   const createRuntime = async (optsForRuntime: {
     activate: boolean;
     autoRestoreLatest: boolean;
@@ -290,22 +320,26 @@ export async function initTaskpane(opts: {
 
     let runtimeAgent: Agent | null = null;
 
-    const gatedTools = await applyExperimentalToolGates(createAllTools());
+    const buildRuntimeTools = async () => {
+      const gatedTools = await applyExperimentalToolGates(createAllTools());
 
-    const tools = withWorkbookCoordinator(
-      gatedTools,
-      workbookCoordinator,
-      {
-        getWorkbookId: resolveWorkbookId,
-        getSessionId: () => runtimeAgent?.sessionId ?? runtimeId,
-      },
-      {
-        onWriteCommitted: (event) => {
-          if (event.impact !== "structure") return;
-          invalidateBlueprint(event.workbookId);
+      return withWorkbookCoordinator(
+        gatedTools,
+        workbookCoordinator,
+        {
+          getWorkbookId: resolveWorkbookId,
+          getSessionId: () => runtimeAgent?.sessionId ?? runtimeId,
         },
-      },
-    );
+        {
+          onWriteCommitted: (event) => {
+            if (event.impact !== "structure") return;
+            invalidateBlueprint(event.workbookId);
+          },
+        },
+      );
+    };
+
+    const tools = await buildRuntimeTools();
 
     const agent = new Agent({
       initialState: {
@@ -321,6 +355,13 @@ export async function initTaskpane(opts: {
     });
 
     runtimeAgent = agent;
+
+    const refreshRuntimeTools = async () => {
+      const nextTools = await buildRuntimeTools();
+      agent.setTools(nextTools);
+    };
+
+    runtimeToolRefreshers.set(runtimeId, refreshRuntimeTools);
 
     // API key resolution
     agent.getApiKey = async (provider: string) => {
@@ -395,6 +436,7 @@ export async function initTaskpane(opts: {
         persistence,
         lockState: "idle",
         dispose: () => {
+          runtimeToolRefreshers.delete(runtimeId);
           unsubscribeErrorTracking();
           actionQueue.shutdown();
           agent.abort();

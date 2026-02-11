@@ -6,6 +6,7 @@
  */
 
 import { ALLOW_REMOTE_EXTENSION_URLS_STORAGE_KEY } from "../commands/extension-source-policy.js";
+import { dispatchExperimentalFeatureChanged } from "./events.js";
 
 export type ExperimentalFeatureId =
   | "tmux_bridge"
@@ -162,16 +163,11 @@ export function setExperimentalFeatureEnabled(
   safeSetItem(feature.storageKey, formatStoredBoolean(enabled));
 
   if (previous === enabled) return;
-  if (typeof document === "undefined") return;
 
-  document.dispatchEvent(
-    new CustomEvent("pi:experimental-feature-changed", {
-      detail: {
-        featureId,
-        enabled,
-      },
-    }),
-  );
+  dispatchExperimentalFeatureChanged({
+    featureId,
+    enabled,
+  });
 }
 
 export function toggleExperimentalFeature(featureId: ExperimentalFeatureId): boolean {

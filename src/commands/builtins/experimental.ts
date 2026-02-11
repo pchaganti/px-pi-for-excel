@@ -12,6 +12,7 @@ import {
   type ExperimentalFeatureId,
 } from "../../experiments/flags.js";
 import { validateOfficeProxyUrl } from "../../auth/proxy-validation.js";
+import { dispatchExperimentalToolConfigChanged } from "../../experiments/events.js";
 import { TMUX_BRIDGE_URL_SETTING_KEY } from "../../tools/experimental-tool-gates.js";
 import { showToast } from "../../ui/toast.js";
 import { showExperimentalDialog } from "./experimental-overlay.js";
@@ -37,6 +38,7 @@ export interface ExperimentalCommandDependencies {
   setTmuxBridgeUrl?: (url: string) => Promise<void>;
   clearTmuxBridgeUrl?: () => Promise<void>;
   validateTmuxBridgeUrl?: (url: string) => string;
+  notifyToolConfigChanged?: (configKey: string) => void;
 }
 
 interface ResolvedExperimentalCommandDependencies {
@@ -50,6 +52,7 @@ interface ResolvedExperimentalCommandDependencies {
   setTmuxBridgeUrl: (url: string) => Promise<void>;
   clearTmuxBridgeUrl: () => Promise<void>;
   validateTmuxBridgeUrl: (url: string) => string;
+  notifyToolConfigChanged: (configKey: string) => void;
 }
 
 function tokenize(args: string): string[] {
@@ -110,6 +113,9 @@ function resolveDependencies(
     setTmuxBridgeUrl: dependencies.setTmuxBridgeUrl ?? defaultSetTmuxBridgeUrl,
     clearTmuxBridgeUrl: dependencies.clearTmuxBridgeUrl ?? defaultClearTmuxBridgeUrl,
     validateTmuxBridgeUrl: dependencies.validateTmuxBridgeUrl ?? validateOfficeProxyUrl,
+    notifyToolConfigChanged: dependencies.notifyToolConfigChanged ?? ((configKey: string) => {
+      dispatchExperimentalToolConfigChanged({ configKey });
+    }),
   };
 }
 
@@ -153,6 +159,7 @@ async function handleTmuxBridgeUrlCommand(
 
   if (valueTokens.length === 1 && TMUX_BRIDGE_URL_CLEAR_ACTIONS.has(firstToken)) {
     await dependencies.clearTmuxBridgeUrl();
+    dependencies.notifyToolConfigChanged(TMUX_BRIDGE_URL_SETTING_KEY);
     dependencies.showToast("Tmux bridge URL cleared.");
     return;
   }
@@ -160,6 +167,7 @@ async function handleTmuxBridgeUrlCommand(
   const candidateUrl = valueTokens.join(" ");
   const normalized = dependencies.validateTmuxBridgeUrl(candidateUrl);
   await dependencies.setTmuxBridgeUrl(normalized);
+  dependencies.notifyToolConfigChanged(TMUX_BRIDGE_URL_SETTING_KEY);
   dependencies.showToast(`Tmux bridge URL set to ${normalized}`);
 }
 

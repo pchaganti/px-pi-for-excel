@@ -177,9 +177,10 @@ void test("/experimental tmux-bridge-url shows configured value", async () => {
   assert.equal(toasts[0], "Tmux bridge URL: https://localhost:3337");
 });
 
-void test("/experimental tmux-bridge-url <url> validates and stores URL", async () => {
+void test("/experimental tmux-bridge-url <url> validates, stores URL, and triggers tool refresh notice", async () => {
   const toasts: string[] = [];
   const stored: string[] = [];
+  const changedConfigKeys: string[] = [];
 
   const command = getExperimentalCommand({
     showExperimentalDialog: () => {},
@@ -191,17 +192,22 @@ void test("/experimental tmux-bridge-url <url> validates and stores URL", async 
       stored.push(url);
       return Promise.resolve();
     },
+    notifyToolConfigChanged: (configKey) => {
+      changedConfigKeys.push(configKey);
+    },
   });
 
   await command.execute("tmux-bridge-url https://localhost:3337/");
 
   assert.deepEqual(stored, ["https://localhost:3337"]);
+  assert.deepEqual(changedConfigKeys, ["tmux.bridge.url"]);
   assert.equal(toasts.length, 1);
   assert.equal(toasts[0], "Tmux bridge URL set to https://localhost:3337");
 });
 
-void test("/experimental tmux-bridge-url clear removes stored URL", async () => {
+void test("/experimental tmux-bridge-url clear removes stored URL and triggers tool refresh notice", async () => {
   const toasts: string[] = [];
+  const changedConfigKeys: string[] = [];
   let clearCount = 0;
 
   const command = getExperimentalCommand({
@@ -213,11 +219,15 @@ void test("/experimental tmux-bridge-url clear removes stored URL", async () => 
       clearCount += 1;
       return Promise.resolve();
     },
+    notifyToolConfigChanged: (configKey) => {
+      changedConfigKeys.push(configKey);
+    },
   });
 
   await command.execute("tmux-bridge-url clear");
 
   assert.equal(clearCount, 1);
+  assert.deepEqual(changedConfigKeys, ["tmux.bridge.url"]);
   assert.equal(toasts.length, 1);
   assert.equal(toasts[0], "Tmux bridge URL cleared.");
 });
