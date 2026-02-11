@@ -125,8 +125,27 @@ const stats: PayloadStats = {
   messageChars: 0,
 };
 
+/**
+ * Debug retention limits.
+ *
+ * Why 24?
+ * - Large enough to inspect recent multi-step tool loops in one session
+ *   (typically several user turns with follow-up calls).
+ * - Small enough to keep memory bounded in long-lived taskpane sessions.
+ *
+ * If we need deeper forensic traces, we can raise this temporarily,
+ * but should keep it bounded to avoid silent memory growth.
+ */
 const MAX_PAYLOAD_SNAPSHOTS = 24;
+
+/**
+ * Number of session-scoped contexts kept for debug inspection.
+ *
+ * This is separate from the per-call ring buffer above and is capped for
+ * the same reason: preserve useful visibility without unbounded retention.
+ */
 const MAX_SESSION_CONTEXTS = 24;
+
 const payloadSnapshots: PayloadSnapshot[] = [];
 
 /** Snapshot of the last LLM context (only kept when debug is on). */

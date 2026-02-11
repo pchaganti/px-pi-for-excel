@@ -65,6 +65,10 @@ This policy sets clear guardrails so we can improve context quality while preser
 **Goal:** make optimization decisions with real payload evidence.
 
 - Add a small ring buffer of recent request snapshots (debug-only).
+- Retention defaults:
+  - keep the latest **24 request snapshots**
+  - keep latest-context entries for up to **24 sessions**
+  - rationale: enough history to inspect multi-step tool loops while keeping taskpane memory bounded
 - Capture, per call:
   - call index
   - continuation vs first call
