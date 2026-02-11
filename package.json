@@ -29,7 +29,7 @@
     "@mariozechner/pi-web-ui": "^0.52.9",
     "@sinclair/typebox": "^0.34.41",
     "lit": "^3.2.1",
-    "marked": "^17.0.1"
+    "marked": "^17.0.2"
   },
   "devDependencies": {
     "@types/office-js": "^1.0.571",
