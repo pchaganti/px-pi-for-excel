@@ -15,12 +15,21 @@ import { compactionSummaryToUserMessage } from "./compaction.js";
 import { shapeToolResultsForLlm } from "./tool-result-shaping.js";
 
 export function convertToLlm(messages: AgentMessage[]): Message[] {
-  const normalized: AgentMessage[] = messages.map((m) => {
-    if (m.role === "compactionSummary") {
-      return compactionSummaryToUserMessage(m);
+  const normalized: AgentMessage[] = [];
+
+  for (const message of messages) {
+    if (message.role === "archivedMessages") {
+      // UI-only history bucket, never sent to the model.
+      continue;
     }
-    return m;
-  });
+
+    if (message.role === "compactionSummary") {
+      normalized.push(compactionSummaryToUserMessage(message));
+      continue;
+    }
+
+    normalized.push(message);
+  }
 
   const shaped = shapeToolResultsForLlm(normalized);
   return defaultConvertToLlm(shaped);

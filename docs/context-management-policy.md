@@ -136,6 +136,7 @@ This policy sets clear guardrails so we can improve context quality while preser
   - `qualityCap` = **88%** of context window for ≥128k models, **85%** for ≥200k models
   - soft warning = max(70% of hard trigger, hard trigger − 5% of context window, min margin 2,048 tokens)
   - auto-compaction uses hard trigger; status-bar warnings remain on the existing 40%/60% UX thresholds
+  - summarized slices are persisted in a UI-only `archivedMessages` bucket with a “Show earlier messages” card (excluded from model context)
 
 **Success:** fewer degraded late-thread responses.
 

@@ -9,6 +9,10 @@ import type { SlashCommand } from "../types.js";
 import type { ActiveAgentProvider } from "./model.js";
 import { showToast } from "../../ui/toast.js";
 import { createCompactionSummaryMessage } from "../../messages/compaction.js";
+import {
+  createArchivedMessagesMessage,
+  splitArchivedMessages,
+} from "../../messages/archived-history.js";
 import { getErrorMessage } from "../../utils/errors.js";
 import { extractTextBlocks, summarizeContentForTranscript } from "../../utils/content.js";
 import { isRecord } from "../../utils/type-guards.js";
@@ -38,6 +42,10 @@ function hasContent(message: AgentMessage): message is AgentMessage & { content:
 }
 
 function messageToTranscriptText(message: AgentMessage): string {
+  if (message.role === "archivedMessages") {
+    return `[archived history: ${message.archivedChatMessageCount} chat messages]`;
+  }
+
   if (message.role === "compactionSummary") return message.summary;
   if (hasContent(message)) return summarizeContentForTranscript(message.content);
   return "";
@@ -419,8 +427,13 @@ export function createCompactCommands(getActiveAgent: ActiveAgentProvider): Slas
           return;
         }
 
-        const msgs = agent.state.messages;
-        if (msgs.length < 4) {
+        const allMessages = agent.state.messages;
+        const {
+          archivedMessages: existingArchivedMessages,
+          messagesWithoutArchived,
+        } = splitArchivedMessages(allMessages);
+
+        if (messagesWithoutArchived.length < 4) {
           showToast("Too few messages to compact");
           return;
         }
@@ -456,17 +469,18 @@ export function createCompactCommands(getActiveAgent: ActiveAgentProvider): Slas
           Math.min(model.maxTokens, Math.floor(0.8 * reserveTokens)),
         );
 
-        const { boundaryStart, previousSummary } = getPreviousCompaction(msgs);
+        const { boundaryStart, previousSummary } = getPreviousCompaction(messagesWithoutArchived);
 
         const runOnce = async (limits: SerializeLimits, keepRecentOverride?: number): Promise<{
           summary: string;
           keptMessages: AgentMessage[];
+          messagesToArchive: AgentMessage[];
           summarizedCount: number;
         }> => {
           const keepRecent = keepRecentOverride ?? keepRecentTokens;
-          const cutIndex = findCutIndex(msgs, boundaryStart, keepRecent);
-          const messagesToSummarize = msgs.slice(boundaryStart, cutIndex);
-          const keptMessages = msgs.slice(cutIndex);
+          const cutIndex = findCutIndex(messagesWithoutArchived, boundaryStart, keepRecent);
+          const messagesToSummarize = messagesWithoutArchived.slice(boundaryStart, cutIndex);
+          const keptMessages = messagesWithoutArchived.slice(cutIndex);
 
           if (messagesToSummarize.length === 0) {
             throw new Error("Nothing to compact");
@@ -513,6 +527,7 @@ export function createCompactCommands(getActiveAgent: ActiveAgentProvider): Slas
           return {
             summary,
             keptMessages,
+            messagesToArchive: messagesToSummarize,
             summarizedCount: countChatMessages(messagesToSummarize),
           };
         };
@@ -530,7 +545,12 @@ export function createCompactCommands(getActiveAgent: ActiveAgentProvider): Slas
         };
 
         try {
-          let out: { summary: string; keptMessages: AgentMessage[]; summarizedCount: number };
+          let out: {
+            summary: string;
+            keptMessages: AgentMessage[];
+            messagesToArchive: AgentMessage[];
+            summarizedCount: number;
+          };
 
           try {
             out = await runOnce(defaultLimits);
@@ -544,13 +564,19 @@ export function createCompactCommands(getActiveAgent: ActiveAgentProvider): Slas
             out = await runOnce(aggressiveLimits, keepMoreRecent);
           }
 
+          const archived = createArchivedMessagesMessage({
+            existingArchivedMessages,
+            newlyArchivedMessages: out.messagesToArchive,
+            timestamp: now,
+          });
+
           const compacted = createCompactionSummaryMessage({
             summary: out.summary,
             messageCountBefore: out.summarizedCount,
             timestamp: now,
           });
 
-          agent.replaceMessages([compacted, ...out.keptMessages]);
+          agent.replaceMessages([archived, compacted, ...out.keptMessages]);
 
           const iface = document.querySelector<PiSidebar>("pi-sidebar");
           iface?.requestUpdate();
