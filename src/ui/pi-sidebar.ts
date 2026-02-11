@@ -18,7 +18,14 @@ import "./working-indicator.js";
 import { initToolGrouping } from "./tool-grouping.js";
 import type { PiInput } from "./pi-input.js";
 import { isDebugEnabled, formatK } from "../debug/debug.js";
-import { getPayloadStats, getLastContext, type PayloadStats } from "../auth/stream-proxy.js";
+import {
+  getPayloadStats,
+  getLastContext,
+  getPayloadSnapshots,
+  type PayloadSnapshot,
+  type PayloadShapeSummary,
+  type PayloadStats,
+} from "../auth/stream-proxy.js";
 
 export interface EmptyHint {
   /** Short text shown on the button. */
@@ -35,6 +42,33 @@ export interface SessionTabView {
   isActive: boolean;
   isBusy: boolean;
   lockState: SessionTabLockState;
+}
+
+function formatPayloadShape(shape: PayloadShapeSummary | undefined): string {
+  if (!shape) return "—";
+
+  if (shape.rootType === "array") {
+    const length = shape.rootArrayLength ?? 0;
+    return `array[len=${length}]`;
+  }
+
+  if (shape.rootType === "null") return "null";
+  if (shape.rootType === "primitive") return "primitive";
+
+  const keyPreview = shape.topLevelKeys.slice(0, 4).join(",");
+  const keySuffix = shape.topLevelKeys.length > 4 ? ",…" : "";
+  const keysLabel = keyPreview.length > 0 ? `${keyPreview}${keySuffix}` : "(none)";
+
+  if (shape.arrayFields.length === 0) {
+    return `keys:${keysLabel}`;
+  }
+
+  const arrayPreview = shape.arrayFields
+    .slice(0, 3)
+    .map((field) => `${field.key}:${field.length}`)
+    .join(",");
+  const arraySuffix = shape.arrayFields.length > 3 ? ",…" : "";
+  return `keys:${keysLabel}; arrays:${arrayPreview}${arraySuffix}`;
 }
 
 @customElement("pi-sidebar")
@@ -54,6 +88,7 @@ export class PiSidebar extends LitElement {
   @state() private _busyLabel: string | null = null;
   @state() private _busyHint: string | null = null;
   @state() private _payloadStats: PayloadStats | null = null;
+  @state() private _payloadSnapshots: PayloadSnapshot[] = [];
   @state() private _contextPillExpanded = false;
 
   @query(".pi-messages") private _scrollContainer?: HTMLElement;
@@ -72,8 +107,10 @@ export class PiSidebar extends LitElement {
     if (isDebugEnabled()) {
       const s = getPayloadStats();
       this._payloadStats = s.calls > 0 ? { ...s } : null;
+      this._payloadSnapshots = [...getPayloadSnapshots()];
     } else {
       this._payloadStats = null;
+      this._payloadSnapshots = [];
     }
   };
 
@@ -116,6 +153,7 @@ export class PiSidebar extends LitElement {
     this.style.position = "relative";
     document.addEventListener("pi:status-update", this._onPayloadUpdate);
     document.addEventListener("pi:debug-changed", this._onPayloadUpdate);
+    this._onPayloadUpdate();
   }
 
   override disconnectedCallback() {
@@ -354,28 +392,88 @@ export class PiSidebar extends LitElement {
   }
 
   private _copyToolsJson() {
-    const ctx = getLastContext();
+    const sessionId = this.agent?.sessionId;
+    const ctx = getLastContext(sessionId);
     if (!ctx?.tools) return;
     const json = JSON.stringify(ctx.tools, null, 2);
     navigator.clipboard.writeText(json).catch(() => { /* ignore */ });
   }
 
   private _renderContextPill() {
-    const ps = this._payloadStats;
-    if (!ps) return nothing;
+    if (!this._payloadStats) return nothing;
 
-    const total = ps.systemChars + ps.toolSchemaChars + ps.messageChars;
+    const sessionId = this.agent?.sessionId;
+    const sessionSnapshots = sessionId
+      ? this._payloadSnapshots.filter((snapshot) => snapshot.sessionId === sessionId)
+      : this._payloadSnapshots;
+
+    const latestSnapshot = sessionSnapshots.length > 0
+      ? sessionSnapshots[sessionSnapshots.length - 1]
+      : null;
+
     const expanded = this._contextPillExpanded;
-    const ctx = expanded ? getLastContext() : undefined;
 
-    // Summary table
-    const summaryMd = [
-      `| | chars |`,
+    if (!latestSnapshot) {
+      const hintMd = [
+        "No payload snapshots for this session yet.",
+        "",
+        "Send a prompt in this tab to capture call-level context details.",
+      ].join("\n");
+
+      return html`
+        <div class="px-4">
+          <div class="pi-context-pill">
+            <div
+              class="pi-context-pill__header"
+              @click=${this._toggleContextPill}
+            >
+              <span>Context · no calls yet for this session</span>
+              <span class="pi-context-pill__chevron ${expanded ? "pi-context-pill__chevron--open" : ""}">${icon(ChevronRight, "sm")}</span>
+            </div>
+            ${expanded ? html`
+              <div class="pi-context-pill__body">
+                <div class="pi-context-pill__section">
+                  <markdown-block .content=${hintMd}></markdown-block>
+                </div>
+              </div>
+            ` : nothing}
+          </div>
+        </div>
+      `;
+    }
+
+    const call = latestSnapshot.call;
+    const systemChars = latestSnapshot.systemChars;
+    const toolSchemaChars = latestSnapshot.toolSchemaChars;
+    const toolCount = latestSnapshot.toolCount;
+    const messageCount = latestSnapshot.messageCount;
+    const messageChars = latestSnapshot.messageChars;
+    const total = latestSnapshot.totalChars;
+
+    const ctx = expanded ? getLastContext(sessionId) : undefined;
+
+    const summaryRows = [
+      `| | value |`,
       `|---|---|`,
-      `| System prompt | ${ps.systemChars.toLocaleString()} |`,
-      `| Tool schemas (${ps.toolCount}) | ${ps.toolSchemaChars.toLocaleString()} |`,
-      `| Messages (${ps.messageCount}) | ${ps.messageChars.toLocaleString()} |`,
-      `| **Total** | **${total.toLocaleString()}** |`,
+      `| Call | #${call}${latestSnapshot.isToolContinuation ? " (continuation)" : " (first)"} |`,
+      `| System prompt | ${systemChars.toLocaleString()} chars |`,
+      `| Tool schemas (${toolCount}) | ${toolSchemaChars.toLocaleString()} chars |`,
+      `| Messages (${messageCount}) | ${messageChars.toLocaleString()} chars |`,
+      `| **Total** | **${total.toLocaleString()} chars** |`,
+      `| Provider/model | \`${latestSnapshot.provider}/${latestSnapshot.modelId}\` |`,
+    ];
+
+    const summaryMd = summaryRows.join("\n");
+
+    const recentMd = [
+      `| call | phase | tools | total chars | payload shape |`,
+      `|---|---|---|---|---|`,
+      ...sessionSnapshots.slice(-8).reverse().map((snapshot) => {
+        const phase = snapshot.isToolContinuation ? "continuation" : "first";
+        const tools = snapshot.toolsIncluded ? String(snapshot.toolCount) : "stripped";
+        const payloadShape = formatPayloadShape(snapshot.payloadShape);
+        return `| #${snapshot.call} | ${phase} | ${tools} | ${snapshot.totalChars.toLocaleString()} | ${payloadShape} |`;
+      }),
     ].join("\n");
 
     // Tools table
@@ -389,10 +487,12 @@ export class PiSidebar extends LitElement {
             return `| \`${t.name}\` | ${desc} | ${formatK(schemaSize)} |`;
           }),
         ].join("\n")
-      : "*(stripped on this call)*";
+      : "*(tools were stripped on this call or context snapshot is unavailable)*";
 
     // System prompt rendered as markdown (not in a code fence)
-    const systemMd = ctx?.systemPrompt ?? "*(none)*";
+    const systemMd = ctx?.systemPrompt ?? "*(none captured for this call)*";
+
+    const phaseLabel = latestSnapshot.isToolContinuation ? " · continuation" : " · first";
 
     return html`
       <div class="px-4">
@@ -401,13 +501,17 @@ export class PiSidebar extends LitElement {
             class="pi-context-pill__header"
             @click=${this._toggleContextPill}
           >
-            <span>Context · call #${ps.calls} · ${formatK(total)} chars</span>
+            <span>Context · call #${call}${phaseLabel} · ${formatK(total)} chars</span>
             <span class="pi-context-pill__chevron ${expanded ? "pi-context-pill__chevron--open" : ""}">${icon(ChevronRight, "sm")}</span>
           </div>
           ${expanded ? html`
             <div class="pi-context-pill__body">
               <div class="pi-context-pill__section">
                 <markdown-block .content=${summaryMd}></markdown-block>
+              </div>
+              <div class="pi-context-pill__section">
+                <span class="pi-context-pill__section-label">Recent calls</span>
+                <markdown-block .content=${recentMd}></markdown-block>
               </div>
               <div class="pi-context-pill__section">
                 <div class="pi-context-pill__section-header">
