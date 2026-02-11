@@ -39,3 +39,26 @@ export function validateOfficeProxyUrl(url: string): string {
 
   return normalized;
 }
+
+function isLoopbackHostname(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  if (h === "localhost") return true;
+  if (h === "::1" || h === "0:0:0:0:0:0:0:1") return true;
+  if (h.startsWith("127.")) return true;
+  if (h.startsWith("::ffff:127.")) return true;
+  return false;
+}
+
+/**
+ * Returns true if the proxy URL points at a loopback/localhost address.
+ * Useful for warning users when they configure a remote proxy.
+ */
+export function isLoopbackProxyUrl(url: string): boolean {
+  const normalized = normalizeProxyUrl(url);
+  try {
+    const parsed = new URL(normalized);
+    return isLoopbackHostname(parsed.hostname);
+  } catch {
+    return false;
+  }
+}

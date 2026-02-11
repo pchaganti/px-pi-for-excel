@@ -12,6 +12,7 @@ import { ModelSelector } from "@mariozechner/pi-web-ui/dist/dialogs/ModelSelecto
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
 import { createOfficeStreamFn, resetPayloadStats } from "../auth/stream-proxy.js";
+import { isLoopbackProxyUrl } from "../auth/proxy-validation.js";
 import { restoreCredentials } from "../auth/restore.js";
 import { getBlueprint } from "../context/blueprint.js";
 import { ChangeTracker } from "../context/change-tracker.js";
@@ -79,6 +80,22 @@ export async function initTaskpane(opts: {
     autoCompactEnabled = (await settings.get<boolean>("compaction.enabled")) ?? true;
   } catch {
     autoCompactEnabled = true;
+  }
+
+  // 1c. Security warning: remote proxies can see your prompts + credentials.
+  try {
+    const proxyEnabled = await settings.get<boolean>("proxy.enabled");
+    const proxyUrl = await settings.get<string>("proxy.url");
+    if (
+      proxyEnabled === true &&
+      typeof proxyUrl === "string" &&
+      proxyUrl.trim().length > 0 &&
+      !isLoopbackProxyUrl(proxyUrl)
+    ) {
+      showToast("Security warning: proxy URL is not localhost — it can see your tokens and prompts.");
+    }
+  } catch {
+    // ignore
   }
 
   // 2. Restore auth
