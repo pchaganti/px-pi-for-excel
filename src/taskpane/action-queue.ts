@@ -9,8 +9,6 @@
 
 import type { Agent } from "@mariozechner/pi-agent-core";
 
-import type { QueueDisplay } from "./queue-display.js";
-import type { PiSidebar } from "../ui/pi-sidebar.js";
 import { commandRegistry } from "../commands/types.js";
 import { maybeAutoCompactBeforePrompt } from "../compaction/auto-compaction.js";
 
@@ -25,10 +23,18 @@ export interface ActionQueue {
   shutdown: () => void;
 }
 
+interface ActionQueueDisplay {
+  setActionQueue: (items: Array<{ type: "prompt" | "command"; label: string; text: string }>) => void;
+}
+
+interface BusyIndicatorHost {
+  setBusyIndicator: (label: string | null, hint?: string | null) => void;
+}
+
 export function createActionQueue(opts: {
   agent: Agent;
-  sidebar: PiSidebar;
-  queueDisplay: QueueDisplay;
+  sidebar: BusyIndicatorHost;
+  queueDisplay: ActionQueueDisplay;
   autoCompactEnabled: boolean;
 }): ActionQueue {
   const { agent, sidebar, queueDisplay, autoCompactEnabled } = opts;
