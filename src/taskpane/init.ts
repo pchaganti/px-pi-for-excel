@@ -52,6 +52,11 @@ import { createQueueDisplay } from "./queue-display.js";
 import { createActionQueue } from "./action-queue.js";
 import { RecentlyClosedStack, type RecentlyClosedItem } from "./recently-closed.js";
 import { setupSessionPersistence } from "./sessions.js";
+import {
+  loadWorkbookTabLayout,
+  saveWorkbookTabLayout,
+  type WorkbookTabLayout,
+} from "./tab-layout.js";
 import { injectStatusBar } from "./status-bar.js";
 import {
   closeStatusPopover,
@@ -253,7 +258,45 @@ export async function initTaskpane(opts: {
     return trimmed.length > 0 ? trimmed : "Untitled";
   };
 
+  const snapshotRuntimeTabLayout = (): WorkbookTabLayout => {
+    const runtimes = runtimeManager.listRuntimes();
+    const activeRuntime = runtimeManager.getActiveRuntime();
+
+    return {
+      sessionIds: runtimes.map((runtime) => runtime.persistence.getSessionId()),
+      activeSessionId: activeRuntime?.persistence.getSessionId() ?? null,
+    };
+  };
+
+  const tabLayoutSignature = (layout: WorkbookTabLayout): string => JSON.stringify(layout);
+
   let previousActiveRuntimeId: string | null = null;
+  let tabLayoutPersistenceEnabled = false;
+  let lastPersistedTabLayoutSignature: string | null = null;
+  let tabLayoutPersistChain: Promise<void> = Promise.resolve();
+
+  const maybePersistTabLayout = (): void => {
+    if (!tabLayoutPersistenceEnabled) return;
+
+    const layout = snapshotRuntimeTabLayout();
+    const layoutSignature = tabLayoutSignature(layout);
+
+    tabLayoutPersistChain = tabLayoutPersistChain
+      .then(
+        async () => {
+          const workbookId = await resolveWorkbookId();
+          const persistSignature = `${workbookId ?? "__global__"}|${layoutSignature}`;
+          if (persistSignature === lastPersistedTabLayoutSignature) return;
+
+          await saveWorkbookTabLayout(settings, workbookId, layout);
+          lastPersistedTabLayoutSignature = persistSignature;
+        },
+        () => undefined,
+      )
+      .catch((error: unknown) => {
+        console.warn("[pi] Failed to persist tab layout:", error);
+      });
+  };
 
   runtimeManager.subscribe((tabs) => {
     sidebar.sessionTabs = tabs;
@@ -266,6 +309,7 @@ export async function initTaskpane(opts: {
       document.dispatchEvent(new CustomEvent("pi:active-runtime-changed"));
     }
 
+    maybePersistTabLayout();
     document.dispatchEvent(new CustomEvent("pi:status-update"));
   });
 
@@ -302,6 +346,7 @@ export async function initTaskpane(opts: {
     sidebar.requestUpdate();
 
     await refreshSystemPromptForAllRuntimes(workbookContext.workbookId);
+    maybePersistTabLayout();
   };
 
   void refreshWorkbookState();
@@ -465,6 +510,48 @@ export async function initTaskpane(opts: {
     );
 
     return runtime;
+  };
+
+  const restorePersistedTabLayout = async (): Promise<SessionRuntime | null> => {
+    const workbookId = await resolveWorkbookId();
+    const savedLayout = await loadWorkbookTabLayout(settings, workbookId);
+    if (!savedLayout) return null;
+
+    const runtimesBySessionId = new Map<string, SessionRuntime>();
+    let firstRuntime: SessionRuntime | null = null;
+
+    for (const sessionId of savedLayout.sessionIds) {
+      const runtime = await createRuntime({
+        activate: false,
+        autoRestoreLatest: false,
+      });
+
+      const sessionData = await sessions.loadSession(sessionId);
+      if (sessionData) {
+        await runtime.persistence.applyLoadedSession(sessionData);
+      } else {
+        // Keep blank tabs durable across reloads.
+        await runtime.persistence.saveSession({ force: true });
+      }
+
+      if (!firstRuntime) {
+        firstRuntime = runtime;
+      }
+
+      if (!runtimesBySessionId.has(sessionId)) {
+        runtimesBySessionId.set(sessionId, runtime);
+      }
+    }
+
+    if (!firstRuntime) return null;
+
+    const preferredActiveRuntime = savedLayout.activeSessionId
+      ? runtimesBySessionId.get(savedLayout.activeSessionId) ?? null
+      : null;
+
+    const nextActiveRuntime = preferredActiveRuntime ?? firstRuntime;
+    runtimeManager.switchRuntime(nextActiveRuntime.runtimeId);
+    return nextActiveRuntime;
   };
 
   const syncRuntimeAfterSessionLoad = (runtime: SessionRuntime): void => {
@@ -693,8 +780,13 @@ export async function initTaskpane(opts: {
     void closeRuntimeWithRecovery(runtimeId);
   };
 
-  // Bootstrap first runtime (auto-restores latest session when available)
-  const initialRuntime = await createRuntime({ activate: true, autoRestoreLatest: true });
+  // Bootstrap from persisted tab layout; fallback to legacy single-runtime restore.
+  const restoredRuntime = await restorePersistedTabLayout();
+  const initialRuntime = restoredRuntime
+    ?? await createRuntime({ activate: true, autoRestoreLatest: true });
+
+  tabLayoutPersistenceEnabled = true;
+  maybePersistTabLayout();
 
   // ── Register extensions ──
   const extensionAPI = createExtensionAPI(initialRuntime.agent);
