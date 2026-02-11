@@ -73,6 +73,11 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Shorthand preserved:** `borders` still applies to all edges + inside (existing behavior, backward compatible).
 - **Rationale:** enables `total-row` style (top border only) and other edge-specific formatting without the all-edges shorthand.
 
+## `view_settings` scope boundary (view vs print)
+- **Included (view/navigation):** gridlines, headings, freeze panes, tab color, sheet visibility (`Visible/Hidden/VeryHidden`), activate sheet, standard column width.
+- **Excluded (print/page layout):** zoom, margins, orientation, print area, and other `pageLayout` concerns.
+- **Rationale:** keep `view_settings` focused on what the user sees/navigates in-sheet. Print concerns belong in a separate future `page_layout` tool.
+
 ## Tool card input/output humanization (UI)
 - **Input:** tool parameters are rendered as a clean key-value list instead of raw JSON. Each tool has a per-tool humanizer in `src/ui/humanize-params.ts` that maps params to readable labels (e.g. "Range", "Fill ● White", "Font ● Gray, italic").
 - **Output:** hex color codes (`#RRGGBB`) in tool result text are replaced with human-readable names via nearest-match against a ~45-color palette (`src/ui/color-names.ts`). Section label changed from "Output" to "Result".

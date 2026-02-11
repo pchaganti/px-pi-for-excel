@@ -147,11 +147,14 @@ void test("content-impact mutation tools do not trigger structure invalidation",
     { toolName: "write_cells", params: { range: "Sheet1!A1", values: [[1]] } },
     { toolName: "format_cells", params: { range: "Sheet1!A1", format: { bold: true } } },
     { toolName: "comments", params: { action: "delete", range: "Sheet1!A1" } },
-    { toolName: "view_settings", params: { action: "set", freezeTopRow: true } },
+    { toolName: "view_settings", params: { action: "hide_gridlines" } },
   ];
 
   for (const item of cases) {
-    await t.test(item.toolName, async () => {
+    const action = typeof item.params.action === "string" ? item.params.action : "";
+    const testName = action ? `${item.toolName}:${action}` : item.toolName;
+
+    await t.test(testName, async () => {
       const coordinator = new FakeCoordinator();
       const mutationEvents: WorkbookMutationEvent[] = [];
       const invalidatedWorkbookIds: Array<string | null> = [];
@@ -175,15 +178,41 @@ void test("content-impact mutation tools do not trigger structure invalidation",
   }
 });
 
+void test("view_settings visibility actions trigger structure invalidation", async () => {
+  const coordinator = new FakeCoordinator();
+  const mutationEvents: WorkbookMutationEvent[] = [];
+  const invalidatedWorkbookIds: Array<string | null> = [];
+
+  const wrapped = wrapSingleTool({
+    tool: makeTool("view_settings"),
+    coordinator,
+    contextProvider: createContextProvider("url_sha256:sheet-vis"),
+    mutationEvents,
+    invalidatedWorkbookIds,
+  });
+
+  await wrapped.execute("tc-view-settings-hide", { action: "hide_sheet", sheet: "Sheet1" });
+
+  assert.equal(coordinator.readCalls.length, 0);
+  assert.equal(coordinator.writeCalls.length, 1);
+  assert.equal(mutationEvents.length, 1);
+  assert.equal(mutationEvents[0]?.impact, "structure");
+  assert.deepEqual(invalidatedWorkbookIds, ["url_sha256:sheet-vis"]);
+});
+
 void test("read-only tool paths never emit mutation events", async (t) => {
   const cases: Array<{ toolName: string; params: Record<string, unknown> }> = [
     { toolName: "read_range", params: { range: "Sheet1!A1:B2" } },
     { toolName: "comments", params: { action: "read", range: "Sheet1!A1" } },
     { toolName: "view_settings", params: { action: "get" } },
+    { toolName: "view_settings", params: { action: "activate", sheet: "Sheet1" } },
   ];
 
   for (const item of cases) {
-    await t.test(item.toolName, async () => {
+    const action = typeof item.params.action === "string" ? item.params.action : "";
+    const testName = action ? `${item.toolName}:${action}` : item.toolName;
+
+    await t.test(testName, async () => {
       const coordinator = new FakeCoordinator();
       const mutationEvents: WorkbookMutationEvent[] = [];
       const invalidatedWorkbookIds: Array<string | null> = [];
