@@ -103,6 +103,7 @@ This policy sets clear guardrails so we can improve context quality while preser
 - Add model-facing truncation/summarization for older or oversized tool results.
 - Keep full raw output in UI/tool cards (no loss of user-visible detail).
 - Keep recency window for exact details (latest N tool results untouched).
+- **Current rollout (v1):** keep latest **6** tool results untouched; compact older tool results when payload exceeds **1,200 chars** or contains images; include a deterministic **500-char preview** in compacted form.
 
 **Success:** lower message-context growth rate with no UX regression.
 
