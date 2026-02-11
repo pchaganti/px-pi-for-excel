@@ -18,7 +18,7 @@ This document summarizes what Pi for Excel stores, where data flows, and the key
 ## Storage model
 
 - API keys: IndexedDB store via pi-web-ui storage backend
-- OAuth credentials: IndexedDB settings (legacy `localStorage` is migration-only cleanup path)
+- OAuth credentials: IndexedDB settings (`oauth.<provider>`)
 - Sessions/settings: IndexedDB
 
 ### User controls
@@ -52,7 +52,7 @@ Hosted taskpane is protected with CSP in `vercel.json` (scripts/styles/fonts/con
 - CSP reduces script/connect exfil paths
 
 ### 2) Token leakage via browser storage/logs
-- OAuth moved from `localStorage` to IndexedDB settings
+- OAuth credentials are stored only in IndexedDB settings
 - No intentional token logging in auth restore/proxy paths
 - Provider disconnect clears both key and OAuth stored credentials
 
