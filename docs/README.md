@@ -5,6 +5,7 @@ Short, topic-based docs (mirrors Pi's layout). Keep deeper decisions close to th
 ## Design (drafts)
 - [Draft: agent instructions (AGENTS.md equivalent)](./design-agent-instructions.md) — [#30](https://github.com/tmustier/pi-for-excel/issues/30)
 - [Draft: multi-session workflows in one workbook (tabs + delegate + team)](./design-multi-session-workbook.md)
+- [Draft: session resume + tab recovery UX](./design-session-resume-ux.md)
 
 ## Architecture & Process
 - [Install (non-technical)](./install.md)
