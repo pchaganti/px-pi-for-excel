@@ -112,12 +112,18 @@ Type `/` in the message input to see all commands:
 | `/default-models` | Default model presets (currently opens the model selector) |
 | `/login` | Add/change/disconnect API keys and OAuth providers |
 | `/settings` | Open settings dialog |
+| `/experimental` | Manage experimental feature flags |
 | `/shortcuts` | Show keyboard shortcuts |
 | `/compact` | Summarize conversation to free context |
 | `/copy` | Copy last response to clipboard |
 | `/export` | Export conversation |
 | `/share-session` | Share the current session |
 | `/snake` | Play Snake! 🐍 (extension) |
+
+Experimental examples:
+- `/experimental on tmux-bridge`
+- `/experimental tmux-bridge-url https://localhost:3337`
+- `/experimental tmux-bridge-url clear`
 
 ## Keyboard Shortcuts
 
@@ -250,9 +256,11 @@ Proxy rejections return reason codes in plaintext (e.g. `blocked_target_loopback
 - Blocked by default: remote extension URLs
 - Temporary unsafe opt-in for local experiments:
 
-```js
-localStorage.setItem("pi.allowRemoteExtensionUrls", "1")
+```bash
+/experimental on remote-extension-urls
 ```
+
+  (Equivalent low-level toggle: `localStorage.setItem("pi.allowRemoteExtensionUrls", "1")`)
 
 ## Roadmap
 

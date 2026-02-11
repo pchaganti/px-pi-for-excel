@@ -18,6 +18,7 @@ import { invalidateBlueprint } from "../context/blueprint.js";
 import { ChangeTracker } from "../context/change-tracker.js";
 import { convertToLlm } from "../messages/convert-to-llm.js";
 import { createAllTools } from "../tools/index.js";
+import { applyExperimentalToolGates } from "../tools/experimental-tool-gates.js";
 import { withWorkbookCoordinator } from "../tools/with-workbook-coordinator.js";
 import { loadExtension, createExtensionAPI } from "../commands/extension-api.js";
 import { registerBuiltins } from "../commands/builtins.js";
@@ -289,8 +290,10 @@ export async function initTaskpane(opts: {
 
     let runtimeAgent: Agent | null = null;
 
+    const gatedTools = await applyExperimentalToolGates(createAllTools());
+
     const tools = withWorkbookCoordinator(
-      createAllTools(),
+      gatedTools,
       workbookCoordinator,
       {
         getWorkbookId: resolveWorkbookId,
