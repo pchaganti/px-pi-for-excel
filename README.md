@@ -209,6 +209,12 @@ npx office-addin-manifest validate manifest.xml
    ALLOWED_ORIGINS="https://my-addin.example.com" npm run proxy:https
    ```
 
+   By default, the proxy also blocks **loopback target URLs** (e.g. `http://localhost:11434`) to reduce SSRF impact.
+   If you intentionally need to proxy to a local service, set:
+   ```bash
+   ALLOW_LOOPBACK_TARGETS=1 npm run proxy:https
+   ```
+
    If port 3001 is taken, pick another port:
    ```bash
    PORT=3003 npm run proxy:https

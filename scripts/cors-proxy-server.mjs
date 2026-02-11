@@ -84,6 +84,20 @@ function isLoopbackAddress(addr) {
   return false;
 }
 
+const allowLoopbackTargets =
+  process.env.ALLOW_LOOPBACK_TARGETS === "1" ||
+  process.env.ALLOW_LOOPBACK_TARGETS === "true";
+
+function isLoopbackHostname(hostname) {
+  if (!hostname) return false;
+  const h = String(hostname).toLowerCase();
+  if (h === "localhost") return true;
+  if (h === "::1" || h === "0:0:0:0:0:0:0:1") return true;
+  if (h.startsWith("127.")) return true;
+  if (h.startsWith("::ffff:127.")) return true;
+  return false;
+}
+
 function setCorsHeaders(req, res) {
   const origin = req.headers.origin;
   if (isAllowedOrigin(origin)) {
@@ -198,6 +212,16 @@ const handler = async (req, res) => {
     res.statusCode = 400;
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.end("Only http(s) target URLs are supported");
+    return;
+  }
+
+  // SECURITY: prevent using this proxy to access other localhost services.
+  // This reduces SSRF impact if the add-in origin is ever compromised.
+  if (!allowLoopbackTargets && isLoopbackHostname(targetUrl.hostname)) {
+    res.statusCode = 403;
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.end("Loopback target URLs are blocked by default. Set ALLOW_LOOPBACK_TARGETS=1 to override.");
+    console.warn(`[proxy] blocked loopback target: ${targetUrl.hostname}`);
     return;
   }
 
