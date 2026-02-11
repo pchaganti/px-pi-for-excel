@@ -6,8 +6,11 @@ import type { SessionData, SessionMetadata } from "@mariozechner/pi-web-ui/dist/
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
 import { showToast } from "../../ui/toast.js";
-import { getWorkbookContext } from "../../workbook/context.js";
-import { partitionSessionIdsByWorkbook } from "../../workbook/session-association.js";
+import { formatWorkbookLabel, getWorkbookContext } from "../../workbook/context.js";
+import {
+  getSessionWorkbookId,
+  partitionSessionIdsByWorkbook,
+} from "../../workbook/session-association.js";
 
 function formatRelativeDate(iso: string): string {
   const d = new Date(iso);
@@ -94,7 +97,7 @@ function buildResumeListItem(session: SessionMetadata): HTMLButtonElement {
 }
 
 function buildWorkbookFilterRow(opts: {
-  workbookId: string;
+  workbookLabel: string;
   checked: boolean;
   onToggle: (checked: boolean) => void;
 }): HTMLElement {
@@ -111,7 +114,7 @@ function buildWorkbookFilterRow(opts: {
 
   const workbookHint = document.createElement("span");
   workbookHint.style.cssText = "font-family: var(--font-mono); opacity: 0.7; margin-left: auto;";
-  workbookHint.textContent = opts.workbookId.slice(0, 22) + "…";
+  workbookHint.textContent = opts.workbookLabel;
 
   checkbox.addEventListener("change", () => {
     opts.onToggle(checkbox.checked);
@@ -140,6 +143,7 @@ export async function showResumeDialog(opts: {
 
   const workbookCtx = await getWorkbookContext();
   const workbookId = workbookCtx.workbookId;
+  const workbookLabel = formatWorkbookLabel(workbookCtx);
   const metadataById = new Map(allSessions.map((s) => [s.id, s]));
 
   let defaultSessionIds = allSessions.map((s) => s.id);
@@ -150,9 +154,6 @@ export async function showResumeDialog(opts: {
       workbookId,
     );
     defaultSessionIds = [...partition.matchingSessionIds, ...partition.unlinkedSessionIds];
-    if (defaultSessionIds.length === 0) {
-      defaultSessionIds = allSessions.map((s) => s.id);
-    }
   }
 
   let showAllWorkbooks = workbookId === null;
@@ -180,7 +181,7 @@ export async function showResumeDialog(opts: {
   if (workbookId) {
     card.appendChild(
       buildWorkbookFilterRow({
-        workbookId,
+        workbookLabel,
         checked: showAllWorkbooks,
         onToggle(checked) {
           showAllWorkbooks = checked;
@@ -243,6 +244,16 @@ export async function showResumeDialog(opts: {
     if (!id) return;
 
     void (async () => {
+      if (workbookId) {
+        const linkedWorkbookId = await getSessionWorkbookId(storage.settings, id);
+        if (linkedWorkbookId && linkedWorkbookId !== workbookId) {
+          const proceed = window.confirm(
+            "This session was created for a different workbook. Resume anyway and replace the current chat?",
+          );
+          if (!proceed) return;
+        }
+      }
+
       const sessionData = await storage.sessions.loadSession(id);
       if (!sessionData) {
         showToast("Session not found");

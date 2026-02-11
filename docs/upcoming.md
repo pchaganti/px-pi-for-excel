@@ -29,6 +29,11 @@ https://github.com/tmustier/pi-for-excel/issues/31
 - A stable **workbook identity** (survives restart/rename/move as much as possible).
 - Session UX that makes workbook association obvious (filtering, warnings on cross-workbook resume).
 
+**Status note:** baseline implementation is now in place:
+- sidebar shows active workbook label (best-effort)
+- auto-restore is workbook-scoped when workbook identity is known (no global fallback)
+- resume dialog warns before loading a session linked to a different workbook
+
 **Implication:** workbook identity becomes a foundational primitive (also needed by #23, #30, #32).
 
 ---
@@ -38,7 +43,7 @@ https://github.com/tmustier/pi-for-excel/issues/23
 
 **What it’s asking:** first-class session history UI + tie session metadata to workbook identity.
 
-**Notes:** we already have persistence and a resume overlay; the missing piece is workbook association + discoverable UI entry point.
+**Status note:** we now have workbook-aware default filtering + cross-workbook resume warning in the existing `/resume` overlay; a dedicated sessions surface can be deferred until broader session management work is prioritized.
 
 ---
 

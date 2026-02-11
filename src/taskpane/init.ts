@@ -31,7 +31,7 @@ import { showToast } from "../ui/toast.js";
 import { PiSidebar } from "../ui/pi-sidebar.js";
 import { setActiveProviders } from "../compat/model-selector-patch.js";
 import { createWorkbookCoordinator } from "../workbook/coordinator.js";
-import { getWorkbookContext } from "../workbook/context.js";
+import { formatWorkbookLabel, getWorkbookContext } from "../workbook/context.js";
 
 import { createContextInjector } from "./context-injection.js";
 import { pickDefaultModel } from "./default-model.js";
@@ -178,6 +178,29 @@ export async function initTaskpane(opts: {
 
   appEl.innerHTML = "";
   appEl.appendChild(sidebar);
+
+  const refreshWorkbookLabel = async () => {
+    try {
+      const workbookContext = await getWorkbookContext();
+      sidebar.workbookLabel = formatWorkbookLabel(workbookContext);
+    } catch {
+      sidebar.workbookLabel = "Current workbook";
+    }
+
+    sidebar.requestUpdate();
+  };
+
+  void refreshWorkbookLabel();
+
+  window.addEventListener("focus", () => {
+    void refreshWorkbookLabel();
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      void refreshWorkbookLabel();
+    }
+  });
 
   const runtimeManager = new SessionRuntimeManager(sidebar);
   const abortedAgents = new WeakSet<Agent>();

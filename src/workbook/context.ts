@@ -17,6 +17,9 @@ export interface WorkbookContext {
    */
   workbookId: string | null;
 
+  /** Best-effort workbook file name derived from the document URL. */
+  workbookName: string | null;
+
   /** Where the identity came from (useful for debugging / future migration). */
   source: "document.url" | "unknown";
 }
@@ -41,6 +44,46 @@ function getOfficeDocumentUrl(): string | null {
 
 function bufferToHex(buf: ArrayBuffer): string {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function getWorkbookNameFromUrl(url: string): string | null {
+  const readName = (raw: string): string | null => {
+    const cleaned = raw.split(/[?#]/, 1)[0]?.trim();
+    if (!cleaned) return null;
+
+    try {
+      const decoded = decodeURIComponent(cleaned).trim();
+      return decoded.length > 0 ? decoded : null;
+    } catch {
+      return cleaned.length > 0 ? cleaned : null;
+    }
+  };
+
+  try {
+    const parsed = new URL(url);
+    const fromPathname = parsed.pathname.split("/").at(-1);
+    if (fromPathname) {
+      const name = readName(fromPathname);
+      if (name) return name;
+    }
+  } catch {
+    // Fall back to plain path parsing below.
+  }
+
+  const normalized = url.replace(/\\/g, "/");
+  const fromPath = normalized.split("/").at(-1);
+  return fromPath ? readName(fromPath) : null;
+}
+
+export function formatWorkbookLabel(context: WorkbookContext): string {
+  if (context.workbookName) return context.workbookName;
+
+  if (context.workbookId) {
+    const shortId = context.workbookId.slice(0, 18);
+    return `Workbook (${shortId}…)`;
+  }
+
+  return "Current workbook";
 }
 
 function fnv1a32Hex(bytes: Uint8Array): string {
@@ -77,11 +120,18 @@ async function sha256Hex(input: string): Promise<string> {
  */
 export async function getWorkbookContext(): Promise<WorkbookContext> {
   const url = getOfficeDocumentUrl();
-  if (!url) return { workbookId: null, source: "unknown" };
+  if (!url) {
+    return {
+      workbookId: null,
+      workbookName: null,
+      source: "unknown",
+    };
+  }
 
   const hash = await sha256Hex(url);
   return {
     workbookId: `url_sha256:${hash}`,
+    workbookName: getWorkbookNameFromUrl(url),
     source: "document.url",
   };
 }
