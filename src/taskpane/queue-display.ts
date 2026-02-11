@@ -1,7 +1,7 @@
 /**
  * Small DOM-only queue display for queued steering / follow-up messages.
  *
- * This intentionally stays as plain DOM manipulation (not Lit) for now.
+ * Stores queue state per runtime, and can attach/detach to the visible sidebar.
  *
  * Security note: avoid `innerHTML` so queued text can't inject markup.
  */
@@ -41,19 +41,34 @@ export type QueueDisplay = {
   add: (type: QueuedMessageType, text: string) => void;
   clear: () => void;
   setActionQueue: (items: Array<{ type: QueuedActionType; label: string; text: string }>) => void;
+  attach: (sidebar: PiSidebar) => void;
+  detach: () => void;
 };
 
 export function createQueueDisplay(opts: {
   agent: Agent;
-  sidebar: PiSidebar;
 }): QueueDisplay {
-  const { agent, sidebar } = opts;
+  const { agent } = opts;
 
   const queued: QueuedItem[] = [];
   let queuedActions: QueuedActionItem[] = [];
+  let attachedSidebar: PiSidebar | null = null;
 
-  function updateQueueDisplay() {
-    let container = document.getElementById("pi-queue-display");
+  function findContainer(sidebar: PiSidebar): HTMLElement | null {
+    return sidebar.querySelector<HTMLElement>("#pi-queue-display");
+  }
+
+  function removeContainer(): void {
+    if (!attachedSidebar) return;
+    const existing = findContainer(attachedSidebar);
+    existing?.remove();
+  }
+
+  function updateQueueDisplay(): void {
+    if (!attachedSidebar) return;
+
+    let container = findContainer(attachedSidebar);
+
     if (queued.length === 0 && queuedActions.length === 0) {
       container?.remove();
       return;
@@ -63,13 +78,12 @@ export function createQueueDisplay(opts: {
       container = document.createElement("div");
       container.id = "pi-queue-display";
       container.className = "pi-queue";
-      // Insert into sidebar layout (before input area) so it participates
-      // in flexbox flow — no fixed positioning, no overlay issues.
-      const inputArea = sidebar.querySelector<HTMLElement>(".pi-input-area");
-      if (inputArea) {
-        inputArea.parentElement?.insertBefore(container, inputArea);
+
+      const inputArea = attachedSidebar.querySelector<HTMLElement>(".pi-input-area");
+      if (inputArea && inputArea.parentElement) {
+        inputArea.parentElement.insertBefore(container, inputArea);
       } else {
-        sidebar.appendChild(container);
+        attachedSidebar.appendChild(container);
       }
     }
 
@@ -99,19 +113,35 @@ export function createQueueDisplay(opts: {
     container.replaceChildren(fragment);
   }
 
-  function add(type: QueuedMessageType, text: string) {
+  function add(type: QueuedMessageType, text: string): void {
     queued.push({ type, text });
     updateQueueDisplay();
   }
 
-  function clear() {
+  function clear(): void {
     queued.length = 0;
     updateQueueDisplay();
   }
 
-  function setActionQueue(items: QueuedActionItem[]) {
+  function setActionQueue(items: QueuedActionItem[]): void {
     queuedActions = items;
     updateQueueDisplay();
+  }
+
+  function attach(sidebar: PiSidebar): void {
+    if (attachedSidebar === sidebar) {
+      updateQueueDisplay();
+      return;
+    }
+
+    removeContainer();
+    attachedSidebar = sidebar;
+    updateQueueDisplay();
+  }
+
+  function detach(): void {
+    removeContainer();
+    attachedSidebar = null;
   }
 
   agent.subscribe((ev) => {
@@ -127,8 +157,10 @@ export function createQueueDisplay(opts: {
     }
 
     // Only clear steer/follow-up on agent end. Action queue is owned elsewhere.
-    if (ev.type === "agent_end" && queued.length > 0) clear();
+    if (ev.type === "agent_end" && queued.length > 0) {
+      clear();
+    }
   });
 
-  return { add, clear, setActionQueue };
+  return { add, clear, setActionQueue, attach, detach };
 }

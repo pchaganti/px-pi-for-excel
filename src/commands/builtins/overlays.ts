@@ -2,11 +2,23 @@
  * Builtin command overlays (provider picker, resume, shortcuts).
  */
 
-import type { Agent } from "@mariozechner/pi-agent-core";
+import type { SessionData, SessionMetadata } from "@mariozechner/pi-web-ui/dist/storage/types.js";
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
 import { showToast } from "../../ui/toast.js";
-import type { PiSidebar } from "../../ui/pi-sidebar.js";
+import { getWorkbookContext } from "../../workbook/context.js";
+import { partitionSessionIdsByWorkbook } from "../../workbook/session-association.js";
+
+function formatRelativeDate(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  if (diff < 60000) return "just now";
+  if (diff < 3600000) return `${Math.round(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.round(diff / 3600000)}h ago`;
+  if (diff < 604800000) return `${Math.round(diff / 86400000)}d ago`;
+  return d.toLocaleDateString();
+}
 
 export async function showProviderPicker(): Promise<void> {
   const existing = document.getElementById("pi-login-overlay");
@@ -37,7 +49,7 @@ export async function showProviderPicker(): Promise<void> {
     throw new Error("Provider list container not found");
   }
 
-  const expandedRef = { current: null as HTMLElement | null };
+  const expandedRef: { current: HTMLElement | null } = { current: null };
 
   for (const provider of ALL_PROVIDERS) {
     const isActive = configuredSet.has(provider.id);
@@ -59,11 +71,59 @@ export async function showProviderPicker(): Promise<void> {
   document.body.appendChild(overlay);
 }
 
-export async function showResumeDialog(agent: Agent): Promise<void> {
-  const storage = getAppStorage();
-  const sessions = await storage.sessions.getAllMetadata();
+function buildResumeListItem(session: SessionMetadata): HTMLButtonElement {
+  const btn = document.createElement("button");
+  btn.className = "pi-welcome-provider pi-resume-item";
+  btn.dataset.id = session.id;
+  btn.style.cssText = "display: flex; flex-direction: column; align-items: flex-start; gap: 2px;";
 
-  if (sessions.length === 0) {
+  const title = document.createElement("span");
+  title.style.cssText = "font-size: 13px; font-weight: 500;";
+  title.textContent = session.title || "Untitled";
+
+  const meta = document.createElement("span");
+  meta.style.cssText = "font-size: 11px; color: var(--muted-foreground);";
+  meta.textContent = `${session.messageCount || 0} messages · ${formatRelativeDate(session.lastModified)}`;
+
+  btn.append(title, meta);
+  return btn;
+}
+
+function buildWorkbookFilterRow(opts: {
+  workbookId: string;
+  checked: boolean;
+  onToggle: (checked: boolean) => void;
+}): HTMLElement {
+  const row = document.createElement("label");
+  row.style.cssText =
+    "display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted-foreground); margin: 0 0 10px; user-select: none;";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = opts.checked;
+
+  const labelText = document.createElement("span");
+  labelText.textContent = "Show sessions from all workbooks";
+
+  const workbookHint = document.createElement("span");
+  workbookHint.style.cssText = "font-family: var(--font-mono); opacity: 0.7; margin-left: auto;";
+  workbookHint.textContent = opts.workbookId.slice(0, 22) + "…";
+
+  checkbox.addEventListener("change", () => {
+    opts.onToggle(checkbox.checked);
+  });
+
+  row.append(checkbox, labelText, workbookHint);
+  return row;
+}
+
+export async function showResumeDialog(opts: {
+  onResumeSession: (sessionData: SessionData) => Promise<void>;
+}): Promise<void> {
+  const storage = getAppStorage();
+  const allSessions = await storage.sessions.getAllMetadata();
+
+  if (allSessions.length === 0) {
     showToast("No previous sessions");
     return;
   }
@@ -74,51 +134,94 @@ export async function showResumeDialog(agent: Agent): Promise<void> {
     return;
   }
 
+  const workbookCtx = await getWorkbookContext();
+  const workbookId = workbookCtx.workbookId;
+  const metadataById = new Map(allSessions.map((s) => [s.id, s]));
+
+  let defaultSessionIds = allSessions.map((s) => s.id);
+  if (workbookId) {
+    const partition = await partitionSessionIdsByWorkbook(
+      storage.settings,
+      allSessions.map((s) => s.id),
+      workbookId,
+    );
+    defaultSessionIds = [...partition.matchingSessionIds, ...partition.unlinkedSessionIds];
+    if (defaultSessionIds.length === 0) {
+      defaultSessionIds = allSessions.map((s) => s.id);
+    }
+  }
+
+  let showAllWorkbooks = workbookId === null;
+
   const overlay = document.createElement("div");
   overlay.id = "pi-resume-overlay";
   overlay.className = "pi-welcome-overlay";
 
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    const now = new Date();
-    const diff = now.getTime() - d.getTime();
-    if (diff < 60000) return "just now";
-    if (diff < 3600000) return `${Math.round(diff / 60000)}m ago`;
-    if (diff < 86400000) return `${Math.round(diff / 3600000)}h ago`;
-    if (diff < 604800000) return `${Math.round(diff / 86400000)}d ago`;
-    return d.toLocaleDateString();
-  };
+  const card = document.createElement("div");
+  card.className = "pi-welcome-card";
+  card.style.cssText =
+    "text-align: left; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;";
 
-  // SECURITY: build the list via DOM APIs so session titles can't inject HTML.
-  overlay.innerHTML = `
-    <div class="pi-welcome-card" style="text-align: left; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
-      <h2 style="font-size: 16px; font-weight: 600; margin: 0 0 12px; font-family: var(--font-sans); flex-shrink: 0;">Resume Session</h2>
-      <div class="pi-resume-list" style="overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></div>
-    </div>
-  `;
+  const title = document.createElement("h2");
+  title.style.cssText =
+    "font-size: 16px; font-weight: 600; margin: 0 0 12px; font-family: var(--font-sans); flex-shrink: 0;";
+  title.textContent = "Resume Session";
 
-  const list = overlay.querySelector<HTMLDivElement>(".pi-resume-list");
-  if (!list) {
-    throw new Error("Resume list container not found");
+  card.appendChild(title);
+
+  const list = document.createElement("div");
+  list.className = "pi-resume-list";
+  list.style.cssText = "overflow-y: auto; display: flex; flex-direction: column; gap: 4px;";
+
+  if (workbookId) {
+    card.appendChild(
+      buildWorkbookFilterRow({
+        workbookId,
+        checked: showAllWorkbooks,
+        onToggle(checked) {
+          showAllWorkbooks = checked;
+          renderList();
+        },
+      }),
+    );
   }
 
-  for (const s of sessions.slice(0, 20)) {
-    const btn = document.createElement("button");
-    btn.className = "pi-welcome-provider pi-resume-item";
-    btn.dataset.id = s.id;
-    btn.style.cssText = "display: flex; flex-direction: column; align-items: flex-start; gap: 2px;";
+  card.appendChild(list);
+  overlay.appendChild(card);
 
-    const title = document.createElement("span");
-    title.style.cssText = "font-size: 13px; font-weight: 500;";
-    title.textContent = s.title || "Untitled";
+  function getVisibleSessions(): SessionMetadata[] {
+    if (showAllWorkbooks || workbookId === null) {
+      return allSessions;
+    }
 
-    const meta = document.createElement("span");
-    meta.style.cssText = "font-size: 11px; color: var(--muted-foreground);";
-    meta.textContent = `${s.messageCount || 0} messages · ${formatDate(s.lastModified)}`;
-
-    btn.append(title, meta);
-    list.appendChild(btn);
+    const visible: SessionMetadata[] = [];
+    for (const sessionId of defaultSessionIds) {
+      const metadata = metadataById.get(sessionId);
+      if (metadata) visible.push(metadata);
+    }
+    return visible;
   }
+
+  function renderList(): void {
+    const sessions = getVisibleSessions().slice(0, 30);
+
+    list.replaceChildren();
+
+    if (sessions.length === 0) {
+      const empty = document.createElement("div");
+      empty.style.cssText =
+        "font-size: 12px; color: var(--muted-foreground); padding: 10px 2px;";
+      empty.textContent = "No sessions available for this workbook.";
+      list.appendChild(empty);
+      return;
+    }
+
+    for (const session of sessions) {
+      list.appendChild(buildResumeListItem(session));
+    }
+  }
+
+  renderList();
 
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) {
@@ -126,50 +229,26 @@ export async function showResumeDialog(agent: Agent): Promise<void> {
       return;
     }
 
-    const item = (e.target as HTMLElement).closest<HTMLElement>(
-      ".pi-resume-item",
-    );
+    const target = e.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    const item = target.closest<HTMLElement>(".pi-resume-item");
     if (!item) return;
 
     const id = item.dataset.id;
     if (!id) return;
 
     void (async () => {
+      const sessionData = await storage.sessions.loadSession(id);
+      if (!sessionData) {
+        showToast("Session not found");
+        overlay.remove();
+        return;
+      }
 
-    const sessionData = await storage.sessions.loadSession(id);
-    if (!sessionData) {
-      showToast("Session not found");
+      await opts.onResumeSession(sessionData);
       overlay.remove();
-      return;
-    }
-
-    // Restore messages and model
-    agent.replaceMessages(sessionData.messages || []);
-    if (sessionData.model) {
-      agent.setModel(sessionData.model);
-    }
-    if (sessionData.thinkingLevel) {
-      agent.setThinkingLevel(sessionData.thinkingLevel);
-    }
-
-    // Notify session tracker of the resumed session
-    document.dispatchEvent(
-      new CustomEvent("pi:session-resumed", {
-        detail: {
-          id: sessionData.id,
-          title: sessionData.title,
-          createdAt: sessionData.createdAt,
-        },
-      }),
-    );
-
-    // Force UI to re-render + hide empty state
-    const iface = document.querySelector<PiSidebar>("pi-sidebar");
-    iface?.requestUpdate();
-    document.dispatchEvent(new CustomEvent("pi:model-changed"));
-
-    overlay.remove();
-    showToast(`Resumed: ${sessionData.title || "Untitled"}`);
+      showToast(`Resumed: ${sessionData.title || "Untitled"}`);
     })();
   });
 

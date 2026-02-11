@@ -18,20 +18,24 @@ export type QueuedAction =
   | { type: "prompt"; text: string }
   | { type: "command"; name: string; args: string };
 
+export interface ActionQueue {
+  enqueuePrompt: (text: string) => void;
+  enqueueCommand: (name: string, args: string) => void;
+  isBusy: () => boolean;
+  shutdown: () => void;
+}
+
 export function createActionQueue(opts: {
   agent: Agent;
   sidebar: PiSidebar;
   queueDisplay: QueueDisplay;
   autoCompactEnabled: boolean;
-}): {
-  enqueuePrompt: (text: string) => void;
-  enqueueCommand: (name: string, args: string) => void;
-  isBusy: () => boolean;
-} {
+}): ActionQueue {
   const { agent, sidebar, queueDisplay, autoCompactEnabled } = opts;
 
   const actions: QueuedAction[] = [];
   let running = false;
+  let closed = false;
 
   const syncDisplay = () => {
     queueDisplay.setActionQueue(
@@ -43,6 +47,12 @@ export function createActionQueue(opts: {
   };
 
   const isBusy = () => running || agent.state.isStreaming;
+
+  const shutdown = () => {
+    closed = true;
+    actions.length = 0;
+    syncDisplay();
+  };
 
   async function runCommand(name: string, args: string): Promise<void> {
     const cmd = commandRegistry.get(name);
@@ -66,18 +76,22 @@ export function createActionQueue(opts: {
   }
 
   async function process(): Promise<void> {
-    if (running) return;
+    if (running || closed) return;
     running = true;
 
     try {
       // Drain sequentially.
-      while (actions.length > 0) {
+      while (!closed && actions.length > 0) {
         // Never start queued actions while the agent is still streaming.
         await agent.waitForIdle();
+
+        if (closed) break;
 
         const next = actions.shift();
         if (!next) break;
         syncDisplay();
+
+        if (closed) break;
 
         if (next.type === "command") {
           await runCommand(next.name, next.args);
@@ -92,6 +106,7 @@ export function createActionQueue(opts: {
           runCompact: async () => runCommand("compact", ""),
         });
 
+        if (closed) break;
         await agent.prompt(next.text);
       }
     } finally {
@@ -101,6 +116,8 @@ export function createActionQueue(opts: {
   }
 
   const enqueuePrompt = (text: string) => {
+    if (closed) return;
+
     const trimmed = text.trim();
     if (!trimmed) return;
 
@@ -110,6 +127,8 @@ export function createActionQueue(opts: {
   };
 
   const enqueueCommand = (name: string, args: string) => {
+    if (closed) return;
+
     const cmdName = name.trim();
     if (!cmdName) return;
 
@@ -118,5 +137,5 @@ export function createActionQueue(opts: {
     void process();
   };
 
-  return { enqueuePrompt, enqueueCommand, isBusy };
+  return { enqueuePrompt, enqueueCommand, isBusy, shutdown };
 }

@@ -27,12 +27,27 @@ export interface EmptyHint {
   prompt: string;
 }
 
+export type SessionTabLockState = "idle" | "waiting_for_lock" | "holding_lock";
+
+export interface SessionTabView {
+  runtimeId: string;
+  title: string;
+  isActive: boolean;
+  isBusy: boolean;
+  lockState: SessionTabLockState;
+}
+
 @customElement("pi-sidebar")
 export class PiSidebar extends LitElement {
   @property({ attribute: false }) agent?: Agent;
   @property({ attribute: false }) emptyHints: EmptyHint[] = [];
   @property({ attribute: false }) onSend?: (text: string) => void;
   @property({ attribute: false }) onAbort?: () => void;
+  @property({ attribute: false }) sessionTabs: SessionTabView[] = [];
+  @property({ attribute: false }) onCreateTab?: () => void;
+  @property({ attribute: false }) onSelectTab?: (runtimeId: string) => void;
+  @property({ attribute: false }) onCloseTab?: (runtimeId: string) => void;
+  @property({ attribute: false }) lockNotice: string | null = null;
 
   @state() private _hasMessages = false;
   @state() private _isStreaming = false;
@@ -50,6 +65,9 @@ export class PiSidebar extends LitElement {
   private _autoScroll = true;
   private _lastScrollTop = 0;
   private _resizeObserver?: ResizeObserver;
+  private _scrollContainerEl?: HTMLElement;
+  private _scrollListener?: () => void;
+  private _groupingRoot?: HTMLElement;
   private _onPayloadUpdate = () => {
     if (isDebugEnabled()) {
       const s = getPayloadStats();
@@ -106,7 +124,16 @@ export class PiSidebar extends LitElement {
     this._unsubscribe = undefined;
     this._cleanupGrouping?.();
     this._cleanupGrouping = undefined;
+    this._groupingRoot = undefined;
     this._resizeObserver?.disconnect();
+    this._resizeObserver = undefined;
+
+    if (this._scrollContainerEl && this._scrollListener) {
+      this._scrollContainerEl.removeEventListener("scroll", this._scrollListener);
+    }
+    this._scrollContainerEl = undefined;
+    this._scrollListener = undefined;
+
     document.removeEventListener("pi:status-update", this._onPayloadUpdate);
     document.removeEventListener("pi:debug-changed", this._onPayloadUpdate);
   }
@@ -116,9 +143,11 @@ export class PiSidebar extends LitElement {
   }
 
   override firstUpdated() {
-    this._setupAutoScroll();
-    const inner = this.querySelector(".pi-messages__inner");
-    if (inner) this._cleanupGrouping = initToolGrouping(inner as HTMLElement);
+    this._ensureMessageEnhancements();
+  }
+
+  override updated(_changed: PropertyValues<this>) {
+    this._ensureMessageEnhancements();
   }
 
   private _setupSubscription() {
@@ -162,25 +191,47 @@ export class PiSidebar extends LitElement {
     });
   }
 
+  private _ensureMessageEnhancements() {
+    this._setupAutoScroll();
+
+    const inner = this.querySelector<HTMLElement>(".pi-messages__inner");
+    if (!inner || this._groupingRoot === inner) return;
+
+    this._cleanupGrouping?.();
+    this._cleanupGrouping = initToolGrouping(inner);
+    this._groupingRoot = inner;
+  }
+
   private _setupAutoScroll() {
     const container = this._scrollContainer;
-    if (!container) return;
+    if (!container || this._scrollContainerEl === container) return;
+
+    this._resizeObserver?.disconnect();
+
+    if (this._scrollContainerEl && this._scrollListener) {
+      this._scrollContainerEl.removeEventListener("scroll", this._scrollListener);
+    }
+
+    this._scrollContainerEl = container;
+
     const content = container.querySelector(".pi-messages__inner");
     if (content) {
       this._resizeObserver = new ResizeObserver(() => {
-        if (this._autoScroll && this._scrollContainer) {
-          this._scrollContainer.scrollTop = this._scrollContainer.scrollHeight;
+        if (this._autoScroll && this._scrollContainerEl) {
+          this._scrollContainerEl.scrollTop = this._scrollContainerEl.scrollHeight;
         }
       });
       this._resizeObserver.observe(content);
     }
-    container.addEventListener("scroll", () => {
+
+    this._scrollListener = () => {
       const top = container.scrollTop;
       const distFromBottom = container.scrollHeight - top - container.clientHeight;
       if (top < this._lastScrollTop && distFromBottom > 50) this._autoScroll = false;
       else if (distFromBottom < 10) this._autoScroll = true;
       this._lastScrollTop = top;
-    });
+    };
+    container.addEventListener("scroll", this._scrollListener);
   }
 
   private _onSend = (e: CustomEvent<{ text: string }>) => {
@@ -211,6 +262,10 @@ export class PiSidebar extends LitElement {
     const hasMessages = this._hasMessages || state.messages.length > 0;
 
     return html`
+      ${this._renderSessionTabs()}
+      ${this.lockNotice
+        ? html`<div class="pi-lock-notice">${this.lockNotice}</div>`
+        : nothing}
       <div class="pi-messages">
         <div class="pi-messages__inner">
           ${hasMessages ? html`
@@ -245,6 +300,51 @@ export class PiSidebar extends LitElement {
           @pi-abort=${this._onAbort}
         ></pi-input>
         <div id="pi-status-bar" class="pi-status-bar"></div>
+      </div>
+    `;
+  }
+
+  private _renderSessionTabs() {
+    if (this.sessionTabs.length === 0) return nothing;
+
+    const canCloseTabs = this.sessionTabs.length > 1;
+
+    return html`
+      <div class="pi-session-tabs">
+        <div class="pi-session-tabs__scroller">
+          ${this.sessionTabs.map((tab) => html`
+            <div class="pi-session-tab ${tab.isActive ? "is-active" : ""}">
+              <button
+                class="pi-session-tab__main"
+                @click=${() => this.onSelectTab?.(tab.runtimeId)}
+                title=${tab.title}
+              >
+                <span class="pi-session-tab__title">${tab.title}</span>
+                ${tab.lockState === "waiting_for_lock"
+                  ? html`<span class="pi-session-tab__lock">lock…</span>`
+                  : nothing}
+                ${tab.isBusy
+                  ? html`<span class="pi-session-tab__busy" aria-hidden="true"></span>`
+                  : nothing}
+              </button>
+              ${canCloseTabs
+                ? html`
+                  <button
+                    class="pi-session-tab__close"
+                    @click=${(event: Event) => {
+                      event.stopPropagation();
+                      this.onCloseTab?.(tab.runtimeId);
+                    }}
+                    aria-label="Close tab"
+                  >
+                    ×
+                  </button>
+                `
+                : nothing}
+            </div>
+          `)}
+        </div>
+        <button class="pi-session-tabs__new" @click=${() => this.onCreateTab?.()} aria-label="New tab">+</button>
       </div>
     `;
   }

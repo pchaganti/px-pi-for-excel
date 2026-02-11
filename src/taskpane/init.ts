@@ -1,8 +1,8 @@
 /**
  * Taskpane initialization.
  *
- * Contains the bulk of app wiring (storage, auth restore, agent creation,
- * sidebar mount, slash commands, session persistence, keyboard shortcuts).
+ * Contains the bulk of app wiring (storage, auth restore, runtime manager,
+ * sidebar mount, slash commands, keyboard shortcuts).
  */
 
 import { html, render } from "lit";
@@ -18,8 +18,10 @@ import { getBlueprint } from "../context/blueprint.js";
 import { ChangeTracker } from "../context/change-tracker.js";
 import { convertToLlm } from "../messages/convert-to-llm.js";
 import { createAllTools } from "../tools/index.js";
+import { withWorkbookCoordinator } from "../tools/with-workbook-coordinator.js";
 import { loadExtension, createExtensionAPI } from "../commands/extension-api.js";
 import { registerBuiltins } from "../commands/builtins.js";
+import { showResumeDialog } from "../commands/builtins/overlays.js";
 import { wireCommandMenu } from "../commands/command-menu.js";
 import { commandRegistry } from "../commands/types.js";
 import { buildSystemPrompt } from "../prompt/system-prompt.js";
@@ -28,6 +30,8 @@ import { renderError } from "../ui/loading.js";
 import { showToast } from "../ui/toast.js";
 import { PiSidebar } from "../ui/pi-sidebar.js";
 import { setActiveProviders } from "../compat/model-selector-patch.js";
+import { createWorkbookCoordinator } from "../workbook/coordinator.js";
+import { getWorkbookContext } from "../workbook/context.js";
 
 import { createContextInjector } from "./context-injection.js";
 import { pickDefaultModel } from "./default-model.js";
@@ -35,8 +39,12 @@ import { installKeyboardShortcuts, cycleThinkingLevel } from "./keyboard-shortcu
 import { createQueueDisplay } from "./queue-display.js";
 import { createActionQueue } from "./action-queue.js";
 import { setupSessionPersistence } from "./sessions.js";
-import { injectStatusBar, updateStatusBar } from "./status-bar.js";
+import { injectStatusBar } from "./status-bar.js";
 import { showWelcomeLogin } from "./welcome-login.js";
+import { SessionRuntimeManager, type RuntimeTabSnapshot } from "./session-runtime-manager.js";
+import { isRecord } from "../utils/type-guards.js";
+
+const BUSY_ALLOWED_COMMANDS = new Set(["compact", "new"]);
 
 function showErrorBanner(errorRoot: HTMLElement, message: string): void {
   render(renderError(message), errorRoot);
@@ -61,6 +69,21 @@ function isLikelyCorsErrorMessage(msg: string): boolean {
   if (m.includes("cors requests are not allowed")) return true;
 
   return false;
+}
+
+function getActiveLockNotice(tabs: RuntimeTabSnapshot[]): string | null {
+  const activeTab = tabs.find((tab) => tab.isActive);
+  if (!activeTab) return null;
+
+  if (activeTab.lockState === "waiting_for_lock") {
+    return "Waiting for workbook lock…";
+  }
+
+  if (activeTab.lockState === "holding_lock") {
+    return "Applying workbook changes…";
+  }
+
+  return null;
 }
 
 export async function initTaskpane(opts: {
@@ -119,7 +142,7 @@ export async function initTaskpane(opts: {
   // 4. Change tracker
   changeTracker.start().catch(() => {});
 
-  // 5. Create agent
+  // 5. Shared runtime dependencies
   const systemPrompt = buildSystemPrompt(blueprint);
   const availableProviders = await providerKeys.list();
   setActiveProviders(new Set(availableProviders));
@@ -142,47 +165,10 @@ export async function initTaskpane(opts: {
     }
   });
 
-  const agent = new Agent({
-    initialState: {
-      systemPrompt,
-      model: defaultModel,
-      thinkingLevel: "off",
-      messages: [],
-      tools: createAllTools(),
-    },
-    convertToLlm,
-    transformContext: createContextInjector(changeTracker),
-    streamFn,
-  });
+  const workbookCoordinator = createWorkbookCoordinator();
 
-  // 6. Set up API key resolution
-  agent.getApiKey = async (provider: string) => {
-    const key = await getAppStorage().providerKeys.get(provider);
-    if (key) return key;
-
-    // Prompt for key
-    const success = await ApiKeyPromptDialog.prompt(provider);
-    const updated = await providerKeys.list();
-    setActiveProviders(new Set(updated));
-    if (success) {
-      clearErrorBanner(errorRoot);
-      return (await getAppStorage().providerKeys.get(provider)) ?? undefined;
-    } else {
-      showErrorBanner(errorRoot, `API key required for ${provider}.`);
-      return undefined;
-    }
-  };
-
-  // 6b. Register builtin slash commands early so the UI can queue/execute
-  // `/compact` even before the rest of init finishes.
-  registerBuiltins(agent);
-
-  // ── Abort tracking (hoisted — used by onAbort + error handler below) ──
-  let userAborted = false;
-
-  // 7. Create and mount PiSidebar
+  // 6. Create and mount PiSidebar
   const sidebar = new PiSidebar();
-  sidebar.agent = agent;
   sidebar.emptyHints = [
     {
       label: "Analyze this data",
@@ -198,70 +184,123 @@ export async function initTaskpane(opts: {
     },
   ];
 
-  const openModelSelector = (): void => {
-    void ModelSelector.open(agent.state.model, (model) => {
-      agent.setModel(model);
-      updateStatusBar(agent);
-      requestAnimationFrame(() => sidebar.requestUpdate());
-    });
-  };
-
-  // ── Queue display + ordered action queue ──
-  const queueDisplay = createQueueDisplay({ agent, sidebar });
-  const actionQueue = createActionQueue({
-    agent,
-    sidebar,
-    queueDisplay,
-    autoCompactEnabled,
-  });
-
-  // Slash commands chosen from the popup menu dispatch this event.
-  document.addEventListener(
-    "pi:command-run",
-    ((e: CustomEvent<{ name?: string; args?: string }>) => {
-      const name = e.detail?.name;
-      if (!name) return;
-
-      if (name === "compact") {
-        actionQueue.enqueueCommand(name, e.detail?.args ?? "");
-        return;
-      }
-
-      // Other commands: execute immediately if we're idle; otherwise block.
-      if (agent.state.isStreaming || actionQueue.isBusy()) {
-        showToast(`Can't run /${name} while Pi is busy`);
-        return;
-      }
-
-      const cmd = commandRegistry.get(name);
-      if (cmd) void cmd.execute(e.detail?.args ?? "");
-    }) as EventListener,
-  );
-
-  sidebar.onSend = (text) => {
-    clearErrorBanner(errorRoot);
-    actionQueue.enqueuePrompt(text);
-  };
-
-  sidebar.onAbort = () => {
-    userAborted = true;
-    agent.abort();
-  };
-
   appEl.innerHTML = "";
   appEl.appendChild(sidebar);
 
-  // 8. Error tracking
-  agent.subscribe((ev) => {
-    if (ev.type === "message_start" && ev.message.role === "user") {
-      clearErrorBanner(errorRoot);
+  const runtimeManager = new SessionRuntimeManager(sidebar);
+  const abortedAgents = new WeakSet<Agent>();
+
+  const getActiveRuntime = () => runtimeManager.getActiveRuntime();
+  const getActiveAgent = () => getActiveRuntime()?.agent ?? null;
+  const getActiveQueueDisplay = () => getActiveRuntime()?.queueDisplay ?? null;
+  const getActiveActionQueue = () => getActiveRuntime()?.actionQueue ?? null;
+  const getActiveLockState = () => getActiveRuntime()?.lockState ?? "idle";
+
+  let previousActiveRuntimeId: string | null = null;
+
+  runtimeManager.subscribe((tabs) => {
+    sidebar.sessionTabs = tabs;
+    sidebar.lockNotice = getActiveLockNotice(tabs);
+    sidebar.requestUpdate();
+
+    const activeRuntimeId = tabs.find((tab) => tab.isActive)?.runtimeId ?? null;
+    if (activeRuntimeId !== previousActiveRuntimeId) {
+      previousActiveRuntimeId = activeRuntimeId;
+      document.dispatchEvent(new CustomEvent("pi:active-runtime-changed"));
     }
-    if (ev.type === "agent_end") {
+
+    document.dispatchEvent(new CustomEvent("pi:status-update"));
+  });
+
+  const resolveWorkbookId = async (): Promise<string | null> => {
+    try {
+      const workbookContext = await getWorkbookContext();
+      return workbookContext.workbookId;
+    } catch {
+      return null;
+    }
+  };
+
+  const createRuntime = async (optsForRuntime: {
+    activate: boolean;
+    autoRestoreLatest: boolean;
+  }) => {
+    const runtimeId = crypto.randomUUID();
+
+    let runtimeAgent: Agent | null = null;
+
+    const tools = withWorkbookCoordinator(
+      createAllTools(),
+      workbookCoordinator,
+      {
+        getWorkbookId: resolveWorkbookId,
+        getSessionId: () => runtimeAgent?.sessionId ?? runtimeId,
+      },
+    );
+
+    const agent = new Agent({
+      initialState: {
+        systemPrompt,
+        model: defaultModel,
+        thinkingLevel: "off",
+        messages: [],
+        tools,
+      },
+      convertToLlm,
+      transformContext: createContextInjector(changeTracker),
+      streamFn,
+    });
+
+    runtimeAgent = agent;
+
+    // API key resolution
+    agent.getApiKey = async (provider: string) => {
+      const key = await getAppStorage().providerKeys.get(provider);
+      if (key) return key;
+
+      const success = await ApiKeyPromptDialog.prompt(provider);
+      const updated = await providerKeys.list();
+      setActiveProviders(new Set(updated));
+      if (success) {
+        clearErrorBanner(errorRoot);
+        return (await getAppStorage().providerKeys.get(provider)) ?? undefined;
+      }
+
+      showErrorBanner(errorRoot, `API key required for ${provider}.`);
+      return undefined;
+    };
+
+    const queueDisplay = createQueueDisplay({ agent });
+    const actionQueue = createActionQueue({
+      agent,
+      sidebar,
+      queueDisplay,
+      autoCompactEnabled,
+    });
+
+    const persistence = await setupSessionPersistence({
+      agent,
+      sessions,
+      settings,
+      autoRestoreLatest: optsForRuntime.autoRestoreLatest,
+    });
+
+    const unsubscribeErrorTracking = agent.subscribe((ev) => {
+      const isActiveRuntime = runtimeManager.getActiveRuntime()?.runtimeId === runtimeId;
+
+      if (ev.type === "message_start" && ev.message.role === "user" && isActiveRuntime) {
+        clearErrorBanner(errorRoot);
+      }
+
+      if (ev.type !== "agent_end") return;
+
+      const wasUserAbort = abortedAgents.has(agent);
+      abortedAgents.delete(agent);
+
+      if (!isActiveRuntime) return;
+
       if (agent.state.error) {
-        const isAbort =
-          userAborted ||
-          /abort/i.test(agent.state.error) ||
-          /cancel/i.test(agent.state.error);
+        const isAbort = wasUserAbort || /abort/i.test(agent.state.error) || /cancel/i.test(agent.state.error);
         if (!isAbort) {
           const err = agent.state.error;
           if (isLikelyCorsErrorMessage(err)) {
@@ -276,15 +315,154 @@ export async function initTaskpane(opts: {
       } else {
         clearErrorBanner(errorRoot);
       }
-      userAborted = false;
+    });
+
+    const runtime = runtimeManager.createRuntime(
+      {
+        runtimeId,
+        agent,
+        actionQueue,
+        queueDisplay,
+        persistence,
+        lockState: "idle",
+        dispose: () => {
+          unsubscribeErrorTracking();
+          actionQueue.shutdown();
+          agent.abort();
+          persistence.dispose();
+        },
+      },
+      { activate: optsForRuntime.activate },
+    );
+
+    return runtime;
+  };
+
+  workbookCoordinator.subscribe((event) => {
+    if (event.operationType !== "write") return;
+
+    const runtime = runtimeManager.findRuntimeBySessionId(event.context.sessionId);
+    if (!runtime) return;
+
+    if (event.type === "queued") {
+      runtimeManager.setRuntimeLockState(runtime.runtimeId, "waiting_for_lock");
+      return;
+    }
+
+    if (event.type === "started") {
+      runtimeManager.setRuntimeLockState(runtime.runtimeId, "holding_lock");
+      return;
+    }
+
+    if (event.type === "completed" || event.type === "failed") {
+      runtimeManager.setRuntimeLockState(runtime.runtimeId, "idle");
     }
   });
 
-  // ── Session persistence ──
-  await setupSessionPersistence({ agent, sidebar, sessions, settings });
+  registerBuiltins({
+    getActiveAgent,
+    renameActiveSession: async (title: string) => {
+      const activeRuntime = getActiveRuntime();
+      if (!activeRuntime) {
+        showToast("No active session");
+        return;
+      }
+
+      await activeRuntime.persistence.renameSession(title);
+    },
+    createRuntime: async () => {
+      await createRuntime({ activate: true, autoRestoreLatest: false });
+    },
+    resumeIntoActiveRuntime: async () => {
+      await showResumeDialog({
+        onResumeSession: async (sessionData) => {
+          const activeRuntime = getActiveRuntime();
+          if (!activeRuntime) {
+            showToast("No active session");
+            return;
+          }
+
+          await activeRuntime.persistence.applyLoadedSession(sessionData);
+          activeRuntime.queueDisplay.clear();
+          activeRuntime.queueDisplay.setActionQueue([]);
+          sidebar.syncFromAgent();
+          sidebar.requestUpdate();
+          document.dispatchEvent(new CustomEvent("pi:model-changed"));
+          document.dispatchEvent(new CustomEvent("pi:status-update"));
+        },
+      });
+    },
+  });
+
+  // Slash commands chosen from the popup menu dispatch this event.
+  const onCommandRun: EventListener = (event) => {
+    if (!(event instanceof CustomEvent)) return;
+    if (!isRecord(event.detail)) return;
+
+    const name = typeof event.detail.name === "string" ? event.detail.name : "";
+    const args = typeof event.detail.args === "string" ? event.detail.args : "";
+    if (!name) return;
+
+    const activeRuntime = getActiveRuntime();
+    if (!activeRuntime) {
+      showToast("No active session");
+      return;
+    }
+
+    const busy = activeRuntime.agent.state.isStreaming || activeRuntime.actionQueue.isBusy();
+    if (busy && !BUSY_ALLOWED_COMMANDS.has(name)) {
+      showToast(`Can't run /${name} while Pi is busy`);
+      return;
+    }
+
+    if (name === "compact") {
+      activeRuntime.actionQueue.enqueueCommand(name, args);
+      return;
+    }
+
+    const cmd = commandRegistry.get(name);
+    if (cmd) void cmd.execute(args);
+  };
+  document.addEventListener("pi:command-run", onCommandRun);
+
+  sidebar.onSend = (text) => {
+    clearErrorBanner(errorRoot);
+    const activeRuntime = getActiveRuntime();
+    if (!activeRuntime) {
+      showToast("No active session");
+      return;
+    }
+    activeRuntime.actionQueue.enqueuePrompt(text);
+  };
+
+  sidebar.onAbort = () => {
+    const activeRuntime = getActiveRuntime();
+    if (!activeRuntime) return;
+    abortedAgents.add(activeRuntime.agent);
+    activeRuntime.agent.abort();
+  };
+
+  sidebar.onCreateTab = () => {
+    void createRuntime({ activate: true, autoRestoreLatest: false });
+  };
+
+  sidebar.onSelectTab = (runtimeId: string) => {
+    runtimeManager.switchRuntime(runtimeId);
+  };
+
+  sidebar.onCloseTab = (runtimeId: string) => {
+    if (runtimeManager.listRuntimes().length <= 1) {
+      showToast("Can't close the last tab");
+      return;
+    }
+    runtimeManager.closeRuntime(runtimeId);
+  };
+
+  // Bootstrap first runtime (auto-restores latest session when available)
+  const initialRuntime = await createRuntime({ activate: true, autoRestoreLatest: true });
 
   // ── Register extensions ──
-  const extensionAPI = createExtensionAPI(agent);
+  const extensionAPI = createExtensionAPI(initialRuntime.agent);
   const { activate: activateSnake } = await import("../extensions/snake.js");
   await loadExtension(extensionAPI, activateSnake);
 
@@ -297,17 +475,20 @@ export async function initTaskpane(opts: {
 
   // ── Keyboard shortcuts ──
   installKeyboardShortcuts({
-    agent,
+    getActiveAgent,
+    getActiveQueueDisplay,
+    getActiveActionQueue,
     sidebar,
-    queueDisplay,
-    actionQueue,
-    markUserAborted: () => {
-      userAborted = true;
+    markUserAborted: (agent: Agent) => {
+      abortedAgents.add(agent);
     },
   });
 
   // ── Status bar ──
-  injectStatusBar(agent);
+  injectStatusBar({
+    getActiveAgent,
+    getLockState: getActiveLockState,
+  });
 
   // ── Wire command menu to textarea ──
   const wireTextarea = () => {
@@ -320,9 +501,26 @@ export async function initTaskpane(opts: {
   };
   requestAnimationFrame(wireTextarea);
 
+  const openModelSelector = (): void => {
+    const activeAgent = getActiveAgent();
+    if (!activeAgent) {
+      showToast("No active session");
+      return;
+    }
+
+    void ModelSelector.open(activeAgent.state.model, (model) => {
+      activeAgent.setModel(model);
+      document.dispatchEvent(new CustomEvent("pi:status-update"));
+      requestAnimationFrame(() => sidebar.requestUpdate());
+    });
+  };
+
   // ── Status bar click handlers ──
   document.addEventListener("click", (e) => {
-    const el = e.target as HTMLElement;
+    const target = e.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    const el = target;
 
     // Model picker
     if (el.closest?.(".pi-status-model")) {
@@ -332,10 +530,11 @@ export async function initTaskpane(opts: {
 
     // Thinking level toggle
     if (el.closest?.(".pi-status-thinking")) {
-      cycleThinkingLevel(agent);
+      const activeAgent = getActiveAgent();
+      if (!activeAgent) return;
+      cycleThinkingLevel(activeAgent);
     }
   });
 
   console.log("[pi] PiSidebar mounted");
 }
-

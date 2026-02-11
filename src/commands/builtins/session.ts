@@ -2,28 +2,30 @@
  * Builtin session management commands.
  */
 
-import type { Agent } from "@mariozechner/pi-agent-core";
-
 import type { SlashCommand } from "../types.js";
 import { showToast } from "../../ui/toast.js";
-import type { PiSidebar } from "../../ui/pi-sidebar.js";
-import { showResumeDialog } from "./overlays.js";
 
-export function createSessionIdentityCommands(_agent: Agent): SlashCommand[] {
+export interface SessionCommandActions {
+  renameActiveSession: (title: string) => Promise<void>;
+  createRuntime: () => Promise<void>;
+  resumeIntoActiveRuntime: () => Promise<void>;
+}
+
+export function createSessionIdentityCommands(actions: SessionCommandActions): SlashCommand[] {
   return [
     {
       name: "name",
       description: "Name the current chat session",
       source: "builtin",
-      execute: (args: string) => {
-        if (!args.trim()) {
+      execute: async (args: string) => {
+        const title = args.trim();
+        if (!title) {
           showToast("Usage: /name My Session Name");
           return;
         }
-        document.dispatchEvent(
-          new CustomEvent("pi:session-rename", { detail: { title: args.trim() } }),
-        );
-        showToast(`Session named: ${args.trim()}`);
+
+        await actions.renameActiveSession(title);
+        showToast(`Session named: ${title}`);
       },
     },
     {
@@ -37,23 +39,15 @@ export function createSessionIdentityCommands(_agent: Agent): SlashCommand[] {
   ];
 }
 
-export function createSessionLifecycleCommands(agent: Agent): SlashCommand[] {
+export function createSessionLifecycleCommands(actions: SessionCommandActions): SlashCommand[] {
   return [
     {
       name: "new",
-      description: "Start a new chat session",
+      description: "Start a new chat session tab",
       source: "builtin",
-      execute: () => {
-        // Signal new session (resets ID) then clear messages
-        document.dispatchEvent(new CustomEvent("pi:session-new"));
-        agent.clearMessages();
-
-        // Force sidebar + status bar to re-render
-        const sidebar = document.querySelector<PiSidebar>("pi-sidebar");
-        sidebar?.requestUpdate();
-
-        document.dispatchEvent(new CustomEvent("pi:status-update"));
-        showToast("New session started");
+      execute: async () => {
+        await actions.createRuntime();
+        showToast("New session tab started");
       },
     },
     {
@@ -61,7 +55,7 @@ export function createSessionLifecycleCommands(agent: Agent): SlashCommand[] {
       description: "Resume a previous session",
       source: "builtin",
       execute: async () => {
-        await showResumeDialog(agent);
+        await actions.resumeIntoActiveRuntime();
       },
     },
   ];

@@ -8,17 +8,19 @@ import { showToast } from "../ui/toast.js";
 import { escapeHtml } from "../utils/html.js";
 import { formatUsageDebug, isDebugEnabled } from "../debug/debug.js";
 import { estimateContextTokens } from "../utils/context-tokens.js";
+import type { RuntimeLockState } from "./session-runtime-manager.js";
 
-export function injectStatusBar(agent: Agent): void {
-  agent.subscribe(() => updateStatusBar(agent));
-  document.addEventListener("pi:status-update", () => updateStatusBar(agent));
-  // Initial render after sidebar mounts
-  requestAnimationFrame(() => updateStatusBar(agent));
-}
+export type ActiveAgentProvider = () => Agent | null;
+export type ActiveLockStateProvider = () => RuntimeLockState;
 
-export function updateStatusBar(agent: Agent): void {
+function renderStatusBar(agent: Agent | null, lockState: RuntimeLockState): void {
   const el = document.getElementById("pi-status-bar");
   if (!el) return;
+
+  if (!agent) {
+    el.innerHTML = `<span class="pi-status-ctx">No active session</span>`;
+    return;
+  }
 
   const state = agent.state;
 
@@ -72,8 +74,16 @@ export function updateStatusBar(agent: Agent): void {
     ? `<span class="pi-status-ctx__debug">${escapeHtml(formatUsageDebug(lastUsage))}</span>`
     : "";
 
+  let lockBadge = "";
+  if (lockState === "waiting_for_lock") {
+    lockBadge = `<span class="pi-status-lock pi-status-lock--waiting" data-tooltip="A workbook write is queued behind another session.">lock…</span>`;
+  } else if (lockState === "holding_lock") {
+    lockBadge = `<span class="pi-status-lock pi-status-lock--active" data-tooltip="This session currently holds the workbook write lock.">lock</span>`;
+  }
+
   el.innerHTML = `
     <span class="pi-status-ctx has-tooltip"><span class="${ctxColor}">${pct}%</span> / ${ctxLabel}${usageDebug}<span class="pi-tooltip pi-tooltip--left">${ctxBaseTooltip}${ctxWarning}</span></span>
+    ${lockBadge}
     <button class="pi-status-model" data-tooltip="Switch the AI model powering this session">
       <span class="pi-status-model__mark">π</span>
       <span class="pi-status-model__name">${modelAliasEscaped}</span>
@@ -81,6 +91,54 @@ export function updateStatusBar(agent: Agent): void {
     </button>
     <span class="pi-status-thinking" data-tooltip="Controls how long the model &quot;thinks&quot; before answering — higher = slower but better reasoning. Click or ⇧Tab to cycle.">${brainSvg} ${thinkingLevel}</span>
   `;
+}
+
+export function updateStatusBarForAgent(agent: Agent, lockState: RuntimeLockState = "idle"): void {
+  renderStatusBar(agent, lockState);
+}
+
+export function updateStatusBar(
+  getActiveAgent: ActiveAgentProvider,
+  getLockState?: ActiveLockStateProvider,
+): void {
+  const activeAgent = getActiveAgent();
+  const lockState = getLockState ? getLockState() : "idle";
+  renderStatusBar(activeAgent, lockState);
+}
+
+export function injectStatusBar(opts: {
+  getActiveAgent: ActiveAgentProvider;
+  getLockState?: ActiveLockStateProvider;
+}): () => void {
+  const { getActiveAgent, getLockState } = opts;
+
+  let unsubscribeActiveAgent: (() => void) | undefined;
+
+  const bindActiveAgent = () => {
+    unsubscribeActiveAgent?.();
+
+    const activeAgent = getActiveAgent();
+    if (activeAgent) {
+      unsubscribeActiveAgent = activeAgent.subscribe(() => updateStatusBar(getActiveAgent, getLockState));
+    } else {
+      unsubscribeActiveAgent = undefined;
+    }
+
+    updateStatusBar(getActiveAgent, getLockState);
+  };
+
+  const onStatusUpdate = () => updateStatusBar(getActiveAgent, getLockState);
+
+  document.addEventListener("pi:status-update", onStatusUpdate);
+  document.addEventListener("pi:active-runtime-changed", bindActiveAgent);
+
+  requestAnimationFrame(bindActiveAgent);
+
+  return () => {
+    unsubscribeActiveAgent?.();
+    document.removeEventListener("pi:status-update", onStatusUpdate);
+    document.removeEventListener("pi:active-runtime-changed", bindActiveAgent);
+  };
 }
 
 export function flashThinkingLevel(level: string, color: string): void {
@@ -94,7 +152,7 @@ export function flashThinkingLevel(level: string, color: string): void {
   };
   showToast(`Thinking: ${labels[level] || level} (next turn)`, 1500);
 
-  const el = document.querySelector(".pi-status-thinking") as HTMLElement;
+  const el = document.querySelector<HTMLElement>(".pi-status-thinking");
   if (!el) return;
 
   el.style.color = color;
