@@ -32,11 +32,14 @@ if (!hooksPath) {
   );
 }
 
-// Best-effort: ensure hook is executable (POSIX).
+// Best-effort: ensure hooks are executable (POSIX).
 try {
-  const hookFile = path.resolve(".githooks", "pre-commit");
-  if (fs.existsSync(hookFile)) {
-    fs.chmodSync(hookFile, 0o755);
+  const hookNames = ["pre-commit", "pre-push"];
+  for (const hookName of hookNames) {
+    const hookFile = path.resolve(".githooks", hookName);
+    if (fs.existsSync(hookFile)) {
+      fs.chmodSync(hookFile, 0o755);
+    }
   }
 } catch {
   // Ignore (e.g. Windows filesystems)
