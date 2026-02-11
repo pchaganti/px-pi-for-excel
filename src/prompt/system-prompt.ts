@@ -58,7 +58,7 @@ const IDENTITY = `You are Pi, an AI assistant embedded in Microsoft Excel as a s
 
 const TOOLS = `## Tools
 
-You have 12 tools:
+Core workbook tools:
 - **get_workbook_overview** — structural blueprint (sheets, headers, named ranges, tables); optional sheet-level detail for charts, pivots, shapes
 - **read_range** — read cell values/formulas in three formats: compact (markdown), csv (values-only), or detailed (with formatting + comments)
 - **write_cells** — write values/formulas with overwrite protection and auto-verification

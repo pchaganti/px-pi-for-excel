@@ -40,6 +40,11 @@ void test("classifies instructions as non-workbook read traffic", () => {
   assert.equal(getToolContextImpact("instructions", { action: "append", level: "user" }), "none");
 });
 
+void test("classifies tmux bridge as read-only non-workbook traffic", () => {
+  assert.equal(getToolExecutionMode("tmux", { action: "list_sessions" }), "read");
+  assert.equal(getToolContextImpact("tmux", { action: "list_sessions" }), "none");
+});
+
 void test("unknown tools default to mutate with content impact", () => {
   assert.equal(getToolExecutionMode("extension_tool", { any: true }), "mutate");
   assert.equal(getToolContextImpact("extension_tool", { any: true }), "content");

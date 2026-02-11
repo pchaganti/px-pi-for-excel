@@ -112,3 +112,17 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Agent text:** unchanged — still the ASCII tree with `├──`/`└──`/`│` connectors.
 - **Implementation:** `TraceDependenciesDetails` passes the `DepNodeDetail` tree to the UI. `src/ui/render-dep-tree.ts` renders the visual tree.
 - **Rationale:** ASCII art rendered via `<markdown-block>` lacked interactivity and visual hierarchy. Clickable addresses + clean CSS indentation is much more usable.
+
+## Experimental tmux bridge tool (`tmux`)
+- **Availability:** non-core experimental tool, hidden by default via `applyExperimentalToolGates()`.
+- **Gate model:** requires `tmux-bridge` experiment enabled, configured `tmux.bridge.url`, and successful bridge `/health` probe.
+- **Execution policy:** classified as `read/none` in workbook coordinator (no workbook lock writes or blueprint invalidation).
+- **Bridge contract:** POST JSON to `https://localhost:<port>/v1/tmux` with actions:
+  - `list_sessions`
+  - `create_session`
+  - `send_keys`
+  - `capture_pane`
+  - `send_and_capture`
+  - `kill_session`
+- **Security posture:** local opt-in only; bridge URL validated via `validateOfficeProxyUrl`; tool execution re-checks gate before every call.
+- **Rationale:** establish a stable adapter contract now (for issue #3) while deferring full companion-daemon rollout.

@@ -1,7 +1,7 @@
 /**
  * Tool execution policy.
  *
- * Classifies core tool calls as read-only vs workbook-mutating,
+ * Classifies tool calls as read-only vs workbook-mutating,
  * and whether a successful mutation should refresh workbook structure context.
  */
 
@@ -15,6 +15,8 @@ const ALWAYS_READ_TOOLS = new Set<string>([
   "trace_dependencies",
   // Instructions mutate local prompt state, not workbook cells/structure.
   "instructions",
+  // External shell bridge traffic does not mutate workbook state.
+  "tmux",
 ]);
 
 const ALWAYS_MUTATE_TOOLS = new Set<string>([

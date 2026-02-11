@@ -58,12 +58,24 @@ export interface ReadRangeCsvDetails {
   csv: string;
 }
 
+export interface TmuxBridgeDetails {
+  kind: "tmux_bridge";
+  ok: boolean;
+  action: string;
+  bridgeUrl?: string;
+  session?: string;
+  sessionsCount?: number;
+  outputPreview?: string;
+  error?: string;
+}
+
 export type ExcelToolDetails =
   | WriteCellsDetails
   | FillFormulaDetails
   | FormatCellsDetails
   | TraceDependenciesDetails
-  | ReadRangeCsvDetails;
+  | ReadRangeCsvDetails
+  | TmuxBridgeDetails;
 
 function isOptionalString(value: unknown): value is string | undefined {
   return value === undefined || typeof value === "string";
@@ -127,4 +139,19 @@ export function isTraceDependenciesDetails(value: unknown): value is TraceDepend
   if (!isRecord(value.root)) return false;
   const root = value.root;
   return typeof root.address === "string" && Array.isArray(root.precedents);
+}
+
+export function isTmuxBridgeDetails(value: unknown): value is TmuxBridgeDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "tmux_bridge") return false;
+
+  return (
+    typeof value.ok === "boolean" &&
+    typeof value.action === "string" &&
+    isOptionalString(value.bridgeUrl) &&
+    isOptionalString(value.session) &&
+    isOptionalNumber(value.sessionsCount) &&
+    isOptionalString(value.outputPreview) &&
+    isOptionalString(value.error)
+  );
 }

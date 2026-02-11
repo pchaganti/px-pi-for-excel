@@ -206,6 +206,7 @@ void test("read-only tool paths never emit mutation events", async (t) => {
     { toolName: "read_range", params: { range: "Sheet1!A1:B2" } },
     { toolName: "comments", params: { action: "read", range: "Sheet1!A1" } },
     { toolName: "view_settings", params: { action: "get" } },
+    { toolName: "tmux", params: { action: "list_sessions" } },
   ];
 
   for (const item of cases) {

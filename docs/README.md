@@ -22,6 +22,7 @@ Short, topic-based docs (mirrors Pi's layout). Keep deeper decisions close to th
 
 ## Tools
 - [Tool behavior decisions](../src/tools/DECISIONS.md)
+- [Experimental tmux bridge contract (v1 stub)](./tmux-bridge-contract.md)
 
 ## Research (local only)
 Research notes live in `research/` but are gitignored except `POC-LEARNINGS.md`.
