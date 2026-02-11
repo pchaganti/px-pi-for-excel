@@ -3,9 +3,10 @@
  */
 
 import type { Api, Model, StopReason, Usage } from "@mariozechner/pi-ai";
-import type { Agent, AgentMessage } from "@mariozechner/pi-agent-core";
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
 
 import type { SlashCommand } from "../types.js";
+import type { ActiveAgentProvider } from "./model.js";
 import { showToast } from "../../ui/toast.js";
 import { createCompactionSummaryMessage } from "../../messages/compaction.js";
 import { getErrorMessage } from "../../utils/errors.js";
@@ -333,13 +334,19 @@ function isPromptTooLongError(err: unknown): boolean {
   );
 }
 
-export function createExportCommands(agent: Agent): SlashCommand[] {
+export function createExportCommands(getActiveAgent: ActiveAgentProvider): SlashCommand[] {
   return [
     {
       name: "export",
       description: "Export session transcript (JSON to clipboard or download)",
       source: "builtin",
       execute: (args: string) => {
+        const agent = getActiveAgent();
+        if (!agent) {
+          showToast("No active session");
+          return;
+        }
+
         const msgs = agent.state.messages;
         if (msgs.length === 0) {
           showToast("No messages to export");
@@ -399,13 +406,19 @@ export function createExportCommands(agent: Agent): SlashCommand[] {
   ];
 }
 
-export function createCompactCommands(agent: Agent): SlashCommand[] {
+export function createCompactCommands(getActiveAgent: ActiveAgentProvider): SlashCommand[] {
   return [
     {
       name: "compact",
       description: "Summarize older messages to free context",
       source: "builtin",
       execute: async (args: string) => {
+        const agent = getActiveAgent();
+        if (!agent) {
+          showToast("No active session");
+          return;
+        }
+
         const msgs = agent.state.messages;
         if (msgs.length < 4) {
           showToast("Too few messages to compact");

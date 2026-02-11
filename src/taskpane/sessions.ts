@@ -1,17 +1,17 @@
 /**
- * Session persistence wiring for the taskpane.
+ * Session persistence wiring for one runtime.
  *
  * Owns:
  * - auto-saving agent state to IndexedDB
- * - restoring latest session on startup
- * - keeping internal session id/title in sync with /new, /name, /resume events
+ * - optional latest-session restore on startup
+ * - session identity lifecycle (new / rename / resume)
  */
 
-import type { Agent } from "@mariozechner/pi-agent-core";
+import type { Agent, AgentMessage } from "@mariozechner/pi-agent-core";
+import type { SessionData } from "@mariozechner/pi-web-ui/dist/storage/types.js";
 import type { SessionsStore } from "@mariozechner/pi-web-ui/dist/storage/stores/sessions-store.js";
 import type { SettingsStore } from "@mariozechner/pi-web-ui/dist/storage/stores/settings-store.js";
 
-import type { PiSidebar } from "../ui/pi-sidebar.js";
 import { extractTextFromContent } from "../utils/content.js";
 import { getWorkbookContext } from "../workbook/context.js";
 import {
@@ -20,13 +20,49 @@ import {
   setLatestSessionForWorkbook,
 } from "../workbook/session-association.js";
 
+export interface SessionPersistenceController {
+  getSessionId: () => string;
+  getSessionTitle: () => string;
+  getSessionCreatedAt: () => string;
+  startNewSession: () => void;
+  renameSession: (title: string) => Promise<void>;
+  applyLoadedSession: (sessionData: SessionData) => Promise<void>;
+  restoreLatestSession: () => Promise<boolean>;
+  saveSession: () => Promise<void>;
+  subscribe: (listener: () => void) => () => void;
+  dispose: () => void;
+}
+
+type SessionId = string;
+
+type UserLikeMessage = AgentMessage & {
+  role: "user" | "user-with-attachments";
+  content: unknown;
+};
+
+function hasAssistantMessage(messages: AgentMessage[]): boolean {
+  return messages.some((m) => m.role === "assistant");
+}
+
+function isChatUserMessage(message: AgentMessage): message is UserLikeMessage {
+  if (!(message.role === "user" || message.role === "user-with-attachments")) {
+    return false;
+  }
+
+  return "content" in message;
+}
+
+function isSessionId(value: string): value is SessionId {
+  return value.split("-").length === 5;
+}
+
 export async function setupSessionPersistence(opts: {
   agent: Agent;
-  sidebar: PiSidebar;
   sessions: SessionsStore;
   settings: SettingsStore;
-}): Promise<void> {
-  const { agent, sidebar, sessions, settings } = opts;
+  autoRestoreLatest?: boolean;
+}): Promise<SessionPersistenceController> {
+  const { agent, sessions, settings } = opts;
 
   async function resolveWorkbookId(): Promise<string | null> {
     try {
@@ -37,13 +73,33 @@ export async function setupSessionPersistence(opts: {
     }
   }
 
-  let sessionId: string = crypto.randomUUID();
-  agent.sessionId = sessionId;
+  const listeners = new Set<() => void>();
+  let sessionId: SessionId = crypto.randomUUID();
   let sessionTitle = "";
   let sessionCreatedAt = new Date().toISOString();
   let firstAssistantSeen = false;
 
-  async function saveSession() {
+  agent.sessionId = sessionId;
+
+  function emitChange(): void {
+    for (const listener of listeners) {
+      listener();
+    }
+  }
+
+  async function updateWorkbookAssociation(savedSessionId: string): Promise<void> {
+    const workbookId = await resolveWorkbookId();
+    if (!workbookId) return;
+
+    try {
+      await linkSessionToWorkbook(settings, savedSessionId, workbookId);
+      await setLatestSessionForWorkbook(settings, workbookId, savedSessionId);
+    } catch (err) {
+      console.warn("[pi] Workbook/session association update failed:", err);
+    }
+  }
+
+  async function saveSession(): Promise<void> {
     if (!firstAssistantSeen) return;
 
     try {
@@ -51,7 +107,7 @@ export async function setupSessionPersistence(opts: {
       const messages = agent.state.messages;
 
       if (!sessionTitle && messages.length > 0) {
-        const firstUser = messages.find((m) => m.role === "user");
+        const firstUser = messages.find((m) => isChatUserMessage(m));
         if (firstUser) {
           const text = extractTextFromContent(firstUser.content);
           sessionTitle = text.slice(0, 80) || "Untitled";
@@ -59,13 +115,13 @@ export async function setupSessionPersistence(opts: {
       }
 
       let preview = "";
-      for (const m of messages) {
+      for (const message of messages) {
         let text = "";
 
-        if (m.role === "compactionSummary") {
-          text = m.summary;
-        } else if (m.role === "user" || m.role === "assistant") {
-          text = extractTextFromContent(m.content);
+        if (message.role === "compactionSummary") {
+          text = message.summary;
+        } else if (message.role === "user" || message.role === "assistant") {
+          text = extractTextFromContent(message.content);
         } else {
           continue;
         }
@@ -89,20 +145,21 @@ export async function setupSessionPersistence(opts: {
       let costCacheWrite = 0;
       let costTotal = 0;
 
-      for (const m of messages) {
-        if (m.role !== "assistant") continue;
-        const u = m.usage;
-        inputTokens += u.input;
-        outputTokens += u.output;
-        cacheReadTokens += u.cacheRead;
-        cacheWriteTokens += u.cacheWrite;
-        totalTokens += u.totalTokens;
+      for (const message of messages) {
+        if (message.role !== "assistant") continue;
+        const usage = message.usage;
 
-        costInput += u.cost.input;
-        costOutput += u.cost.output;
-        costCacheRead += u.cost.cacheRead;
-        costCacheWrite += u.cost.cacheWrite;
-        costTotal += u.cost.total;
+        inputTokens += usage.input;
+        outputTokens += usage.output;
+        cacheReadTokens += usage.cacheRead;
+        cacheWriteTokens += usage.cacheWrite;
+        totalTokens += usage.totalTokens;
+
+        costInput += usage.cost.input;
+        costOutput += usage.cost.output;
+        costCacheRead += usage.cost.cacheRead;
+        costCacheWrite += usage.cost.cacheWrite;
+        costTotal += usage.cost.total;
       }
 
       const savedSessionId = sessionId;
@@ -136,108 +193,117 @@ export async function setupSessionPersistence(opts: {
         sessionTitle,
       );
 
-      const workbookId = await resolveWorkbookId();
-      if (workbookId) {
-        try {
-          await linkSessionToWorkbook(settings, savedSessionId, workbookId);
-          await setLatestSessionForWorkbook(settings, workbookId, savedSessionId);
-        } catch (err) {
-          console.warn("[pi] Workbook/session association update failed:", err);
-        }
-      }
+      await updateWorkbookAssociation(savedSessionId);
+      emitChange();
     } catch (err) {
       console.warn("[pi] Session save failed:", err);
     }
   }
 
-  function startNewSession() {
+  function startNewSession(): void {
     sessionId = crypto.randomUUID();
-    agent.sessionId = sessionId;
     sessionTitle = "";
     sessionCreatedAt = new Date().toISOString();
     firstAssistantSeen = false;
+    agent.sessionId = sessionId;
+    emitChange();
   }
 
-  agent.subscribe((ev) => {
-    if (ev.type === "message_end") {
-      if (ev.message.role === "assistant") firstAssistantSeen = true;
-      if (firstAssistantSeen) void saveSession();
+  async function renameSession(title: string): Promise<void> {
+    sessionTitle = title.trim();
+    emitChange();
+    await saveSession();
+  }
+
+  async function applyLoadedSession(sessionData: SessionData): Promise<void> {
+    if (isSessionId(sessionData.id)) {
+      sessionId = sessionData.id;
+    } else {
+      sessionId = crypto.randomUUID();
+    }
+
+    sessionTitle = sessionData.title || "";
+    sessionCreatedAt = sessionData.createdAt;
+    firstAssistantSeen = hasAssistantMessage(sessionData.messages);
+
+    agent.sessionId = sessionId;
+    agent.replaceMessages(sessionData.messages);
+
+    if (sessionData.model) {
+      agent.setModel(sessionData.model);
+    }
+    if (sessionData.thinkingLevel) {
+      agent.setThinkingLevel(sessionData.thinkingLevel);
+    }
+
+    await updateWorkbookAssociation(sessionId);
+    emitChange();
+  }
+
+  async function restoreLatestSession(): Promise<boolean> {
+    try {
+      const candidates: string[] = [];
+
+      const workbookId = await resolveWorkbookId();
+      if (workbookId) {
+        const workbookLatest = await getLatestSessionForWorkbook(settings, workbookId);
+        if (workbookLatest) candidates.push(workbookLatest);
+      }
+
+      const globalLatest = await sessions.getLatestSessionId();
+      if (globalLatest) candidates.push(globalLatest);
+
+      const seen = new Set<string>();
+      for (const candidateId of candidates) {
+        if (seen.has(candidateId)) continue;
+        seen.add(candidateId);
+
+        const sessionData = await sessions.loadSession(candidateId);
+        if (!sessionData || sessionData.messages.length === 0) continue;
+
+        await applyLoadedSession(sessionData);
+        console.log(`[pi] Restored session: ${sessionData.title || candidateId}`);
+        return true;
+      }
+    } catch (err) {
+      console.warn("[pi] Session restore failed:", err);
+    }
+
+    return false;
+  }
+
+  const unsubscribeAgent = agent.subscribe((event) => {
+    if (event.type !== "message_end") return;
+
+    if (event.message.role === "assistant") {
+      firstAssistantSeen = true;
+    }
+
+    if (firstAssistantSeen) {
+      void saveSession();
     }
   });
 
-  // Auto-restore latest session (prefer workbook-scoped "latest" when available)
-  try {
-    const candidates: string[] = [];
-
-    const workbookId = await resolveWorkbookId();
-    if (workbookId) {
-      const wbLatest = await getLatestSessionForWorkbook(settings, workbookId);
-      if (wbLatest) candidates.push(wbLatest);
-    }
-
-    const globalLatest = await sessions.getLatestSessionId();
-    if (globalLatest) candidates.push(globalLatest);
-
-    const seen = new Set<string>();
-    for (const id of candidates) {
-      if (seen.has(id)) continue;
-      seen.add(id);
-
-      const sessionData = await sessions.loadSession(id);
-      if (!sessionData || sessionData.messages.length === 0) continue;
-
-      sessionId = sessionData.id;
-      agent.sessionId = sessionId;
-      sessionTitle = sessionData.title || "";
-      sessionCreatedAt = sessionData.createdAt;
-      firstAssistantSeen = true;
-
-      agent.replaceMessages(sessionData.messages);
-      if (sessionData.model) agent.setModel(sessionData.model);
-      if (sessionData.thinkingLevel) agent.setThinkingLevel(sessionData.thinkingLevel);
-
-      // Force sidebar to pick up restored messages
-      sidebar.syncFromAgent();
-      console.log(`[pi] Restored session: ${sessionTitle || id}`);
-      break;
-    }
-  } catch (err) {
-    console.warn("[pi] Session restore failed:", err);
+  if (opts.autoRestoreLatest) {
+    await restoreLatestSession();
   }
 
-  document.addEventListener("pi:session-new", () => startNewSession());
-
-  interface RenameDetail { title?: string }
-  interface ResumeDetail { id?: string; title?: string; createdAt?: string }
-
-  document.addEventListener(
-    "pi:session-rename",
-    ((e: CustomEvent<RenameDetail>) => {
-      sessionTitle = e.detail?.title || sessionTitle;
-      void saveSession();
-    }) as EventListener,
-  );
-  document.addEventListener(
-    "pi:session-resumed",
-    ((e: CustomEvent<ResumeDetail>) => {
-      const id = e.detail?.id || sessionId;
-      sessionId = id;
-      agent.sessionId = sessionId;
-      sessionTitle = e.detail?.title || "";
-      sessionCreatedAt = e.detail?.createdAt || new Date().toISOString();
-      firstAssistantSeen = true;
-
-      void (async () => {
-        const workbookId = await resolveWorkbookId();
-        if (!workbookId) return;
-
-        try {
-          await linkSessionToWorkbook(settings, id, workbookId);
-          await setLatestSessionForWorkbook(settings, workbookId, id);
-        } catch (err) {
-          console.warn("[pi] Workbook/session association update failed:", err);
-        }
-      })();
-    }) as EventListener,
-  );
+  return {
+    getSessionId: () => sessionId,
+    getSessionTitle: () => sessionTitle,
+    getSessionCreatedAt: () => sessionCreatedAt,
+    startNewSession,
+    renameSession,
+    applyLoadedSession,
+    restoreLatestSession,
+    saveSession,
+    subscribe(listener: () => void): () => void {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    dispose(): void {
+      unsubscribeAgent();
+      listeners.clear();
+    },
+  };
 }

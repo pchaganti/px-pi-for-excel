@@ -18,16 +18,18 @@ export type QueuedAction =
   | { type: "prompt"; text: string }
   | { type: "command"; name: string; args: string };
 
+export interface ActionQueue {
+  enqueuePrompt: (text: string) => void;
+  enqueueCommand: (name: string, args: string) => void;
+  isBusy: () => boolean;
+}
+
 export function createActionQueue(opts: {
   agent: Agent;
   sidebar: PiSidebar;
   queueDisplay: QueueDisplay;
   autoCompactEnabled: boolean;
-}): {
-  enqueuePrompt: (text: string) => void;
-  enqueueCommand: (name: string, args: string) => void;
-  isBusy: () => boolean;
-} {
+}): ActionQueue {
   const { agent, sidebar, queueDisplay, autoCompactEnabled } = opts;
 
   const actions: QueuedAction[] = [];

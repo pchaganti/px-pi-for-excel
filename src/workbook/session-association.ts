@@ -58,3 +58,47 @@ export async function getLatestSessionForWorkbook(
   const v = await settings.get(workbookLatestSessionKey(workbookId));
   return typeof v === "string" && v.trim().length > 0 ? v : null;
 }
+
+export interface SessionWorkbookPartition {
+  matchingSessionIds: string[];
+  unlinkedSessionIds: string[];
+  foreignSessionIds: string[];
+}
+
+/**
+ * Partition session ids by workbook association.
+ *
+ * - `matchingSessionIds`: linked to this workbook
+ * - `unlinkedSessionIds`: legacy/no mapping
+ * - `foreignSessionIds`: linked to another workbook
+ */
+export async function partitionSessionIdsByWorkbook(
+  settings: SettingsStore,
+  sessionIds: string[],
+  workbookId: string,
+): Promise<SessionWorkbookPartition> {
+  const matchingSessionIds: string[] = [];
+  const unlinkedSessionIds: string[] = [];
+  const foreignSessionIds: string[] = [];
+
+  for (const sessionId of sessionIds) {
+    const linkedWorkbookId = await getSessionWorkbookId(settings, sessionId);
+    if (!linkedWorkbookId) {
+      unlinkedSessionIds.push(sessionId);
+      continue;
+    }
+
+    if (linkedWorkbookId === workbookId) {
+      matchingSessionIds.push(sessionId);
+      continue;
+    }
+
+    foreignSessionIds.push(sessionId);
+  }
+
+  return {
+    matchingSessionIds,
+    unlinkedSessionIds,
+    foreignSessionIds,
+  };
+}

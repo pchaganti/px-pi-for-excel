@@ -17,7 +17,7 @@ import {
   isCommandMenuVisible,
 } from "../commands/command-menu.js";
 
-import { flashThinkingLevel, updateStatusBar } from "./status-bar.js";
+import { flashThinkingLevel, updateStatusBarForAgent } from "./status-bar.js";
 
 type QueueDisplay = {
   add: (type: "steer" | "follow-up", text: string) => void;
@@ -36,6 +36,8 @@ const THINKING_COLORS: Record<ThinkingLevel, string> = {
   high: "#875f87",
   xhigh: "#8b008b",
 };
+
+const BUSY_ALLOWED_COMMANDS = new Set(["compact", "new"]);
 
 function setExcelToolCardsExpanded(expanded: boolean): void {
   const toolMessages = document.querySelectorAll("tool-message");
@@ -116,20 +118,26 @@ export function cycleThinkingLevel(agent: Agent): ThinkingLevel {
   const next = levels[(idx >= 0 ? idx + 1 : 0) % levels.length];
 
   agent.setThinkingLevel(next);
-  updateStatusBar(agent);
+  updateStatusBarForAgent(agent);
   flashThinkingLevel(next, THINKING_COLORS[next] || "#a0a0a0");
 
   return next;
 }
 
 export function installKeyboardShortcuts(opts: {
-  agent: Agent;
+  getActiveAgent: () => Agent | null;
+  getActiveQueueDisplay: () => QueueDisplay | null;
+  getActiveActionQueue: () => ActionQueue | null;
   sidebar: PiSidebar;
-  queueDisplay: QueueDisplay;
-  actionQueue: ActionQueue;
-  markUserAborted: () => void;
+  markUserAborted: (agent: Agent) => void;
 }): () => void {
-  const { agent, sidebar, queueDisplay, actionQueue, markUserAborted } = opts;
+  const {
+    getActiveAgent,
+    getActiveQueueDisplay,
+    getActiveActionQueue,
+    sidebar,
+    markUserAborted,
+  } = opts;
 
   const onKeyDown = (e: KeyboardEvent) => {
     // Command menu takes priority
@@ -137,11 +145,13 @@ export function installKeyboardShortcuts(opts: {
       if (handleCommandMenuKey(e)) return;
     }
 
+    const agent = getActiveAgent();
     const textarea = sidebar.getTextarea();
+    const targetNode = e.target instanceof Node ? e.target : null;
     const isInEditor = Boolean(
-      textarea && (e.target === textarea || textarea.contains(e.target as Node)),
+      textarea && targetNode && (targetNode === textarea || textarea.contains(targetNode)),
     );
-    const isStreaming = agent.state.isStreaming;
+    const isStreaming = agent?.state.isStreaming ?? false;
 
     // ESC — dismiss command menu
     if (e.key === "Escape" && isCommandMenuVisible()) {
@@ -151,15 +161,16 @@ export function installKeyboardShortcuts(opts: {
     }
 
     // ESC — abort
-    if (e.key === "Escape" && isStreaming) {
+    if (e.key === "Escape" && isStreaming && agent) {
       e.preventDefault();
-      markUserAborted();
+      markUserAborted(agent);
       agent.abort();
       return;
     }
 
     // Shift+Tab — cycle thinking level
     if (e.shiftKey && e.key === "Tab") {
+      if (!agent) return;
       e.preventDefault();
       cycleThinkingLevel(agent);
       return;
@@ -196,11 +207,10 @@ export function installKeyboardShortcuts(opts: {
       const args = spaceIdx > 0 ? val.slice(spaceIdx + 1) : "";
       const cmd = commandRegistry.get(cmdName);
       if (cmd) {
-        const busy = isStreaming || actionQueue.isBusy();
+        const actionQueue = getActiveActionQueue();
+        const busy = isStreaming || actionQueue?.isBusy() === true;
 
-        // Only queue `/compact` while busy for now. Other commands may be interactive
-        // (e.g. /snake) and should not be deferred.
-        if (busy && cmdName !== "compact") {
+        if (busy && !BUSY_ALLOWED_COMMANDS.has(cmdName)) {
           e.preventDefault();
           e.stopImmediatePropagation();
           showToast(`Can't run /${cmdName} while Pi is busy`);
@@ -214,6 +224,10 @@ export function installKeyboardShortcuts(opts: {
         if (input) input.clear();
 
         if (cmdName === "compact") {
+          if (!actionQueue) {
+            showToast("No active session");
+            return;
+          }
           actionQueue.enqueueCommand(cmdName, args);
         } else {
           void cmd.execute(args);
@@ -224,7 +238,7 @@ export function installKeyboardShortcuts(opts: {
     }
 
     // Enter/Alt+Enter while streaming — steer or follow-up
-    if (isInEditor && textarea && e.key === "Enter" && !e.shiftKey && isStreaming) {
+    if (isInEditor && textarea && e.key === "Enter" && !e.shiftKey && isStreaming && agent) {
       const text = textarea.value.trim();
       if (!text) return;
 
@@ -239,10 +253,10 @@ export function installKeyboardShortcuts(opts: {
 
       if (e.altKey) {
         agent.followUp(msg);
-        queueDisplay.add("follow-up", text);
+        getActiveQueueDisplay()?.add("follow-up", text);
       } else {
         agent.steer(msg);
-        queueDisplay.add("steer", text);
+        getActiveQueueDisplay()?.add("steer", text);
       }
 
       const input = sidebar.getInput();
