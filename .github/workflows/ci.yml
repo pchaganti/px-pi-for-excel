@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Security audit (npm)
+        run: npm audit --audit-level=high
+
       - name: Lint + typecheck
         run: npm run check
 
