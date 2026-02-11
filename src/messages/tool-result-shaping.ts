@@ -20,16 +20,31 @@ type ToolResultMessage = Extract<AgentMessage, { role: "toolResult" }>;
 type TextBlock = Extract<ToolResultMessage["content"][number], { type: "text" }>;
 type ImageBlock = Extract<ToolResultMessage["content"][number], { type: "image" }>;
 
+interface ToolResultPayloadStats {
+  textPayload: string;
+  textChars: number;
+  imageCount: number;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function isToolResultMessage(message: AgentMessage): message is ToolResultMessage {
   return message.role === "toolResult";
 }
 
-function isTextBlock(block: ToolResultMessage["content"][number]): block is TextBlock {
-  return block.type === "text";
+function isTextBlock(block: unknown): block is TextBlock {
+  return isRecord(block) && block.type === "text" && typeof block.text === "string";
 }
 
-function isImageBlock(block: ToolResultMessage["content"][number]): block is ImageBlock {
-  return block.type === "image";
+function isImageBlock(block: unknown): block is ImageBlock {
+  return (
+    isRecord(block) &&
+    block.type === "image" &&
+    typeof block.data === "string" &&
+    typeof block.mimeType === "string"
+  );
 }
 
 function clampPositiveInteger(value: number, fallback: number): number {
@@ -70,27 +85,56 @@ function buildRecentIndexSet(indices: readonly number[], keep: number): Set<numb
   return new Set<number>(indices.slice(indices.length - keep));
 }
 
-function summarizeToolResult(
-  message: ToolResultMessage,
-  previewChars: number,
-): TextBlock {
+function normalizeToolResultContent(message: ToolResultMessage): ToolResultMessage["content"] {
+  const rawContent: unknown = message.content;
+
+  // Backwards compatibility: older persisted sessions may still carry string
+  // tool-result payloads.
+  if (typeof rawContent === "string") {
+    return [{ type: "text", text: rawContent }];
+  }
+
+  if (!Array.isArray(rawContent)) {
+    return [];
+  }
+
+  const normalized: ToolResultMessage["content"] = [];
+  for (const block of rawContent) {
+    if (isTextBlock(block) || isImageBlock(block)) {
+      normalized.push(block);
+    }
+  }
+
+  return normalized;
+}
+
+function collectToolResultPayload(content: ToolResultMessage["content"]): ToolResultPayloadStats {
   let textPayload = "";
+  let textChars = 0;
   let imageCount = 0;
 
-  for (const block of message.content) {
-    if (isTextBlock(block)) {
+  for (const block of content) {
+    if (block.type === "text") {
       if (textPayload.length > 0) textPayload += "\n";
       textPayload += block.text;
+      textChars += block.text.length;
       continue;
     }
 
-    if (isImageBlock(block)) {
+    if (block.type === "image") {
       imageCount += 1;
     }
   }
 
-  const originalChars = textPayload.length;
-  const previewSource = textPayload.trim();
+  return { textPayload, textChars, imageCount };
+}
+
+function summarizeToolResult(
+  message: ToolResultMessage,
+  payload: ToolResultPayloadStats,
+  previewChars: number,
+): TextBlock {
+  const previewSource = payload.textPayload.trim();
   const preview = previewSource.slice(0, previewChars);
   const previewWasTruncated = preview.length < previewSource.length;
 
@@ -98,9 +142,9 @@ function summarizeToolResult(
   lines.push(`[Compacted tool result] ${message.toolName}${message.isError ? " (error)" : ""}`);
 
   const sourceParts: string[] = [];
-  sourceParts.push(`${originalChars.toLocaleString()} text chars`);
-  if (imageCount > 0) {
-    sourceParts.push(`${imageCount} image block${imageCount === 1 ? "" : "s"}`);
+  sourceParts.push(`${payload.textChars.toLocaleString()} text chars`);
+  if (payload.imageCount > 0) {
+    sourceParts.push(`${payload.imageCount} image block${payload.imageCount === 1 ? "" : "s"}`);
   }
   lines.push(`Original payload: ${sourceParts.join(", ")}.`);
 
@@ -120,26 +164,11 @@ function summarizeToolResult(
 }
 
 function shouldCompactToolResult(
-  message: ToolResultMessage,
+  payload: ToolResultPayloadStats,
   maxCharsBeforeCompaction: number,
 ): boolean {
-  let textChars = 0;
-  let hasImage = false;
-
-  for (const block of message.content) {
-    if (isTextBlock(block)) {
-      textChars += block.text.length;
-      if (textChars > maxCharsBeforeCompaction) return true;
-      continue;
-    }
-
-    if (isImageBlock(block)) {
-      hasImage = true;
-    }
-  }
-
-  if (hasImage) return true;
-  return false;
+  if (payload.imageCount > 0) return true;
+  return payload.textChars > maxCharsBeforeCompaction;
 }
 
 export function shapeToolResultsForLlm(
@@ -154,15 +183,22 @@ export function shapeToolResultsForLlm(
 
   return messages.map((message, index) => {
     if (!isToolResultMessage(message)) return message;
-    if (recentSet.has(index)) return message;
 
-    if (!shouldCompactToolResult(message, resolvedConfig.maxCharsBeforeCompaction)) {
-      return message;
+    const normalizedMessage: ToolResultMessage = {
+      ...message,
+      content: normalizeToolResultContent(message),
+    };
+
+    if (recentSet.has(index)) return normalizedMessage;
+
+    const payload = collectToolResultPayload(normalizedMessage.content);
+    if (!shouldCompactToolResult(payload, resolvedConfig.maxCharsBeforeCompaction)) {
+      return normalizedMessage;
     }
 
     return {
-      ...message,
-      content: [summarizeToolResult(message, resolvedConfig.previewChars)],
+      ...normalizedMessage,
+      content: [summarizeToolResult(normalizedMessage, payload, resolvedConfig.previewChars)],
     };
   });
 }

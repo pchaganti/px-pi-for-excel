@@ -47,6 +47,10 @@ function createToolResult(args: {
   };
 }
 
+function forceLegacyStringContent(message: ToolResultMessage, text: string): void {
+  Reflect.set(message, "content", text);
+}
+
 void test("compacts older large tool results but preserves recent ones", () => {
   const long = "x".repeat(1500);
   const older = createToolResult({
@@ -113,6 +117,37 @@ void test("keeps older small tool results intact", () => {
   const olderText = shapedOlder.content.find((block) => block.type === "text");
   assert.ok(olderText);
   assert.equal(olderText.text, "short");
+});
+
+void test("compacts older legacy string tool-result payloads", () => {
+  const long = "legacy".repeat(350);
+
+  const older = createToolResult({
+    toolCallId: "1",
+    toolName: "read_range",
+    text: long,
+    timestamp: 1,
+  });
+  forceLegacyStringContent(older, long);
+
+  const recent = createToolResult({
+    toolCallId: "2",
+    toolName: "read_range",
+    text: "ok",
+    timestamp: 2,
+  });
+
+  const shaped = shapeToolResultsForLlm([older, recent], {
+    recentToolResultsToKeep: 1,
+    maxCharsBeforeCompaction: 1200,
+    previewChars: 40,
+  });
+
+  const shapedOlder = shaped[0];
+  assert.equal(shapedOlder.role, "toolResult");
+  const olderText = shapedOlder.content.find((block) => block.type === "text");
+  assert.ok(olderText);
+  assert.match(olderText.text, /^\[Compacted tool result\]/);
 });
 
 void test("compacts older image tool results even with small text", () => {
