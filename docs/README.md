@@ -13,6 +13,7 @@ Short, topic-based docs (mirrors Pi's layout). Keep deeper decisions close to th
 - [Cleanup approach](./cleanup-approach.md)
 - [Codebase simplification plan](./codebase-simplification-plan.md)
 - [Context management policy (cache-safe)](./context-management-policy.md)
+- [Security threat model](./security-threat-model.md)
 - [Compaction (`/compact`)](./compaction.md)
 - [Upcoming (open issues digest)](./upcoming.md)
 - [Model/dependency update playbook](./model-updates.md)

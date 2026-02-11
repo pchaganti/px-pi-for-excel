@@ -135,6 +135,14 @@ export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise
             resolve();
           })();
         },
+        onDisconnected: (_row, _id, label) => {
+          void (async () => {
+            const updated = await providerKeys.list();
+            setActiveProviders(new Set(updated));
+            document.dispatchEvent(new CustomEvent("pi:providers-changed"));
+            showToast(`${label} disconnected`);
+          })();
+        },
       });
       providerList.appendChild(row);
     }

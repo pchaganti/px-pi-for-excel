@@ -60,6 +60,10 @@ export async function showProviderPicker(): Promise<void> {
         document.dispatchEvent(new CustomEvent("pi:providers-changed"));
         showToast(`${label} connected`);
       },
+      onDisconnected: (_row: HTMLElement, _id: string, label: string) => {
+        document.dispatchEvent(new CustomEvent("pi:providers-changed"));
+        showToast(`${label} disconnected`);
+      },
     });
     list.appendChild(row);
   }
