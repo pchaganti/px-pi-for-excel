@@ -253,6 +253,13 @@ export class PiSidebar extends LitElement {
     this._contextPillExpanded = !this._contextPillExpanded;
   }
 
+  private _copyToolsJson() {
+    const ctx = getLastContext();
+    if (!ctx?.tools) return;
+    const json = JSON.stringify(ctx.tools, null, 2);
+    navigator.clipboard.writeText(json).catch(() => { /* ignore */ });
+  }
+
   private _renderContextPill() {
     const ps = this._payloadStats;
     if (!ps) return nothing;
@@ -260,34 +267,33 @@ export class PiSidebar extends LitElement {
     const fmtK = (n: number): string => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
     const total = ps.systemChars + ps.toolSchemaChars + ps.messageChars;
     const expanded = this._contextPillExpanded;
-
-    // Build expanded body from the last captured context — show everything.
     const ctx = getLastContext();
 
-    const systemText = ctx?.systemPrompt ?? "(none)";
-
-    const toolsText = ctx?.tools
-      ? JSON.stringify(ctx.tools, null, 2)
-      : "(stripped on this call)";
-
-    const body = [
+    // Summary table
+    const summaryMd = [
       `| | chars |`,
       `|---|---|`,
       `| System prompt | ${ps.systemChars.toLocaleString()} |`,
       `| Tool schemas (${ps.toolCount}) | ${ps.toolSchemaChars.toLocaleString()} |`,
       `| Messages (${ps.messageCount}) | ${ps.messageChars.toLocaleString()} |`,
       `| **Total** | **${total.toLocaleString()}** |`,
-      "",
-      "**System prompt**",
-      "```",
-      systemText,
-      "```",
-      "",
-      "**Tools**",
-      "```json",
-      toolsText,
-      "```",
     ].join("\n");
+
+    // Tools table
+    const toolsTableMd = ctx?.tools
+      ? [
+          `| tool | description | schema |`,
+          `|---|---|---|`,
+          ...ctx.tools.map((t) => {
+            const schemaSize = JSON.stringify(t.parameters).length;
+            const desc = t.description.split("\n")[0].slice(0, 80);
+            return `| \`${t.name}\` | ${desc} | ${fmtK(schemaSize)} |`;
+          }),
+        ].join("\n")
+      : "*(stripped on this call)*";
+
+    // System prompt rendered as markdown (not in a code fence)
+    const systemMd = ctx?.systemPrompt ?? "*(none)*";
 
     return html`
       <div class="px-4">
@@ -301,7 +307,20 @@ export class PiSidebar extends LitElement {
           </div>
           ${expanded ? html`
             <div class="pi-context-pill__body">
-              <markdown-block .content=${body}></markdown-block>
+              <div class="pi-context-pill__section">
+                <markdown-block .content=${summaryMd}></markdown-block>
+              </div>
+              <div class="pi-context-pill__section">
+                <div class="pi-context-pill__section-header">
+                  <span class="pi-context-pill__section-label">Tools</span>
+                  ${ctx?.tools ? html`<button class="pi-context-pill__copy" @click=${this._copyToolsJson}>Copy JSON</button>` : nothing}
+                </div>
+                <markdown-block .content=${toolsTableMd}></markdown-block>
+              </div>
+              <div class="pi-context-pill__section">
+                <span class="pi-context-pill__section-label">System prompt</span>
+                <markdown-block .content=${systemMd}></markdown-block>
+              </div>
             </div>
           ` : nothing}
         </div>
