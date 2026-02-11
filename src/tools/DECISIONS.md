@@ -127,5 +127,5 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
   - `capture_pane`
   - `send_and_capture`
   - `kill_session`
-- **Security posture:** local opt-in only; bridge URL validated via `validateOfficeProxyUrl`; tool execution re-checks gate before every call; bridge enforces loopback+origin checks and optional bearer token.
+- **Security posture:** local opt-in only; bridge URL validated via `validateOfficeProxyUrl`; tool execution re-checks gate before every call; bridge enforces loopback+origin checks and optional bearer token (`TMUX_BRIDGE_TOKEN` / setting `tmux.bridge.token`, managed via `/experimental tmux-bridge-token ...`).
 - **Rationale:** stable local adapter contract now (issue #3) with safe stub-first rollout and incremental hardening.

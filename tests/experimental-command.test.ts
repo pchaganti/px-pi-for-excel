@@ -55,6 +55,7 @@ void test("/experimental help shows usage and feature list", async () => {
   assert.match(toasts[0], /tmux-bridge/u);
   assert.match(toasts[0], /remote-extension-urls/u);
   assert.match(toasts[0], /tmux-bridge-url/u);
+  assert.match(toasts[0], /tmux-bridge-token/u);
 });
 
 void test("/experimental on <feature> enables feature and reports flag-only suffix", async () => {
@@ -249,4 +250,97 @@ void test("/experimental tmux-bridge-url invalid URL surfaces validation error",
 
   assert.equal(toasts.length, 1);
   assert.equal(toasts[0], "Invalid Proxy URL");
+});
+
+void test("/experimental tmux-bridge-token shows masked configured value", async () => {
+  const toasts: string[] = [];
+
+  const command = getExperimentalCommand({
+    showExperimentalDialog: () => {},
+    showToast: (message) => {
+      toasts.push(message);
+    },
+    getTmuxBridgeToken: () => Promise.resolve("supersecrettoken"),
+  });
+
+  await command.execute("tmux-bridge-token");
+
+  assert.equal(toasts.length, 1);
+  assert.equal(toasts[0], "Tmux bridge token: supe**********en (length 16)");
+  assert.ok(!toasts[0].includes("supersecrettoken"));
+});
+
+void test("/experimental tmux-bridge-token <token> stores token and triggers tool refresh notice", async () => {
+  const toasts: string[] = [];
+  const stored: string[] = [];
+  const changedConfigKeys: string[] = [];
+
+  const command = getExperimentalCommand({
+    showExperimentalDialog: () => {},
+    showToast: (message) => {
+      toasts.push(message);
+    },
+    validateTmuxBridgeToken: (token) => token.trim(),
+    setTmuxBridgeToken: (token) => {
+      stored.push(token);
+      return Promise.resolve();
+    },
+    notifyToolConfigChanged: (configKey) => {
+      changedConfigKeys.push(configKey);
+    },
+  });
+
+  await command.execute("tmux-bridge-token supersecrettoken");
+
+  assert.deepEqual(stored, ["supersecrettoken"]);
+  assert.deepEqual(changedConfigKeys, ["tmux.bridge.token"]);
+  assert.equal(toasts.length, 1);
+  assert.equal(toasts[0], "Tmux bridge token set (supe**********en).");
+  assert.ok(!toasts[0].includes("supersecrettoken"));
+});
+
+void test("/experimental tmux-bridge-token clear removes token and triggers tool refresh notice", async () => {
+  const toasts: string[] = [];
+  const changedConfigKeys: string[] = [];
+  let clearCount = 0;
+
+  const command = getExperimentalCommand({
+    showExperimentalDialog: () => {},
+    showToast: (message) => {
+      toasts.push(message);
+    },
+    clearTmuxBridgeToken: () => {
+      clearCount += 1;
+      return Promise.resolve();
+    },
+    notifyToolConfigChanged: (configKey) => {
+      changedConfigKeys.push(configKey);
+    },
+  });
+
+  await command.execute("tmux-bridge-token clear");
+
+  assert.equal(clearCount, 1);
+  assert.deepEqual(changedConfigKeys, ["tmux.bridge.token"]);
+  assert.equal(toasts.length, 1);
+  assert.equal(toasts[0], "Tmux bridge token cleared.");
+});
+
+void test("/experimental tmux-bridge-token invalid token surfaces validation error", async () => {
+  const toasts: string[] = [];
+
+  const command = getExperimentalCommand({
+    showExperimentalDialog: () => {},
+    showToast: (message) => {
+      toasts.push(message);
+    },
+    validateTmuxBridgeToken: () => {
+      throw new Error("Tmux bridge token must not contain whitespace.");
+    },
+  });
+
+  await command.execute("tmux-bridge-token has spaces");
+
+  assert.equal(toasts.length, 1);
+  assert.equal(toasts[0], "Tmux bridge token must not contain whitespace.");
 });
