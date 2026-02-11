@@ -14,6 +14,7 @@ has_manifest_changes() {
 }
 
 should_audit=0
+audit_reason=""
 
 while read local_ref local_sha remote_ref remote_sha
 do
@@ -32,7 +33,12 @@ do
     if [ -n "$base_ref" ]; then
       range="$base_ref..$local_sha"
     else
-      range="$local_sha^..$local_sha"
+      # No safe base to diff against (e.g. local clone without fetched remote main).
+      # Be conservative: run audit instead of risking a false "skip".
+      should_audit=1
+      audit_reason="no_safe_base"
+      printf "%s\n" "[pre-push] Could not determine base for new remote ref; running npm audit conservatively"
+      break
     fi
   else
     range="$remote_sha..$local_sha"
@@ -40,6 +46,7 @@ do
 
   if has_manifest_changes "$range"; then
     should_audit=1
+    audit_reason="manifest_change"
     break
   fi
 done
@@ -49,5 +56,9 @@ if [ "$should_audit" -eq 0 ]; then
   exit 0
 fi
 
-printf "%s\n" "[pre-push] package.json/package-lock.json changed; running npm audit --audit-level=high"
+if [ "$audit_reason" = "manifest_change" ]; then
+  printf "%s\n" "[pre-push] package.json/package-lock.json changed; running npm audit --audit-level=high"
+else
+  printf "%s\n" "[pre-push] Running npm audit --audit-level=high (conservative check)"
+fi
 npm audit --audit-level=high
