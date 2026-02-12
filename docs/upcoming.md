@@ -189,11 +189,11 @@ https://github.com/tmustier/pi-for-excel/issues/22
 ### #29 — Explainability: trace precedents/dependents + explain formula UX
 https://github.com/tmustier/pi-for-excel/issues/29
 
-**Status note:** `trace_dependencies` now supports both directions (`mode: precedents|dependents`) with structured metadata and clickable, collapsible tree rendering.
+**Status note:** explainability workflow is now in place:
+- `trace_dependencies` supports both directions (`mode: precedents|dependents`) with structured metadata and clickable, collapsible tree rendering
+- `explain_formula` provides plain-language explanations for single formula cells with cited direct references
 
-**Remaining scope:** add a dedicated “explain this formula” workflow (natural-language explanation + guided references).
-
-**Implication:** continue building on structured `details` metadata so explanation UX can cite and navigate references without brittle markdown parsing.
+**Implication:** future enhancements can stay additive (richer narratives, deeper lineage controls) on top of structured `details` metadata and clickable citations.
 
 ---
 

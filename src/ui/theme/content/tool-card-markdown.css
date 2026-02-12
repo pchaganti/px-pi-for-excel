@@ -136,6 +136,49 @@
   font-style: italic;
 }
 
+/* Explain formula block */
+.pi-formula-explain {
+  display: grid;
+  gap: 8px;
+}
+
+.pi-formula-explain__label {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  font-weight: 600;
+}
+
+.pi-formula-explain__formula {
+  display: grid;
+  gap: 4px;
+}
+
+.pi-formula-explain__formula code {
+  display: block;
+  padding: 4px 6px;
+  border: 1px solid var(--alpha-8);
+  border-radius: var(--radius-xs);
+  background: var(--alpha-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pi-formula-explain__list {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 4px;
+  font-size: var(--text-sm);
+}
+
+.pi-formula-explain__preview {
+  color: var(--muted-foreground);
+  font-size: var(--text-xs);
+}
+
 /* Flex overflow fix for tool cards */
 tool-message {
   min-width: 0;

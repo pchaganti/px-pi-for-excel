@@ -18,6 +18,7 @@ import { CORE_TOOL_NAMES, type CoreToolName } from "../tools/registry.js";
 import {
   isCommentsDetails,
   isConditionalFormatDetails,
+  isExplainFormulaDetails,
   isFillFormulaDetails,
   isFormatCellsDetails,
   isModifyStructureDetails,
@@ -275,6 +276,40 @@ function renderWorkbookCellDiff(details: unknown): TemplateResult {
           ? html`<div class="pi-tool-card__diff-note">Showing first ${changes.sample.length} changed cell(s).</div>`
           : html``}
       </div>
+    </div>
+  `;
+}
+
+function renderExplainFormulaDetails(details: unknown): TemplateResult | null {
+  if (!isExplainFormulaDetails(details)) return null;
+
+  if (!details.hasFormula) {
+    return html`<div class="pi-tool-card__plain-text">${details.explanation}</div>`;
+  }
+
+  return html`
+    <div class="pi-formula-explain">
+      <div class="pi-tool-card__plain-text">${details.explanation}</div>
+      <div class="pi-formula-explain__formula">
+        <span class="pi-formula-explain__label">Formula:</span>
+        <code>${details.formula}</code>
+      </div>
+      <div class="pi-formula-explain__refs">
+        <div class="pi-formula-explain__label">Direct references (${details.references.length})</div>
+        <ul class="pi-formula-explain__list">
+          ${details.references.length > 0
+            ? details.references.map((reference) => html`
+              <li>
+                ${cellRefs(reference.address)}
+                ${reference.valuePreview ? html`<span class="pi-formula-explain__preview"> → ${reference.valuePreview}</span>` : html``}
+              </li>
+            `)
+            : html`<li>(No direct references detected)</li>`}
+        </ul>
+      </div>
+      ${details.truncated
+        ? html`<div class="pi-tool-card__diff-note">Showing the first ${details.references.length} reference(s).</div>`
+        : html``}
     </div>
   `;
 }
@@ -783,6 +818,14 @@ function describeToolCall(
         address: cell,
       };
     }
+    case "explain_formula": {
+      const cell = p.cell as string | undefined;
+      return {
+        action: "Explain formula",
+        detail: cell ?? "cell",
+        address: cell,
+      };
+    }
     case "comments": {
       const op = p.action as string | undefined;
       const addr = range ? compactRange(range) : "range";
@@ -936,6 +979,7 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
             ? "Dependents"
             : "Precedents"
           : "Dependencies";
+        const formulaExplanation = renderExplainFormulaDetails(result.details);
 
         return {
           content: html`
@@ -957,8 +1001,10 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
                     </div>
                   ` : ""}
                   <div class="pi-tool-card__section">
-                    <div class="pi-tool-card__section-label">${depTree !== null ? depSectionLabel : csvTable !== null ? "Data" : "Result"}</div>
-                    ${csvTable !== null
+                    <div class="pi-tool-card__section-label">${formulaExplanation !== null ? "Formula explanation" : depTree !== null ? depSectionLabel : csvTable !== null ? "Data" : "Result"}</div>
+                    ${formulaExplanation !== null
+                      ? formulaExplanation
+                      : csvTable !== null
                       ? csvTable
                       : depTree !== null
                       ? depTree

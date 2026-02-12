@@ -13,6 +13,7 @@ const ALWAYS_READ_TOOLS = new Set<string>([
   "read_range",
   "search_workbook",
   "trace_dependencies",
+  "explain_formula",
   // Instructions and conventions mutate local prompt/config state, not workbook cells/structure.
   "instructions",
   "conventions",

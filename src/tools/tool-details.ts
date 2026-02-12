@@ -88,6 +88,23 @@ export interface TraceDependenciesDetails {
   truncated?: boolean;
 }
 
+export interface ExplainFormulaReferenceDetail {
+  address: string;
+  valuePreview?: string;
+  formulaPreview?: string;
+}
+
+export interface ExplainFormulaDetails {
+  kind: "explain_formula";
+  cell: string;
+  hasFormula: boolean;
+  formula?: string;
+  valuePreview?: string;
+  explanation: string;
+  references: ExplainFormulaReferenceDetail[];
+  truncated?: boolean;
+}
+
 export interface ReadRangeCsvDetails {
   kind: "read_range_csv";
   /** 0-indexed starting column (A=0, B=1, …) */
@@ -268,6 +285,7 @@ export type ExcelToolDetails =
   | ModifyStructureDetails
   | CommentsDetails
   | TraceDependenciesDetails
+  | ExplainFormulaDetails
   | ReadRangeCsvDetails
   | TmuxBridgeDetails
   | PythonBridgeDetails
@@ -500,6 +518,32 @@ export function isTraceDependenciesDetails(value: unknown): value is TraceDepend
     isOptionalNumber(value.nodeCount) &&
     isOptionalNumber(value.edgeCount) &&
     isOptionalTraceDependencySource(value.source) &&
+    isOptionalBoolean(value.truncated)
+  );
+}
+
+function isExplainFormulaReferenceDetail(value: unknown): value is ExplainFormulaReferenceDetail {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.address === "string" &&
+    isOptionalString(value.valuePreview) &&
+    isOptionalString(value.formulaPreview)
+  );
+}
+
+export function isExplainFormulaDetails(value: unknown): value is ExplainFormulaDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "explain_formula") return false;
+
+  return (
+    typeof value.cell === "string" &&
+    typeof value.hasFormula === "boolean" &&
+    isOptionalString(value.formula) &&
+    isOptionalString(value.valuePreview) &&
+    typeof value.explanation === "string" &&
+    Array.isArray(value.references) &&
+    value.references.every((reference) => isExplainFormulaReferenceDetail(reference)) &&
     isOptionalBoolean(value.truncated)
   );
 }

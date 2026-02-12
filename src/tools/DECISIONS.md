@@ -132,6 +132,13 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Fallback behavior:** tool prefers Office.js direct precedent/dependent APIs and falls back to formula parsing/scanning when APIs are unavailable.
 - **Rationale:** ASCII art via `<markdown-block>` lacked interactivity and visual hierarchy. Clickable addresses + collapsible branches make formula navigation significantly more usable.
 
+## Formula explanation workflow (`explain_formula`)
+- **Scope:** `explain_formula` targets a single cell and returns a concise natural-language explanation, current value preview, formula text, and direct reference citations.
+- **Reference preview policy:** loads and previews a bounded set of direct references (`max_references`, default 8, max 20) to keep response latency predictable.
+- **Fallback behavior:** if the target is not a formula cell, returns an explicit static-value explanation instead of failing silently.
+- **UI:** explanation card renders clickable reference citations with value previews.
+- **Rationale:** users need plain-English interpretation without losing inspectability; bounded reference previews preserve responsiveness on dense workbooks.
+
 ## Experimental tmux bridge tool (`tmux`)
 - **Availability:** non-core experimental tool, always registered via `createAllTools()`; execution is gated by `applyExperimentalToolGates()`.
 - **Gate model:** requires `tmux-bridge` experiment enabled, configured `tmux.bridge.url`, and successful bridge `/health` probe.
