@@ -199,15 +199,27 @@ export interface WorkbookHistoryDetails {
   error?: string;
 }
 
+export type SkillsSourceKind = "bundled" | "external";
+
+export interface SkillsListEntryDetails {
+  name: string;
+  sourceKind: SkillsSourceKind;
+  location: string;
+}
+
 export interface SkillsListDetails {
   kind: "skills_list";
   count: number;
   names: string[];
+  entries: SkillsListEntryDetails[];
+  externalDiscoveryEnabled: boolean;
 }
 
 export interface SkillsReadDetails {
   kind: "skills_read";
   skillName: string;
+  sourceKind: SkillsSourceKind;
+  location: string;
   cacheHit: boolean;
   refreshed: boolean;
   sessionScoped: boolean;
@@ -220,6 +232,7 @@ export interface SkillsErrorDetails {
   message: string;
   requestedName?: string;
   availableNames?: string[];
+  externalDiscoveryEnabled: boolean;
 }
 
 export type SkillsToolDetails = SkillsListDetails | SkillsReadDetails | SkillsErrorDetails;
@@ -356,6 +369,20 @@ function isOptionalStringArray(value: unknown): value is string[] | undefined {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isSkillsSourceKind(value: unknown): value is SkillsSourceKind {
+  return value === "bundled" || value === "external";
+}
+
+function isSkillsListEntryDetails(value: unknown): value is SkillsListEntryDetails {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.name === "string" &&
+    isSkillsSourceKind(value.sourceKind) &&
+    typeof value.location === "string"
+  );
 }
 
 function isRecoveryCheckpointDetails(value: unknown): value is RecoveryCheckpointDetails {
@@ -694,7 +721,10 @@ export function isSkillsListDetails(value: unknown): value is SkillsListDetails 
 
   return (
     typeof value.count === "number" &&
-    isStringArray(value.names)
+    isStringArray(value.names) &&
+    Array.isArray(value.entries) &&
+    value.entries.every((entry) => isSkillsListEntryDetails(entry)) &&
+    typeof value.externalDiscoveryEnabled === "boolean"
   );
 }
 
@@ -704,6 +734,8 @@ export function isSkillsReadDetails(value: unknown): value is SkillsReadDetails 
 
   return (
     typeof value.skillName === "string" &&
+    isSkillsSourceKind(value.sourceKind) &&
+    typeof value.location === "string" &&
     typeof value.cacheHit === "boolean" &&
     typeof value.refreshed === "boolean" &&
     typeof value.sessionScoped === "boolean" &&
@@ -719,7 +751,8 @@ export function isSkillsErrorDetails(value: unknown): value is SkillsErrorDetail
   return (
     typeof value.message === "string" &&
     isOptionalString(value.requestedName) &&
-    isOptionalStringArray(value.availableNames)
+    isOptionalStringArray(value.availableNames) &&
+    typeof value.externalDiscoveryEnabled === "boolean"
   );
 }
 

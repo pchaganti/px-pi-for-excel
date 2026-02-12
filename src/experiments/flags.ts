@@ -13,10 +13,12 @@ export type ExperimentalFeatureId =
   | "python_bridge"
   | "mcp_tools"
   | "files_workspace"
+  | "external_skills_discovery"
   | "remote_extension_urls"
   | "extension_permission_gates"
   | "extension_sandbox_runtime"
-  | "extension_widget_v2";
+  | "extension_widget_v2"
+  | "office_js_execute";
 
 export type ExperimentalFeatureWiring = "wired" | "flag-only";
 
@@ -71,6 +73,26 @@ const EXPERIMENTAL_FEATURES = [
     description: "Allow experimental file workspace and artifact tooling.",
     wiring: "wired",
     storageKey: "pi.experimental.filesWorkspace",
+  },
+  {
+    id: "external_skills_discovery",
+    slug: "external-skills-discovery",
+    aliases: ["external-skills", "skills-discovery"],
+    title: "External skills discovery",
+    description: "Allow loading Agent Skills from local externally configured SKILL.md sources.",
+    warning: "Security: external skills can contain untrusted instructions and executable references.",
+    wiring: "flag-only",
+    storageKey: "pi.experimental.externalSkillsDiscovery",
+  },
+  {
+    id: "office_js_execute",
+    slug: "office-js-execute",
+    aliases: ["execute-office-js", "office-js", "excel-js"],
+    title: "Direct Office.js execution",
+    description: "Allow direct execute_office_js calls with Excel.RequestContext.",
+    warning: "High impact: arbitrary Office.js can mutate workbook structure, formulas, and formatting.",
+    wiring: "wired",
+    storageKey: "pi.experimental.officeJsExecute",
   },
   {
     id: "remote_extension_urls",

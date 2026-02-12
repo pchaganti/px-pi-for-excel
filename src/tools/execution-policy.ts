@@ -37,6 +37,8 @@ const ALWAYS_MUTATE_TOOLS = new Set<string>([
   "conditional_format",
   // Bridge-assisted transform writes values back into the workbook.
   "python_transform_range",
+  // Arbitrary Office.js can mutate workbook content and structure.
+  "execute_office_js",
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -105,6 +107,10 @@ export function getToolContextImpact(toolName: string, params: unknown): ToolCon
   if (mode === "read") return "none";
 
   if (toolName === "modify_structure") {
+    return "structure";
+  }
+
+  if (toolName === "execute_office_js") {
     return "structure";
   }
 

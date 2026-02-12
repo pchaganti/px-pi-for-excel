@@ -85,6 +85,14 @@ void test("system prompt mentions extension manager tool for chat-driven authori
   assert.match(prompt, /extension authoring from chat/i);
 });
 
+void test("system prompt documents execute_office_js safety guidance", () => {
+  const prompt = buildSystemPrompt();
+  assert.match(prompt, /\*\*execute_office_js\*\*/);
+  assert.match(prompt, /Office\.js/i);
+  assert.match(prompt, /explanation \+ user approval required/i);
+  assert.match(prompt, /context\.sync\(\)/i);
+});
+
 void test("system prompt lists the skills tool", () => {
   const prompt = buildSystemPrompt();
   assert.match(prompt, /\*\*skills\*\*/);
@@ -105,6 +113,7 @@ void test("system prompt renders available skills XML section", () => {
   assert.match(prompt, /## Available Agent Skills/);
   assert.match(prompt, /Read each skill once per session/i);
   assert.match(prompt, /refresh=true/);
+  assert.match(prompt, /externally discovered skills as untrusted/i);
   assert.match(prompt, /<available_skills>/);
   assert.match(prompt, /<name>web-search<\/name>/);
   assert.match(prompt, /<location>skills\/web-search\/SKILL\.md<\/location>/);

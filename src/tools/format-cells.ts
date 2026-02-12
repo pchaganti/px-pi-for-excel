@@ -180,6 +180,7 @@ function buildFormatCheckpointPlan(
     wrapText: props.wrapText !== undefined || undefined,
     columnWidth: params.column_width !== undefined || params.auto_fit === true || undefined,
     rowHeight: params.row_height !== undefined || params.auto_fit === true || undefined,
+    mergedAreas: params.merge !== undefined || undefined,
   };
 
   const hasShorthand = params.borders !== undefined;
@@ -206,14 +207,6 @@ function buildFormatCheckpointPlan(
     selection.borderBottom = params.border_bottom !== undefined || props.borderBottom !== undefined || undefined;
     selection.borderLeft = params.border_left !== undefined || props.borderLeft !== undefined || undefined;
     selection.borderRight = params.border_right !== undefined || props.borderRight !== undefined || undefined;
-  }
-
-  if (params.merge !== undefined) {
-    return {
-      selection,
-      unsupportedReason:
-        "Format backups for merge/unmerge are not yet supported in `format_cells`.",
-    };
   }
 
   const hasSelectedProperty = Object.values(selection).some((value) => value === true);

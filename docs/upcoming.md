@@ -101,10 +101,10 @@ https://github.com/tmustier/pi-for-excel/issues/27
 - backup browser overlay (menu + `/history`) plus `/revert` for latest-backup rollback
 - dedicated backup browser overlay (menu + `/history`) with restore/delete/clear controls
 - restore creates an inverse backup so rollbacks are themselves reversible
-- unsupported mutation tools/actions (including unsupported `format_cells` variants such as `merge` and unsupported `modify_structure` variants) explicitly report when no backup is created
+- unsupported mutation tools/actions (including unsupported `modify_structure` variants) explicitly report when no backup is created
 
 **Remaining follow-up:**
-- broader remaining coverage (unsupported `modify_structure` actions, remaining unsupported `format_cells` variant `merge`, plus additional conditional-format rule types)
+- broader remaining coverage (unsupported `modify_structure` actions plus additional conditional-format rule types)
 - richer history UX (search/filter/export, retention controls)
 - feasibility deep-dive for full-file snapshots vs range snapshots in Office.js
 

@@ -406,6 +406,7 @@ function isRecoveryFormatSelection(value: unknown): value is RecoveryFormatRange
     "wrapText",
     "columnWidth",
     "rowHeight",
+    "mergedAreas",
     "borderTop",
     "borderBottom",
     "borderLeft",
@@ -431,6 +432,10 @@ function isStringGrid(value: unknown): value is string[][] {
 
 function isNumberList(value: unknown): value is number[] {
   return Array.isArray(value) && value.every((item) => typeof item === "number" && Number.isFinite(item));
+}
+
+function isStringList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
 function isRecoveryFormatBorderState(value: unknown): value is RecoveryFormatBorderState {
@@ -462,6 +467,7 @@ function isRecoveryFormatAreaState(value: unknown): value is RecoveryFormatRange
   if (value.wrapText !== undefined && typeof value.wrapText !== "boolean") return false;
   if (value.columnWidths !== undefined && !isNumberList(value.columnWidths)) return false;
   if (value.rowHeights !== undefined && !isNumberList(value.rowHeights)) return false;
+  if (value.mergedAreas !== undefined && !isStringList(value.mergedAreas)) return false;
 
   if (value.borderTop !== undefined && !isRecoveryFormatBorderState(value.borderTop)) return false;
   if (value.borderBottom !== undefined && !isRecoveryFormatBorderState(value.borderBottom)) return false;

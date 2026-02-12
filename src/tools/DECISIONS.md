@@ -181,6 +181,15 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **MCP integration:** configurable server registry (`mcp.servers.v1`), UI add/remove/test, and a single `mcp` gateway tool for list/search/describe/call flows.
 - **Rationale:** satisfy issue #24 with explicit consent, clear attribution, and minimal overlap with the extension system.
 
+## Experimental direct Office.js tool (`execute_office_js`)
+- **Availability:** non-core experimental tool, always registered via `createAllTools()`; execution is hard-gated by `applyExperimentalToolGates()` and `/experimental on office-js-execute`.
+- **Contract:** accepts `code` (async function body receiving `context: Excel.RequestContext`) plus a short user-facing `explanation`.
+- **Safety guards:** blocks nested `Excel.run(...)` usage (host already provides context), enforces explanation/code length limits, requires explicit user confirmation on every execution, and fails closed if confirmation UI is unavailable.
+- **Result policy:** tool output must be JSON-serializable; non-serializable results are returned as deterministic errors.
+- **Audit/recovery:** appends operation-level entries to `workbook.change-audit.v1` and explicitly reports that no workbook checkpoint is created.
+- **Execution policy:** treated as `mutate/structure` to force conservative workbook-context refresh after execution.
+- **Rationale:** unlock advanced Office.js scenarios when structured tools are insufficient while preserving explicit consent and auditability.
+
 ## Extension manager tool (`extensions_manager`)
 - **Availability:** always registered via `createAllTools()`.
 - **Purpose:** lets the agent manage extension lifecycle from chat (`list`, `install_code`, `set_enabled`, `reload`, `uninstall`).
@@ -239,6 +248,6 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Restore UX:** `workbook_history` can list/restore/delete/clear backups; restores also create an inverse backup (`restore_snapshot`) so users can undo a mistaken restore.
 - **Coverage signaling:** unsupported `modify_structure` actions and mutating `view_settings` actions explicitly report when no backup was created.
 - **Current `modify_structure` backup limits:** captures/restores only `rename_sheet`, `hide_sheet`, and `unhide_sheet` actions.
-- **Current `format_cells` backup limits:** captures/restores core range-format properties (font/fill/number format/alignment/wrap/borders) plus row/column dimensions (`column_width`, `row_height`, `auto_fit`). Mutations involving `merge` currently skip backup capture with an explicit note.
+- **Current `format_cells` backup scope:** captures/restores core range-format properties (font/fill/number format/alignment/wrap/borders), row/column dimensions (`column_width`, `row_height`, `auto_fit`), and merge state (`merge`/`unmerge`).
 - **Quick affordance:** users can restore via `/history` (Backups overlay) or `/revert` (latest backup).
 - **Rationale:** addresses #27 by shifting from cumbersome up-front approvals to versioned recovery with explicit user-controlled rollback.

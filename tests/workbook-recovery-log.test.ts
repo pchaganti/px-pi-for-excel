@@ -56,7 +56,7 @@ void test("firstCellAddress handles quoted sheet names that include !", () => {
   assert.equal(firstCellAddress("Sheet1!C5:D7"), "C5");
 });
 
-void test("estimateFormatCaptureCellCount scales by dimensions for dimension-only selection", () => {
+void test("estimateFormatCaptureCellCount scales by serialized checkpoint shape", () => {
   const largeArea = [{ rowCount: 1_048_576, columnCount: 3 }];
 
   assert.equal(
@@ -76,7 +76,17 @@ void test("estimateFormatCaptureCellCount scales by dimensions for dimension-onl
 
   assert.equal(
     estimateFormatCaptureCellCount(largeArea, { columnWidth: true, fillColor: true }),
-    3_145_728,
+    4,
+  );
+
+  assert.equal(
+    estimateFormatCaptureCellCount(largeArea, { mergedAreas: true }),
+    1_572_864,
+  );
+
+  assert.equal(
+    estimateFormatCaptureCellCount(largeArea, { mergedAreas: true, rowHeight: true }),
+    2_621_440,
   );
 });
 
@@ -143,6 +153,7 @@ void test("persisted format checkpoints retain dimension state", async () => {
     selection: {
       columnWidth: true,
       rowHeight: true,
+      mergedAreas: true,
     },
     areas: [
       {
@@ -151,6 +162,7 @@ void test("persisted format checkpoints retain dimension state", async () => {
         columnCount: 2,
         columnWidths: [64, 80],
         rowHeights: [18, 22],
+        mergedAreas: ["Sheet1!A1:B1"],
       },
     ],
     cellCount: 4,
@@ -435,6 +447,7 @@ void test("restore applies format-cells checkpoints and creates inverse checkpoi
       bold: true,
       columnWidth: true,
       rowHeight: true,
+      mergedAreas: true,
       borderTop: true,
     },
     areas: [
@@ -447,6 +460,7 @@ void test("restore applies format-cells checkpoints and creates inverse checkpoi
         bold: true,
         columnWidths: [64, 80],
         rowHeights: [24],
+        mergedAreas: ["Sheet1!A1:B1"],
         borderTop: {
           style: "Continuous",
           weight: "Thin",
@@ -464,6 +478,7 @@ void test("restore applies format-cells checkpoints and creates inverse checkpoi
       bold: true,
       columnWidth: true,
       rowHeight: true,
+      mergedAreas: true,
       borderTop: true,
     },
     areas: [
@@ -476,6 +491,7 @@ void test("restore applies format-cells checkpoints and creates inverse checkpoi
         bold: false,
         columnWidths: [72, 72],
         rowHeights: [20],
+        mergedAreas: [],
         borderTop: {
           style: "None",
         },
