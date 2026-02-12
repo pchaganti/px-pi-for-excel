@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  buildChangeExplanation,
+  MAX_EXPLANATION_PROMPT_CHARS,
+  MAX_EXPLANATION_TEXT_CHARS,
+} from "../src/audit/change-explanation.ts";
+import {
   WorkbookChangeAuditLog,
   type AppendWorkbookChangeAuditEntryArgs,
 } from "../src/audit/workbook-change-audit.ts";
@@ -383,4 +388,79 @@ void test("workbook_history restore appends audit entries for success and missin
   assert.equal(missingAuditCapture.entries[0]?.toolName, "workbook_history");
   assert.equal(missingAuditCapture.entries[0]?.blocked, true);
   assert.equal(missingAuditCapture.entries[0]?.changedCount, 0);
+});
+
+void test("buildChangeExplanation shapes citations and prompt from change metadata", () => {
+  const explanation = buildChangeExplanation({
+    toolName: "write_cells",
+    blocked: false,
+    changedCount: 4,
+    summary: "wrote budget deltas",
+    outputAddress: "Sheet1!A1:B2",
+    changes: {
+      changedCount: 4,
+      truncated: false,
+      sample: [
+        {
+          address: "Sheet1!A1",
+          beforeValue: "10",
+          afterValue: "12",
+        },
+        {
+          address: "Sheet1!B2",
+          beforeValue: "=SUM(B3:B10)",
+          afterValue: "=SUM(B3:B11)",
+          beforeFormula: "=SUM(B3:B10)",
+          afterFormula: "=SUM(B3:B11)",
+        },
+      ],
+    },
+  });
+
+  assert.match(explanation.prompt, /Tool: write_cells/u);
+  assert.match(explanation.prompt, /Sample changes:/u);
+  assert.match(explanation.prompt, /Sheet1!A1/u);
+
+  assert.match(explanation.text, /changed 4 cell/u);
+  assert.match(explanation.text, /Inspect:/u);
+  assert.ok(explanation.citations.includes("Sheet1!A1"));
+  assert.ok(explanation.citations.includes("Sheet1!B2"));
+  assert.ok(explanation.citations.includes("Sheet1!A1:B2"));
+  assert.equal(explanation.usedFallback, false);
+});
+
+void test("buildChangeExplanation enforces prompt and text budgets", () => {
+  const longSummary = "x".repeat(MAX_EXPLANATION_PROMPT_CHARS + 200);
+
+  const explanation = buildChangeExplanation({
+    toolName: "python_transform_range",
+    blocked: false,
+    changedCount: 128,
+    summary: longSummary,
+    outputAddress: "Sheet1!A1:Z99",
+    changes: {
+      changedCount: 128,
+      truncated: true,
+      sample: [...Array(10).keys()].map((index) => ({
+        address: `Sheet1!A${index + 1}`,
+        beforeValue: "before-" + "v".repeat(120),
+        afterValue: "after-" + "w".repeat(120),
+      })),
+    },
+  });
+
+  assert.equal(explanation.prompt.length <= MAX_EXPLANATION_PROMPT_CHARS, true);
+  assert.equal(explanation.text.length <= MAX_EXPLANATION_TEXT_CHARS, true);
+  assert.equal(explanation.truncated, true);
+});
+
+void test("buildChangeExplanation falls back gracefully on sparse metadata", () => {
+  const explanation = buildChangeExplanation({
+    toolName: "modify_structure",
+    blocked: false,
+  });
+
+  assert.equal(explanation.citations.length, 0);
+  assert.equal(explanation.usedFallback, true);
+  assert.match(explanation.text, /Not enough audit metadata/u);
 });

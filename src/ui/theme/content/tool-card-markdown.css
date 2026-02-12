@@ -90,6 +90,52 @@
   font-size: var(--text-xs);
 }
 
+/* Optional explanation drawer for mutation cards */
+.pi-tool-card__explain {
+  border: 1px solid var(--alpha-8);
+  border-radius: var(--radius-sm);
+  background: var(--alpha-2);
+}
+
+.pi-tool-card__explain-toggle {
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--foreground);
+  padding: 7px 9px;
+}
+
+.pi-tool-card__explain-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.pi-tool-card__explain[open] .pi-tool-card__explain-toggle {
+  border-bottom: 1px solid var(--alpha-8);
+}
+
+.pi-tool-card__explain-body {
+  padding: 8px 9px 9px;
+}
+
+.pi-tool-card__explain-citations {
+  margin-top: 7px;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  line-height: 1.45;
+}
+
+.pi-tool-card__explain-citations-label {
+  margin-right: 5px;
+  font-weight: 600;
+}
+
+.pi-tool-card__explain-citations-empty {
+  font-style: italic;
+}
+
 /* Flex overflow fix for tool cards */
 tool-message {
   min-width: 0;

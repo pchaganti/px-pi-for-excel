@@ -24,10 +24,16 @@ import {
   isPythonTransformRangeDetails,
   isReadRangeCsvDetails,
   isTraceDependenciesDetails,
+  isWorkbookHistoryDetails,
   isWriteCellsDetails,
   type RecoveryCheckpointDetails,
   type WriteCellsDetails,
 } from "../tools/tool-details.js";
+import { getToolExecutionMode } from "../tools/execution-policy.js";
+import {
+  buildChangeExplanation,
+  type ChangeExplanationInput,
+} from "../audit/change-explanation.js";
 import { renderCsvTable } from "./render-csv-table.js";
 import { renderDepTree } from "./render-dep-tree.js";
 
@@ -269,6 +275,198 @@ function renderWorkbookCellDiff(details: unknown): TemplateResult {
           ? html`<div class="pi-tool-card__diff-note">Showing first ${changes.sample.length} changed cell(s).</div>`
           : html``}
       </div>
+    </div>
+  `;
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function extractResultError(resultText: string | undefined): string | undefined {
+  if (!resultText) return undefined;
+
+  const summary = resultSummary(resultText);
+  if (!summary) return undefined;
+
+  const normalized = summary.replace(/^\s*⚠️\s*/u, "").trim();
+  if (/^error\b/ui.test(normalized)) {
+    return normalized.replace(/^error:\s*/ui, "").trim();
+  }
+
+  return undefined;
+}
+
+function buildChangeExplanationInputForTool(
+  toolName: SupportedToolName,
+  params: unknown,
+  resultText: string | undefined,
+  details: unknown,
+): ChangeExplanationInput | null {
+  if (getToolExecutionMode(toolName, params) !== "mutate") return null;
+
+  const p = safeParseParams(params);
+  const range = optionalString(p.range);
+  const startCell = optionalString(p.start_cell);
+  const sheet = optionalString(p.sheet);
+  const action = optionalString(p.action);
+
+  const summary = resultSummary(resultText ?? "") ?? undefined;
+  const error = extractResultError(resultText);
+  const blockedFromText = Boolean(resultText && isBlocked(resultText));
+
+  if (isWriteCellsDetails(details)) {
+    return {
+      toolName,
+      blocked: details.blocked,
+      changedCount: details.changes?.changedCount,
+      summary,
+      error,
+      outputAddress: details.address ?? startCell,
+      changes: details.changes,
+    };
+  }
+
+  if (isFillFormulaDetails(details)) {
+    return {
+      toolName,
+      blocked: details.blocked,
+      changedCount: details.changes?.changedCount,
+      summary,
+      error,
+      outputAddress: details.address ?? range,
+      changes: details.changes,
+    };
+  }
+
+  if (isPythonTransformRangeDetails(details)) {
+    return {
+      toolName,
+      blocked: details.blocked || blockedFromText,
+      changedCount: details.changes?.changedCount,
+      summary,
+      error: details.error ?? error,
+      inputAddress: details.inputAddress,
+      outputAddress: details.outputAddress,
+      changes: details.changes,
+    };
+  }
+
+  if (isWorkbookHistoryDetails(details) && details.action === "restore") {
+    const historyError = optionalString(details.error);
+    return {
+      toolName,
+      blocked: blockedFromText || Boolean(historyError),
+      changedCount: details.changedCount,
+      summary,
+      error: historyError ?? error,
+      outputAddress: details.address,
+    };
+  }
+
+  if (toolName === "format_cells") {
+    const detailsAddress = isFormatCellsDetails(details) ? details.address : undefined;
+    return {
+      toolName,
+      blocked: blockedFromText,
+      summary,
+      error,
+      outputAddress: detailsAddress ?? range,
+    };
+  }
+
+  if (toolName === "conditional_format") {
+    return {
+      toolName,
+      blocked: blockedFromText,
+      summary,
+      error,
+      outputAddress: range,
+    };
+  }
+
+  if (toolName === "modify_structure") {
+    return {
+      toolName,
+      blocked: blockedFromText,
+      summary,
+      error,
+      outputAddress: range ?? sheet,
+    };
+  }
+
+  if (toolName === "comments") {
+    return {
+      toolName,
+      blocked: blockedFromText,
+      changedCount: blockedFromText ? 0 : 1,
+      summary,
+      error,
+      outputAddress: range,
+    };
+  }
+
+  if (toolName === "view_settings") {
+    const outputAddress = range ?? sheet;
+    return {
+      toolName,
+      blocked: blockedFromText,
+      changedCount: blockedFromText ? 0 : 1,
+      summary,
+      error,
+      outputAddress,
+    };
+  }
+
+  if (toolName === "workbook_history" && action === "restore") {
+    return {
+      toolName,
+      blocked: blockedFromText,
+      summary,
+      error,
+    };
+  }
+
+  return null;
+}
+
+function renderCitations(citations: readonly string[]): TemplateResult {
+  if (citations.length === 0) {
+    return html`<span class="pi-tool-card__explain-citations-empty">No range citations available.</span>`;
+  }
+
+  return html`${citations.map((address, index) => html`${index > 0 ? html`, ` : html``}${cellRefs(address)}`)}`;
+}
+
+function renderChangeExplanationSection(
+  toolName: SupportedToolName,
+  params: unknown,
+  resultText: string | undefined,
+  details: unknown,
+): TemplateResult {
+  const input = buildChangeExplanationInputForTool(toolName, params, resultText, details);
+  if (!input) return html``;
+
+  const explanation = buildChangeExplanation(input);
+
+  return html`
+    <div class="pi-tool-card__section">
+      <details class="pi-tool-card__explain">
+        <summary class="pi-tool-card__explain-toggle">Explain these changes</summary>
+        <div class="pi-tool-card__explain-body">
+          <div class="pi-tool-card__plain-text">${explanation.text}</div>
+          <div class="pi-tool-card__explain-citations">
+            <span class="pi-tool-card__explain-citations-label">Citations:</span>
+            ${renderCitations(explanation.citations)}
+          </div>
+          ${explanation.usedFallback
+            ? html`<div class="pi-tool-card__diff-note">Limited metadata available; explanation is high-level.</div>`
+            : html``}
+          ${explanation.truncated
+            ? html`<div class="pi-tool-card__diff-note">Explanation uses a bounded metadata sample.</div>`
+            : html``}
+        </div>
+      </details>
     </div>
   `;
 }
@@ -775,6 +973,7 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
                     ${renderImages(images)}
                   </div>
                   ${renderWorkbookCellDiff(result.details)}
+                  ${renderChangeExplanationSection(toolName, params, text, result.details)}
                 </div>
               </div>
             </div>
