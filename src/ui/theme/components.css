@@ -2,8 +2,6 @@
    3. PI-SIDEBAR — tabs + messages area + input area
    ═══════════════════════════════════════════════════════ */
 
-/* ── Session tabs ── */
-
 .pi-session-tabs {
   display: flex;
   align-items: center;
@@ -13,42 +11,26 @@
   padding-right: 44px;
 
   /* ── Liquid glass surface ── */
-  background:
-    /* Specular sheen — subtle top-to-bottom gradient simulating light across glass */
-    linear-gradient(
-      180deg,
-      oklch(1 0 0 / 0.18) 0%,
-      oklch(1 0 0 / 0.0) 50%,
-      oklch(0 0 0 / 0.02) 100%
-    ),
-    /* Base translucent fill */
-    oklch(1 0 0 / 0.60);
-  backdrop-filter: blur(20px) saturate(1.6) brightness(1.04);
-  -webkit-backdrop-filter: blur(20px) saturate(1.6) brightness(1.04);
-  box-shadow:
-    /* Specular top edge — light catching the glass rim */
-    inset 0 1px 0 0 oklch(1 0 0 / 0.8),
-    /* Inner depth — bottom edge recedes */
-    inset 0 -1px 0 0 oklch(0 0 0 / 0.04);
+  background: transparent;
 
   flex-shrink: 0;
   position: relative;
   z-index: 10;
 }
 
-/* Accent gradient line — teal light refracting along the bottom edge */
+/* Liquid glass fade — tab strip dissolves into content below */
 .pi-session-tabs::after {
   content: '';
   position: absolute;
-  bottom: 0;
+  bottom: -24px;
   left: 0;
   right: 0;
-  height: 1px;
+  height: 24px;
   background: linear-gradient(
-    90deg,
-    oklch(0.50 0.14 155 / 0.40),
-    oklch(0.55 0.10 100 / 0.15),
-    transparent 75%
+    to bottom,
+    oklch(0.98 0.002 90 / 0.5),
+    oklch(0.98 0.002 90 / 0.2) 40%,
+    transparent
   );
   pointer-events: none;
 }
@@ -66,49 +48,23 @@
 .pi-session-tab {
   display: flex;
   align-items: center;
-  border: var(--glass-border);
+  border: 1px solid oklch(0 0 0 / 0.10);
   border-radius: 8px;
-  background:
-    linear-gradient(
-      180deg,
-      oklch(1 0 0 / 0.15) 0%,
-      oklch(1 0 0 / 0.0) 100%
-    ),
-    var(--glass-bg);
-  box-shadow:
-    var(--glass-highlight),
-    var(--glass-inner-shadow),
-    /* Subtle lift — glass chip floating on the bar */
-    0 0.5px 2px oklch(0 0 0 / 0.06);
+  background: oklch(1 0 0 / 0.25);
+  color: var(--muted-foreground);
   min-width: 0;
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .pi-session-tab:hover {
-  background:
-    linear-gradient(
-      180deg,
-      oklch(1 0 0 / 0.22) 0%,
-      oklch(1 0 0 / 0.0) 100%
-    ),
-    oklch(1 0 0 / 0.65);
+  background: oklch(1 0 0 / 0.40);
+  border-color: oklch(0 0 0 / 0.14);
 }
 
 .pi-session-tab.is-active {
+  background: oklch(0.45 0.12 160 / 0.18);
   border-color: oklch(0.45 0.12 160 / 0.25);
-  background:
-    linear-gradient(
-      180deg,
-      oklch(1 0 0 / 0.20) 0%,
-      oklch(0.45 0.12 160 / 0.04) 100%
-    ),
-    oklch(0.45 0.12 160 / 0.07);
-  box-shadow:
-    var(--glass-highlight),
-    var(--glass-inner-shadow),
-    /* Teal glow — active pane refracting accent color */
-    0 0 6px oklch(0.45 0.12 160 / 0.08),
-    0 0.5px 2px oklch(0 0 0 / 0.06);
+  color: var(--foreground);
 }
 
 .pi-session-tab__main {
@@ -118,7 +74,7 @@
   min-width: 0;
   border: none;
   background: transparent;
-  color: var(--foreground);
+  color: inherit;
   font-family: var(--font-sans);
   font-size: 11.5px;
   padding: 4px 8px;
@@ -136,37 +92,56 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--pi-green);
-  box-shadow: 0 0 0 3px oklch(0.45 0.12 160 / 0.12);
+  background: white;
+  box-shadow: 0 0 0 3px oklch(1 0 0 / 0.25);
   flex-shrink: 0;
 }
 
 .pi-session-tab__lock {
   font-size: 10px;
-  color: var(--muted-foreground);
+  color: oklch(1 0 0 / 0.7);
   font-family: var(--font-mono);
   flex-shrink: 0;
 }
 
-.pi-session-tab__close,
-.pi-session-tabs__new {
+.pi-session-tab__close {
   border: none;
   background: transparent;
-  color: var(--muted-foreground);
+  color: oklch(1 0 0 / 0.7);
   font-size: 12px;
   width: 20px;
   height: 20px;
   border-radius: 5px;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.12s, color 0.12s, box-shadow 0.12s;
 }
 
-.pi-session-tab__close:hover,
+.pi-session-tab__close:hover {
+  background: oklch(1 0 0 / 0.2);
+  color: white;
+}
+
+.pi-session-tabs__new {
+  border: 1px dashed oklch(0 0 0 / 0.15);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 16px;
+  font-weight: 300;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
 .pi-session-tabs__new:hover {
-  background: oklch(1 0 0 / 0.45);
-  color: var(--foreground);
-  box-shadow: var(--glass-highlight), var(--glass-inner-shadow);
+  background: oklch(0.45 0.12 160 / 0.08);
+  border-color: oklch(0.45 0.12 160 / 0.3);
+  color: var(--pi-green);
 }
 
 .pi-session-tab__close:disabled {
@@ -213,7 +188,7 @@
   position: absolute;
   top: 100%;
   right: 0;
-  z-index: 50;
+  z-index: 210;
   min-width: 190px;
   margin-top: 6px;
   padding: 4px;
@@ -331,14 +306,19 @@
   padding: 6px 10px;
   position: relative;
   z-index: 10;
-  background: var(--pi-surface-translucent);
-  border-top: var(--pi-divider);
+  background: transparent;
 }
 
-/* Input footer */
-.pi-input-area {
-  backdrop-filter: blur(12px) saturate(1.3);
-  -webkit-backdrop-filter: blur(12px) saturate(1.3);
+/* Input footer — soft fade into content above */
+.pi-input-area::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 0;
+  right: 0;
+  height: 10px;
+  background: linear-gradient(to top, oklch(0 0 0 / 0.04), transparent);
+  pointer-events: none;
 }
 
 
@@ -352,7 +332,6 @@
   border: var(--pill-border);
   background: var(--pill-bg);
   box-shadow: var(--pill-shadow);
-  overflow: hidden;
 }
 
 .pi-input-card:focus-within {
@@ -1046,7 +1025,7 @@ pi-working-indicator {
 
 .pi-toast {
   position: fixed;
-  top: 12px;
+  top: 56px;
   left: 50%;
   transform: translateX(-50%) translateY(-4px);
   z-index: 200;
