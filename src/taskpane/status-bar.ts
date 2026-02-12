@@ -104,9 +104,11 @@ function renderStatusBar(
     lockBadge = `<span class="pi-status-lock pi-status-lock--active" data-tooltip="This session currently holds the workbook write lock.">lock</span>`;
   }
 
-  const instructionsBadge = instructionsActive
-    ? `<button class="pi-status-rules" data-tooltip="Custom rules are being applied. Click to edit.">${rulesSvg} rules</button>`
-    : "";
+  const rulesActiveClass = instructionsActive ? " pi-status-rules--active" : "";
+  const rulesTooltip = instructionsActive
+    ? "Custom rules are active. Click to edit rules &amp; number format."
+    : "Click to edit rules &amp; number format preferences.";
+  const instructionsBadge = `<button class="pi-status-rules${rulesActiveClass}" data-tooltip="${rulesTooltip}">${rulesSvg} rules</button>`;
 
   const integrationsBadge = activeIntegrations.length > 0
     ? `<button class="pi-status-integrations" data-tooltip="${ACTIVE_INTEGRATIONS_TOOLTIP_PREFIX}: ${escapeAttr(activeIntegrations.join(", "))}. Click to manage.">${integrationsSvg} ${formatIntegrationCountLabel(activeIntegrations.length)}</button>`

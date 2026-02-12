@@ -863,9 +863,9 @@ pi-working-indicator {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  border: 1px solid var(--green-alpha-25);
-  background: var(--pi-green-light);
-  color: var(--primary);
+  border: 1px solid var(--alpha-8);
+  background: var(--alpha-4);
+  color: var(--muted-foreground);
   border-radius: var(--radius-xs);
   padding: 1px 6px;
   font-size: var(--text-xs);
@@ -881,6 +881,16 @@ pi-working-indicator {
 }
 
 .pi-status-rules:hover {
+  background: var(--alpha-8);
+}
+
+.pi-status-rules--active {
+  border-color: var(--green-alpha-25);
+  background: var(--pi-green-light);
+  color: var(--primary);
+}
+
+.pi-status-rules--active:hover {
   background: var(--green-alpha-14);
 }
 
