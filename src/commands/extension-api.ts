@@ -83,8 +83,8 @@ export interface WidgetUpsertSpec {
   order?: number;
   collapsible?: boolean;
   collapsed?: boolean;
-  minHeightPx?: number;
-  maxHeightPx?: number;
+  minHeightPx?: number | null;
+  maxHeightPx?: number | null;
 }
 
 export interface WidgetAPI {
@@ -283,7 +283,7 @@ function showLegacyWidget(el: HTMLElement): void {
   }
 
   slot.replaceChildren(el);
-  slot.style.display = "block";
+  slot.style.display = "flex";
 }
 
 function dismissLegacyWidget(): void {

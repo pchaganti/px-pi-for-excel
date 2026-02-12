@@ -105,6 +105,13 @@ Enable with:
 
 `upsert(spec)` supports optional metadata: `title`, `placement` (`above-input` | `below-input`), `order`, `collapsible`, `collapsed`, `minHeightPx`, `maxHeightPx`.
 
+Widget API v2 host behavior:
+- `collapsible: true` renders a built-in header toggle (expand/collapse) for predictable UX.
+- Omitted optional fields preserve prior widget metadata on upsert (title/placement/order/collapse/size).
+- `minHeightPx` / `maxHeightPx` are clamped to safe host bounds (`72..640` px).
+- If both bounds are set and `maxHeightPx < minHeightPx`, host coerces `maxHeightPx` up to `minHeightPx`.
+- Pass `null` for `minHeightPx` / `maxHeightPx` to clear a previously set bound while keeping other widget metadata unchanged.
+
 ### `toast(message)`
 Show a short toast notification.
 

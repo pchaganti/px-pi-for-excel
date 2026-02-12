@@ -144,8 +144,32 @@ function asFiniteNumberOrNull(value: unknown): number | null {
   return value;
 }
 
-function asWidgetPlacementOrDefault(value: unknown): WidgetPlacement {
-  return value === "below-input" ? "below-input" : "above-input";
+function asFiniteNumberOrNullOrUndefined(value: unknown): number | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value !== "number" || Number.isNaN(value) || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  return value;
+}
+
+function asWidgetPlacementOrUndefined(value: unknown): WidgetPlacement | undefined {
+  if (value === "above-input" || value === "below-input") {
+    return value;
+  }
+
+  return undefined;
+}
+
+function asBooleanOrUndefined(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
 }
 
 function isSandboxEnvelope(value: unknown): value is SandboxEnvelope {
@@ -272,7 +296,7 @@ function showWidgetNode(
 
   card.appendChild(body);
   slot.replaceChildren(card);
-  slot.style.display = "block";
+  slot.style.display = "flex";
 
   return new Set(collectSandboxUiActionIds(node));
 }
@@ -297,8 +321,8 @@ interface SandboxWidgetUpsertOptions {
   order?: number;
   collapsible?: boolean;
   collapsed?: boolean;
-  minHeightPx?: number;
-  maxHeightPx?: number;
+  minHeightPx?: number | null;
+  maxHeightPx?: number | null;
 }
 
 function upsertSandboxWidgetNode(options: SandboxWidgetUpsertOptions): Set<string> {
@@ -1080,12 +1104,22 @@ class SandboxRuntimeHost {
                 widgetId,
                 tree,
                 title: typeof payload.title === "string" ? payload.title : undefined,
-                placement: payload.placement === "below-input" ? "below-input" : "above-input",
+                placement: payload.placement === "above-input" || payload.placement === "below-input"
+                  ? payload.placement
+                  : undefined,
                 order: typeof payload.order === "number" ? payload.order : undefined,
-                collapsible: payload.collapsible === true,
-                collapsed: payload.collapsed === true,
-                minHeightPx: typeof payload.minHeightPx === "number" ? payload.minHeightPx : undefined,
-                maxHeightPx: typeof payload.maxHeightPx === "number" ? payload.maxHeightPx : undefined,
+                collapsible: typeof payload.collapsible === "boolean" ? payload.collapsible : undefined,
+                collapsed: typeof payload.collapsed === "boolean" ? payload.collapsed : undefined,
+                minHeightPx: typeof payload.minHeightPx === "number"
+                  ? payload.minHeightPx
+                  : payload.minHeightPx === null
+                    ? null
+                    : undefined,
+                maxHeightPx: typeof payload.maxHeightPx === "number"
+                  ? payload.maxHeightPx
+                  : payload.maxHeightPx === null
+                    ? null
+                    : undefined,
               }));
             },
             remove(id) {
@@ -1584,12 +1618,12 @@ class SandboxRuntimeHost {
           const widgetId = asNonEmptyString(payload.widgetId, "widgetId");
           const tree = normalizeSandboxUiNode(payload.tree);
           const title = typeof payload.title === "string" ? payload.title : undefined;
-          const placement = asWidgetPlacementOrDefault(payload.placement);
+          const placement = asWidgetPlacementOrUndefined(payload.placement);
           const order = asFiniteNumberOrNull(payload.order);
-          const minHeightPx = asFiniteNumberOrNull(payload.minHeightPx);
-          const maxHeightPx = asFiniteNumberOrNull(payload.maxHeightPx);
-          const collapsible = payload.collapsible === true;
-          const collapsed = payload.collapsed === true;
+          const minHeightPx = asFiniteNumberOrNullOrUndefined(payload.minHeightPx);
+          const maxHeightPx = asFiniteNumberOrNullOrUndefined(payload.maxHeightPx);
+          const collapsible = asBooleanOrUndefined(payload.collapsible);
+          const collapsed = asBooleanOrUndefined(payload.collapsed);
 
           const actionIds = upsertSandboxWidgetNode({
             ownerId: this.widgetOwnerId,
@@ -1608,8 +1642,8 @@ class SandboxRuntimeHost {
             order: order ?? undefined,
             collapsible,
             collapsed,
-            minHeightPx: minHeightPx ?? undefined,
-            maxHeightPx: maxHeightPx ?? undefined,
+            minHeightPx,
+            maxHeightPx,
           });
 
           this.replaceWidgetActionIds(widgetId, actionIds);

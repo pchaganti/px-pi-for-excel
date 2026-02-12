@@ -73,4 +73,6 @@ void test("extension API source exports additive widget lifecycle methods", asyn
   assert.match(source, /remove\(id: string\)/);
   assert.match(source, /clear\(\)/);
   assert.match(source, /extension_widget_v2/);
+  assert.match(source, /minHeightPx\?: number \| null/);
+  assert.match(source, /maxHeightPx\?: number \| null/);
 });
