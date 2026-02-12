@@ -12,6 +12,7 @@ import { createPythonRunTool } from "./python-run.js";
 import { createLibreOfficeConvertTool } from "./libreoffice-convert.js";
 import { createPythonTransformRangeTool } from "./python-transform-range.js";
 import { createFilesTool } from "./files.js";
+import { createExecuteOfficeJsTool } from "./execute-office-js.js";
 import {
   createExtensionsManagerTool,
   type ExtensionsManagerToolRuntime,
@@ -38,6 +39,7 @@ export function createAllTools(options: CreateAllToolsOptions = {}) {
     createLibreOfficeConvertTool(),
     createPythonTransformRangeTool(),
     createFilesTool(),
+    createExecuteOfficeJsTool(),
     createExtensionsManagerTool({ getManager: getExtensionManager }),
   ];
 }

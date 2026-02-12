@@ -1,7 +1,7 @@
 /**
  * Experimental tool gatekeeper.
  *
- * Security posture for experimental capabilities (local bridges + files workspace):
+ * Security posture for experimental capabilities (local bridges + files + direct Office.js):
  * - capability must be explicitly enabled via /experimental
  * - local bridge URL must be configured (for bridge-backed tools)
  * - bridge must be reachable at execution time (for bridge-backed tools)
@@ -16,6 +16,7 @@ import { isExperimentalFeatureEnabled } from "../experiments/flags.js";
 
 const TMUX_TOOL_NAME = "tmux";
 const FILES_TOOL_NAME = "files";
+const EXECUTE_OFFICE_JS_TOOL_NAME = "execute_office_js";
 const PYTHON_TOOL_NAMES = new Set<string>([
   "python_run",
   "libreoffice_convert",
@@ -78,19 +79,37 @@ export interface FilesWorkspaceGateDependencies {
   isFilesWorkspaceExperimentEnabled?: () => boolean;
 }
 
+export type OfficeJsExecuteGateReason = "office_js_execute_experiment_disabled";
+
+export interface OfficeJsExecuteGateResult {
+  allowed: boolean;
+  reason?: OfficeJsExecuteGateReason;
+}
+
+export interface OfficeJsExecuteGateDependencies {
+  isOfficeJsExecuteExperimentEnabled?: () => boolean;
+}
+
 export interface PythonBridgeApprovalRequest {
   toolName: string;
   bridgeUrl: string;
   params: unknown;
 }
 
+export interface OfficeJsExecuteApprovalRequest {
+  explanation: string;
+  code: string;
+}
+
 export interface ExperimentalToolGateDependencies extends
   TmuxBridgeGateDependencies,
   PythonBridgeGateDependencies,
-  FilesWorkspaceGateDependencies {
+  FilesWorkspaceGateDependencies,
+  OfficeJsExecuteGateDependencies {
   requestPythonBridgeApproval?: (request: PythonBridgeApprovalRequest) => Promise<boolean>;
   getApprovedPythonBridgeUrl?: () => Promise<string | undefined>;
   setApprovedPythonBridgeUrl?: (bridgeUrl: string) => Promise<void>;
+  requestOfficeJsExecuteApproval?: (request: OfficeJsExecuteApprovalRequest) => Promise<boolean>;
 }
 
 function defaultIsTmuxExperimentEnabled(): boolean {
@@ -103,6 +122,10 @@ function defaultIsPythonExperimentEnabled(): boolean {
 
 function defaultIsFilesWorkspaceExperimentEnabled(): boolean {
   return isExperimentalFeatureEnabled("files_workspace");
+}
+
+function defaultIsOfficeJsExecuteExperimentEnabled(): boolean {
+  return isExperimentalFeatureEnabled("office_js_execute");
 }
 
 async function defaultGetBridgeUrl(settingKey: string): Promise<string | undefined> {
@@ -280,6 +303,23 @@ export function evaluateFilesWorkspaceGate(
   return { allowed: true };
 }
 
+export function evaluateOfficeJsExecuteGate(
+  dependencies: OfficeJsExecuteGateDependencies = {},
+): OfficeJsExecuteGateResult {
+  const isEnabled =
+    dependencies.isOfficeJsExecuteExperimentEnabled
+    ?? defaultIsOfficeJsExecuteExperimentEnabled;
+
+  if (!isEnabled()) {
+    return {
+      allowed: false,
+      reason: "office_js_execute_experiment_disabled",
+    };
+  }
+
+  return { allowed: true };
+}
+
 export function buildTmuxBridgeGateErrorMessage(reason: TmuxBridgeGateReason): string {
   switch (reason) {
     case "tmux_experiment_disabled":
@@ -310,6 +350,13 @@ export function buildFilesWorkspaceGateErrorMessage(reason: FilesWorkspaceGateRe
   switch (reason) {
     case "files_experiment_disabled":
       return "Files workspace is disabled. Enable it with /experimental on files-workspace.";
+  }
+}
+
+export function buildOfficeJsExecuteGateErrorMessage(reason: OfficeJsExecuteGateReason): string {
+  switch (reason) {
+    case "office_js_execute_experiment_disabled":
+      return "Direct Office.js execution is disabled. Enable it with /experimental on office-js-execute.";
   }
 }
 
@@ -364,6 +411,57 @@ function defaultRequestPythonBridgeApproval(
   );
 }
 
+function getOfficeJsApprovalMessage(request: OfficeJsExecuteApprovalRequest): string {
+  const explanation = request.explanation.trim().length > 0
+    ? request.explanation.trim()
+    : "(no explanation provided)";
+
+  const firstLine = request.code
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.length > 0)
+    ?? "(no code preview)";
+
+  return [
+    "Allow direct Office.js execution?",
+    "",
+    `Action: ${explanation}`,
+    `Code preview: ${firstLine}`,
+  ].join("\n");
+}
+
+function defaultRequestOfficeJsExecuteApproval(
+  request: OfficeJsExecuteApprovalRequest,
+): Promise<boolean> {
+  if (typeof window === "undefined" || typeof window.confirm !== "function") {
+    return Promise.resolve(true);
+  }
+
+  return Promise.resolve(window.confirm(getOfficeJsApprovalMessage(request)));
+}
+
+function getOfficeJsExecuteApprovalRequest(params: unknown): OfficeJsExecuteApprovalRequest {
+  if (!isRecordObject(params)) {
+    return {
+      explanation: "",
+      code: "",
+    };
+  }
+
+  const explanation = typeof params.explanation === "string"
+    ? params.explanation
+    : "";
+
+  const code = typeof params.code === "string"
+    ? params.code
+    : "";
+
+  return {
+    explanation,
+    code,
+  };
+}
+
 function wrapTmuxToolWithHardGate(
   tool: AgentTool,
   dependencies: ExperimentalToolGateDependencies,
@@ -393,6 +491,33 @@ function wrapFilesToolWithHardGate(
       if (!gate.allowed) {
         const reason = gate.reason ?? "files_experiment_disabled";
         throw new Error(buildFilesWorkspaceGateErrorMessage(reason));
+      }
+
+      return tool.execute(toolCallId, params, signal, onUpdate);
+    },
+  };
+}
+
+function wrapExecuteOfficeJsToolWithHardGate(
+  tool: AgentTool,
+  dependencies: ExperimentalToolGateDependencies,
+): AgentTool {
+  const requestApproval =
+    dependencies.requestOfficeJsExecuteApproval
+    ?? defaultRequestOfficeJsExecuteApproval;
+
+  return {
+    ...tool,
+    execute: async (toolCallId, params, signal, onUpdate) => {
+      const gate = evaluateOfficeJsExecuteGate(dependencies);
+      if (!gate.allowed) {
+        const reason = gate.reason ?? "office_js_execute_experiment_disabled";
+        throw new Error(buildOfficeJsExecuteGateErrorMessage(reason));
+      }
+
+      const approved = await requestApproval(getOfficeJsExecuteApprovalRequest(params));
+      if (!approved) {
+        throw new Error("Office.js execution cancelled by user.");
       }
 
       return tool.execute(toolCallId, params, signal, onUpdate);
@@ -449,10 +574,11 @@ function wrapPythonBridgeToolWithHardGate(
  * Apply experimental gates to tool execution.
  *
  * Current rules:
- * - `tmux`, `files`, `python_run`, `libreoffice_convert`, and `python_transform_range`
- *   stay registered to keep the tool list stable.
+ * - `tmux`, `files`, `execute_office_js`, `python_run`, `libreoffice_convert`, and
+ *   `python_transform_range` stay registered to keep the tool list stable.
  * - each gated tool execution re-checks experiment flags (and bridge health where relevant).
  * - python/libreoffice bridge tools require user confirmation once per configured bridge URL.
+ * - execute_office_js requires explicit user confirmation on every execution.
  */
 export function applyExperimentalToolGates(
   tools: AgentTool[],
@@ -468,6 +594,11 @@ export function applyExperimentalToolGates(
 
     if (tool.name === FILES_TOOL_NAME) {
       gatedTools.push(wrapFilesToolWithHardGate(tool, dependencies));
+      continue;
+    }
+
+    if (tool.name === EXECUTE_OFFICE_JS_TOOL_NAME) {
+      gatedTools.push(wrapExecuteOfficeJsToolWithHardGate(tool, dependencies));
       continue;
     }
 

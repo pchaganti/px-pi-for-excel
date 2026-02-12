@@ -215,7 +215,7 @@ void test("workbook change audit log accepts non-cell mutation tool entries", as
   assert.equal(entries[0]?.changedCount, 2);
 });
 
-void test("workbook change audit log accepts comments/view_settings/workbook_history entries", async () => {
+void test("workbook change audit log accepts comments/view_settings/workbook_history/execute_office_js entries", async () => {
   const settingsStore = createInMemorySettingsStore();
 
   const log = new WorkbookChangeAuditLog({
@@ -256,9 +256,23 @@ void test("workbook change audit log accepts comments/view_settings/workbook_his
     summary: "error: no backups available to restore",
   });
 
+  await log.append({
+    toolName: "execute_office_js",
+    toolCallId: "call-office-js",
+    blocked: false,
+    changedCount: 0,
+    changes: [],
+    summary: "executed Office.js: update formulas",
+  });
+
   const entries = await log.list();
-  assert.equal(entries.length, 3);
-  assert.deepEqual(entries.map((entry) => entry.toolName), ["workbook_history", "view_settings", "comments"]);
+  assert.equal(entries.length, 4);
+  assert.deepEqual(entries.map((entry) => entry.toolName), [
+    "execute_office_js",
+    "workbook_history",
+    "view_settings",
+    "comments",
+  ]);
 });
 
 void test("comments tool appends audit entries for mutating actions", async () => {

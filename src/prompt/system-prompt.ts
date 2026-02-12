@@ -181,9 +181,11 @@ Core workbook tools:
 - **workbook_history** — list/restore/delete automatic backups created before Pi edits for supported workbook mutations (\`write_cells\`, \`fill_formula\`, \`python_transform_range\`, \`format_cells\`, \`conditional_format\`, \`comments\`, and supported \`modify_structure\` actions)
 - **skills** — list/read bundled Agent Skills (SKILL.md) for task-specific workflows
 - **extensions_manager** — list/install/reload/enable/disable/uninstall sidebar extensions from code (for extension authoring from chat)
+- **execute_office_js** — run direct Office.js against the active workbook when structured tools cannot express the operation (experimental; explanation + user approval required)
 
 Other tools may be available depending on enabled experiments/integrations.
-If **files** is available, use it for workspace artifacts (list/read/write/delete files).`;
+If **files** is available, use it for workspace artifacts (list/read/write/delete files).
+If **execute_office_js** is available, keep code minimal, call \`context.sync()\` after \`load()\`, and return JSON-serializable results.`;
 
 const WORKFLOW = `## Workflow
 
