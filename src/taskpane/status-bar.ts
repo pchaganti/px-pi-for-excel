@@ -8,18 +8,22 @@ import { showToast } from "../ui/toast.js";
 import { escapeAttr, escapeHtml } from "../utils/html.js";
 import { formatUsageDebug, isDebugEnabled } from "../debug/debug.js";
 import { estimateContextTokens } from "../utils/context-tokens.js";
+import {
+  ACTIVE_INTEGRATIONS_TOOLTIP_PREFIX,
+  formatIntegrationCountLabel,
+} from "../integrations/naming.js";
 import type { RuntimeLockState } from "./session-runtime-manager.js";
 
 export type ActiveAgentProvider = () => Agent | null;
 export type ActiveLockStateProvider = () => RuntimeLockState;
 export type ActiveInstructionsProvider = () => boolean;
-export type ActiveSkillsProvider = () => string[];
+export type ActiveIntegrationsProvider = () => string[];
 
 function renderStatusBar(
   agent: Agent | null,
   lockState: RuntimeLockState,
   instructionsActive: boolean,
-  activeSkills: string[],
+  activeIntegrations: string[],
 ): void {
   const el = document.getElementById("pi-status-bar");
   if (!el) return;
@@ -100,8 +104,8 @@ function renderStatusBar(
     ? `<button class="pi-status-instructions" data-tooltip="Persistent instructions are active. Click to edit.">📋 instr</button>`
     : "";
 
-  const skillsBadge = activeSkills.length > 0
-    ? `<button class="pi-status-skills" data-tooltip="Active skills: ${escapeAttr(activeSkills.join(", "))}. Click to manage.">🧩 ${activeSkills.length} skill${activeSkills.length === 1 ? "" : "s"}</button>`
+  const integrationsBadge = activeIntegrations.length > 0
+    ? `<button class="pi-status-integrations" data-tooltip="${ACTIVE_INTEGRATIONS_TOOLTIP_PREFIX}: ${escapeAttr(activeIntegrations.join(", "))}. Click to manage.">🧩 ${formatIntegrationCountLabel(activeIntegrations.length)}</button>`
     : "";
 
   const thinkingTooltip = escapeAttr(
@@ -112,7 +116,7 @@ function renderStatusBar(
     <span class="pi-status-ctx pi-status-ctx--trigger has-tooltip" data-status-popover="${ctxPopoverText}"><span class="${ctxColor}">${pct}%</span> / ${ctxLabel}${usageDebug}<span class="pi-tooltip pi-tooltip--left">${ctxBaseTooltip}${ctxWarning}</span></span>
     ${lockBadge}
     ${instructionsBadge}
-    ${skillsBadge}
+    ${integrationsBadge}
     <button class="pi-status-model" data-tooltip="Switch the AI model powering this session">
       <span class="pi-status-model__mark">π</span>
       <span class="pi-status-model__name">${modelAliasEscaped}</span>
@@ -126,31 +130,31 @@ export function updateStatusBarForAgent(
   agent: Agent,
   lockState: RuntimeLockState = "idle",
   instructionsActive = false,
-  activeSkills: string[] = [],
+  activeIntegrations: string[] = [],
 ): void {
-  renderStatusBar(agent, lockState, instructionsActive, activeSkills);
+  renderStatusBar(agent, lockState, instructionsActive, activeIntegrations);
 }
 
 export function updateStatusBar(
   getActiveAgent: ActiveAgentProvider,
   getLockState?: ActiveLockStateProvider,
   getInstructionsActive?: ActiveInstructionsProvider,
-  getActiveSkills?: ActiveSkillsProvider,
+  getActiveIntegrations?: ActiveIntegrationsProvider,
 ): void {
   const activeAgent = getActiveAgent();
   const lockState = getLockState ? getLockState() : "idle";
   const instructionsActive = getInstructionsActive ? getInstructionsActive() : false;
-  const activeSkills = getActiveSkills ? getActiveSkills() : [];
-  renderStatusBar(activeAgent, lockState, instructionsActive, activeSkills);
+  const activeIntegrations = getActiveIntegrations ? getActiveIntegrations() : [];
+  renderStatusBar(activeAgent, lockState, instructionsActive, activeIntegrations);
 }
 
 export function injectStatusBar(opts: {
   getActiveAgent: ActiveAgentProvider;
   getLockState?: ActiveLockStateProvider;
   getInstructionsActive?: ActiveInstructionsProvider;
-  getActiveSkills?: ActiveSkillsProvider;
+  getActiveIntegrations?: ActiveIntegrationsProvider;
 }): () => void {
-  const { getActiveAgent, getLockState, getInstructionsActive, getActiveSkills } = opts;
+  const { getActiveAgent, getLockState, getInstructionsActive, getActiveIntegrations } = opts;
 
   let unsubscribeActiveAgent: (() => void) | undefined;
 
@@ -160,16 +164,16 @@ export function injectStatusBar(opts: {
     const activeAgent = getActiveAgent();
     if (activeAgent) {
       unsubscribeActiveAgent = activeAgent.subscribe(
-        () => updateStatusBar(getActiveAgent, getLockState, getInstructionsActive, getActiveSkills),
+        () => updateStatusBar(getActiveAgent, getLockState, getInstructionsActive, getActiveIntegrations),
       );
     } else {
       unsubscribeActiveAgent = undefined;
     }
 
-    updateStatusBar(getActiveAgent, getLockState, getInstructionsActive, getActiveSkills);
+    updateStatusBar(getActiveAgent, getLockState, getInstructionsActive, getActiveIntegrations);
   };
 
-  const onStatusUpdate = () => updateStatusBar(getActiveAgent, getLockState, getInstructionsActive, getActiveSkills);
+  const onStatusUpdate = () => updateStatusBar(getActiveAgent, getLockState, getInstructionsActive, getActiveIntegrations);
 
   document.addEventListener("pi:status-update", onStatusUpdate);
   document.addEventListener("pi:active-runtime-changed", bindActiveAgent);

@@ -40,14 +40,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-void test("builtins registry wires /experimental, /extensions, and /skills command registration", async () => {
+void test("builtins registry wires /experimental, /extensions, and /integrations command registration", async () => {
   const source = await readFile(new URL("../src/commands/builtins/index.ts", import.meta.url), "utf8");
 
   assert.match(source, /createExperimentalCommands/);
   assert.match(source, /\.\.\.createExperimentalCommands\(\)/);
 
-  assert.match(source, /createSkillsCommands/);
-  assert.match(source, /\.\.\.createSkillsCommands\(context\)/);
+  assert.match(source, /createIntegrationsCommands/);
+  assert.match(source, /\.\.\.createIntegrationsCommands\(context\)/);
 
   assert.match(source, /createExtensionsCommands/);
   assert.match(source, /\.\.\.createExtensionsCommands\(context\)/);
@@ -105,15 +105,15 @@ void test("builtins registry wires /experimental, /extensions, and /skills comma
   assert.match(experimentalFlagsSource, /extension-widget-v2/);
 });
 
-void test("taskpane init keeps getSkillToolNames imported when used", async () => {
+void test("taskpane init keeps getIntegrationToolNames imported when used", async () => {
   const initSource = await readFile(new URL("../src/taskpane/init.ts", import.meta.url), "utf8");
-  if (!/getSkillToolNames\(\)/.test(initSource)) {
+  if (!/getIntegrationToolNames\(\)/.test(initSource)) {
     return;
   }
 
   assert.match(
     initSource,
-    /import\s*\{[\s\S]*getSkillToolNames[\s\S]*\}\s*from "\.\.\/skills\/catalog\.js";/,
+    /import\s*\{[\s\S]*getIntegrationToolNames[\s\S]*\}\s*from "\.\.\/integrations\/catalog\.js";/,
   );
 });
 

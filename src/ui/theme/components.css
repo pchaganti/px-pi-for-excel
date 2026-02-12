@@ -876,7 +876,7 @@ pi-working-indicator {
   background: var(--green-alpha-14);
 }
 
-.pi-status-skills {
+.pi-status-integrations {
   border: 1px solid oklch(0.67 0.17 35 / 0.32);
   background: oklch(0.67 0.17 35 / 0.09);
   color: oklch(0.5 0.12 35);
@@ -890,7 +890,7 @@ pi-working-indicator {
   flex-shrink: 0;
 }
 
-.pi-status-skills:hover {
+.pi-status-integrations:hover {
   background: oklch(0.67 0.17 35 / 0.16);
 }
 

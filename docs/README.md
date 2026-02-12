@@ -23,7 +23,8 @@ Short, topic-based docs (mirrors Pi's layout). Keep deeper decisions close to th
 - [Model/dependency update playbook](./model-updates.md)
 - [UI architecture](../src/ui/README.md) — layout, styling, the `@layer` gotcha
 - [Extensions authoring guide (MVP)](./extensions.md)
-- [Skills + external tools (web search, MCP)](./skills-external-tools.md)
+- [Integrations + external tools (web search, MCP)](./integrations-external-tools.md)
+- [Agent Skills interop (skills vs integrations)](./agent-skills-interop.md)
 
 ## Tools
 - [Tool behavior decisions](../src/tools/DECISIONS.md)

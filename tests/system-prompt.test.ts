@@ -83,3 +83,20 @@ void test("system prompt mentions extension manager tool for chat-driven authori
   assert.match(prompt, /\*\*extensions_manager\*\*/);
   assert.match(prompt, /extension authoring from chat/i);
 });
+
+void test("system prompt renders active integrations with Agent Skill mapping", () => {
+  const prompt = buildSystemPrompt({
+    activeIntegrations: [
+      {
+        id: "web_search",
+        title: "Web Search",
+        instructions: "Use web search for fresh facts.",
+        agentSkillName: "web-search",
+      },
+    ],
+  });
+
+  assert.match(prompt, /## Active Integrations/);
+  assert.match(prompt, /### Web Search/);
+  assert.match(prompt, /Agent Skill mapping: `web-search`/);
+});

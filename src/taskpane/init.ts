@@ -34,7 +34,7 @@ import { applyExperimentalToolGates } from "../tools/experimental-tool-gates.js"
 import { withWorkbookCoordinator } from "../tools/with-workbook-coordinator.js";
 import { registerBuiltins } from "../commands/builtins.js";
 import { showExtensionsDialog } from "../commands/builtins/extensions-overlay.js";
-import { showSkillsDialog } from "../commands/builtins/skills-overlay.js";
+import { showIntegrationsDialog } from "../commands/builtins/integrations-overlay.js";
 import { ExtensionRuntimeManager } from "../extensions/runtime-manager.js";
 import type { ResumeDialogTarget } from "../commands/builtins/resume-target.js";
 import {
@@ -53,13 +53,14 @@ import {
 } from "../instructions/store.js";
 import { getResolvedConventions } from "../conventions/store.js";
 import {
-  buildSkillPromptEntries,
-  createToolsForSkills,
-  getSkillToolNames,
-  SKILL_IDS,
-} from "../skills/catalog.js";
-import { PI_SKILLS_CHANGED_EVENT } from "../skills/events.js";
-import { getExternalToolsEnabled, resolveConfiguredSkillIds } from "../skills/store.js";
+  buildIntegrationPromptEntries,
+  createToolsForIntegrations,
+  getIntegrationToolNames,
+  INTEGRATION_IDS,
+} from "../integrations/catalog.js";
+import { PI_INTEGRATIONS_CHANGED_EVENT } from "../integrations/events.js";
+import { INTEGRATIONS_COMMAND_NAME } from "../integrations/naming.js";
+import { getExternalToolsEnabled, resolveConfiguredIntegrationIds } from "../integrations/store.js";
 import { buildSystemPrompt } from "../prompt/system-prompt.js";
 import { initAppStorage } from "../storage/init-app-storage.js";
 import { renderError } from "../ui/loading.js";
@@ -106,7 +107,16 @@ import {
 import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
 import { isRecord } from "../utils/type-guards.js";
 
-const BUSY_ALLOWED_COMMANDS = new Set(["compact", "new", "instructions", "resume", "history", "reopen", "extensions"]);
+const BUSY_ALLOWED_COMMANDS = new Set([
+  "compact",
+  "new",
+  "instructions",
+  "resume",
+  "history",
+  "reopen",
+  "extensions",
+  INTEGRATIONS_COMMAND_NAME,
+]);
 
 function showErrorBanner(errorRoot: HTMLElement, message: string): void {
   render(renderError(message), errorRoot);
@@ -310,32 +320,32 @@ export async function initTaskpane(opts: {
     return workbookContext.workbookId;
   };
 
-  const resolveRuntimeSkillIds = async (args: {
+  const resolveRuntimeIntegrationIds = async (args: {
     sessionId: string;
     workbookId: string | null;
   }): Promise<string[]> => {
-    const configuredSkillIds = await resolveConfiguredSkillIds({
+    const configuredIntegrationIds = await resolveConfiguredIntegrationIds({
       settings,
       sessionId: args.sessionId,
       workbookId: args.workbookId,
-      knownSkillIds: SKILL_IDS,
+      knownIntegrationIds: INTEGRATION_IDS,
     });
 
     const externalToolsEnabled = await getExternalToolsEnabled(settings);
-    return externalToolsEnabled ? configuredSkillIds : [];
+    return externalToolsEnabled ? configuredIntegrationIds : [];
   };
 
   const buildRuntimeSystemPrompt = async (args: {
     workbookId: string | null;
-    activeSkillIds: readonly string[];
+    activeIntegrationIds: readonly string[];
   }): Promise<string> => {
     try {
       const userInstructions = await getUserInstructions(settings);
       const workbookInstructions = await getWorkbookInstructions(settings, args.workbookId);
       setInstructionsActive(hasAnyInstructions({ userInstructions, workbookInstructions }));
       const conventions = await getResolvedConventions(settings);
-      const activeSkills = buildSkillPromptEntries(args.activeSkillIds);
-      return buildSystemPrompt({ userInstructions, workbookInstructions, activeSkills, conventions });
+      const activeIntegrations = buildIntegrationPromptEntries(args.activeIntegrationIds);
+      return buildSystemPrompt({ userInstructions, workbookInstructions, activeIntegrations, conventions });
     } catch {
       setInstructionsActive(false);
       return buildSystemPrompt();
@@ -345,7 +355,7 @@ export async function initTaskpane(opts: {
   const runtimeManager = new SessionRuntimeManager(sidebar);
   const abortedAgents = new WeakSet<Agent>();
   const runtimeCapabilityRefreshers = new Map<string, () => Promise<void>>();
-  const runtimeActiveSkillIds = new Map<string, string[]>();
+  const runtimeActiveIntegrationIds = new Map<string, string[]>();
   const recentlyClosed = new RecentlyClosedStack(10);
 
   const getActiveRuntime = () => runtimeManager.getActiveRuntime();
@@ -388,12 +398,12 @@ export async function initTaskpane(opts: {
     restoredFromSnapshotId: snapshot.restoredFromSnapshotId,
   });
 
-  const getActiveSkillTitles = (): string[] => {
+  const getActiveIntegrationTitles = (): string[] => {
     const runtime = getActiveRuntime();
     if (!runtime) return [];
 
-    const skillIds = runtimeActiveSkillIds.get(runtime.runtimeId) ?? [];
-    return buildSkillPromptEntries(skillIds).map((entry) => entry.title);
+    const integrationIds = runtimeActiveIntegrationIds.get(runtime.runtimeId) ?? [];
+    return buildIntegrationPromptEntries(integrationIds).map((entry) => entry.title);
   };
 
   const formatSessionTitle = (title: string): string => {
@@ -508,7 +518,7 @@ export async function initTaskpane(opts: {
 
   const reservedToolNames = new Set([
     ...createAllTools().map((tool) => tool.name),
-    ...getSkillToolNames(),
+    ...getIntegrationToolNames(),
   ]);
   const extensionManager = new ExtensionRuntimeManager({
     settings,
@@ -549,7 +559,7 @@ export async function initTaskpane(opts: {
     void refreshCapabilitiesForAllRuntimes();
   });
 
-  document.addEventListener(PI_SKILLS_CHANGED_EVENT, () => {
+  document.addEventListener(PI_INTEGRATIONS_CHANGED_EVENT, () => {
     void refreshCapabilitiesForAllRuntimes();
   });
 
@@ -592,12 +602,12 @@ export async function initTaskpane(opts: {
       systemPrompt: string;
     }> => {
       const workbookId = await resolveWorkbookId();
-      const activeSkillIds = await resolveRuntimeSkillIds({
+      const activeIntegrationIds = await resolveRuntimeIntegrationIds({
         sessionId,
         workbookId,
       });
 
-      runtimeActiveSkillIds.set(runtimeId, activeSkillIds);
+      runtimeActiveIntegrationIds.set(runtimeId, activeIntegrationIds);
 
       const coreTools = createAllTools({
         getExtensionManager: () => extensionManager,
@@ -605,7 +615,7 @@ export async function initTaskpane(opts: {
       const gatedCoreTools = await applyExperimentalToolGates(coreTools);
       const allTools = [
         ...gatedCoreTools,
-        ...createToolsForSkills(activeSkillIds),
+        ...createToolsForIntegrations(activeIntegrationIds),
         ...extensionManager.getRegisteredTools(),
       ];
 
@@ -626,7 +636,7 @@ export async function initTaskpane(opts: {
 
       const systemPrompt = await buildRuntimeSystemPrompt({
         workbookId,
-        activeSkillIds,
+        activeIntegrationIds,
       });
 
       return {
@@ -751,7 +761,7 @@ export async function initTaskpane(opts: {
         lockState: "idle",
         dispose: () => {
           runtimeCapabilityRefreshers.delete(runtimeId);
-          runtimeActiveSkillIds.delete(runtimeId);
+          runtimeActiveIntegrationIds.delete(runtimeId);
           unsubscribeSessionCapabilitySync();
           unsubscribeErrorTracking();
           actionQueue.shutdown();
@@ -953,8 +963,8 @@ export async function initTaskpane(opts: {
     }
   });
 
-  const openSkillsManager = () => {
-    showSkillsDialog({
+  const openIntegrationsManager = () => {
+    showIntegrationsDialog({
       getActiveSessionId: () => getActiveRuntime()?.persistence.getSessionId() ?? null,
       resolveWorkbookContext: async () => {
         const workbookContext = await resolveWorkbookContext();
@@ -1032,7 +1042,7 @@ export async function initTaskpane(opts: {
     openExtensionsManager: () => {
       showExtensionsDialog(extensionManager);
     },
-    openSkillsManager,
+    openIntegrationsManager,
   });
 
   // Slash commands chosen from the popup menu dispatch this event.
@@ -1101,8 +1111,8 @@ export async function initTaskpane(opts: {
       },
     });
   };
-  sidebar.onOpenSkills = () => {
-    openSkillsManager();
+  sidebar.onOpenIntegrations = () => {
+    openIntegrationsManager();
   };
   sidebar.onOpenFiles = () => {
     void showFilesWorkspaceDialog();
@@ -1210,7 +1220,7 @@ export async function initTaskpane(opts: {
     getActiveAgent,
     getLockState: getActiveLockState,
     getInstructionsActive: () => instructionsActive,
-    getActiveSkills: getActiveSkillTitles,
+    getActiveIntegrations: getActiveIntegrationTitles,
   });
 
   // ── Wire command menu to textarea ──
@@ -1314,10 +1324,10 @@ export async function initTaskpane(opts: {
       return;
     }
 
-    // Skills manager
-    if (el.closest(".pi-status-skills")) {
+    // Integrations manager
+    if (el.closest(".pi-status-integrations")) {
       closeStatusPopover();
-      openSkillsManager();
+      openIntegrationsManager();
       return;
     }
 
