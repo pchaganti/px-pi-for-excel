@@ -60,6 +60,11 @@ import { buildSystemPrompt } from "../prompt/system-prompt.js";
 import { initAppStorage } from "../storage/init-app-storage.js";
 import { renderError } from "../ui/loading.js";
 import { showFilesWorkspaceDialog } from "../ui/files-dialog.js";
+import {
+  PI_REQUEST_INPUT_FOCUS_EVENT,
+  moveCursorToEnd,
+  requestChatInputFocus,
+} from "../ui/input-focus.js";
 import { showActionToast, showToast } from "../ui/toast.js";
 import { PiSidebar } from "../ui/pi-sidebar.js";
 import { setActiveProviders } from "../compat/model-selector-patch.js";
@@ -95,6 +100,7 @@ import {
   type RuntimeTabSnapshot,
   type SessionRuntime,
 } from "./session-runtime-manager.js";
+import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
 import { isRecord } from "../utils/type-guards.js";
 
 const BUSY_ALLOWED_COMMANDS = new Set(["compact", "new", "instructions", "resume", "history", "reopen", "extensions"]);
@@ -429,6 +435,34 @@ export async function initTaskpane(opts: {
       });
   };
 
+  const focusChatInput = (): void => {
+    if (doesOverlayClaimEscape(document.activeElement)) {
+      return;
+    }
+
+    const input = sidebar.getInput();
+    if (!input) {
+      return;
+    }
+
+    input.focus();
+
+    const textarea = sidebar.getTextarea();
+    if (textarea) {
+      moveCursorToEnd(textarea);
+    }
+  };
+
+  const focusChatInputSoon = (): void => {
+    requestAnimationFrame(() => {
+      focusChatInput();
+    });
+  };
+
+  document.addEventListener(PI_REQUEST_INPUT_FOCUS_EVENT, () => {
+    focusChatInputSoon();
+  });
+
   runtimeManager.subscribe((tabs) => {
     sidebar.sessionTabs = tabs;
     sidebar.lockNotice = getActiveLockNotice(tabs);
@@ -438,6 +472,9 @@ export async function initTaskpane(opts: {
     if (activeRuntimeId !== previousActiveRuntimeId) {
       previousActiveRuntimeId = activeRuntimeId;
       document.dispatchEvent(new CustomEvent("pi:active-runtime-changed"));
+      if (activeRuntimeId) {
+        focusChatInputSoon();
+      }
     }
 
     maybePersistTabLayout();
@@ -1136,6 +1173,25 @@ export async function initTaskpane(opts: {
     },
     onReopenLastClosed: () => {
       void reopenLastClosed();
+    },
+    onSwitchAdjacentTab: (direction: -1 | 1) => {
+      const tabs = runtimeManager.snapshotTabs();
+      if (tabs.length <= 1) {
+        return;
+      }
+
+      const activeIndex = tabs.findIndex((tab) => tab.isActive);
+      if (activeIndex < 0) {
+        return;
+      }
+
+      const nextIndex = activeIndex + direction;
+      if (nextIndex < 0 || nextIndex >= tabs.length) {
+        return;
+      }
+
+      runtimeManager.switchRuntime(tabs[nextIndex].runtimeId);
+      requestChatInputFocus();
     },
   });
 

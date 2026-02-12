@@ -10,6 +10,7 @@ import {
   getResumeTargetLabel,
   type ResumeDialogTarget,
 } from "./resume-target.js";
+import { requestChatInputFocus } from "../../ui/input-focus.js";
 import { showToast } from "../../ui/toast.js";
 import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../../workbook/context.js";
@@ -131,6 +132,7 @@ export async function showProviderPicker(): Promise<void> {
     overlayClosers.delete(overlay);
     cleanupEscape();
     overlay.remove();
+    requestChatInputFocus();
   };
   const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
   overlayClosers.set(overlay, closeOverlay);
@@ -345,6 +347,7 @@ export async function showResumeDialog(opts: {
     overlayClosers.delete(overlay);
     cleanupEscape();
     overlay.remove();
+    requestChatInputFocus();
   };
   const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
   overlayClosers.set(overlay, closeOverlay);
@@ -655,6 +658,7 @@ export async function showRecoveryDialog(opts: {
     overlayClosers.delete(overlay);
     cleanupEscape();
     overlay.remove();
+    requestChatInputFocus();
   };
 
   const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
@@ -687,11 +691,12 @@ export function showShortcutsDialog(): void {
   const shortcuts = [
     ["Enter", "Send message"],
     ["Shift+Tab", "Cycle thinking level"],
-    ["Esc", "Dismiss menu/dialog (or abort if none open)"],
+    ["Esc", "Exit input focus, dismiss overlays, or abort streaming"],
     ["Enter (streaming)", "Steer — redirect agent"],
     ["⌥Enter", "Queue follow-up message"],
     ["/", "Open command menu"],
     ["↑↓", "Navigate command menu"],
+    ["←/→", "Switch chats (when not in a text field)"],
     ["⌘/Ctrl+⇧T", "Reopen last closed tab"],
     ["F2", "Focus chat input"],
     ["F6", "Focus: Sheet ↔ Sidebar"],
@@ -758,6 +763,7 @@ export function showShortcutsDialog(): void {
     overlayClosers.delete(overlay);
     cleanupEscape();
     overlay.remove();
+    requestChatInputFocus();
   };
   const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
   overlayClosers.set(overlay, closeOverlay);

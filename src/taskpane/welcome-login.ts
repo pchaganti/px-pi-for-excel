@@ -5,6 +5,7 @@
 import type { ProviderKeysStore } from "@mariozechner/pi-web-ui/dist/storage/stores/provider-keys-store.js";
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
+import { requestChatInputFocus } from "../ui/input-focus.js";
 import { installOverlayEscapeClose } from "../ui/overlay-escape.js";
 import { showToast } from "../ui/toast.js";
 import { setActiveProviders } from "../compat/model-selector-patch.js";
@@ -65,6 +66,7 @@ export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise
       closed = true;
       cleanupEscape();
       overlay.remove();
+      requestChatInputFocus();
       resolve();
     };
     const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);

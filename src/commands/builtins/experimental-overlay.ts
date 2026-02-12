@@ -8,6 +8,7 @@ import {
   setExperimentalFeatureEnabled,
   type ExperimentalFeatureSnapshot,
 } from "../../experiments/flags.js";
+import { requestChatInputFocus } from "../../ui/input-focus.js";
 import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
 import { showToast } from "../../ui/toast.js";
 
@@ -146,6 +147,7 @@ export function showExperimentalDialog(): void {
     overlayClosers.delete(overlay);
     cleanupEscape();
     overlay.remove();
+    requestChatInputFocus();
   };
   const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
   overlayClosers.set(overlay, closeOverlay);

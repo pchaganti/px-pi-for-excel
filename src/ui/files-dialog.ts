@@ -13,6 +13,7 @@ import { type FilesWorkspaceAuditContext, getFilesWorkspace } from "../files/wor
 import { isExperimentalFeatureEnabled, setExperimentalFeatureEnabled } from "../experiments/flags.js";
 import { getErrorMessage } from "../utils/errors.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../workbook/context.js";
+import { requestChatInputFocus } from "./input-focus.js";
 import { installOverlayEscapeClose } from "./overlay-escape.js";
 import { showToast } from "./toast.js";
 
@@ -327,6 +328,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     cleanup();
     revokeObjectUrl();
     overlay.remove();
+    requestChatInputFocus();
   };
 
   const setStatus = (message: string) => {

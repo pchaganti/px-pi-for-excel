@@ -8,9 +8,11 @@ import type { Agent, AgentMessage, ThinkingLevel } from "@mariozechner/pi-agent-
 import { supportsXhigh } from "@mariozechner/pi-ai";
 
 import type { PiSidebar } from "../ui/pi-sidebar.js";
+import { moveCursorToEnd } from "../ui/input-focus.js";
 import { showToast } from "../ui/toast.js";
 
 import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
+import { blurTextEntryTarget, isTextEntryTarget } from "../utils/text-entry.js";
 import { commandRegistry } from "../commands/types.js";
 import {
   handleCommandMenuKey,
@@ -39,6 +41,15 @@ interface ReopenShortcutEventLike {
 
 interface FocusInputShortcutEventLike {
   key: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+}
+
+interface AdjacentTabShortcutEventLike {
+  key: string;
+  repeat: boolean;
   metaKey: boolean;
   ctrlKey: boolean;
   shiftKey: boolean;
@@ -153,6 +164,30 @@ export function isFocusInputShortcut(event: FocusInputShortcutEventLike): boolea
   return event.key === "F2";
 }
 
+export function getAdjacentTabDirectionFromShortcut(
+  event: AdjacentTabShortcutEventLike,
+): -1 | 1 | null {
+  if (event.repeat) return null;
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return null;
+
+  if (event.key === "ArrowLeft") return -1;
+  if (event.key === "ArrowRight") return 1;
+  return null;
+}
+
+export function shouldBlurEditorFromEscape(opts: {
+  key: string;
+  isInEditor: boolean;
+  isStreaming: boolean;
+  escapeClaimedByOverlay: boolean;
+}): boolean {
+  if (opts.key !== "Escape") return false;
+  if (!opts.isInEditor) return false;
+  if (opts.isStreaming) return false;
+  if (opts.escapeClaimedByOverlay) return false;
+  return true;
+}
+
 export function shouldAbortFromEscape(opts: {
   isStreaming: boolean;
   hasAgent: boolean;
@@ -171,6 +206,7 @@ export function installKeyboardShortcuts(opts: {
   sidebar: PiSidebar;
   markUserAborted: (agent: Agent) => void;
   onReopenLastClosed?: () => void;
+  onSwitchAdjacentTab?: (direction: -1 | 1) => void;
 }): () => void {
   const {
     getActiveAgent,
@@ -179,6 +215,7 @@ export function installKeyboardShortcuts(opts: {
     sidebar,
     markUserAborted,
     onReopenLastClosed,
+    onSwitchAdjacentTab,
   } = opts;
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -206,8 +243,7 @@ export function installKeyboardShortcuts(opts: {
 
       const activeTextarea = sidebar.getTextarea();
       if (activeTextarea) {
-        const cursor = activeTextarea.value.length;
-        activeTextarea.setSelectionRange(cursor, cursor);
+        moveCursorToEnd(activeTextarea);
       }
 
       return;
@@ -221,6 +257,21 @@ export function installKeyboardShortcuts(opts: {
     }
 
     const escapeClaimedByOverlay = e.key === "Escape" && doesOverlayClaimEscape(targetNode);
+
+    // ESC — leave editor focus (when not streaming)
+    if (
+      shouldBlurEditorFromEscape({
+        key: e.key,
+        isInEditor,
+        isStreaming,
+        escapeClaimedByOverlay,
+      })
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      blurTextEntryTarget(targetNode);
+      return;
+    }
 
     // ESC — abort (only when no overlay/dialog is claiming Escape)
     if (
@@ -243,6 +294,19 @@ export function installKeyboardShortcuts(opts: {
       if (!onReopenLastClosed) return;
       e.preventDefault();
       onReopenLastClosed();
+      return;
+    }
+
+    // ←/→ — switch tabs when editor is not focused
+    const adjacentTabDirection = getAdjacentTabDirectionFromShortcut(e);
+    if (
+      adjacentTabDirection
+      && onSwitchAdjacentTab
+      && !doesOverlayClaimEscape(targetNode)
+      && !isTextEntryTarget(targetNode)
+    ) {
+      e.preventDefault();
+      onSwitchAdjacentTab(adjacentTabDirection);
       return;
     }
 

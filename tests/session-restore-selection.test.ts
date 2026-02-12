@@ -6,9 +6,11 @@ import {
   getResumeTargetLabel,
 } from "../src/commands/builtins/resume-target.ts";
 import {
+  getAdjacentTabDirectionFromShortcut,
   isFocusInputShortcut,
   isReopenLastClosedShortcut,
   shouldAbortFromEscape,
+  shouldBlurEditorFromEscape,
 } from "../src/taskpane/keyboard-shortcuts.ts";
 import { RecentlyClosedStack } from "../src/taskpane/recently-closed.ts";
 import {
@@ -183,6 +185,98 @@ void test("F2 focuses chat input only without modifiers", () => {
       ctrlKey: false,
       shiftKey: false,
       altKey: false,
+    }),
+    false,
+  );
+});
+
+void test("Left/Right arrow tab switching only triggers without modifiers", () => {
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "ArrowLeft",
+      repeat: false,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    -1,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "ArrowRight",
+      repeat: false,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    1,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "ArrowRight",
+      repeat: false,
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    }),
+    null,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "ArrowLeft",
+      repeat: true,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    null,
+  );
+});
+
+void test("Escape exits editor focus only when not streaming and no overlay claims it", () => {
+  assert.equal(
+    shouldBlurEditorFromEscape({
+      key: "Escape",
+      isInEditor: true,
+      isStreaming: false,
+      escapeClaimedByOverlay: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldBlurEditorFromEscape({
+      key: "Escape",
+      isInEditor: true,
+      isStreaming: true,
+      escapeClaimedByOverlay: false,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldBlurEditorFromEscape({
+      key: "Escape",
+      isInEditor: true,
+      isStreaming: false,
+      escapeClaimedByOverlay: true,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldBlurEditorFromEscape({
+      key: "Enter",
+      isInEditor: true,
+      isStreaming: false,
+      escapeClaimedByOverlay: false,
     }),
     false,
   );

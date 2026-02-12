@@ -34,6 +34,7 @@ import {
   type McpConfigStore,
   type McpServerConfig,
 } from "../../tools/mcp-config.js";
+import { requestChatInputFocus } from "../../ui/input-focus.js";
 import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
 import { showToast } from "../../ui/toast.js";
 import { isRecord } from "../../utils/type-guards.js";
@@ -523,6 +524,7 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
     overlayClosers.delete(overlay);
     cleanupEscape();
     overlay.remove();
+    requestChatInputFocus();
   };
   const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
   overlayClosers.set(overlay, closeOverlay);
