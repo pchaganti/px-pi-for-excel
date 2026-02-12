@@ -39,6 +39,7 @@ Replace cumbersome up-front approval selectors with a low-friction workflow:
   - `write_cells`
   - `fill_formula`
   - `python_transform_range`
+  - `format_cells` (except unsupported mutations noted below)
   - `conditional_format`
   - `comments` (mutating actions)
 - New tool: `workbook_history`
@@ -57,6 +58,7 @@ Replace cumbersome up-front approval selectors with a low-friction workflow:
   - snapshots are skipped above `MAX_RECOVERY_CELLS` to avoid oversized local state
 - Coverage signaling:
   - non-checkpointed mutation tools now explicitly state when no checkpoint is created
+  - `format_cells` currently skips checkpoint capture for unsupported mutations (`column_width`, `row_height`, `auto_fit`, `merge`) and reports that explicitly
 
 ## Why this is better than approval selectors for now
 
@@ -66,7 +68,7 @@ Replace cumbersome up-front approval selectors with a low-friction workflow:
 
 ## Follow-ups
 
-1. Extend checkpointing to remaining non-covered mutations (`format_cells`, `modify_structure`) and broaden rule-type coverage for conditional formatting.
+1. Extend checkpointing to remaining non-covered mutations (`modify_structure`) and broaden remaining `format_cells` coverage (`column_width`, `row_height`, `auto_fit`, `merge`) plus additional conditional-format rule types.
 2. Enrich checkpoint history UX (search/filter/export, retention controls).
 3. Evaluate host-specific full-file snapshot feasibility for coarse-grained restore points.
 4. Potentially expose “YOLO mode” toggle once we have both lightweight and strict workflows fully defined.

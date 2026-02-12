@@ -96,15 +96,15 @@ Delivered for this phase:
 https://github.com/tmustier/pi-for-excel/issues/27
 
 **Status note:** rollback UX is now in place:
-- automatic checkpoints for `write_cells`, `fill_formula`, `python_transform_range`, `conditional_format`, and mutating `comments` actions
+- automatic checkpoints for `write_cells`, `fill_formula`, `python_transform_range`, `format_cells` (with scoped limits), `conditional_format`, and mutating `comments` actions
 - new `workbook_history` tool (list / restore / delete / clear)
 - post-write action toast with one-click **Revert**
 - dedicated checkpoint browser overlay (menu + `/history`) with restore/delete/clear controls
 - restore creates an inverse checkpoint so rollbacks are themselves reversible
-- non-checkpointed mutation tools explicitly report when no checkpoint is created
+- non-checkpointed mutation tools (and unsupported `format_cells` variants) explicitly report when no checkpoint is created
 
 **Remaining follow-up:**
-- broader remaining coverage (`format_cells`, `modify_structure`, plus additional conditional-format rule types)
+- broader remaining coverage (`modify_structure`, unsupported `format_cells` variants, plus additional conditional-format rule types)
 - richer history UX (search/filter/export, retention controls)
 - feasibility deep-dive for full-file snapshots vs range snapshots in Office.js
 

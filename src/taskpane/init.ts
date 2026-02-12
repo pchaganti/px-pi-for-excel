@@ -170,6 +170,7 @@ function parseWorkbookSnapshotCreatedDetail(value: unknown): WorkbookSnapshotCre
     rawToolName === "write_cells" ||
     rawToolName === "fill_formula" ||
     rawToolName === "python_transform_range" ||
+    rawToolName === "format_cells" ||
     rawToolName === "conditional_format" ||
     rawToolName === "comments" ||
     rawToolName === "restore_snapshot"

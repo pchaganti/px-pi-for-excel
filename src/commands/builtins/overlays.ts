@@ -38,6 +38,7 @@ export type RecoveryCheckpointToolName =
   | "write_cells"
   | "fill_formula"
   | "python_transform_range"
+  | "format_cells"
   | "conditional_format"
   | "comments"
   | "restore_snapshot";
@@ -59,6 +60,8 @@ function formatRecoveryToolLabel(toolName: RecoveryCheckpointToolName): string {
       return "Fill formula";
     case "python_transform_range":
       return "Python transform";
+    case "format_cells":
+      return "Format cells";
     case "conditional_format":
       return "Conditional format";
     case "comments":
