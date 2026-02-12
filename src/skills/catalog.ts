@@ -8,21 +8,11 @@ import mcpGatewaySkillMarkdown from "../../skills/mcp-gateway/SKILL.md?raw";
 import webSearchSkillMarkdown from "../../skills/web-search/SKILL.md?raw";
 
 import { parseSkillDocument, type ParsedSkillFrontmatter } from "./frontmatter.js";
-
-export interface AgentSkillDefinition {
-  name: string;
-  description: string;
-  compatibility?: string;
-  location: string;
-  markdown: string;
-  body: string;
-}
-
-export interface AgentSkillPromptEntry {
-  name: string;
-  description: string;
-  location: string;
-}
+import type {
+  AgentSkillDefinition,
+  AgentSkillPromptEntry,
+  AgentSkillSourceKind,
+} from "./types.js";
 
 interface BundledSkillSource {
   location: string;
@@ -44,6 +34,7 @@ function buildDefinition(args: {
   location: string;
   markdown: string;
   frontmatter: ParsedSkillFrontmatter;
+  sourceKind: AgentSkillSourceKind;
   body: string;
 }): AgentSkillDefinition {
   return {
@@ -51,6 +42,7 @@ function buildDefinition(args: {
     description: args.frontmatter.description,
     compatibility: args.frontmatter.compatibility,
     location: args.location,
+    sourceKind: args.sourceKind,
     markdown: args.markdown,
     body: args.body,
   };
@@ -70,6 +62,7 @@ function buildCatalog(): AgentSkillDefinition[] {
       location: source.location,
       markdown: source.markdown,
       frontmatter: parsed.frontmatter,
+      sourceKind: "bundled",
       body: parsed.body,
     }));
   }
@@ -79,6 +72,26 @@ function buildCatalog(): AgentSkillDefinition[] {
 }
 
 const CATALOG = buildCatalog();
+
+export function mergeAgentSkillDefinitions(
+  preferred: readonly AgentSkillDefinition[],
+  fallback: readonly AgentSkillDefinition[],
+): AgentSkillDefinition[] {
+  const byName = new Map<string, AgentSkillDefinition>();
+
+  for (const skill of preferred) {
+    byName.set(skill.name.toLowerCase(), skill);
+  }
+
+  for (const skill of fallback) {
+    const key = skill.name.toLowerCase();
+    if (!byName.has(key)) {
+      byName.set(key, skill);
+    }
+  }
+
+  return Array.from(byName.values()).sort((left, right) => left.name.localeCompare(right.name));
+}
 
 export function listAgentSkills(): AgentSkillDefinition[] {
   return [...CATALOG];
@@ -92,10 +105,14 @@ export function getAgentSkillByName(name: string): AgentSkillDefinition | null {
   return found ?? null;
 }
 
-export function getAgentSkillPromptEntries(): AgentSkillPromptEntry[] {
-  return CATALOG.map((entry) => ({
+export function buildAgentSkillPromptEntries(skills: readonly AgentSkillDefinition[]): AgentSkillPromptEntry[] {
+  return skills.map((entry) => ({
     name: entry.name,
     description: entry.description,
     location: entry.location,
   }));
+}
+
+export function getAgentSkillPromptEntries(): AgentSkillPromptEntry[] {
+  return buildAgentSkillPromptEntries(CATALOG);
 }

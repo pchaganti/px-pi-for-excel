@@ -13,6 +13,7 @@ export type ExperimentalFeatureId =
   | "python_bridge"
   | "mcp_tools"
   | "files_workspace"
+  | "external_skills_discovery"
   | "remote_extension_urls"
   | "extension_permission_gates"
   | "extension_sandbox_runtime"
@@ -71,6 +72,16 @@ const EXPERIMENTAL_FEATURES = [
     description: "Allow experimental file workspace and artifact tooling.",
     wiring: "wired",
     storageKey: "pi.experimental.filesWorkspace",
+  },
+  {
+    id: "external_skills_discovery",
+    slug: "external-skills-discovery",
+    aliases: ["external-skills", "skills-discovery"],
+    title: "External skills discovery",
+    description: "Allow loading Agent Skills from local externally configured SKILL.md sources.",
+    warning: "Security: external skills can contain untrusted instructions and executable references.",
+    wiring: "flag-only",
+    storageKey: "pi.experimental.externalSkillsDiscovery",
   },
   {
     id: "remote_extension_urls",
