@@ -124,6 +124,7 @@ function promptForText(opts: {
     const overlay = document.createElement("div");
     overlay.id = "pi-prompt-overlay";
     overlay.className = "pi-welcome-overlay";
+    overlay.dataset.claimsEscape = "true";
     overlay.innerHTML = `
       <div class="pi-welcome-card" style="text-align: left; max-width: 420px;">
         <h2 class="pi-prompt-title" style="font-size: 16px; font-weight: 600; margin: 0 0 6px; font-family: var(--font-sans);"></h2>

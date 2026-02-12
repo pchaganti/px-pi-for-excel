@@ -12,10 +12,13 @@ import {
   USER_INSTRUCTIONS_SOFT_LIMIT,
   WORKBOOK_INSTRUCTIONS_SOFT_LIMIT,
 } from "../../instructions/store.js";
+import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
 import { showToast } from "../../ui/toast.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../../workbook/context.js";
 
 type InstructionsTab = "user" | "workbook";
+
+const overlayClosers = new WeakMap<HTMLElement, () => void>();
 
 function setActiveInstructionsTab(
   tabButtons: Record<InstructionsTab, HTMLButtonElement>,
@@ -48,7 +51,13 @@ export async function showInstructionsDialog(opts?: {
 }): Promise<void> {
   const existing = document.getElementById("pi-instructions-overlay");
   if (existing) {
-    existing.remove();
+    const closeExisting = overlayClosers.get(existing);
+    if (closeExisting) {
+      closeExisting();
+    } else {
+      existing.remove();
+    }
+
     return;
   }
 
@@ -129,6 +138,20 @@ export async function showInstructionsDialog(opts?: {
   card.append(title, tabs, workbookTag, textarea, footer);
   overlay.appendChild(card);
 
+  let closed = false;
+  const closeOverlay = () => {
+    if (closed) {
+      return;
+    }
+
+    closed = true;
+    overlayClosers.delete(overlay);
+    cleanupEscape();
+    overlay.remove();
+  };
+  const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
+  overlayClosers.set(overlay, closeOverlay);
+
   const tabButtons: Record<InstructionsTab, HTMLButtonElement> = {
     user: userTab,
     workbook: workbookTab,
@@ -202,7 +225,7 @@ export async function showInstructionsDialog(opts?: {
   });
 
   cancelBtn.addEventListener("click", () => {
-    overlay.remove();
+    closeOverlay();
   });
 
   saveBtn.addEventListener("click", () => {
@@ -222,13 +245,13 @@ export async function showInstructionsDialog(opts?: {
       }
 
       showToast("Instructions saved");
-      overlay.remove();
+      closeOverlay();
     })();
   });
 
   overlay.addEventListener("click", (event) => {
     if (event.target === overlay) {
-      overlay.remove();
+      closeOverlay();
     }
   });
 

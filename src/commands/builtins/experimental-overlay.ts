@@ -8,9 +8,11 @@ import {
   setExperimentalFeatureEnabled,
   type ExperimentalFeatureSnapshot,
 } from "../../experiments/flags.js";
+import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
 import { showToast } from "../../ui/toast.js";
 
 const OVERLAY_ID = "pi-experimental-overlay";
+const overlayClosers = new WeakMap<HTMLElement, () => void>();
 
 function applyStatusVisual(statusEl: HTMLSpanElement, enabled: boolean): void {
   statusEl.textContent = enabled ? "Enabled" : "Disabled";
@@ -97,7 +99,13 @@ function buildFeatureRow(feature: ExperimentalFeatureSnapshot): HTMLElement {
 export function showExperimentalDialog(): void {
   const existing = document.getElementById(OVERLAY_ID);
   if (existing) {
-    existing.remove();
+    const closeExisting = overlayClosers.get(existing);
+    if (closeExisting) {
+      closeExisting();
+    } else {
+      existing.remove();
+    }
+
     return;
   }
 
@@ -136,13 +144,27 @@ export function showExperimentalDialog(): void {
     "margin-top: 12px; width: 100%; padding: 8px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08); background: oklch(0 0 0 / 0.03); cursor: pointer; font-family: var(--font-sans); font-size: 13px;";
   closeBtn.textContent = "Close";
 
-  closeBtn.addEventListener("click", () => {
+  let closed = false;
+  const closeOverlay = () => {
+    if (closed) {
+      return;
+    }
+
+    closed = true;
+    overlayClosers.delete(overlay);
+    cleanupEscape();
     overlay.remove();
+  };
+  const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
+  overlayClosers.set(overlay, closeOverlay);
+
+  closeBtn.addEventListener("click", () => {
+    closeOverlay();
   });
 
   overlay.addEventListener("click", (event) => {
     if (event.target === overlay) {
-      overlay.remove();
+      closeOverlay();
     }
   });
 
