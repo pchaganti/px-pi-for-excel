@@ -63,20 +63,20 @@ function renderStatusBar(
 
   // Context health: color + tooltip based on usage
   let ctxColor = "";
-  const ctxBaseTooltip = `How much of the model's context window has been used (${totalTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tokens). As it fills up the model may lose track of earlier details — start a new chat if quality drops.`;
+  const ctxBaseTooltip = `How much of Pi's memory (context window) the conversation is using — ${totalTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tokens. As this fills up, Pi may lose track of earlier details — start a new chat if quality drops.`;
   let ctxWarning = "";
   let ctxWarningText = "";
   if (pct > 100) {
     ctxColor = "pi-status-ctx--red";
-    ctxWarningText = "Context window exceeded — the next message will fail. Use /compact to free up some context, or /new to clear the chat.";
+    ctxWarningText = "Context is full — the next message will fail. Use /compact to summarize earlier messages, or /new for a fresh chat.";
     ctxWarning = `<span class="pi-tooltip__warn pi-tooltip__warn--red">${ctxWarningText}</span>`;
   } else if (pct > 60) {
     ctxColor = "pi-status-ctx--red";
-    ctxWarningText = `Context ${pct}% used up — quality will degrade. Use /compact to free up some context, or /new to clear the chat.`;
+    ctxWarningText = `Context ${pct}% full — responses will get less accurate. Use /compact to free space, or /new for a fresh chat.`;
     ctxWarning = `<span class="pi-tooltip__warn pi-tooltip__warn--red">${ctxWarningText}</span>`;
   } else if (pct > 40) {
     ctxColor = "pi-status-ctx--yellow";
-    ctxWarningText = `Context ${pct}% used up. Consider using /compact to free up some context, or /new to clear the chat.`;
+    ctxWarningText = `Context ${pct}% full. Consider /compact to free space, or /new for a fresh chat.`;
     ctxWarning = `<span class="pi-tooltip__warn pi-tooltip__warn--yellow">${ctxWarningText}</span>`;
   }
 
@@ -101,7 +101,7 @@ function renderStatusBar(
   }
 
   const instructionsBadge = instructionsActive
-    ? `<button class="pi-status-instructions" data-tooltip="Persistent instructions are active. Click to edit.">📋 instr</button>`
+    ? `<button class="pi-status-instructions" data-tooltip="Custom rules are being applied. Click to edit.">📋 rules</button>`
     : "";
 
   const integrationsBadge = activeIntegrations.length > 0
@@ -109,7 +109,7 @@ function renderStatusBar(
     : "";
 
   const thinkingTooltip = escapeAttr(
-    "Controls how long the model \"thinks\" before answering — higher = slower but better reasoning. Click to choose a level, or use ⇧Tab to cycle.",
+    "How deeply Pi reasons before answering — higher is slower but more thorough. Click to choose, or ⇧Tab to cycle.",
   );
 
   el.innerHTML = `

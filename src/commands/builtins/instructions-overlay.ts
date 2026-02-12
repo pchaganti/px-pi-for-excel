@@ -83,13 +83,13 @@ export async function showInstructionsDialog(opts?: {
 
   const userTab = document.createElement("button");
   userTab.type = "button";
-  userTab.textContent = "My Instructions";
+  userTab.textContent = "Personal";
   userTab.className = "pi-overlay-tab";
   userTab.setAttribute("role", "tab");
 
   const workbookTab = document.createElement("button");
   workbookTab.type = "button";
-  workbookTab.textContent = "Workbook";
+  workbookTab.textContent = "This Workbook";
   workbookTab.className = "pi-overlay-tab";
   workbookTab.setAttribute("role", "tab");
 
@@ -126,8 +126,8 @@ export async function showInstructionsDialog(opts?: {
   saveBtn.className = "pi-overlay-btn pi-overlay-btn--primary";
 
   actions.append(cancelBtn, saveBtn);
-  footer.append(counter, hint, actions);
-  card.append(title, tabs, workbookTag, textarea, footer);
+  footer.append(counter, actions);
+  card.append(title, tabs, workbookTag, hint, textarea, footer);
   overlay.appendChild(card);
 
   let closed = false;
@@ -163,7 +163,7 @@ export async function showInstructionsDialog(opts?: {
       counter.classList.toggle("is-warning", count > USER_INSTRUCTIONS_SOFT_LIMIT);
 
       hint.textContent =
-        "Private to your machine. These apply to all workbooks and can be updated automatically when you express preferences.";
+        "Rules Pi follows in every conversation. Pi can also update these when you tell it your preferences — e.g. \"always use EUR\".";
       workbookTag.hidden = true;
       return;
     }
@@ -178,10 +178,10 @@ export async function showInstructionsDialog(opts?: {
 
     if (!workbookId) {
       hint.textContent =
-        "Workbook identity is unavailable right now, so workbook instructions can't be saved for this file.";
+        "Can't identify this workbook right now — try saving the file first.";
     } else {
       hint.textContent =
-        "Saved for this workbook on this machine. The assistant should ask before adding workbook-level notes.";
+        "Rules that only apply when this workbook is open. Pi will confirm before adding anything here.";
     }
 
     workbookTag.hidden = false;

@@ -7,7 +7,11 @@ import {
   type WorkbookRecoverySnapshot,
 } from "../src/workbook/recovery-log.ts";
 import type { WorkbookContext } from "../src/workbook/context.ts";
-import { firstCellAddress, type RecoveryFormatRangeState } from "../src/workbook/recovery-states.ts";
+import {
+  firstCellAddress,
+  type RecoveryFormatRangeState,
+  type RecoveryModifyStructureState,
+} from "../src/workbook/recovery-states.ts";
 
 const RECOVERY_SETTING_KEY = "workbook.recovery-snapshots.v1";
 
@@ -431,6 +435,78 @@ void test("restore applies format-cells checkpoints and creates inverse checkpoi
   assert.equal(inverse?.snapshotKind, "format_cells_state");
   assert.equal(inverse?.restoredFromSnapshotId, appended?.id);
   assert.deepEqual(withoutUndefined(inverse?.formatRangeState), withoutUndefined(currentFormatState));
+});
+
+void test("restore applies modify-structure checkpoints and creates inverse checkpoint", async () => {
+  const settingsStore = createInMemorySettingsStore();
+
+  const workbookContext: WorkbookContext = {
+    workbookId: "url_sha256:workbook-structure",
+    workbookName: "Structure.xlsx",
+    source: "document.url",
+  };
+
+  let idCounter = 0;
+  const createId = (): string => {
+    idCounter += 1;
+    return `snap-structure-${idCounter}`;
+  };
+
+  let appliedAddress = "";
+  let appliedState: RecoveryModifyStructureState | null = null;
+
+  const restoredState: RecoveryModifyStructureState = {
+    kind: "sheet_name",
+    sheetId: "sheet-id-1",
+    name: "Revenue",
+  };
+
+  const currentState: RecoveryModifyStructureState = {
+    kind: "sheet_name",
+    sheetId: "sheet-id-1",
+    name: "Revenue (draft)",
+  };
+
+  const log = new WorkbookRecoveryLog({
+    getSettingsStore: () => Promise.resolve(settingsStore),
+    getWorkbookContext: () => Promise.resolve(workbookContext),
+    now: () => 1700000001900,
+    createId,
+    applySnapshot: () => Promise.resolve({ values: [[1]], formulas: [[1]] }),
+    applyModifyStructureSnapshot: (address, state) => {
+      appliedAddress = address;
+      appliedState = state;
+      return Promise.resolve(currentState);
+    },
+  });
+
+  const appended = await log.appendModifyStructure({
+    toolName: "modify_structure",
+    toolCallId: "call-structure",
+    address: "Revenue (draft)",
+    changedCount: 1,
+    modifyStructureState: restoredState,
+  });
+
+  assert.ok(appended);
+
+  const restored = await log.restore(appended?.id ?? "");
+
+  assert.equal(restored.address, "Revenue (draft)");
+  assert.equal(restored.restoredSnapshotId, appended?.id);
+  assert.equal(appliedAddress, "Revenue (draft)");
+  assert.deepEqual(appliedState, restoredState);
+
+  const snapshots = await log.listForCurrentWorkbook(10);
+  const inverse = restored.inverseSnapshotId
+    ? findSnapshotById(snapshots, restored.inverseSnapshotId)
+    : null;
+
+  assert.ok(inverse);
+  assert.equal(inverse?.toolName, "restore_snapshot");
+  assert.equal(inverse?.snapshotKind, "modify_structure_state");
+  assert.equal(inverse?.restoredFromSnapshotId, appended?.id);
+  assert.deepEqual(inverse?.modifyStructureState, currentState);
 });
 
 void test("restore applies conditional-format checkpoints and creates inverse checkpoint", async () => {

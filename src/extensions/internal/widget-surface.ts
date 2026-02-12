@@ -16,8 +16,8 @@ export interface ExtensionWidgetSpec {
   order?: number;
   collapsible?: boolean;
   collapsed?: boolean;
-  minHeightPx?: number;
-  maxHeightPx?: number;
+  minHeightPx?: number | null;
+  maxHeightPx?: number | null;
 }
 
 interface NormalizedWidgetSpec {
@@ -34,6 +34,16 @@ interface NormalizedWidgetSpec {
   createdAt: number;
 }
 
+export interface ExtensionWidgetHeightBounds {
+  minHeightPx: number | null;
+  maxHeightPx: number | null;
+}
+
+export interface ExtensionWidgetCollapseState {
+  collapsible: boolean;
+  collapsed: boolean;
+}
+
 const WIDGET_SLOT_ID = "pi-widget-slot";
 const BELOW_SLOT_ID = "pi-widget-slot-below";
 const LEGACY_TITLELESS_CLASS = "pi-widget-slot";
@@ -47,23 +57,107 @@ function toWidgetKey(ownerId: string, id: string): string {
   return `${ownerId}::${id}`;
 }
 
-function parseOptionalNumber(value: number | undefined): number | null {
-  if (typeof value !== "number" || Number.isNaN(value) || !Number.isFinite(value)) {
-    return null;
-  }
-
-  return value;
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && !Number.isNaN(value) && Number.isFinite(value);
 }
 
-function clampHeight(value: number | null): number | null {
+function normalizePlacement(
+  placement: ExtensionWidgetPlacement | undefined,
+  existing: NormalizedWidgetSpec | null,
+): ExtensionWidgetPlacement {
+  if (placement === "above-input" || placement === "below-input") {
+    return placement;
+  }
+
+  return existing?.placement ?? "above-input";
+}
+
+function normalizeOrder(value: number | undefined, existing: NormalizedWidgetSpec | null): number {
+  if (isFiniteNumber(value)) {
+    return value;
+  }
+
+  return existing?.order ?? 0;
+}
+
+function clampHeight(value: number): number {
+  return Math.round(Math.max(MIN_WIDGET_HEIGHT_PX, Math.min(MAX_WIDGET_HEIGHT_PX, value)));
+}
+
+function normalizeHeightOverride(value: number | null | undefined): number | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
   if (value === null) {
     return null;
   }
 
-  return Math.max(MIN_WIDGET_HEIGHT_PX, Math.min(MAX_WIDGET_HEIGHT_PX, value));
+  if (!isFiniteNumber(value)) {
+    return undefined;
+  }
+
+  return clampHeight(value);
 }
 
-function normalizeWidgetSpec(input: ExtensionWidgetSpec, existingCreatedAt: number | null): NormalizedWidgetSpec {
+export function normalizeWidgetHeightBounds(
+  minHeightPx: number | null,
+  maxHeightPx: number | null,
+): ExtensionWidgetHeightBounds {
+  if (minHeightPx !== null && maxHeightPx !== null && maxHeightPx < minHeightPx) {
+    return {
+      minHeightPx,
+      maxHeightPx: minHeightPx,
+    };
+  }
+
+  return {
+    minHeightPx,
+    maxHeightPx,
+  };
+}
+
+export function resolveWidgetHeightBoundsForUpsert(
+  nextMinHeightPx: number | null | undefined,
+  nextMaxHeightPx: number | null | undefined,
+  existing: ExtensionWidgetHeightBounds | null,
+): ExtensionWidgetHeightBounds {
+  const minOverride = normalizeHeightOverride(nextMinHeightPx);
+  const maxOverride = normalizeHeightOverride(nextMaxHeightPx);
+
+  const resolvedMin = minOverride === undefined ? (existing?.minHeightPx ?? null) : minOverride;
+  const resolvedMax = maxOverride === undefined ? (existing?.maxHeightPx ?? null) : maxOverride;
+
+  return normalizeWidgetHeightBounds(resolvedMin, resolvedMax);
+}
+
+export function resolveWidgetCollapseState(
+  nextCollapsible: boolean | undefined,
+  nextCollapsed: boolean | undefined,
+  existing: ExtensionWidgetCollapseState | null,
+): ExtensionWidgetCollapseState {
+  const collapsible = typeof nextCollapsible === "boolean"
+    ? nextCollapsible
+    : (existing?.collapsible ?? false);
+
+  if (!collapsible) {
+    return {
+      collapsible: false,
+      collapsed: false,
+    };
+  }
+
+  const collapsed = typeof nextCollapsed === "boolean"
+    ? nextCollapsed
+    : (existing?.collapsed ?? false);
+
+  return {
+    collapsible,
+    collapsed,
+  };
+}
+
+function normalizeWidgetSpec(input: ExtensionWidgetSpec, existing: NormalizedWidgetSpec | null): NormalizedWidgetSpec {
   const ownerId = input.ownerId.trim();
   if (ownerId.length === 0) {
     throw new Error("Widget owner id cannot be empty.");
@@ -74,20 +168,47 @@ function normalizeWidgetSpec(input: ExtensionWidgetSpec, existingCreatedAt: numb
     throw new Error("Widget id cannot be empty.");
   }
 
-  const title = typeof input.title === "string" ? input.title.trim() : "";
+  const title = typeof input.title === "string"
+    ? input.title.trim()
+    : (existing?.title ?? "");
+
+  const placement = normalizePlacement(input.placement, existing);
+  const order = normalizeOrder(input.order, existing);
+
+  const collapseState = resolveWidgetCollapseState(
+    input.collapsible,
+    input.collapsed,
+    existing
+      ? {
+        collapsible: existing.collapsible,
+        collapsed: existing.collapsed,
+      }
+      : null,
+  );
+
+  const heightBounds = resolveWidgetHeightBoundsForUpsert(
+    input.minHeightPx,
+    input.maxHeightPx,
+    existing
+      ? {
+        minHeightPx: existing.minHeightPx,
+        maxHeightPx: existing.maxHeightPx,
+      }
+      : null,
+  );
 
   return {
     ownerId,
     id,
     element: input.element,
     title,
-    placement: input.placement ?? "above-input",
-    order: typeof input.order === "number" && Number.isFinite(input.order) ? input.order : 0,
-    collapsible: input.collapsible === true,
-    collapsed: input.collapsed === true,
-    minHeightPx: clampHeight(parseOptionalNumber(input.minHeightPx)),
-    maxHeightPx: clampHeight(parseOptionalNumber(input.maxHeightPx)),
-    createdAt: existingCreatedAt ?? creationCounter++,
+    placement,
+    order,
+    collapsible: collapseState.collapsible,
+    collapsed: collapseState.collapsed,
+    minHeightPx: heightBounds.minHeightPx,
+    maxHeightPx: heightBounds.maxHeightPx,
+    createdAt: existing?.createdAt ?? creationCounter++,
   };
 }
 
@@ -151,52 +272,82 @@ function sortWidgets(widgets: readonly NormalizedWidgetSpec[]): NormalizedWidget
   });
 }
 
+function createWidgetTitle(widget: NormalizedWidgetSpec): HTMLSpanElement {
+  const title = document.createElement("span");
+  title.className = "pi-ext-widget-title";
+  title.textContent = widget.title.length > 0 ? widget.title : widget.id;
+  return title;
+}
+
 function buildWidgetCard(widget: NormalizedWidgetSpec): HTMLElement {
-  const card = document.createElement("div");
-  card.className = "pi-overlay-surface";
+  const card = document.createElement("section");
+  card.className = "pi-overlay-surface pi-ext-widget-card";
+  card.dataset.widgetOwnerId = widget.ownerId;
+  card.dataset.widgetId = widget.id;
+  card.dataset.widgetPlacement = widget.placement;
 
   const showHeader = widget.title.length > 0 || widget.collapsible;
-  let contentContainer: HTMLElement = card;
 
   if (showHeader) {
-    const header = document.createElement("div");
-    header.className = "pi-ext-widget-header";
-
-    const title = document.createElement("span");
-    title.className = "pi-ext-widget-title";
-    title.textContent = widget.title.length > 0 ? widget.title : widget.id;
-    header.appendChild(title);
-
     if (widget.collapsible) {
-      const toggle = document.createElement("button");
-      toggle.type = "button";
-      toggle.className = "pi-overlay-btn pi-overlay-btn--ghost";
-      toggle.textContent = widget.collapsed ? "Expand" : "Collapse";
-      toggle.addEventListener("click", () => {
+      const headerButton = document.createElement("button");
+      headerButton.type = "button";
+      headerButton.className = "pi-ext-widget-header pi-ext-widget-header--toggle";
+      headerButton.setAttribute("aria-expanded", widget.collapsed ? "false" : "true");
+      headerButton.setAttribute(
+        "aria-label",
+        `${widget.collapsed ? "Expand" : "Collapse"} widget ${widget.title.length > 0 ? widget.title : widget.id}`,
+      );
+
+      const title = createWidgetTitle(widget);
+
+      const toggleState = document.createElement("span");
+      toggleState.className = "pi-ext-widget-header__state";
+
+      const icon = document.createElement("span");
+      icon.className = "pi-ext-widget-header__icon";
+      icon.textContent = widget.collapsed ? "▸" : "▾";
+
+      const action = document.createElement("span");
+      action.className = "pi-ext-widget-header__action";
+      action.textContent = widget.collapsed ? "Expand" : "Collapse";
+
+      toggleState.append(icon, action);
+      headerButton.append(title, toggleState);
+      headerButton.addEventListener("click", () => {
         widget.collapsed = !widget.collapsed;
         renderExtensionWidgets();
       });
-      header.appendChild(toggle);
+
+      card.appendChild(headerButton);
+    } else {
+      const header = document.createElement("div");
+      header.className = "pi-ext-widget-header";
+      header.appendChild(createWidgetTitle(widget));
+      card.appendChild(header);
     }
-
-    const body = document.createElement("div");
-    body.className = "pi-ext-widget-body";
-
-    card.append(header, body);
-    contentContainer = body;
   }
 
+  const body = document.createElement("div");
+  body.className = "pi-ext-widget-body";
+
   if (widget.minHeightPx !== null) {
-    contentContainer.style.minHeight = `${widget.minHeightPx}px`;
+    body.style.minHeight = `${widget.minHeightPx}px`;
   }
 
   if (widget.maxHeightPx !== null) {
-    contentContainer.style.maxHeight = `${widget.maxHeightPx}px`;
-    contentContainer.style.overflow = "auto";
+    body.style.maxHeight = `${widget.maxHeightPx}px`;
+    body.style.overflowY = "auto";
+    body.classList.add("pi-ext-widget-body--scrollable");
   }
 
-  contentContainer.style.display = widget.collapsed ? "none" : "block";
-  contentContainer.replaceChildren(widget.element);
+  body.hidden = widget.collapsed;
+  if (widget.collapsed) {
+    card.classList.add("is-collapsed");
+  }
+
+  body.replaceChildren(widget.element);
+  card.appendChild(body);
 
   return card;
 }
@@ -207,7 +358,7 @@ function renderSlot(slot: HTMLElement | null, widgets: readonly NormalizedWidget
   }
 
   slot.replaceChildren(...widgets.map((widget) => buildWidgetCard(widget)));
-  slot.style.display = widgets.length > 0 ? "block" : "none";
+  slot.style.display = widgets.length > 0 ? "flex" : "none";
 }
 
 export function renderExtensionWidgets(): void {
@@ -221,8 +372,8 @@ export function renderExtensionWidgets(): void {
 
 export function upsertExtensionWidget(input: ExtensionWidgetSpec): void {
   const key = toWidgetKey(input.ownerId, input.id);
-  const existing = widgetsByKey.get(key);
-  const normalized = normalizeWidgetSpec(input, existing ? existing.createdAt : null);
+  const existing = widgetsByKey.get(key) ?? null;
+  const normalized = normalizeWidgetSpec(input, existing);
 
   widgetsByKey.set(key, normalized);
   renderExtensionWidgets();

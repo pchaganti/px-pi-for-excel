@@ -200,6 +200,9 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **API:** additive `widget.upsert/remove/clear` methods with stable widget ids.
 - **Placement/order:** widgets sort deterministically by `(order asc, createdAt asc, id asc)` within `above-input` / `below-input` buckets.
 - **Ownership model:** widgets are extension-owned (`ownerId`) and auto-cleared on extension teardown/reload/uninstall.
+- **Header behavior (slice B):** `collapsible: true` renders host-owned expand/collapse controls with predictable labels and keyboard focus semantics.
+- **Sizing behavior (slice B):** `minHeightPx` / `maxHeightPx` are clamped to safe host bounds (`72..640`), `max < min` is normalized to `max = min`, and `null` clears an existing bound.
+- **Upsert semantics (slice B):** omitted optional metadata preserves existing widget state; updates can focus on content without restating layout fields.
 - **Compatibility:** legacy `widget.show/dismiss` remains supported and maps to a reserved legacy widget id when v2 is enabled.
 - **Rationale:** establish predictable multi-widget lifecycle semantics before richer layout controls.
 
@@ -228,11 +231,12 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 
 ## Workbook recovery checkpoints (`workbook_history`)
 - **Goal:** prefer low-friction workflows over pre-execution approval selectors by making rollback easy and reliable.
-- **Automatic checkpoints:** successful `write_cells`, `fill_formula`, `python_transform_range`, `format_cells`, `conditional_format`, and mutating `comments` actions store pre-mutation snapshots in local `workbook.recovery-snapshots.v1`.
+- **Automatic checkpoints:** successful `write_cells`, `fill_formula`, `python_transform_range`, `format_cells`, `conditional_format`, mutating `comments` actions, and supported `modify_structure` actions (`rename_sheet`, `hide_sheet`, `unhide_sheet`) store pre-mutation snapshots in local `workbook.recovery-snapshots.v1`.
 - **Safety limits:** checkpoint capture is skipped for very large writes (> `MAX_RECOVERY_CELLS`) to avoid oversized local state.
 - **Workbook identity guardrails:** append/list/delete/clear/restore paths are scoped to the active workbook identity; restore rejects identity-less or cross-workbook checkpoints.
 - **Restore UX:** `workbook_history` can list/restore/delete/clear checkpoints; restores also create an inverse checkpoint (`restore_snapshot`) so users can undo a mistaken restore.
-- **Coverage signaling:** non-checkpointed mutation tools (`modify_structure`, and mutating `view_settings` actions) explicitly report when no recovery checkpoint was created.
+- **Coverage signaling:** unsupported `modify_structure` actions and mutating `view_settings` actions explicitly report when no recovery checkpoint was created.
+- **Current `modify_structure` checkpoint limits:** captures/restores only `rename_sheet`, `hide_sheet`, and `unhide_sheet` actions.
 - **Current `format_cells` checkpoint limits:** captures/restores core range-format properties (font/fill/number format/alignment/wrap/borders). Mutations involving `column_width`, `row_height`, `auto_fit`, or `merge` currently skip checkpoint capture with an explicit note.
 - **Quick affordance:** after a checkpointed write, UI shows an action toast with **Revert**.
 - **Rationale:** addresses #27 by shifting from cumbersome up-front approvals to versioned recovery with explicit user-controlled rollback.

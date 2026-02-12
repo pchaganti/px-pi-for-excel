@@ -41,6 +41,7 @@ export type RecoveryCheckpointToolName =
   | "format_cells"
   | "conditional_format"
   | "comments"
+  | "modify_structure"
   | "restore_snapshot";
 
 export interface RecoveryCheckpointSummary {
@@ -66,6 +67,8 @@ function formatRecoveryToolLabel(toolName: RecoveryCheckpointToolName): string {
       return "Conditional format";
     case "comments":
       return "Comments";
+    case "modify_structure":
+      return "Modify structure";
     case "restore_snapshot":
       return "Restore";
     default:

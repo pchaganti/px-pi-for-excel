@@ -404,7 +404,7 @@ export function showIntegrationsDialog(dependencies: IntegrationsDialogDependenc
   title.className = "pi-overlay-title";
 
   const subtitle = document.createElement("p");
-  subtitle.textContent = "Integrations can inject instructions and external tools. Keep external access opt-in.";
+  subtitle.textContent = "Add capabilities like web search and external integrations. External tools are off by default.";
   subtitle.className = "pi-overlay-subtitle";
 
   titleWrap.append(title, subtitle);
