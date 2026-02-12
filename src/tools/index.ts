@@ -6,6 +6,7 @@
  */
 
 import { createCoreTools } from "./registry.js";
+import type { SkillReadCache } from "../skills/read-cache.js";
 import { createTmuxTool } from "./tmux.js";
 import { createPythonRunTool } from "./python-run.js";
 import { createLibreOfficeConvertTool } from "./libreoffice-convert.js";
@@ -18,13 +19,20 @@ import {
 
 export interface CreateAllToolsOptions {
   getExtensionManager?: () => ExtensionsManagerToolRuntime | null;
+  getSessionId?: () => string | null;
+  skillReadCache?: SkillReadCache;
 }
 
 export function createAllTools(options: CreateAllToolsOptions = {}) {
   const getExtensionManager = options.getExtensionManager ?? (() => null);
 
   return [
-    ...createCoreTools(),
+    ...createCoreTools({
+      skills: {
+        getSessionId: options.getSessionId,
+        readCache: options.skillReadCache,
+      },
+    }),
     createTmuxTool(),
     createPythonRunTool(),
     createLibreOfficeConvertTool(),

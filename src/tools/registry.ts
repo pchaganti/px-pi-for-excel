@@ -25,7 +25,10 @@ import { createCommentsTool } from "./comments.js";
 import { createInstructionsTool } from "./instructions.js";
 import { createConventionsTool } from "./conventions.js";
 import { createWorkbookHistoryTool } from "./workbook-history.js";
-import { createSkillsTool } from "./skills.js";
+import {
+  createSkillsTool,
+  type SkillsToolDependencies,
+} from "./skills.js";
 
 /** Canonical list of core tool names (single source of truth). */
 export const CORE_TOOL_NAMES = [
@@ -53,8 +56,12 @@ export type CoreToolName = (typeof CORE_TOOL_NAMES)[number];
 // Each tool still validates its own schema at runtime.
 export type AnyCoreTool = AgentTool<TSchema, unknown>;
 
+export interface CreateCoreToolsOptions {
+  skills?: SkillsToolDependencies;
+}
+
 /** Create all core (built-in) Excel tools for the agent. */
-export function createCoreTools(): AnyCoreTool[] {
+export function createCoreTools(options: CreateCoreToolsOptions = {}): AnyCoreTool[] {
   return [
     createGetWorkbookOverviewTool(),
     createReadRangeTool(),
@@ -71,6 +78,6 @@ export function createCoreTools(): AnyCoreTool[] {
     createInstructionsTool(),
     createConventionsTool(),
     createWorkbookHistoryTool(),
-    createSkillsTool(),
+    createSkillsTool(options.skills),
   ] as unknown as AnyCoreTool[];
 }

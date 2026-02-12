@@ -100,6 +100,7 @@ function buildAvailableSkillsSection(availableSkills: AvailableSkillPromptEntry[
   const lines: string[] = [
     "## Available Agent Skills",
     "When a task matches one of these skills, call the **skills** tool with action=\"read\" and the skill name.",
+    "Read each skill once per session and reuse it from context; avoid repeated reads unless the user asks to refresh.",
     "",
     "<available_skills>",
   ];

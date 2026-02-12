@@ -103,6 +103,7 @@ void test("system prompt renders available skills XML section", () => {
   });
 
   assert.match(prompt, /## Available Agent Skills/);
+  assert.match(prompt, /Read each skill once per session/i);
   assert.match(prompt, /<available_skills>/);
   assert.match(prompt, /<name>web-search<\/name>/);
   assert.match(prompt, /<location>skills\/web-search\/SKILL\.md<\/location>/);

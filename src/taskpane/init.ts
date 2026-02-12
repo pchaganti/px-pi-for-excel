@@ -63,6 +63,7 @@ import { INTEGRATIONS_COMMAND_NAME } from "../integrations/naming.js";
 import { getExternalToolsEnabled, resolveConfiguredIntegrationIds } from "../integrations/store.js";
 import { buildSystemPrompt } from "../prompt/system-prompt.js";
 import { getAgentSkillPromptEntries } from "../skills/catalog.js";
+import { createSkillReadCache } from "../skills/read-cache.js";
 import { initAppStorage } from "../storage/init-app-storage.js";
 import { renderError } from "../ui/loading.js";
 import { showFilesWorkspaceDialog } from "../ui/files-dialog.js";
@@ -604,6 +605,7 @@ export async function initTaskpane(opts: {
   }) => {
     const runtimeId = crypto.randomUUID();
     let runtimeSessionId: string = crypto.randomUUID();
+    const runtimeSkillReadCache = createSkillReadCache();
 
     let runtimeAgent: Agent | null = null;
 
@@ -621,6 +623,8 @@ export async function initTaskpane(opts: {
 
       const coreTools = createAllTools({
         getExtensionManager: () => extensionManager,
+        getSessionId: () => runtimeAgent?.sessionId ?? runtimeSessionId,
+        skillReadCache: runtimeSkillReadCache,
       }).filter(isRuntimeAgentTool);
       const gatedCoreTools = await applyExperimentalToolGates(coreTools);
       const allTools = [
@@ -724,6 +728,7 @@ export async function initTaskpane(opts: {
       const nextSessionId = persistence.getSessionId();
       if (nextSessionId === observedSessionId) return;
 
+      runtimeSkillReadCache.clearSession(observedSessionId);
       observedSessionId = nextSessionId;
       runtimeSessionId = nextSessionId;
       void refreshRuntimeCapabilities();
@@ -772,6 +777,7 @@ export async function initTaskpane(opts: {
         dispose: () => {
           runtimeCapabilityRefreshers.delete(runtimeId);
           runtimeActiveIntegrationIds.delete(runtimeId);
+          runtimeSkillReadCache.clearAll();
           unsubscribeSessionCapabilitySync();
           unsubscribeErrorTracking();
           actionQueue.shutdown();
