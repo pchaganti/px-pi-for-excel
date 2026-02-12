@@ -9,11 +9,15 @@ import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun } from "../excel/helpers.js";
 import { getWorkbookChangeAuditLog } from "../audit/workbook-change-audit.js";
+import { dispatchWorkbookSnapshotCreated } from "../workbook/recovery-events.js";
+import { getWorkbookRecoveryLog } from "../workbook/recovery-log.js";
+import { captureModifyStructureState, type RecoveryModifyStructureState } from "../workbook/recovery-states.js";
 import { getErrorMessage } from "../utils/errors.js";
 import type { ModifyStructureDetails } from "./tool-details.js";
 import {
-  NON_CHECKPOINTED_MUTATION_NOTE,
-  NON_CHECKPOINTED_MUTATION_REASON,
+  CHECKPOINT_SKIPPED_NOTE,
+  CHECKPOINT_SKIPPED_REASON,
+  recoveryCheckpointCreated,
   recoveryCheckpointUnavailable,
 } from "./recovery-metadata.js";
 
@@ -77,6 +81,34 @@ interface StructureMutationResult {
   summary: string;
 }
 
+type SupportedStructureCheckpointAction = "rename_sheet" | "hide_sheet" | "unhide_sheet";
+
+function supportedCheckpointActionFor(
+  action: Params["action"],
+): SupportedStructureCheckpointAction | null {
+  if (action === "rename_sheet" || action === "hide_sheet" || action === "unhide_sheet") {
+    return action;
+  }
+
+  return null;
+}
+
+function checkpointStateKindFor(
+  action: SupportedStructureCheckpointAction,
+): RecoveryModifyStructureState["kind"] {
+  return action === "rename_sheet" ? "sheet_name" : "sheet_visibility";
+}
+
+function unsupportedStructureCheckpointReason(action: Params["action"]): string {
+  return `Checkpoint capture is not yet supported for modify_structure action \`${action}\`.`;
+}
+
+function appendResultNote(result: AgentToolResult<ModifyStructureDetails>, note: string): void {
+  const first = result.content[0];
+  if (!first || first.type !== "text") return;
+  first.text = `${first.text}\n\n${note}`;
+}
+
 function columnNumberToLetter(position: number): string {
   let col = position - 1; // 0-indexed
   let letter = "";
@@ -103,6 +135,26 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
       params: Params,
     ): Promise<AgentToolResult<ModifyStructureDetails>> => {
       try {
+        const checkpointAction = supportedCheckpointActionFor(params.action);
+        const checkpointKind = checkpointAction ? checkpointStateKindFor(checkpointAction) : null;
+
+        let checkpointState: RecoveryModifyStructureState | null = null;
+        let checkpointUnavailableReason = checkpointAction
+          ? null
+          : unsupportedStructureCheckpointReason(params.action);
+
+        if (checkpointKind && typeof params.sheet === "string" && params.sheet.trim().length > 0) {
+          checkpointState = await captureModifyStructureState({
+            kind: checkpointKind,
+            sheetRef: params.sheet,
+          });
+
+          if (!checkpointState) {
+            checkpointUnavailableReason =
+              `Checkpoint capture was skipped for \`${params.action}\` (sheet state unavailable).`;
+          }
+        }
+
         const result = await excelRun<StructureMutationResult>(async (context) => {
           const action = params.action;
           const count = params.count || 1;
@@ -199,6 +251,7 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
               return {
                 message: `Added sheet "${name}".`,
                 changedCount: 1,
+                outputAddress: name,
                 summary: `added sheet ${name}`,
               };
             }
@@ -212,6 +265,7 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
               return {
                 message: `Deleted sheet "${sheetName}".`,
                 changedCount: 1,
+                outputAddress: sheetName,
                 summary: `deleted sheet ${sheetName}`,
               };
             }
@@ -227,6 +281,7 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
               return {
                 message: `Renamed sheet "${previousName}" to "${newName}".`,
                 changedCount: 1,
+                outputAddress: newName,
                 summary: `renamed sheet ${previousName} to ${newName}`,
               };
             }
@@ -244,6 +299,7 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
                 return {
                   message: `Duplicated "${params.sheet}" as "${params.new_name}".`,
                   changedCount: 1,
+                  outputAddress: params.new_name,
                   summary: `duplicated sheet ${params.sheet} as ${params.new_name}`,
                 };
               }
@@ -252,6 +308,7 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
               return {
                 message: `Duplicated "${params.sheet}" as "${copy.name}".`,
                 changedCount: 1,
+                outputAddress: copy.name,
                 summary: `duplicated sheet ${params.sheet}`,
               };
             }
@@ -264,6 +321,7 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
               return {
                 message: `Hidden sheet "${params.sheet}".`,
                 changedCount: 1,
+                outputAddress: params.sheet,
                 summary: `hidden sheet ${params.sheet}`,
               };
             }
@@ -276,6 +334,7 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
               return {
                 message: `Unhidden sheet "${params.sheet}".`,
                 changedCount: 1,
+                outputAddress: params.sheet,
                 summary: `unhidden sheet ${params.sheet}`,
               };
             }
@@ -295,14 +354,44 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
           summary: result.summary,
         });
 
-        return {
-          content: [{ type: "text", text: `${result.message}\n\n${NON_CHECKPOINTED_MUTATION_NOTE}` }],
+        const toolResult: AgentToolResult<ModifyStructureDetails> = {
+          content: [{ type: "text", text: result.message }],
           details: {
             kind: "modify_structure",
             action: params.action,
-            recovery: recoveryCheckpointUnavailable(NON_CHECKPOINTED_MUTATION_REASON),
           },
         };
+
+        const checkpointAddress = result.outputAddress ?? params.sheet ?? params.action;
+
+        if (checkpointAction && checkpointState) {
+          const checkpoint = await getWorkbookRecoveryLog().appendModifyStructure({
+            toolName: "modify_structure",
+            toolCallId,
+            address: checkpointAddress,
+            changedCount: result.changedCount,
+            modifyStructureState: checkpointState,
+          });
+
+          if (checkpoint) {
+            toolResult.details.recovery = recoveryCheckpointCreated(checkpoint.id);
+            dispatchWorkbookSnapshotCreated({
+              snapshotId: checkpoint.id,
+              toolName: checkpoint.toolName,
+              address: checkpoint.address,
+              changedCount: checkpoint.changedCount,
+            });
+          } else {
+            toolResult.details.recovery = recoveryCheckpointUnavailable(CHECKPOINT_SKIPPED_REASON);
+            appendResultNote(toolResult, CHECKPOINT_SKIPPED_NOTE);
+          }
+        } else {
+          const reason = checkpointUnavailableReason ?? CHECKPOINT_SKIPPED_REASON;
+          toolResult.details.recovery = recoveryCheckpointUnavailable(reason);
+          appendResultNote(toolResult, CHECKPOINT_SKIPPED_NOTE);
+        }
+
+        return toolResult;
       } catch (e: unknown) {
         const message = getErrorMessage(e);
 

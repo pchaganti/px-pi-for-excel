@@ -39,6 +39,22 @@ export interface RecoveryCommentThreadState {
   replies: string[];
 }
 
+export type RecoverySheetVisibility = "Visible" | "Hidden" | "VeryHidden";
+
+export interface RecoverySheetNameState {
+  kind: "sheet_name";
+  sheetId: string;
+  name: string;
+}
+
+export interface RecoverySheetVisibilityState {
+  kind: "sheet_visibility";
+  sheetId: string;
+  visibility: RecoverySheetVisibility;
+}
+
+export type RecoveryModifyStructureState = RecoverySheetNameState | RecoverySheetVisibilityState;
+
 export interface RecoveryFormatSelection {
   numberFormat?: boolean;
   fillColor?: boolean;
@@ -272,6 +288,10 @@ function isRecoveryRangeBorderWeight(value: unknown): value is RecoveryRangeBord
   return false;
 }
 
+function isRecoverySheetVisibility(value: unknown): value is RecoverySheetVisibility {
+  return value === "Visible" || value === "Hidden" || value === "VeryHidden";
+}
+
 function normalizeConditionalFormatType(type: unknown): "custom" | "cell_value" | null {
   if (type === "Custom" || type === "custom") {
     return "custom";
@@ -372,6 +392,22 @@ export function cloneRecoveryCommentThreadState(state: RecoveryCommentThreadStat
     content: state.content,
     resolved: state.resolved,
     replies: [...state.replies],
+  };
+}
+
+export function cloneRecoveryModifyStructureState(state: RecoveryModifyStructureState): RecoveryModifyStructureState {
+  if (state.kind === "sheet_name") {
+    return {
+      kind: "sheet_name",
+      sheetId: state.sheetId,
+      name: state.name,
+    };
+  }
+
+  return {
+    kind: "sheet_visibility",
+    sheetId: state.sheetId,
+    visibility: state.visibility,
   };
 }
 
@@ -981,6 +1017,85 @@ export async function applyFormatCellsState(
 
     await context.sync();
     return cloneRecoveryFormatRangeState(previousState);
+  });
+}
+
+interface CaptureModifyStructureStateArgs {
+  kind: RecoveryModifyStructureState["kind"];
+  sheetRef: string;
+}
+
+export async function captureModifyStructureState(
+  args: CaptureModifyStructureStateArgs,
+): Promise<RecoveryModifyStructureState | null> {
+  return excelRun<RecoveryModifyStructureState | null>(async (context) => {
+    const sheet = context.workbook.worksheets.getItemOrNullObject(args.sheetRef);
+    sheet.load("isNullObject,id,name,visibility");
+    await context.sync();
+
+    if (sheet.isNullObject) {
+      return null;
+    }
+
+    if (args.kind === "sheet_name") {
+      return {
+        kind: "sheet_name",
+        sheetId: sheet.id,
+        name: sheet.name,
+      };
+    }
+
+    const visibility = sheet.visibility;
+    if (!isRecoverySheetVisibility(visibility)) {
+      return null;
+    }
+
+    return {
+      kind: "sheet_visibility",
+      sheetId: sheet.id,
+      visibility,
+    };
+  });
+}
+
+export async function applyModifyStructureState(
+  targetState: RecoveryModifyStructureState,
+): Promise<RecoveryModifyStructureState> {
+  return excelRun<RecoveryModifyStructureState>(async (context) => {
+    const sheet = context.workbook.worksheets.getItemOrNullObject(targetState.sheetId);
+    sheet.load("isNullObject,id,name,visibility");
+    await context.sync();
+
+    if (sheet.isNullObject) {
+      throw new Error("Sheet referenced by structure checkpoint no longer exists.");
+    }
+
+    if (targetState.kind === "sheet_name") {
+      const currentState: RecoveryModifyStructureState = {
+        kind: "sheet_name",
+        sheetId: sheet.id,
+        name: sheet.name,
+      };
+
+      sheet.name = targetState.name;
+      await context.sync();
+      return currentState;
+    }
+
+    const currentVisibility = sheet.visibility;
+    if (!isRecoverySheetVisibility(currentVisibility)) {
+      throw new Error("Sheet visibility is unsupported for structure checkpoint restore.");
+    }
+
+    const currentState: RecoveryModifyStructureState = {
+      kind: "sheet_visibility",
+      sheetId: sheet.id,
+      visibility: currentVisibility,
+    };
+
+    sheet.visibility = targetState.visibility;
+    await context.sync();
+    return currentState;
   });
 }
 

@@ -183,6 +183,7 @@ function parseWorkbookSnapshotCreatedDetail(value: unknown): WorkbookSnapshotCre
     rawToolName === "format_cells" ||
     rawToolName === "conditional_format" ||
     rawToolName === "comments" ||
+    rawToolName === "modify_structure" ||
     rawToolName === "restore_snapshot"
       ? rawToolName
       : null;

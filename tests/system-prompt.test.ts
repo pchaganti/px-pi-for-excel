@@ -57,6 +57,7 @@ void test("system prompt includes workbook history recovery tool", () => {
   assert.match(prompt, /format_cells/);
   assert.match(prompt, /conditional_format/);
   assert.match(prompt, /comments/);
+  assert.match(prompt, /modify_structure/);
 });
 
 void test("system prompt documents trace_dependencies precedents/dependents modes", () => {
