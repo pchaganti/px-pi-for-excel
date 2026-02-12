@@ -108,6 +108,91 @@ export interface PythonTransformRangeDetails {
   error?: string;
 }
 
+export interface WebSearchDetails {
+  kind: "web_search";
+  ok: boolean;
+  provider: string;
+  query: string;
+  sentQuery: string;
+  recency?: string;
+  siteFilters?: string[];
+  maxResults: number;
+  resultCount?: number;
+  proxied?: boolean;
+  proxyBaseUrl?: string;
+  error?: string;
+}
+
+export interface McpGatewayDetails {
+  kind: "mcp_gateway";
+  ok: boolean;
+  operation: string;
+  server?: string;
+  tool?: string;
+  proxied?: boolean;
+  proxyBaseUrl?: string;
+  resultPreview?: string;
+  error?: string;
+}
+
+export type FilesWorkspaceBackendKind = "native-directory" | "opfs" | "memory";
+
+export interface FilesWorkbookTagDetails {
+  workbookId: string;
+  workbookLabel: string;
+  taggedAt: number;
+}
+
+export interface FilesListItemDetails {
+  path: string;
+  size: number;
+  mimeType: string;
+  fileKind: "text" | "binary";
+  modifiedAt: number;
+  workbookTag?: FilesWorkbookTagDetails;
+}
+
+export interface FilesListDetails {
+  kind: "files_list";
+  backend: FilesWorkspaceBackendKind;
+  count: number;
+  files: FilesListItemDetails[];
+}
+
+export interface FilesReadDetails {
+  kind: "files_read";
+  backend: FilesWorkspaceBackendKind;
+  path: string;
+  mode: "text" | "base64";
+  size: number;
+  mimeType: string;
+  fileKind: "text" | "binary";
+  truncated: boolean;
+  workbookTag?: FilesWorkbookTagDetails;
+}
+
+export interface FilesWriteDetails {
+  kind: "files_write";
+  backend: FilesWorkspaceBackendKind;
+  path: string;
+  encoding: "text" | "base64";
+  chars: number;
+  workbookTag?: FilesWorkbookTagDetails;
+}
+
+export interface FilesDeleteDetails {
+  kind: "files_delete";
+  backend: FilesWorkspaceBackendKind;
+  path: string;
+  workbookTag?: FilesWorkbookTagDetails;
+}
+
+export type FilesToolDetails =
+  | FilesListDetails
+  | FilesReadDetails
+  | FilesWriteDetails
+  | FilesDeleteDetails;
+
 export type ExcelToolDetails =
   | WriteCellsDetails
   | FillFormulaDetails
@@ -117,7 +202,10 @@ export type ExcelToolDetails =
   | TmuxBridgeDetails
   | PythonBridgeDetails
   | LibreOfficeBridgeDetails
-  | PythonTransformRangeDetails;
+  | PythonTransformRangeDetails
+  | WebSearchDetails
+  | McpGatewayDetails
+  | FilesToolDetails;
 
 function isOptionalString(value: unknown): value is string | undefined {
   return value === undefined || typeof value === "string";
@@ -125,6 +213,45 @@ function isOptionalString(value: unknown): value is string | undefined {
 
 function isOptionalNumber(value: unknown): value is number | undefined {
   return value === undefined || typeof value === "number";
+}
+
+function isOptionalBoolean(value: unknown): value is boolean | undefined {
+  return value === undefined || typeof value === "boolean";
+}
+
+function isOptionalStringArray(value: unknown): value is string[] | undefined {
+  return value === undefined || (Array.isArray(value) && value.every((item) => typeof item === "string"));
+}
+
+function isFilesWorkspaceBackendKind(value: unknown): value is FilesWorkspaceBackendKind {
+  return value === "native-directory" || value === "opfs" || value === "memory";
+}
+
+function isFilesWorkbookTagDetails(value: unknown): value is FilesWorkbookTagDetails {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.workbookId === "string" &&
+    typeof value.workbookLabel === "string" &&
+    typeof value.taggedAt === "number"
+  );
+}
+
+function isOptionalFilesWorkbookTagDetails(value: unknown): value is FilesWorkbookTagDetails | undefined {
+  return value === undefined || isFilesWorkbookTagDetails(value);
+}
+
+function isFilesListItemDetails(value: unknown): value is FilesListItemDetails {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.path === "string" &&
+    typeof value.size === "number" &&
+    typeof value.mimeType === "string" &&
+    (value.fileKind === "text" || value.fileKind === "binary") &&
+    typeof value.modifiedAt === "number" &&
+    isOptionalFilesWorkbookTagDetails(value.workbookTag)
+  );
 }
 
 export function isWriteCellsDetails(value: unknown): value is WriteCellsDetails {
@@ -248,5 +375,92 @@ export function isPythonTransformRangeDetails(value: unknown): value is PythonTr
     isOptionalNumber(value.colsWritten) &&
     isOptionalNumber(value.formulaErrorCount) &&
     isOptionalString(value.error)
+  );
+}
+
+export function isWebSearchDetails(value: unknown): value is WebSearchDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "web_search") return false;
+
+  return (
+    typeof value.ok === "boolean" &&
+    typeof value.provider === "string" &&
+    typeof value.query === "string" &&
+    typeof value.sentQuery === "string" &&
+    isOptionalString(value.recency) &&
+    isOptionalStringArray(value.siteFilters) &&
+    typeof value.maxResults === "number" &&
+    isOptionalNumber(value.resultCount) &&
+    isOptionalBoolean(value.proxied) &&
+    isOptionalString(value.proxyBaseUrl) &&
+    isOptionalString(value.error)
+  );
+}
+
+export function isMcpGatewayDetails(value: unknown): value is McpGatewayDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "mcp_gateway") return false;
+
+  return (
+    typeof value.ok === "boolean" &&
+    typeof value.operation === "string" &&
+    isOptionalString(value.server) &&
+    isOptionalString(value.tool) &&
+    isOptionalBoolean(value.proxied) &&
+    isOptionalString(value.proxyBaseUrl) &&
+    isOptionalString(value.resultPreview) &&
+    isOptionalString(value.error)
+  );
+}
+
+export function isFilesListDetails(value: unknown): value is FilesListDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "files_list") return false;
+
+  return (
+    isFilesWorkspaceBackendKind(value.backend) &&
+    typeof value.count === "number" &&
+    Array.isArray(value.files) &&
+    value.files.every((item) => isFilesListItemDetails(item))
+  );
+}
+
+export function isFilesReadDetails(value: unknown): value is FilesReadDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "files_read") return false;
+
+  return (
+    isFilesWorkspaceBackendKind(value.backend) &&
+    typeof value.path === "string" &&
+    (value.mode === "text" || value.mode === "base64") &&
+    typeof value.size === "number" &&
+    typeof value.mimeType === "string" &&
+    (value.fileKind === "text" || value.fileKind === "binary") &&
+    typeof value.truncated === "boolean" &&
+    isOptionalFilesWorkbookTagDetails(value.workbookTag)
+  );
+}
+
+export function isFilesWriteDetails(value: unknown): value is FilesWriteDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "files_write") return false;
+
+  return (
+    isFilesWorkspaceBackendKind(value.backend) &&
+    typeof value.path === "string" &&
+    (value.encoding === "text" || value.encoding === "base64") &&
+    typeof value.chars === "number" &&
+    isOptionalFilesWorkbookTagDetails(value.workbookTag)
+  );
+}
+
+export function isFilesDeleteDetails(value: unknown): value is FilesDeleteDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "files_delete") return false;
+
+  return (
+    isFilesWorkspaceBackendKind(value.backend) &&
+    typeof value.path === "string" &&
+    isOptionalFilesWorkbookTagDetails(value.workbookTag)
   );
 }

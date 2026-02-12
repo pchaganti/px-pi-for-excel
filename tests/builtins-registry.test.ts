@@ -40,11 +40,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-void test("builtins registry wires /experimental and /extensions command registration", async () => {
+void test("builtins registry wires /experimental, /extensions, and /skills command registration", async () => {
   const source = await readFile(new URL("../src/commands/builtins/index.ts", import.meta.url), "utf8");
 
   assert.match(source, /createExperimentalCommands/);
   assert.match(source, /\.\.\.createExperimentalCommands\(\)/);
+
+  assert.match(source, /createSkillsCommands/);
+  assert.match(source, /\.\.\.createSkillsCommands\(context\)/);
 
   assert.match(source, /createExtensionsCommands/);
   assert.match(source, /\.\.\.createExtensionsCommands\(context\)/);
@@ -74,11 +77,15 @@ void test("builtins registry wires /experimental and /extensions command registr
   );
   assert.match(extensionsOverlaySource, /manager\.setExtensionCapability\(/);
   assert.match(extensionsOverlaySource, /toggle\.type = "checkbox"/);
+  assert.match(extensionsOverlaySource, /confirmExtensionInstall\(/);
+  assert.match(extensionsOverlaySource, /confirmExtensionEnable\(/);
+  assert.match(extensionsOverlaySource, /higher-risk permissions/);
   assert.match(extensionsOverlaySource, /Updated permissions for/);
   assert.match(extensionsOverlaySource, /reload failed \(see Last error\)/);
 
   const extensionsDocsSource = await readFile(new URL("../docs/extensions.md", import.meta.url), "utf8");
   assert.match(extensionsDocsSource, /## Permission review\/revoke/);
+  assert.match(extensionsDocsSource, /Install from URL\/code asks for confirmation/);
   assert.match(extensionsDocsSource, /extensions\.registry\.v2/);
 
   const experimentalFlagsSource = await readFile(new URL("../src/experiments/flags.ts", import.meta.url), "utf8");
@@ -95,6 +102,19 @@ void test("taskpane init keeps getSkillToolNames imported when used", async () =
   assert.match(
     initSource,
     /import\s*\{[\s\S]*getSkillToolNames[\s\S]*\}\s*from "\.\.\/skills\/catalog\.js";/,
+  );
+});
+
+void test("taskpane init wires Files workspace opener when sidebar callback is present", async () => {
+  const initSource = await readFile(new URL("../src/taskpane/init.ts", import.meta.url), "utf8");
+  if (!/sidebar\.onOpenFiles\s*=/.test(initSource)) {
+    return;
+  }
+
+  assert.match(initSource, /showFilesWorkspaceDialog/);
+  assert.match(
+    initSource,
+    /sidebar\.onOpenFiles\s*=\s*\(\)\s*=>\s*\{\s*void showFilesWorkspaceDialog\(\);\s*\};/,
   );
 });
 
