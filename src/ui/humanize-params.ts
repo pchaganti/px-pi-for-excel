@@ -737,6 +737,10 @@ function humanizeSkills(p: Record<string, unknown>): ParamItem[] {
     items.push({ label: "Skill", value: str(p.name) });
   }
 
+  if (p.refresh === true) {
+    items.push({ label: "Refresh", value: "yes" });
+  }
+
   return items;
 }
 
