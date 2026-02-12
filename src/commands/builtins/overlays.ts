@@ -11,6 +11,7 @@ import {
   type ResumeDialogTarget,
 } from "./resume-target.js";
 import { showToast } from "../../ui/toast.js";
+import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../../workbook/context.js";
 import {
   getSessionWorkbookId,
@@ -18,6 +19,8 @@ import {
 } from "../../workbook/session-association.js";
 
 export { showInstructionsDialog } from "./instructions-overlay.js";
+
+const overlayClosers = new WeakMap<HTMLElement, () => void>();
 
 function formatRelativeDate(iso: string): string {
   const d = new Date(iso);
@@ -33,7 +36,13 @@ function formatRelativeDate(iso: string): string {
 export async function showProviderPicker(): Promise<void> {
   const existing = document.getElementById("pi-login-overlay");
   if (existing) {
-    existing.remove();
+    const closeExisting = overlayClosers.get(existing);
+    if (closeExisting) {
+      closeExisting();
+    } else {
+      existing.remove();
+    }
+
     return;
   }
 
@@ -78,8 +87,22 @@ export async function showProviderPicker(): Promise<void> {
     list.appendChild(row);
   }
 
+  let closed = false;
+  const closeOverlay = () => {
+    if (closed) {
+      return;
+    }
+
+    closed = true;
+    overlayClosers.delete(overlay);
+    cleanupEscape();
+    overlay.remove();
+  };
+  const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
+  overlayClosers.set(overlay, closeOverlay);
+
   overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) overlay.remove();
+    if (e.target === overlay) closeOverlay();
   });
 
   document.body.appendChild(overlay);
@@ -146,7 +169,13 @@ export async function showResumeDialog(opts: {
 
   const existing = document.getElementById("pi-resume-overlay");
   if (existing) {
-    existing.remove();
+    const closeExisting = overlayClosers.get(existing);
+    if (closeExisting) {
+      closeExisting();
+    } else {
+      existing.remove();
+    }
+
     return;
   }
 
@@ -292,9 +321,23 @@ export async function showResumeDialog(opts: {
 
   renderList();
 
+  let closed = false;
+  const closeOverlay = () => {
+    if (closed) {
+      return;
+    }
+
+    closed = true;
+    overlayClosers.delete(overlay);
+    cleanupEscape();
+    overlay.remove();
+  };
+  const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
+  overlayClosers.set(overlay, closeOverlay);
+
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) {
-      overlay.remove();
+      closeOverlay();
       return;
     }
 
@@ -321,7 +364,7 @@ export async function showResumeDialog(opts: {
       const sessionData = await storage.sessions.loadSession(id);
       if (!sessionData) {
         showToast("Session not found");
-        overlay.remove();
+        closeOverlay();
         return;
       }
 
@@ -331,7 +374,7 @@ export async function showResumeDialog(opts: {
         await opts.onOpenInNewTab(sessionData);
       }
 
-      overlay.remove();
+      closeOverlay();
       const resumedMode = targetMode === "replace_current" ? "current tab" : "new tab";
       showToast(`Resumed in ${resumedMode}: ${sessionData.title || "Untitled"}`);
     })();
@@ -356,7 +399,13 @@ export function showShortcutsDialog(): void {
 
   const existing = document.getElementById("pi-shortcuts-overlay");
   if (existing) {
-    existing.remove();
+    const closeExisting = overlayClosers.get(existing);
+    if (closeExisting) {
+      closeExisting();
+    } else {
+      existing.remove();
+    }
+
     return;
   }
 
@@ -378,12 +427,34 @@ export function showShortcutsDialog(): void {
           )
           .join("")}
       </div>
-      <button onclick="this.closest('.pi-welcome-overlay').remove()" style="margin-top: 16px; width: 100%; padding: 8px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08); background: oklch(0 0 0 / 0.03); cursor: pointer; font-family: var(--font-sans); font-size: 13px;">Close</button>
+      <button class="pi-shortcuts-close" style="margin-top: 16px; width: 100%; padding: 8px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08); background: oklch(0 0 0 / 0.03); cursor: pointer; font-family: var(--font-sans); font-size: 13px;">Close</button>
     </div>
   `;
 
+  const closeButton = overlay.querySelector<HTMLButtonElement>(".pi-shortcuts-close");
+
+  let closed = false;
+  const closeOverlay = () => {
+    if (closed) {
+      return;
+    }
+
+    closed = true;
+    overlayClosers.delete(overlay);
+    cleanupEscape();
+    overlay.remove();
+  };
+  const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
+  overlayClosers.set(overlay, closeOverlay);
+
+  closeButton?.addEventListener("click", () => {
+    closeOverlay();
+  });
+
   overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) overlay.remove();
+    if (e.target === overlay) {
+      closeOverlay();
+    }
   });
 
   document.body.appendChild(overlay);

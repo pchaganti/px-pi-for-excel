@@ -7,6 +7,7 @@ import { validateOfficeProxyUrl } from "../../auth/proxy-validation.js";
 import { dispatchExperimentalToolConfigChanged } from "../../experiments/events.js";
 import { isExperimentalFeatureEnabled, setExperimentalFeatureEnabled } from "../../experiments/flags.js";
 import { PYTHON_BRIDGE_URL_SETTING_KEY } from "../../tools/experimental-tool-gates.js";
+import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
 import { showToast } from "../../ui/toast.js";
 
 const OVERLAY_ID = "pi-extensions-overlay";
@@ -552,6 +553,10 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     void renderLocalBridgeState();
   });
 
+  const cleanupEscape = installOverlayEscapeClose(overlay, () => {
+    closeOverlay();
+  });
+
   let closed = false;
   closeOverlay = () => {
     if (closed) {
@@ -560,13 +565,12 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
 
     closed = true;
     overlayClosers.delete(overlay);
+    cleanupEscape();
     unsubscribe();
     overlay.remove();
   };
 
-  overlayClosers.set(overlay, () => {
-    closeOverlay();
-  });
+  overlayClosers.set(overlay, closeOverlay);
 
   overlay.addEventListener("click", (event) => {
     if (event.target !== overlay) {

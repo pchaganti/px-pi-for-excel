@@ -6,7 +6,7 @@
  */
 
 const ESCAPE_OWNER_SELECTORS = [
-  ".pi-welcome-overlay",
+  ".pi-welcome-overlay[data-claims-escape='true']",
   ".pi-utilities-menu",
   ".pi-status-popover",
   "#pi-command-menu",
