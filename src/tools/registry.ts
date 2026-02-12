@@ -25,6 +25,7 @@ import { createCommentsTool } from "./comments.js";
 import { createInstructionsTool } from "./instructions.js";
 import { createConventionsTool } from "./conventions.js";
 import { createWorkbookHistoryTool } from "./workbook-history.js";
+import { createSkillsTool } from "./skills.js";
 
 /** Canonical list of core tool names (single source of truth). */
 export const CORE_TOOL_NAMES = [
@@ -43,6 +44,7 @@ export const CORE_TOOL_NAMES = [
   "instructions",
   "conventions",
   "workbook_history",
+  "skills",
 ] as const;
 
 export type CoreToolName = (typeof CORE_TOOL_NAMES)[number];
@@ -69,5 +71,6 @@ export function createCoreTools(): AnyCoreTool[] {
     createInstructionsTool(),
     createConventionsTool(),
     createWorkbookHistoryTool(),
+    createSkillsTool(),
   ] as unknown as AnyCoreTool[];
 }

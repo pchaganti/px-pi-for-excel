@@ -84,6 +84,29 @@ void test("system prompt mentions extension manager tool for chat-driven authori
   assert.match(prompt, /extension authoring from chat/i);
 });
 
+void test("system prompt lists the skills tool", () => {
+  const prompt = buildSystemPrompt();
+  assert.match(prompt, /\*\*skills\*\*/);
+  assert.match(prompt, /SKILL\.md/);
+});
+
+void test("system prompt renders available skills XML section", () => {
+  const prompt = buildSystemPrompt({
+    availableSkills: [
+      {
+        name: "web-search",
+        description: "Search the web for up-to-date facts.",
+        location: "skills/web-search/SKILL.md",
+      },
+    ],
+  });
+
+  assert.match(prompt, /## Available Agent Skills/);
+  assert.match(prompt, /<available_skills>/);
+  assert.match(prompt, /<name>web-search<\/name>/);
+  assert.match(prompt, /<location>skills\/web-search\/SKILL\.md<\/location>/);
+});
+
 void test("system prompt renders active integrations with Agent Skill mapping", () => {
   const prompt = buildSystemPrompt({
     activeIntegrations: [

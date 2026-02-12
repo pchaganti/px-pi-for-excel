@@ -727,6 +727,19 @@ function humanizeWorkbookHistory(p: Record<string, unknown>): ParamItem[] {
   return items;
 }
 
+function humanizeSkills(p: Record<string, unknown>): ParamItem[] {
+  const items: ParamItem[] = [];
+  const action = str(p.action || "list");
+
+  items.push({ label: "Action", value: action });
+
+  if (p.name) {
+    items.push({ label: "Skill", value: str(p.name) });
+  }
+
+  return items;
+}
+
 function humanizeWebSearch(p: Record<string, unknown>): ParamItem[] {
   const items: ParamItem[] = [];
 
@@ -903,6 +916,7 @@ const CORE_HUMANIZERS = {
   instructions: humanizeInstructions,
   conventions: humanizeConventions,
   workbook_history: humanizeWorkbookHistory,
+  skills: humanizeSkills,
 } satisfies Record<CoreToolName, HumanizerFn>;
 
 const EXTRA_HUMANIZERS: Record<string, HumanizerFn> = {

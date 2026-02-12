@@ -25,6 +25,15 @@ They control:
 
 Code lives under `src/integrations/*`.
 
+## Runtime skill loading
+
+The add-in now exposes a `skills` tool for standards-based skill loading:
+
+- `skills` action=`list` → lists bundled Agent Skills
+- `skills` action=`read` + `name` → returns full `SKILL.md`
+
+The system prompt also includes `<available_skills>` entries so the model can choose a matching skill, then load it on demand.
+
 ## Mapping table
 
 | Agent Skill | Integration ID | Tool name |

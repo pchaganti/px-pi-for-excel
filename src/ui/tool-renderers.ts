@@ -934,6 +934,14 @@ function describeToolCall(
       }
       return { action: "List", detail: "checkpoints" };
     }
+    case "skills": {
+      const action = p.action as string | undefined;
+      const name = p.name as string | undefined;
+      if (action === "read") {
+        return { action: "Read skill", detail: name ?? "name" };
+      }
+      return { action: "List skills", detail: "" };
+    }
     case "web_search": {
       const query = p.query as string | undefined;
       return { action: "Web search", detail: query ? `\"${query}\"` : "query" };

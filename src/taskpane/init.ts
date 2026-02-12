@@ -62,6 +62,7 @@ import { PI_INTEGRATIONS_CHANGED_EVENT } from "../integrations/events.js";
 import { INTEGRATIONS_COMMAND_NAME } from "../integrations/naming.js";
 import { getExternalToolsEnabled, resolveConfiguredIntegrationIds } from "../integrations/store.js";
 import { buildSystemPrompt } from "../prompt/system-prompt.js";
+import { getAgentSkillPromptEntries } from "../skills/catalog.js";
 import { initAppStorage } from "../storage/init-app-storage.js";
 import { renderError } from "../ui/loading.js";
 import { showFilesWorkspaceDialog } from "../ui/files-dialog.js";
@@ -335,6 +336,8 @@ export async function initTaskpane(opts: {
     return externalToolsEnabled ? configuredIntegrationIds : [];
   };
 
+  const availableSkills = getAgentSkillPromptEntries();
+
   const buildRuntimeSystemPrompt = async (args: {
     workbookId: string | null;
     activeIntegrationIds: readonly string[];
@@ -345,10 +348,16 @@ export async function initTaskpane(opts: {
       setInstructionsActive(hasAnyInstructions({ userInstructions, workbookInstructions }));
       const conventions = await getResolvedConventions(settings);
       const activeIntegrations = buildIntegrationPromptEntries(args.activeIntegrationIds);
-      return buildSystemPrompt({ userInstructions, workbookInstructions, activeIntegrations, conventions });
+      return buildSystemPrompt({
+        userInstructions,
+        workbookInstructions,
+        activeIntegrations,
+        availableSkills,
+        conventions,
+      });
     } catch {
       setInstructionsActive(false);
-      return buildSystemPrompt();
+      return buildSystemPrompt({ availableSkills });
     }
   };
 
