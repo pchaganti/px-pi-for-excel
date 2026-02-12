@@ -229,3 +229,13 @@ void test("extension registry migrates legacy v1 entries to v2 permissions", asy
   assert.ok(Array.isArray(migrated.items));
   assert.equal(migrated.items.length, 1);
 });
+
+void test("tool disclosure bundles keep skills available in core-only contexts", async () => {
+  const source = await readFile(new URL("../src/context/tool-disclosure.ts", import.meta.url), "utf8");
+
+  assert.match(source, /core:\s*\[[\s\S]*"skills"[\s\S]*\],/);
+  assert.match(source, /analysis:\s*\[[\s\S]*"skills"[\s\S]*\],/);
+  assert.match(source, /formatting:\s*\[[\s\S]*"skills"[\s\S]*\],/);
+  assert.match(source, /structure:\s*\[[\s\S]*"skills"[\s\S]*\],/);
+  assert.match(source, /comments:\s*\[[\s\S]*"skills"[\s\S]*\],/);
+});

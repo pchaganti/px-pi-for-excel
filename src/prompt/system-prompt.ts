@@ -17,10 +17,17 @@ export interface ActiveIntegrationPromptEntry {
   warning?: string;
 }
 
+export interface AvailableSkillPromptEntry {
+  name: string;
+  description: string;
+  location: string;
+}
+
 export interface SystemPromptOptions {
   userInstructions?: string | null;
   workbookInstructions?: string | null;
   activeIntegrations?: ActiveIntegrationPromptEntry[];
+  availableSkills?: AvailableSkillPromptEntry[];
   /** Resolved conventions (defaults merged with stored). Omit to skip convention diff section. */
   conventions?: ResolvedConventions | null;
 }
@@ -76,6 +83,39 @@ function buildActiveIntegrationsSection(activeIntegrations: ActiveIntegrationPro
   return lines.join("\n").trimEnd();
 }
 
+function escapeXml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function buildAvailableSkillsSection(availableSkills: AvailableSkillPromptEntry[] | undefined): string | null {
+  if (!availableSkills || availableSkills.length === 0) {
+    return null;
+  }
+
+  const lines: string[] = [
+    "## Available Agent Skills",
+    "When a task matches one of these skills, call the **skills** tool with action=\"read\" and the skill name.",
+    "",
+    "<available_skills>",
+  ];
+
+  for (const skill of availableSkills) {
+    lines.push("  <skill>");
+    lines.push(`    <name>${escapeXml(skill.name)}</name>`);
+    lines.push(`    <description>${escapeXml(skill.description)}</description>`);
+    lines.push(`    <location>${escapeXml(skill.location)}</location>`);
+    lines.push("  </skill>");
+  }
+
+  lines.push("</available_skills>");
+  return lines.join("\n");
+}
+
 /**
  * Build the system prompt.
  */
@@ -88,6 +128,11 @@ export function buildSystemPrompt(opts: SystemPromptOptions = {}): string {
   const integrationsSection = buildActiveIntegrationsSection(opts.activeIntegrations);
   if (integrationsSection) {
     sections.push(integrationsSection);
+  }
+
+  const availableSkillsSection = buildAvailableSkillsSection(opts.availableSkills);
+  if (availableSkillsSection) {
+    sections.push(availableSkillsSection);
   }
 
   sections.push(TOOLS);
@@ -132,6 +177,7 @@ Core workbook tools:
 - **instructions** — update persistent user/workbook instructions (append or replace)
 - **conventions** — read/update formatting defaults (currency, negatives, zeros, decimal places)
 - **workbook_history** — list/restore/delete automatic recovery checkpoints for supported workbook mutations (\`write_cells\`, \`fill_formula\`, \`python_transform_range\`, \`format_cells\`, \`conditional_format\`, \`comments\`, and supported \`modify_structure\` actions)
+- **skills** — list/read bundled Agent Skills (SKILL.md) for task-specific workflows
 - **extensions_manager** — list/install/reload/enable/disable/uninstall sidebar extensions from code (for extension authoring from chat)
 
 Other tools may be available depending on enabled experiments/integrations.
