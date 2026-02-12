@@ -64,13 +64,13 @@ https://github.com/tmustier/pi-for-excel/issues/30
 ### #6 — UX: change approval UI + clickable cell citations
 https://github.com/tmustier/pi-for-excel/issues/6
 
-**What it’s asking:**
-- tool-level approval flow for potentially destructive actions
-- clickable citations in assistant messages
+**Status:** closed (2026-02-12).
 
-**Status note:** clickable cell references have shipped (partial completion of this issue). Approval UI remains.
+Resolved outcome:
+- clickable citations are implemented
+- destructive-tool pre-execution approval is intentionally not planned for now
 
-**Implication:** approval UI will be much easier if tool calls/results expose structured metadata (see cleanup plan lever: `ToolResultMessage.details`).
+**Implication:** if confirmations are revisited later, track them in a new focused issue with narrow UX scope.
 
 ---
 
@@ -231,11 +231,14 @@ https://github.com/tmustier/pi-for-excel/issues/24
 ### #25 — Tools: Python runner + LibreOffice bridge
 https://github.com/tmustier/pi-for-excel/issues/25
 
-**Status note:** initial local-bridge slice is now implemented behind `python-bridge` experiment:
+**Status:** closed (2026-02-12) via #78.
+
+Delivered:
 - gated tools: `python_run`, `libreoffice_convert`, `python_transform_range`
 - local helper: `scripts/python-bridge-server.mjs` (`stub` + `real` modes)
 - config: `/experimental python-bridge-url` + `/experimental python-bridge-token`
-- first-run approval prompt per bridge URL for Python/LibreOffice executions
+- first-run approval cached per bridge URL for Python/LibreOffice executions
+- bridge setup controls in `/extensions`
 
 **Remaining follow-up:** richer sandboxing controls, artifact-first workflows, and safer patch/apply patterns for structural workbook edits.
 
