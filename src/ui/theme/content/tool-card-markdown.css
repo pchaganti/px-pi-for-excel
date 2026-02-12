@@ -1,0 +1,97 @@
+/* ── Markdown in tool cards ────────────────────────────── */
+
+/* Scrollable container for wide markdown tables */
+.pi-tool-card__markdown {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Tighter typography inside tool result cards */
+.pi-tool-card__markdown markdown-block { font-size: var(--text-sm); line-height: 1.5; }
+.pi-tool-card__markdown markdown-block p { font-size: var(--text-sm); margin: 0 0 6px; }
+
+/* Tables: compact sizing for sidebar width */
+.pi-tool-card__markdown table {
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  line-height: 1.35;
+}
+.pi-tool-card__markdown th {
+  font-size: var(--text-sm);
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.pi-tool-card__markdown td {
+  padding: 3px 8px;
+}
+
+/* Plain text fallback (no markdown syntax detected) */
+.pi-tool-card__plain-text {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--foreground);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* Echo result — redundant success message replaced with compact "✓ Done" */
+.pi-tool-card__echo-result {
+  color: var(--pi-green);
+  font-weight: 500;
+  white-space: normal;
+}
+
+/* Cell-level diff summary for mutation tools */
+.pi-tool-card__diff {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pi-tool-card__diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+
+.pi-tool-card__diff-table th,
+.pi-tool-card__diff-table td {
+  border: 1px solid var(--alpha-8);
+  padding: 4px 6px;
+  vertical-align: top;
+}
+
+.pi-tool-card__diff-table th {
+  background: var(--alpha-2);
+  text-align: left;
+  font-weight: 600;
+}
+
+.pi-tool-card__diff-cell {
+  white-space: nowrap;
+}
+
+.pi-tool-card__diff-value {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pi-tool-card__diff-formula {
+  margin-top: 3px;
+  color: var(--muted-foreground);
+  font-size: var(--text-xs);
+}
+
+.pi-tool-card__diff-note {
+  margin-top: 6px;
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+}
+
+/* Flex overflow fix for tool cards */
+tool-message {
+  min-width: 0;
+}
+

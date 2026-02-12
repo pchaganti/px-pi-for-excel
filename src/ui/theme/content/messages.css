@@ -1,0 +1,34 @@
+/* ═══════════════════════════════════════════════════════
+   11. PI-WEB-UI CONTENT OVERRIDES
+   Targeted overrides for message components at sidebar width.
+   ═══════════════════════════════════════════════════════ */
+
+/* User message — white card, right-aligned */
+user-message > div {
+  margin-left: 8px;
+  margin-right: 8px;
+  justify-content: flex-end;
+}
+
+.user-message-container {
+  background: var(--pill-bg);
+  border: var(--pill-border);
+  border-radius: var(--pill-radius);
+  box-shadow: var(--pill-shadow);
+  max-width: calc(100% - var(--pill-inset));
+  margin-left: var(--pill-inset);
+}
+
+assistant-message { margin-right: var(--pill-inset); }
+
+/* Added by applyMessageStyleHooks() so we don't depend on utility classes. */
+.pi-assistant-body {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+/* Indent prose so it aligns with pill header text. */
+.pi-assistant-body > markdown-block {
+  margin-left: var(--pill-text-indent);
+}
+
