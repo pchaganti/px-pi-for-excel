@@ -3,16 +3,16 @@ import { test } from "node:test";
 
 import {
   getExternalToolsEnabled,
-  getSessionSkillIds,
-  getWorkbookSkillIds,
-  resolveConfiguredSkillIds,
+  getSessionIntegrationIds,
+  getWorkbookIntegrationIds,
+  resolveConfiguredIntegrationIds,
   setExternalToolsEnabled,
-  setSessionSkillIds,
-  setSkillEnabledInScope,
-  setWorkbookSkillIds,
-} from "../src/skills/store.ts";
+  setSessionIntegrationIds,
+  setIntegrationEnabledInScope,
+  setWorkbookIntegrationIds,
+} from "../src/integrations/store.ts";
 
-const KNOWN_SKILLS = ["web_search", "mcp_tools"] as const;
+const KNOWN_INTEGRATIONS = ["web_search", "mcp_tools"] as const;
 
 class MemorySettingsStore {
   private readonly values = new Map<string, unknown>();
@@ -27,63 +27,63 @@ class MemorySettingsStore {
   }
 }
 
-void test("resolves session + workbook skills in catalog order", async () => {
+void test("resolves session + workbook integrations in catalog order", async () => {
   const settings = new MemorySettingsStore();
 
-  await setSessionSkillIds(settings, "session-1", ["mcp_tools"], KNOWN_SKILLS);
-  await setWorkbookSkillIds(settings, "workbook-1", ["web_search"], KNOWN_SKILLS);
+  await setSessionIntegrationIds(settings, "session-1", ["mcp_tools"], KNOWN_INTEGRATIONS);
+  await setWorkbookIntegrationIds(settings, "workbook-1", ["web_search"], KNOWN_INTEGRATIONS);
 
-  const resolved = await resolveConfiguredSkillIds({
+  const resolved = await resolveConfiguredIntegrationIds({
     settings,
     sessionId: "session-1",
     workbookId: "workbook-1",
-    knownSkillIds: KNOWN_SKILLS,
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
   });
 
   assert.deepEqual(resolved, ["web_search", "mcp_tools"]);
 });
 
-void test("setSkillEnabledInScope toggles session/workbook flags", async () => {
+void test("setIntegrationEnabledInScope toggles session/workbook flags", async () => {
   const settings = new MemorySettingsStore();
 
-  await setSkillEnabledInScope({
+  await setIntegrationEnabledInScope({
     settings,
     scope: "session",
     identifier: "session-2",
-    skillId: "web_search",
+    integrationId: "web_search",
     enabled: true,
-    knownSkillIds: KNOWN_SKILLS,
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
   });
 
-  await setSkillEnabledInScope({
+  await setIntegrationEnabledInScope({
     settings,
     scope: "workbook",
     identifier: "workbook-2",
-    skillId: "mcp_tools",
+    integrationId: "mcp_tools",
     enabled: true,
-    knownSkillIds: KNOWN_SKILLS,
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
   });
 
   assert.deepEqual(
-    await getSessionSkillIds(settings, "session-2", KNOWN_SKILLS),
+    await getSessionIntegrationIds(settings, "session-2", KNOWN_INTEGRATIONS),
     ["web_search"],
   );
   assert.deepEqual(
-    await getWorkbookSkillIds(settings, "workbook-2", KNOWN_SKILLS),
+    await getWorkbookIntegrationIds(settings, "workbook-2", KNOWN_INTEGRATIONS),
     ["mcp_tools"],
   );
 
-  await setSkillEnabledInScope({
+  await setIntegrationEnabledInScope({
     settings,
     scope: "session",
     identifier: "session-2",
-    skillId: "web_search",
+    integrationId: "web_search",
     enabled: false,
-    knownSkillIds: KNOWN_SKILLS,
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
   });
 
   assert.deepEqual(
-    await getSessionSkillIds(settings, "session-2", KNOWN_SKILLS),
+    await getSessionIntegrationIds(settings, "session-2", KNOWN_INTEGRATIONS),
     [],
   );
 });

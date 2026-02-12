@@ -153,7 +153,7 @@ https://github.com/tmustier/pi-for-excel/issues/14
 - #18 — tool inventory / progressive disclosure
 - #20 — context budget / compaction behavior
 - #30 + #1 — workbook instructions + conventions storage/exposure
-- #24 + #13 — skills/external tools and extension platform
+- #24 + #13 — integrations/external tools and extension platform
 - #6 + #28 + #27 — planning/approval UX, auditability, and recovery safety
 
 **Implication:** treat those mapped issues as the source of truth for ongoing implementation.
@@ -244,12 +244,12 @@ https://github.com/tmustier/pi-for-excel/issues/24
 Delivered:
 - `web_search` tool (Brave provider) with explicit request attribution
 - `mcp` gateway tool (status/connect/search/describe/call)
-- Skills manager UI (`/skills`) with per-session/per-workbook scope
+- Integrations manager UI (`/integrations`) with per-session/per-workbook scope
 - MCP server config UI (add/remove/test URL + optional token)
 - global external-tools gate (`external.tools.enabled`, default-off)
-- active skills visibility in the status bar
+- active integrations visibility in the status bar
 
-**Note:** we implemented skills as first-class bundles while keeping extensions as the generalized plugin runtime.
+**Note:** we implemented integrations as first-class bundles while keeping extensions as the generalized plugin runtime.
 
 ---
 
@@ -347,7 +347,7 @@ From the issues above, the most leverage comes from making a few primitives expl
 
 2) **A single extensible capability registry**
 - tools + tool tiers + UI renderers + humanizers should be registered in one place
-- should be designed to allow extension/skill/MCP-based injection later
+- should be designed to allow extension/integration/MCP-based injection later
 
 3) **Structured tool results (`details`)**
 - unlocks approval UI, diffs/audit log, interactive graphs/trees, better tool cards

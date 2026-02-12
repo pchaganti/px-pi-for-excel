@@ -1,24 +1,28 @@
 /**
- * Skills manager overlay.
+ * Integrations manager overlay.
  */
 
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
 import {
-  SKILL_IDS,
-  listSkillDefinitions,
-  type SkillDefinition,
-} from "../../skills/catalog.js";
-import { dispatchSkillsChanged } from "../../skills/events.js";
+  INTEGRATION_IDS,
+  listIntegrationDefinitions,
+  type IntegrationDefinition,
+} from "../../integrations/catalog.js";
+import { dispatchIntegrationsChanged } from "../../integrations/events.js";
+import {
+  INTEGRATIONS_LABEL,
+  INTEGRATIONS_LABEL_LOWER,
+} from "../../integrations/naming.js";
 import {
   getExternalToolsEnabled,
-  getSessionSkillIds,
-  getWorkbookSkillIds,
-  resolveConfiguredSkillIds,
+  getSessionIntegrationIds,
+  getWorkbookIntegrationIds,
+  resolveConfiguredIntegrationIds,
   setExternalToolsEnabled,
-  setSkillEnabledInScope,
-  type SkillSettingsStore,
-} from "../../skills/store.js";
+  setIntegrationEnabledInScope,
+  type IntegrationSettingsStore,
+} from "../../integrations/store.js";
 import { getEnabledProxyBaseUrl, resolveOutboundRequestUrl } from "../../tools/external-fetch.js";
 import {
   clearWebSearchApiKey,
@@ -39,7 +43,7 @@ import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
 import { showToast } from "../../ui/toast.js";
 import { isRecord } from "../../utils/type-guards.js";
 
-const OVERLAY_ID = "pi-skills-overlay";
+const OVERLAY_ID = "pi-integrations-overlay";
 const MCP_PROBE_TIMEOUT_MS = 8_000;
 const overlayClosers = new WeakMap<HTMLElement, () => void>();
 
@@ -48,20 +52,20 @@ interface WorkbookContextSnapshot {
   workbookLabel: string;
 }
 
-export interface SkillsDialogDependencies {
+export interface IntegrationsDialogDependencies {
   getActiveSessionId: () => string | null;
   resolveWorkbookContext: () => Promise<WorkbookContextSnapshot>;
   onChanged?: () => Promise<void> | void;
 }
 
-interface SkillsSnapshot {
+interface IntegrationsSnapshot {
   sessionId: string;
   workbookId: string | null;
   workbookLabel: string;
   externalToolsEnabled: boolean;
-  sessionSkillIds: string[];
-  workbookSkillIds: string[];
-  activeSkillIds: string[];
+  sessionIntegrationIds: string[];
+  workbookIntegrationIds: string[];
+  activeIntegrationIds: string[];
   webSearchApiKey?: string;
   mcpServers: McpServerConfig[];
 }
@@ -103,19 +107,19 @@ function createBadge(text: string, tone: "ok" | "warn" | "muted"): HTMLSpanEleme
   return badge;
 }
 
-function isEnabledInList(skillIds: readonly string[], skillId: string): boolean {
-  return skillIds.includes(skillId);
+function isEnabledInList(integrationIds: readonly string[], integrationId: string): boolean {
+  return integrationIds.includes(integrationId);
 }
 
 function getSettingsStore(): Promise<
-  SkillSettingsStore & WebSearchConfigStore & McpConfigStore
+  IntegrationSettingsStore & WebSearchConfigStore & McpConfigStore
 > {
   return Promise.resolve(getAppStorage().settings);
 }
 
 async function buildSnapshot(
-  dependencies: SkillsDialogDependencies,
-): Promise<SkillsSnapshot> {
+  dependencies: IntegrationsDialogDependencies,
+): Promise<IntegrationsSnapshot> {
   const settings = await getSettingsStore();
   const sessionId = dependencies.getActiveSessionId();
   if (!sessionId) {
@@ -126,22 +130,22 @@ async function buildSnapshot(
 
   const [
     externalToolsEnabled,
-    sessionSkillIds,
-    workbookSkillIds,
-    activeSkillIds,
+    sessionIntegrationIds,
+    workbookIntegrationIds,
+    activeIntegrationIds,
     webSearchConfig,
     mcpServers,
   ] = await Promise.all([
     getExternalToolsEnabled(settings),
-    getSessionSkillIds(settings, sessionId, SKILL_IDS),
+    getSessionIntegrationIds(settings, sessionId, INTEGRATION_IDS),
     workbookContext.workbookId
-      ? getWorkbookSkillIds(settings, workbookContext.workbookId, SKILL_IDS)
+      ? getWorkbookIntegrationIds(settings, workbookContext.workbookId, INTEGRATION_IDS)
       : Promise.resolve([]),
-    resolveConfiguredSkillIds({
+    resolveConfiguredIntegrationIds({
       settings,
       sessionId,
       workbookId: workbookContext.workbookId,
-      knownSkillIds: SKILL_IDS,
+      knownIntegrationIds: INTEGRATION_IDS,
     }),
     loadWebSearchProviderConfig(settings),
     loadMcpServers(settings),
@@ -152,9 +156,9 @@ async function buildSnapshot(
     workbookId: workbookContext.workbookId,
     workbookLabel: workbookContext.workbookLabel,
     externalToolsEnabled,
-    sessionSkillIds,
-    workbookSkillIds,
-    activeSkillIds,
+    sessionIntegrationIds,
+    workbookIntegrationIds,
+    activeIntegrationIds,
     webSearchApiKey: webSearchConfig.apiKey,
     mcpServers,
   };
@@ -171,7 +175,7 @@ async function postJsonRpc(args: {
   server: McpServerConfig;
   method: string;
   params?: unknown;
-  settings: SkillSettingsStore;
+  settings: IntegrationSettingsStore;
   expectResponse?: boolean;
 }): Promise<{ response: unknown; proxied: boolean; proxyBaseUrl?: string } | null> {
   const { server, method, params, settings, expectResponse = true } = args;
@@ -246,7 +250,7 @@ async function postJsonRpc(args: {
 
 async function probeMcpServer(
   server: McpServerConfig,
-  settings: SkillSettingsStore,
+  settings: IntegrationSettingsStore,
 ): Promise<{ toolCount: number; proxied: boolean; proxyBaseUrl?: string }> {
   await postJsonRpc({
     server,
@@ -287,39 +291,39 @@ async function probeMcpServer(
   };
 }
 
-function createSkillCard(args: {
-  skill: SkillDefinition;
-  snapshot: SkillsSnapshot;
-  onToggleSession: (skillId: string, next: boolean) => Promise<void>;
-  onToggleWorkbook: (skillId: string, next: boolean) => Promise<void>;
+function createIntegrationCard(args: {
+  integration: IntegrationDefinition;
+  snapshot: IntegrationsSnapshot;
+  onToggleSession: (integrationId: string, next: boolean) => Promise<void>;
+  onToggleWorkbook: (integrationId: string, next: boolean) => Promise<void>;
 }): HTMLElement {
-  const { skill, snapshot } = args;
+  const { integration, snapshot } = args;
 
   const card = document.createElement("div");
-  card.className = "pi-overlay-surface pi-skills-card";
+  card.className = "pi-overlay-surface pi-integrations-card";
 
   const top = document.createElement("div");
-  top.className = "pi-skills-card__top";
+  top.className = "pi-integrations-card__top";
 
   const textWrap = document.createElement("div");
-  textWrap.className = "pi-skills-card__text-wrap";
+  textWrap.className = "pi-integrations-card__text-wrap";
 
   const title = document.createElement("strong");
-  title.textContent = skill.title;
-  title.className = "pi-skills-card__title";
+  title.textContent = integration.title;
+  title.className = "pi-integrations-card__title";
 
   const description = document.createElement("span");
-  description.textContent = skill.description;
-  description.className = "pi-skills-card__description";
+  description.textContent = integration.description;
+  description.className = "pi-integrations-card__description";
 
   textWrap.append(title, description);
 
   const badges = document.createElement("div");
   badges.className = "pi-overlay-badges";
 
-  if (isEnabledInList(snapshot.activeSkillIds, skill.id) && snapshot.externalToolsEnabled) {
+  if (isEnabledInList(snapshot.activeIntegrationIds, integration.id) && snapshot.externalToolsEnabled) {
     badges.appendChild(createBadge("active", "ok"));
-  } else if (isEnabledInList(snapshot.activeSkillIds, skill.id) && !snapshot.externalToolsEnabled) {
+  } else if (isEnabledInList(snapshot.activeIntegrationIds, integration.id) && !snapshot.externalToolsEnabled) {
     badges.appendChild(createBadge("configured (blocked)", "warn"));
   } else {
     badges.appendChild(createBadge("inactive", "muted"));
@@ -328,33 +332,33 @@ function createSkillCard(args: {
   top.append(textWrap, badges);
 
   const warning = document.createElement("div");
-  warning.className = "pi-skills-card__warning";
-  warning.textContent = skill.warning ?? "";
-  warning.hidden = !skill.warning;
+  warning.className = "pi-integrations-card__warning";
+  warning.textContent = integration.warning ?? "";
+  warning.hidden = !integration.warning;
 
   const toggles = document.createElement("div");
-  toggles.className = "pi-skills-card__toggles";
+  toggles.className = "pi-integrations-card__toggles";
 
   const sessionLabel = document.createElement("label");
-  sessionLabel.className = "pi-skills-card__toggle-label";
+  sessionLabel.className = "pi-integrations-card__toggle-label";
 
   const sessionToggle = document.createElement("input");
   sessionToggle.type = "checkbox";
-  sessionToggle.checked = isEnabledInList(snapshot.sessionSkillIds, skill.id);
+  sessionToggle.checked = isEnabledInList(snapshot.sessionIntegrationIds, integration.id);
   sessionToggle.addEventListener("change", () => {
-    void args.onToggleSession(skill.id, sessionToggle.checked);
+    void args.onToggleSession(integration.id, sessionToggle.checked);
   });
   sessionLabel.append(sessionToggle, document.createTextNode("Enable for this session"));
 
   const workbookLabel = document.createElement("label");
-  workbookLabel.className = "pi-skills-card__toggle-label";
+  workbookLabel.className = "pi-integrations-card__toggle-label";
 
   const workbookToggle = document.createElement("input");
   workbookToggle.type = "checkbox";
-  workbookToggle.checked = isEnabledInList(snapshot.workbookSkillIds, skill.id);
+  workbookToggle.checked = isEnabledInList(snapshot.workbookIntegrationIds, integration.id);
   workbookToggle.disabled = snapshot.workbookId === null;
   workbookToggle.addEventListener("change", () => {
-    void args.onToggleWorkbook(skill.id, workbookToggle.checked);
+    void args.onToggleWorkbook(integration.id, workbookToggle.checked);
   });
 
   const workbookText = snapshot.workbookId
@@ -369,7 +373,7 @@ function createSkillCard(args: {
   return card;
 }
 
-export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
+export function showIntegrationsDialog(dependencies: IntegrationsDialogDependencies): void {
   const existing = document.getElementById(OVERLAY_ID);
   if (existing) {
     const closeExisting = overlayClosers.get(existing);
@@ -387,7 +391,7 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   overlay.className = "pi-welcome-overlay";
 
   const card = document.createElement("div");
-  card.className = "pi-welcome-card pi-overlay-card pi-skills-dialog";
+  card.className = "pi-welcome-card pi-overlay-card pi-integrations-dialog";
 
   const header = document.createElement("div");
   header.className = "pi-overlay-header";
@@ -396,11 +400,11 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   titleWrap.className = "pi-overlay-title-wrap";
 
   const title = document.createElement("h2");
-  title.textContent = "Skills";
+  title.textContent = INTEGRATIONS_LABEL;
   title.className = "pi-overlay-title";
 
   const subtitle = document.createElement("p");
-  subtitle.textContent = "Skills can inject instructions and external tools. Keep external access opt-in.";
+  subtitle.textContent = "Integrations can inject instructions and external tools. Keep external access opt-in.";
   subtitle.className = "pi-overlay-subtitle";
 
   titleWrap.append(title, subtitle);
@@ -420,7 +424,7 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   externalCard.className = "pi-overlay-surface";
 
   const externalToggleLabel = document.createElement("label");
-  externalToggleLabel.className = "pi-skills-toggle-label";
+  externalToggleLabel.className = "pi-integrations-toggle-label";
 
   const externalToggle = document.createElement("input");
   externalToggle.type = "checkbox";
@@ -431,18 +435,18 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   externalToggleLabel.append(externalToggle, externalToggleText);
 
   const activeSummary = document.createElement("div");
-  activeSummary.className = "pi-skills-active-summary";
+  activeSummary.className = "pi-integrations-active-summary";
 
   externalCard.append(externalToggleLabel, activeSummary);
   externalSection.appendChild(externalCard);
 
-  const skillsSection = document.createElement("section");
-  skillsSection.className = "pi-overlay-section";
-  skillsSection.appendChild(createSectionTitle("Skill bundles"));
+  const integrationsSection = document.createElement("section");
+  integrationsSection.className = "pi-overlay-section";
+  integrationsSection.appendChild(createSectionTitle(`${INTEGRATIONS_LABEL} bundles`));
 
-  const skillsList = document.createElement("div");
-  skillsList.className = "pi-overlay-list";
-  skillsSection.appendChild(skillsList);
+  const integrationsList = document.createElement("div");
+  integrationsList.className = "pi-overlay-list";
+  integrationsSection.appendChild(integrationsList);
 
   const webSearchSection = document.createElement("section");
   webSearchSection.className = "pi-overlay-section";
@@ -452,10 +456,10 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   webSearchCard.className = "pi-overlay-surface";
 
   const webSearchStatus = document.createElement("div");
-  webSearchStatus.className = "pi-skills-web-search-status";
+  webSearchStatus.className = "pi-integrations-web-search-status";
 
   const webSearchInputRow = document.createElement("div");
-  webSearchInputRow.className = "pi-skills-web-search-row";
+  webSearchInputRow.className = "pi-integrations-web-search-row";
 
   const webSearchApiKeyInput = createInput("Brave API key", "password");
   const webSearchSaveButton = createButton("Save key");
@@ -482,17 +486,17 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
 
   const mcpAddTitle = document.createElement("div");
   mcpAddTitle.textContent = "Add server";
-  mcpAddTitle.className = "pi-skills-mcp-add-title";
+  mcpAddTitle.className = "pi-integrations-mcp-add-title";
 
   const mcpAddRow = document.createElement("div");
-  mcpAddRow.className = "pi-skills-mcp-add-row";
+  mcpAddRow.className = "pi-integrations-mcp-add-row";
 
   const mcpNameInput = createInput("Name");
   const mcpUrlInput = createInput("https://example.com/mcp");
   const mcpTokenInput = createInput("Bearer token (optional)", "password");
 
   const mcpEnabledLabel = document.createElement("label");
-  mcpEnabledLabel.className = "pi-skills-toggle-label";
+  mcpEnabledLabel.className = "pi-integrations-toggle-label";
   const mcpEnabledInput = document.createElement("input");
   mcpEnabledInput.type = "checkbox";
   mcpEnabledInput.checked = true;
@@ -510,7 +514,7 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
 
   mcpSection.append(mcpList, mcpAddCard);
 
-  body.append(externalSection, skillsSection, webSearchSection, mcpSection);
+  body.append(externalSection, integrationsSection, webSearchSection, mcpSection);
   card.append(header, body);
   overlay.appendChild(card);
 
@@ -532,7 +536,7 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   closeButton.addEventListener("click", closeOverlay);
 
   let busy = false;
-  let snapshot: SkillsSnapshot | null = null;
+  let snapshot: IntegrationsSnapshot | null = null;
 
   const setBusy = (next: boolean): void => {
     busy = next;
@@ -548,7 +552,7 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   };
 
   const afterMutation = async (reason: "toggle" | "scope" | "external-toggle" | "config"): Promise<void> => {
-    dispatchSkillsChanged({ reason });
+    dispatchIntegrationsChanged({ reason });
     if (dependencies.onChanged) {
       await dependencies.onChanged();
     }
@@ -570,7 +574,7 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
         showToast(successMessage);
       }
     } catch (error: unknown) {
-      showToast(`Skills: ${getErrorMessage(error)}`);
+      showToast(`Integrations: ${getErrorMessage(error)}`);
     } finally {
       setBusy(false);
     }
@@ -578,21 +582,21 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
 
   const renderMcpServerRow = (server: McpServerConfig): HTMLElement => {
     const row = document.createElement("div");
-    row.className = "pi-overlay-surface pi-skills-mcp-row";
+    row.className = "pi-overlay-surface pi-integrations-mcp-row";
 
     const top = document.createElement("div");
-    top.className = "pi-skills-mcp-row__top";
+    top.className = "pi-integrations-mcp-row__top";
 
     const info = document.createElement("div");
-    info.className = "pi-skills-mcp-row__info";
+    info.className = "pi-integrations-mcp-row__info";
 
     const name = document.createElement("strong");
     name.textContent = server.name;
-    name.className = "pi-skills-mcp-row__name";
+    name.className = "pi-integrations-mcp-row__name";
 
     const url = document.createElement("code");
     url.textContent = server.url;
-    url.className = "pi-skills-mcp-row__url";
+    url.className = "pi-integrations-mcp-row__url";
 
     info.append(name, url);
 
@@ -640,49 +644,49 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
     const currentSnapshot = snapshot;
     externalToggle.checked = currentSnapshot.externalToolsEnabled;
 
-    const activeNames = currentSnapshot.activeSkillIds
-      .map((skillId) => listSkillDefinitions().find((skill) => skill.id === skillId)?.title ?? skillId)
+    const activeNames = currentSnapshot.activeIntegrationIds
+      .map((integrationId) => listIntegrationDefinitions().find((integration) => integration.id === integrationId)?.title ?? integrationId)
       .join(", ");
 
     activeSummary.textContent = currentSnapshot.externalToolsEnabled
-      ? (currentSnapshot.activeSkillIds.length > 0
+      ? (currentSnapshot.activeIntegrationIds.length > 0
         ? `Active now: ${activeNames}`
-        : "No active skills in this session/workbook.")
-      : "External tools are disabled globally. Skills remain configured but inactive.";
+        : `No active ${INTEGRATIONS_LABEL_LOWER} in this session/workbook.`)
+      : `External tools are disabled globally. ${INTEGRATIONS_LABEL} remain configured but inactive.`;
 
-    skillsList.replaceChildren();
-    for (const skill of listSkillDefinitions()) {
-      skillsList.appendChild(createSkillCard({
-        skill,
+    integrationsList.replaceChildren();
+    for (const integration of listIntegrationDefinitions()) {
+      integrationsList.appendChild(createIntegrationCard({
+        integration,
         snapshot: currentSnapshot,
-        onToggleSession: async (skillId, next) => {
+        onToggleSession: async (integrationId, next) => {
           await runAction(async () => {
             const settings = await getSettingsStore();
-            await setSkillEnabledInScope({
+            await setIntegrationEnabledInScope({
               settings,
               scope: "session",
               identifier: currentSnapshot.sessionId,
-              skillId,
+              integrationId,
               enabled: next,
-              knownSkillIds: SKILL_IDS,
+              knownIntegrationIds: INTEGRATION_IDS,
             });
-          }, "scope", `${skill.title}: ${next ? "enabled" : "disabled"} for this session`);
+          }, "scope", `${integration.title}: ${next ? "enabled" : "disabled"} for this session`);
         },
-        onToggleWorkbook: async (skillId, next) => {
+        onToggleWorkbook: async (integrationId, next) => {
           const workbookId = currentSnapshot.workbookId;
           if (!workbookId) return;
 
           await runAction(async () => {
             const settings = await getSettingsStore();
-            await setSkillEnabledInScope({
+            await setIntegrationEnabledInScope({
               settings,
               scope: "workbook",
               identifier: workbookId,
-              skillId,
+              integrationId,
               enabled: next,
-              knownSkillIds: SKILL_IDS,
+              knownIntegrationIds: INTEGRATION_IDS,
             });
-          }, "scope", `${skill.title}: ${next ? "enabled" : "disabled"} for workbook`);
+          }, "scope", `${integration.title}: ${next ? "enabled" : "disabled"} for workbook`);
         },
       }));
     }
@@ -769,7 +773,7 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   setBusy(true);
   void refresh()
     .catch((error: unknown) => {
-      showToast(`Skills: ${getErrorMessage(error)}`);
+      showToast(`Integrations: ${getErrorMessage(error)}`);
       closeOverlay();
     })
     .finally(() => {

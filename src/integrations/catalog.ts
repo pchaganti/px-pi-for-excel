@@ -1,7 +1,7 @@
 /**
- * Built-in skill catalog.
+ * Built-in integration catalog.
  *
- * Skills bundle:
+ * Integrations bundle:
  * - additional system guidance
  * - one or more tools
  */
@@ -11,31 +11,35 @@ import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { createMcpTool } from "../tools/mcp.js";
 import { createWebSearchTool } from "../tools/web-search.js";
 
-export const SKILL_IDS = ["web_search", "mcp_tools"] as const;
-export type SkillId = (typeof SKILL_IDS)[number];
+export const INTEGRATION_IDS = ["web_search", "mcp_tools"] as const;
+export type IntegrationId = (typeof INTEGRATION_IDS)[number];
 
-export interface SkillPromptEntry {
-  id: SkillId;
+export interface IntegrationPromptEntry {
+  id: IntegrationId;
   title: string;
   instructions: string;
+  agentSkillName?: string;
   warning?: string;
 }
 
-export interface SkillDefinition {
-  id: SkillId;
+export interface IntegrationDefinition {
+  id: IntegrationId;
   title: string;
   description: string;
+  /** Standards-based Agent Skill identity (agentskills.io). */
+  agentSkillName?: string;
   warning?: string;
   toolNames: readonly string[];
   instructions: string;
   createTools: () => AgentTool[];
 }
 
-const SKILL_DEFINITIONS: Record<SkillId, SkillDefinition> = {
+const INTEGRATION_DEFINITIONS: Record<IntegrationId, IntegrationDefinition> = {
   web_search: {
     id: "web_search",
     title: "Web Search",
     description: "Search external web content (Brave Search) for up-to-date facts.",
+    agentSkillName: "web-search",
     warning: "External network access: query text is sent to the search provider.",
     toolNames: ["web_search"],
     instructions:
@@ -47,6 +51,7 @@ const SKILL_DEFINITIONS: Record<SkillId, SkillDefinition> = {
     id: "mcp_tools",
     title: "MCP Gateway",
     description: "Call tools from user-configured MCP servers.",
+    agentSkillName: "mcp-gateway",
     warning: "External tools: MCP servers may execute arbitrary remote actions.",
     toolNames: ["mcp"],
     instructions:
@@ -56,23 +61,23 @@ const SKILL_DEFINITIONS: Record<SkillId, SkillDefinition> = {
   },
 };
 
-export function listSkillDefinitions(): SkillDefinition[] {
-  return SKILL_IDS.map((skillId) => SKILL_DEFINITIONS[skillId]);
+export function listIntegrationDefinitions(): IntegrationDefinition[] {
+  return INTEGRATION_IDS.map((integrationId) => INTEGRATION_DEFINITIONS[integrationId]);
 }
 
-export function getSkillDefinition(skillId: string): SkillDefinition | null {
-  if (!Object.hasOwn(SKILL_DEFINITIONS, skillId)) return null;
+export function getIntegrationDefinition(integrationId: string): IntegrationDefinition | null {
+  if (!Object.hasOwn(INTEGRATION_DEFINITIONS, integrationId)) return null;
 
-  if (skillId === "web_search") return SKILL_DEFINITIONS.web_search;
-  if (skillId === "mcp_tools") return SKILL_DEFINITIONS.mcp_tools;
+  if (integrationId === "web_search") return INTEGRATION_DEFINITIONS.web_search;
+  if (integrationId === "mcp_tools") return INTEGRATION_DEFINITIONS.mcp_tools;
   return null;
 }
 
-export function createToolsForSkills(skillIds: readonly string[]): AgentTool[] {
+export function createToolsForIntegrations(integrationIds: readonly string[]): AgentTool[] {
   const tools: AgentTool[] = [];
 
-  for (const skillId of skillIds) {
-    const definition = getSkillDefinition(skillId);
+  for (const integrationId of integrationIds) {
+    const definition = getIntegrationDefinition(integrationId);
     if (!definition) continue;
     tools.push(...definition.createTools());
   }
@@ -80,17 +85,18 @@ export function createToolsForSkills(skillIds: readonly string[]): AgentTool[] {
   return tools;
 }
 
-export function buildSkillPromptEntries(skillIds: readonly string[]): SkillPromptEntry[] {
-  const entries: SkillPromptEntry[] = [];
+export function buildIntegrationPromptEntries(integrationIds: readonly string[]): IntegrationPromptEntry[] {
+  const entries: IntegrationPromptEntry[] = [];
 
-  for (const skillId of skillIds) {
-    const definition = getSkillDefinition(skillId);
+  for (const integrationId of integrationIds) {
+    const definition = getIntegrationDefinition(integrationId);
     if (!definition) continue;
 
     entries.push({
       id: definition.id,
       title: definition.title,
       instructions: definition.instructions,
+      agentSkillName: definition.agentSkillName,
       warning: definition.warning,
     });
   }
@@ -98,10 +104,10 @@ export function buildSkillPromptEntries(skillIds: readonly string[]): SkillPromp
   return entries;
 }
 
-export function getSkillToolNames(): string[] {
+export function getIntegrationToolNames(): string[] {
   const names = new Set<string>();
 
-  for (const definition of listSkillDefinitions()) {
+  for (const definition of listIntegrationDefinitions()) {
     for (const toolName of definition.toolNames) {
       names.add(toolName);
     }

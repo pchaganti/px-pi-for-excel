@@ -7,6 +7,7 @@ import { Type, type Static, type TSchema } from "@sinclair/typebox";
 
 import { getErrorMessage } from "../utils/errors.js";
 import { isRecord } from "../utils/type-guards.js";
+import { integrationsCommandHint } from "../integrations/naming.js";
 import type { ProxyAwareSettingsStore } from "./external-fetch.js";
 import { getEnabledProxyBaseUrl, resolveOutboundRequestUrl } from "./external-fetch.js";
 import {
@@ -526,7 +527,7 @@ export function createMcpTool(
         const enabledServers = runtimeConfig.servers.filter((server) => server.enabled);
 
         if (runtimeConfig.servers.length === 0) {
-          throw new Error("No MCP servers configured. Open /skills to add one.");
+          throw new Error(`No MCP servers configured. Open ${integrationsCommandHint()} to add one.`);
         }
 
         const resolveSingleServer = (token: string): McpServerConfig => {

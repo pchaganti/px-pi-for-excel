@@ -1,14 +1,14 @@
-/* Skills manager */
+/* Integrations manager */
 
-.pi-skills-dialog {
+.pi-integrations-dialog {
   width: min(760px, 92vw);
   max-height: 88vh;
   overflow: hidden;
   gap: 12px;
 }
 
-.pi-skills-toggle-label,
-.pi-skills-card__toggle-label {
+.pi-integrations-toggle-label,
+.pi-integrations-card__toggle-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -17,84 +17,84 @@
   color: var(--foreground);
 }
 
-.pi-skills-active-summary,
-.pi-skills-web-search-status {
+.pi-integrations-active-summary,
+.pi-integrations-web-search-status {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   color: var(--muted-foreground);
 }
 
-.pi-skills-card {
+.pi-integrations-card {
   gap: 7px;
 }
 
-.pi-skills-card__top,
-.pi-skills-mcp-row__top {
+.pi-integrations-card__top,
+.pi-integrations-mcp-row__top {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 10px;
 }
 
-.pi-skills-card__text-wrap,
-.pi-skills-mcp-row__info {
+.pi-integrations-card__text-wrap,
+.pi-integrations-mcp-row__info {
   display: flex;
   flex-direction: column;
   gap: 3px;
   min-width: 0;
 }
 
-.pi-skills-card__title,
-.pi-skills-mcp-row__name {
+.pi-integrations-card__title,
+.pi-integrations-mcp-row__name {
   font-family: var(--font-sans);
   font-size: var(--text-base);
   color: var(--foreground);
 }
 
-.pi-skills-card__description {
+.pi-integrations-card__description {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   color: var(--muted-foreground);
 }
 
-.pi-skills-card__warning {
+.pi-integrations-card__warning {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   color: oklch(0.55 0.12 35);
 }
 
-.pi-skills-card__toggles {
+.pi-integrations-card__toggles {
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
 }
 
-.pi-skills-web-search-row {
+.pi-integrations-web-search-row {
   display: grid;
   grid-template-columns: 1fr auto auto;
   gap: 8px;
   align-items: center;
 }
 
-.pi-skills-mcp-add-title {
+.pi-integrations-mcp-add-title {
   font-family: var(--font-sans);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--foreground);
 }
 
-.pi-skills-mcp-add-row {
+.pi-integrations-mcp-add-row {
   display: grid;
   grid-template-columns: 150px 1fr 150px auto auto;
   gap: 8px;
   align-items: center;
 }
 
-.pi-skills-mcp-row {
+.pi-integrations-mcp-row {
   gap: 7px;
 }
 
-.pi-skills-mcp-row__url {
+.pi-integrations-mcp-row__url {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--muted-foreground);

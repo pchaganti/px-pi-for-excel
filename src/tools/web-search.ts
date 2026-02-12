@@ -7,6 +7,7 @@ import { Type, type Static, type TSchema } from "@sinclair/typebox";
 
 import { getErrorMessage } from "../utils/errors.js";
 import { isRecord } from "../utils/type-guards.js";
+import { integrationsCommandHint } from "../integrations/naming.js";
 import {
   getEnabledProxyBaseUrl,
   resolveOutboundRequestUrl,
@@ -407,7 +408,7 @@ export function createWebSearchTool(
         const apiKey = normalizeOptionalString(config.apiKey);
         if (!apiKey) {
           throw new Error(
-            "Web search API key is missing. Open /skills and set the Brave API key.",
+            `Web search API key is missing. Open ${integrationsCommandHint()} and set the Brave API key.`,
           );
         }
 

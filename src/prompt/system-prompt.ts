@@ -7,18 +7,20 @@
 
 import type { ResolvedConventions } from "../conventions/types.js";
 import { diffFromDefaults } from "../conventions/store.js";
+import { ACTIVE_INTEGRATIONS_PROMPT_HEADING } from "../integrations/naming.js";
 
-export interface ActiveSkillPromptEntry {
+export interface ActiveIntegrationPromptEntry {
   id: string;
   title: string;
   instructions: string;
+  agentSkillName?: string;
   warning?: string;
 }
 
 export interface SystemPromptOptions {
   userInstructions?: string | null;
   workbookInstructions?: string | null;
-  activeSkills?: ActiveSkillPromptEntry[];
+  activeIntegrations?: ActiveIntegrationPromptEntry[];
   /** Resolved conventions (defaults merged with stored). Omit to skip convention diff section. */
   conventions?: ResolvedConventions | null;
 }
@@ -52,18 +54,21 @@ ${userValue}
 ${workbookValue}`;
 }
 
-function buildActiveSkillsSection(activeSkills: ActiveSkillPromptEntry[] | undefined): string | null {
-  if (!activeSkills || activeSkills.length === 0) {
+function buildActiveIntegrationsSection(activeIntegrations: ActiveIntegrationPromptEntry[] | undefined): string | null {
+  if (!activeIntegrations || activeIntegrations.length === 0) {
     return null;
   }
 
-  const lines: string[] = ["## Active Skills"];
+  const lines: string[] = [`## ${ACTIVE_INTEGRATIONS_PROMPT_HEADING}`];
 
-  for (const skill of activeSkills) {
-    lines.push(`### ${skill.title}`);
-    lines.push(skill.instructions.trim());
-    if (skill.warning) {
-      lines.push(`- Warning: ${skill.warning}`);
+  for (const integration of activeIntegrations) {
+    lines.push(`### ${integration.title}`);
+    if (integration.agentSkillName) {
+      lines.push(`- Agent Skill mapping: \`${integration.agentSkillName}\``);
+    }
+    lines.push(integration.instructions.trim());
+    if (integration.warning) {
+      lines.push(`- Warning: ${integration.warning}`);
     }
     lines.push("");
   }
@@ -80,9 +85,9 @@ export function buildSystemPrompt(opts: SystemPromptOptions = {}): string {
   sections.push(IDENTITY);
   sections.push(buildInstructionsSection(opts));
 
-  const skillsSection = buildActiveSkillsSection(opts.activeSkills);
-  if (skillsSection) {
-    sections.push(skillsSection);
+  const integrationsSection = buildActiveIntegrationsSection(opts.activeIntegrations);
+  if (integrationsSection) {
+    sections.push(integrationsSection);
   }
 
   sections.push(TOOLS);
@@ -129,7 +134,7 @@ Core workbook tools:
 - **workbook_history** — list/restore/delete automatic recovery checkpoints for supported workbook mutations (\`write_cells\`, \`fill_formula\`, \`python_transform_range\`, \`format_cells\`, \`conditional_format\`, \`comments\`)
 - **extensions_manager** — list/install/reload/enable/disable/uninstall sidebar extensions from code (for extension authoring from chat)
 
-Other tools may be available depending on enabled experiments/skills.
+Other tools may be available depending on enabled experiments/integrations.
 If **files** is available, use it for workspace artifacts (list/read/write/delete files).`;
 
 const WORKFLOW = `## Workflow
