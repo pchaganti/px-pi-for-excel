@@ -21,4 +21,5 @@
 @import "./theme/overlays.css";
 @import "./theme/content-overrides.css";
 @import "./theme/dialogs.css";
+@import "./theme/unstable-overrides.css";
 @import "./theme/queue.css";

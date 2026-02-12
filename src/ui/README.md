@@ -51,7 +51,7 @@ Tailwind v4 puts all utilities inside `@layer utilities`. Unlayered CSS always b
 | 7–10. Chrome | Status bar (model picker + ctx + thinking), toast, slash command menu, welcome overlay |
 | 10b. Overlay primitives | Shared classes for builtins overlays (tabs, textarea, buttons, footer actions) |
 | 11. Content overrides | **Targeted** pi-web-ui tweaks — user bubble color, sidebar-width margins, tool card borders |
-| 12–13. Dialogs, Queue | Model selector glass treatment, steer/follow-up queue |
+| 12–13. Dialogs, unstable overrides, Queue | Stable dialog styling + isolated utility-coupled overrides + steer/follow-up queue |
 
 > Note: `theme.css` is an entrypoint; styles are split into `src/ui/theme/*.css` and imported in order:
 > - `theme/tokens.css` (1)
@@ -59,7 +59,8 @@ Tailwind v4 puts all utilities inside `@layer utilities`. Unlayered CSS always b
 > - `theme/components.css` (3–10)
 > - `theme/overlays.css` (10b) → imports `theme/overlays/{primitives,extensions,skills,provider-resume-shortcuts,experimental}.css`
 > - `theme/content-overrides.css` (11)
-> - `theme/dialogs.css` (12)
+> - `theme/dialogs.css` (12, stable selectors)
+> - `theme/unstable-overrides.css` (12b, utility-coupled upstream selectors)
 > - `theme/queue.css` (13)
 
 ### When overriding pi-web-ui styles
@@ -70,6 +71,7 @@ pi-web-ui uses Light DOM (`createRenderRoot() { return this; }`), so styles leak
 - **Use element-scoped selectors** like `user-message .mx-4` or `tool-message .border` — not bare class names.
 - **Use `!important` sparingly** — only needed when overriding Tailwind utility classes that also use `!important` or when specificity within `@layer` can't be beaten otherwise.
 - **Don't target deep Tailwind internals** like `.px-2.pb-2 > .flex.gap-2:last-child > button:last-child`. These break on library updates. Target the custom element tag or a stable class name.
+- If you must target utility internals, place the rule in `src/ui/theme/unstable-overrides.css` with a short comment.
 
 ## Components
 
