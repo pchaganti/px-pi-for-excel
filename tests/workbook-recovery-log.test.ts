@@ -81,12 +81,12 @@ void test("estimateFormatCaptureCellCount scales by serialized checkpoint shape"
 
   assert.equal(
     estimateFormatCaptureCellCount(largeArea, { mergedAreas: true }),
-    1,
+    1_572_864,
   );
 
   assert.equal(
     estimateFormatCaptureCellCount(largeArea, { mergedAreas: true, rowHeight: true }),
-    1_048_577,
+    2_621_440,
   );
 });
 

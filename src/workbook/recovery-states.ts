@@ -545,6 +545,18 @@ export interface RecoveryFormatAreaShape {
   columnCount: number;
 }
 
+function estimateMergedAreasUnitCount(area: RecoveryFormatAreaShape): number {
+  const cellCount = area.rowCount * area.columnCount;
+
+  if (cellCount <= 1) {
+    return cellCount;
+  }
+
+  // A merged block must contain at least two cells, so this bounds merge-dense sheets
+  // without pretending merged-area payloads are constant-size.
+  return Math.floor(cellCount / 2);
+}
+
 export function estimateFormatCaptureCellCount(
   areas: readonly RecoveryFormatAreaShape[],
   selection: RecoveryFormatSelection,
@@ -567,7 +579,7 @@ export function estimateFormatCaptureCellCount(
     }
 
     if (selection.mergedAreas === true) {
-      areaCount += 1;
+      areaCount += estimateMergedAreasUnitCount(area);
     }
 
     if (includeAreaScalarUnits) {
