@@ -69,6 +69,14 @@ const THINKING_COLORS: Record<ThinkingLevel, string> = {
 
 const BUSY_ALLOWED_COMMANDS = new Set(["compact", "new", "resume", "reopen"]);
 
+function isInsideSessionTabs(target: EventTarget | null | undefined): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return target.closest(".pi-session-tabs") !== null;
+}
+
 function setExcelToolCardsExpanded(expanded: boolean): void {
   const toolMessages = document.querySelectorAll("tool-message");
 
@@ -251,8 +259,12 @@ export function installKeyboardShortcuts(opts: {
     const textarea = sidebar.getTextarea();
     const eventTarget = e.target instanceof Node ? e.target : null;
     const keyTarget = eventTarget ?? (document.activeElement instanceof Node ? document.activeElement : null);
+    const isInSidebarInput = keyTarget instanceof Element
+      ? keyTarget.closest(".pi-input-card") !== null
+      : false;
     const isInEditor = Boolean(
-      textarea && keyTarget && (keyTarget === textarea || textarea.contains(keyTarget)),
+      isInSidebarInput
+      || (textarea && keyTarget && (keyTarget === textarea || textarea.contains(keyTarget))),
     );
     const isStreaming = agent?.state.isStreaming ?? false;
 
@@ -333,6 +345,7 @@ export function installKeyboardShortcuts(opts: {
       adjacentTabDirection
       && onSwitchAdjacentTab
       && !isTextEntryTarget(keyTarget)
+      && !isInsideSessionTabs(keyTarget)
     ) {
       e.preventDefault();
       onSwitchAdjacentTab(adjacentTabDirection);

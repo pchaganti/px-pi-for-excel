@@ -73,12 +73,27 @@
   gap: 6px;
   min-width: 0;
   border: none;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: inherit;
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   padding: 4px 8px;
   cursor: pointer;
+  -webkit-appearance: none;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+  caret-color: transparent;
+}
+
+.pi-session-tab__main:focus,
+.pi-session-tab__main:focus-visible {
+  outline: none;
+}
+
+.pi-session-tab__main:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--green-alpha-30);
 }
 
 .pi-session-tab__title {

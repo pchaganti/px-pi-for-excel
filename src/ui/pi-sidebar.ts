@@ -353,6 +353,7 @@ export class PiSidebar extends LitElement {
 
     event.preventDefault();
     event.stopPropagation();
+    event.stopImmediatePropagation();
 
     const tabs = this.sessionTabs;
     if (tabs.length <= 1) {
