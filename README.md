@@ -1,432 +1,235 @@
 # Pi for Excel
 
-An open-source, multi-model AI sidebar add-in for Microsoft Excel — powered by [Pi](https://pi.dev).
+Open-source, multi-model AI sidebar add-in for Microsoft Excel. Powered by [Pi](https://github.com/mariozechner/pi-coding-agent).
 
-**Bring your own key. Free. Open source.**
-
-## What is this?
-
-Pi for Excel puts an AI assistant directly in your Excel sidebar. It can read your spreadsheet, write formulas, format cells, search data, and trace dependencies — all through natural conversation.
-
-Unlike proprietary alternatives, Pi for Excel:
-- **Works with any LLM** — Anthropic, OpenAI, Google, local models via Ollama/vLLM
-- **Keeps your data local** — the agent runs entirely in the browser; your spreadsheet data never leaves your machine (only the context you send to your chosen LLM provider)
-- **Is free and open source** — no subscription, no per-seat pricing
-
-## Why Pi for Excel?
-
-Existing AI add-ins for Excel are closed-source, locked to a single model, and charge $20+/month. They also leave real capabilities on the table:
-
-| | Proprietary add-ins | Pi for Excel |
-|---|---|---|
-| **Context awareness** | Thin metadata push (sheet names + dimensions). Agent has to make tool calls just to see what you're looking at. | **Rich workbook blueprint** (headers, named ranges, tables, formula density) + **auto-read of your selection** — the agent already knows what you're looking at before you ask. |
-| **Formula tracing** | Manual cell-by-cell tracing. Deep dependency trees take dozens of tool calls. | **`trace_dependencies`** — full formula tree in a single call via Office.js `getDirectPrecedents()`. |
-| **Sessions** | Total amnesia. Close the sidebar, lose everything. | **Persistent sessions** saved to IndexedDB. Resume any conversation, even after restarting Excel. |
-| **Change tracking** | No awareness of what you edited between messages. | **Automatic change tracking** — the agent sees your edits and adapts. |
-| **Models** | Locked to one provider and model. | **Any model** — swap between Opus, Sonnet, GPT, Gemini, Codex, or local models mid-conversation. |
-| **Cost** | $20+/month per seat. | **Free.** Bring your own API key. |
-| **Tool overhead** | Separate tools for compact vs. detailed reads — the model often picks the wrong one. | **11 tools, one per verb.** `read_range` has a `mode` param (compact/csv/detailed). Less overhead, fewer wasted calls. |
-| **Writes** | Overwrite protection, but no verification. | **Auto-verification** — reads back written cells to check for `#REF!`, `#VALUE!`, and other errors. |
+Pi for Excel gives you a conversational AI assistant that can read, write, and format your spreadsheets — directly from an Excel sidebar panel. Bring your own API key or OAuth login for Anthropic, OpenAI, Google Gemini, or GitHub Copilot.
 
 ## Features
 
-- **13 core Excel tools** — `get_workbook_overview`, `read_range`, `write_cells`, `fill_formula`, `search_workbook`, `modify_structure`, `format_cells`, `conditional_format`, `comments`, `trace_dependencies`, `view_settings`, `instructions`, `conventions`
-- **Composable cell styles** — named format presets (`"currency"`, `"percent"`, `"integer"`) and structural styles (`"header"`, `"total-row"`, `"input"`) that compose like CSS classes: `style: ["currency", "total-row"]`
-- **Auto-context injection** — automatically reads around your selection and tracks changes between messages
-- **Workbook blueprint** — sends a structural overview of your workbook to the LLM at session start (auto-invalidates after structural changes)
-- **Multi-provider auth** — API keys, OAuth (Anthropic, OpenAI, Google, GitHub Copilot, Antigravity), or reuse credentials from Pi TUI
-- **Persistent sessions** — conversations auto-save to IndexedDB and survive sidebar close/reopen. Resume any previous session with `/resume`
-- **Write verification** — automatically checks formula results after writing
-- **Clickable cell references** — cell addresses in assistant messages navigate to the range with a highlight glow
-- **Markdown tool cards** — tool outputs render as formatted markdown (tables, lists, headers) instead of raw text
-- **Slash commands** — type `/` to browse all available commands with fuzzy search
-- **Extensions** — modular extension system with slash commands and inline widget UI (e.g., `/snake`)
-- **Skills manager** — opt-in skill bundles (session/workbook scope) that can inject instructions and add external tools (`web_search`, `mcp`)
-- **Keyboard shortcuts** — `Escape` to interrupt, `Shift+Tab` to cycle thinking depth (incl. **max** / `xhigh` effort on Opus 4.6+), `Ctrl+O` to hide/show thinking + tool details
-- **Working indicator** — rotating whimsical messages and feature discovery hints while the model is streaming
-- **Pi-compatible messages** — conversations use the same `AgentMessage` format as Pi TUI. Session storage differs (IndexedDB vs JSONL), but the message layer is shared — future import/export is straightforward.
+**Core spreadsheet tools** — 16 built-in tools that the AI can call to interact with your workbook:
 
-## Install (recommended)
+| Tool | What it does |
+|---|---|
+| `get_workbook_overview` | Structural blueprint — sheets, headers, named ranges, tables, charts, pivots |
+| `read_range` | Read cells in compact (markdown), CSV, or detailed (with formatting) mode |
+| `write_cells` | Write values/formulas with overwrite protection and auto-verification |
+| `fill_formula` | AutoFill a formula across a range (relative refs adjust automatically) |
+| `search_workbook` | Find text, values, or formula references across all sheets |
+| `modify_structure` | Insert/delete rows/columns, add/rename/delete/hide sheets |
+| `format_cells` | Apply formatting — fonts, colors, number formats, borders, named styles |
+| `conditional_format` | Add or clear conditional formatting rules |
+| `trace_dependencies` | Trace formula lineage (precedents upstream or dependents downstream) |
+| `explain_formula` | Plain-language formula explanation with cited cell references |
+| `view_settings` | Gridlines, headings, freeze panes, tab color, sheet visibility |
+| `comments` | Read, add, update, reply, resolve/reopen cell comments |
+| `workbook_history` | List/restore automatic recovery checkpoints for workbook mutations |
+| `instructions` | Persistent user-level and workbook-level guidance for the AI |
+| `conventions` | Configurable formatting defaults (currency, negatives, zeros, decimal places) |
+| `skills` | Bundled Agent Skills for task-specific workflows |
 
-Use the non-technical install guide: **[`docs/install.md`](./docs/install.md)**.
+**Multi-model support** — use any supported provider; switch models mid-conversation:
+- **Anthropic** (Claude) — API key or OAuth
+- **OpenAI** / **OpenAI Codex** — API key
+- **Google Gemini** — API key
+- **GitHub Copilot** — OAuth
 
-It includes:
-- manifest download + Excel install steps (macOS + Windows)
-- first-run provider setup
-- OAuth/CORS troubleshooting for login-based providers
+**Session management** — multiple session tabs per workbook, auto-save/restore, session history, `/resume` to pick up where you left off.
+
+**Auto-context injection** — the AI automatically receives the workbook blueprint, your current selection, and recent cell changes before every turn. No need to manually describe what you're looking at.
+
+**Workbook recovery** — automatic checkpoints before every mutation. One-click revert from the sidebar if something goes wrong.
+
+**Formatting conventions** — define your house style once (currency symbol, negative style, decimal places) and the AI follows it automatically.
+
+**Slash commands** — `/model`, `/login`, `/settings`, `/instructions`, `/extensions`, `/integrations`, `/export`, `/compact`, `/new`, `/resume`, `/history`, `/shortcuts`, and more.
+
+**Extensions** — install sidebar extensions (mini-apps) from chat. The AI can generate and install extension code directly via the `extensions_manager` tool. Extensions run in an iframe sandbox by default.
+
+**Integrations** — opt-in external tool integrations:
+- **Web Search** (Brave Search) — look up external facts without leaving Excel
+- **MCP Gateway** — connect to user-configured MCP servers for custom tool access
+
+**Experimental features** (opt-in via `/experimental`):
+- Tmux bridge — remote terminal control from the sidebar
+- Python / LibreOffice bridge — run Python scripts and convert files locally
+- Files workspace — shared artifact storage across sessions
+
+## Install (non-technical)
+
+No git, Node, or dev tools needed.
+
+1. Download [`manifest.prod.xml`](https://pi-for-excel.vercel.app/manifest.prod.xml)
+
+2. **Sideload the manifest into Excel:**
+
+   **macOS** ([Microsoft docs](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/sideload-an-office-add-in-on-mac)):
+
+   Copy the manifest into Excel's sideload folder and restart Excel:
+   ```bash
+   cp manifest.prod.xml ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/
+   ```
+   Then open Excel → **Insert** → **My Add-ins** → you should see **Pi for Excel**.
+
+   **Windows** — you can try to install and run this on Windows — it might work! Follow the [Microsoft sideloading docs](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/sideload-office-add-ins-for-testing):
+
+   Open Excel → **Insert** → **My Add-ins** → **Upload My Add-in** → select `manifest.prod.xml`.
+
+3. Click **Open Pi** in the ribbon
+4. Connect a provider via `/login` or the welcome screen (paste an API key or use OAuth)
+5. Start chatting — try `What sheets do I have?` or `Summarize my current selection`
+
+For detailed install instructions (including OAuth proxy setup), see [docs/install.md](docs/install.md).
 
 ## Developer Quick Start
 
 ### Prerequisites
-- Node.js 20+
-- Microsoft Excel (desktop, macOS or Windows)
-- [mkcert](https://github.com/FiloSottile/mkcert) for local HTTPS
+
+- **Node.js ≥ 20**
+- **mkcert** — for local HTTPS (required by Office.js)
 
 ### Setup
 
 ```bash
 git clone https://github.com/tmustier/pi-for-excel.git
 cd pi-for-excel
-
-# Install dependencies
 npm install
 
-# Generate HTTPS certificates (required by Office add-ins)
-mkcert -install  # one-time: trust the CA
-mkcert localhost
-mv localhost.pem cert.pem
+# Generate local HTTPS certs (Office.js requires HTTPS)
+mkcert -install   # one-time CA setup
+mkcert localhost   # creates localhost.pem + localhost-key.pem
 mv localhost-key.pem key.pem
-
-# Start dev server
-npm run dev
+mv localhost.pem cert.pem
 ```
 
-### Sideload into Excel
+### Run
 
-**macOS:**
+```bash
+npm run dev        # Vite dev server on https://localhost:3000
+```
+
+Then sideload the dev manifest into Excel:
+
+**macOS** ([Microsoft docs](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/sideload-an-office-add-in-on-mac)):
 ```bash
 cp manifest.xml ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/
 ```
+Then open Excel → **Insert** → **My Add-ins** → **Pi for Excel**.
 
-Then open Excel → Insert → My Add-ins → Pi for Excel (Dev).
+**Windows** ([Microsoft docs](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/sideload-office-add-ins-for-testing)):
 
-**Windows:**
-```bash
-npm run sideload
-```
+Open Excel → **Insert** → **My Add-ins** → **Upload My Add-in** → select `manifest.xml`.
 
-### Configure an LLM provider
+The dev manifest points to `https://localhost:3000`. The production manifest (`manifest.prod.xml`) points to the hosted Vercel deployment.
 
-On first launch, a welcome overlay appears with provider login options:
-
-1. **OAuth** — click a provider (e.g. Anthropic) to authenticate in your browser, then paste the authorization code back into the add-in when prompted.
-2. **API key** — paste a key directly for any supported provider.
-3. **Pi TUI credentials** — if you already use [Pi TUI](https://pi.dev), credentials from `~/.pi/agent/auth.json` are loaded automatically in dev mode.
-
-You can change providers later with the `/login` command or by clicking the model name in the status bar.
-
-## Commands
-
-Type `/` in the message input to see all commands:
+### Useful commands
 
 | Command | Description |
-|---------|-------------|
-| `/new` | Start a new chat session (current session is saved) |
-| `/resume` | Resume a previous session |
-| `/name <title>` | Rename the current session |
-| `/model` | Switch LLM model |
-| `/default-models` | Default model presets (currently opens the model selector) |
-| `/login` | Add/change/disconnect API keys and OAuth providers |
-| `/settings` | Open settings dialog |
-| `/skills` | Manage skills + external tools (web search, MCP servers) |
-| `/experimental` | Manage experimental feature flags |
-| `/extensions` | Open extensions manager (install/enable/disable/reload/uninstall) |
-| `/shortcuts` | Show keyboard shortcuts |
-| `/compact` | Summarize conversation to free context |
-| `/copy` | Copy last response to clipboard |
-| `/export` | Export conversation |
-| `/share-session` | Share the current session |
-| `/snake` | Play Snake! 🐍 (extension) |
+|---|---|
+| `npm run dev` | Start Vite dev server (port 3000, HTTPS) |
+| `npm run build` | Production build → `dist/` |
+| `npm run check` | Lint + typecheck + CSS theme checks |
+| `npm run typecheck` | TypeScript type checking only |
+| `npm run lint` | ESLint |
+| `npm run test:models` | Unit tests — model ordering |
+| `npm run test:context` | Unit tests — tools, context, sessions, extensions, integrations |
+| `npm run test:security` | Security policy tests — proxy, CORS, sandbox, OAuth |
+| `npm run proxy:https` | CORS proxy helper for OAuth flows (default `https://localhost:3003`) |
+| `npm run validate` | Validate the Office add-in manifest |
 
-Experimental examples:
-- `/experimental on tmux-bridge`
-- `/experimental tmux-bridge-url https://localhost:3337`
-- `/experimental tmux-bridge-token <token>`
-- `/experimental tmux-status`
-- `/experimental tmux-bridge-url clear`
-- `/experimental tmux-bridge-token clear`
-- `/experimental on python-bridge`
-- `/experimental python-bridge-url https://localhost:3340`
-- `/experimental python-bridge-token <token>`
-- `/experimental python-bridge-url clear`
-- `/experimental python-bridge-token clear`
+### CORS proxy helper
 
-Skills/external tools quick start:
-- `/skills` → enable **Web Search** and/or **MCP Gateway**
-- Toggle **Allow external tools** (global gate, default-off)
-- Add Brave API key for `web_search`
-- Add MCP servers (URL + optional token) and use **Test** before enabling skill
+Some OAuth token endpoints are blocked by CORS inside Office webviews. If OAuth login fails:
 
-## Keyboard Shortcuts
+1. Run `npm run proxy:https` (defaults to `https://localhost:3003`)
+2. In Pi → `/settings` → **Proxy** → enable and set the URL
+3. Retry login
 
-| Shortcut | Action |
-|----------|--------|
-| `Escape` | Interrupt the current response |
-| `Shift+Tab` | Cycle thinking depth (off → low → … → max on supported models) |
-| `Ctrl+O` | Toggle collapse of thinking blocks and tool messages |
-| `/` | Open the slash command menu |
+API-key auth generally works without the proxy.
 
 ## Architecture
 
+Pi for Excel is a single-page Office taskpane add-in built with:
+
+- **[Vite](https://vite.dev/)** — dev server + production bundler
+- **[Lit](https://lit.dev/)** — web components for the sidebar UI
+- **[pi-agent-core](https://www.npmjs.com/package/@mariozechner/pi-agent-core)** — agent runtime (tool loop, streaming, state management)
+- **[pi-ai](https://www.npmjs.com/package/@mariozechner/pi-ai)** — multi-provider LLM abstraction (Anthropic, OpenAI, Google, GitHub Copilot)
+- **[pi-web-ui](https://www.npmjs.com/package/@mariozechner/pi-web-ui)** — shared web UI components (message rendering, storage, settings dialogs)
+- **[Office.js](https://learn.microsoft.com/en-us/office/dev/add-ins/)** — Excel workbook API
+
+### Source layout
+
 ```
 src/
-├── taskpane.ts              # Thin entrypoint (boot import + tool renderers + bootstrap)
-├── boot.ts                  # CSS imports + Lit compat patch install
-├── compat/                  # Runtime monkey patches / shims
-│   ├── lit-class-field-shadowing.ts
-│   └── model-selector-patch.ts
-├── taskpane/                # Taskpane wiring modules
-│   ├── bootstrap.ts         # Office.onReady + fallback, styles, global patches
-│   ├── init.ts              # Agent + sidebar wiring
-│   ├── sessions.ts          # IndexedDB session persistence
-│   ├── queue-display.ts     # Steering/follow-up queue UI
-│   ├── keyboard-shortcuts.ts
-│   ├── status-bar.ts
-│   ├── welcome-login.ts
-│   ├── default-model.ts
-│   └── context-injection.ts
-├── excel/helpers.ts         # Office.js wrappers + edge-case guards
-├── auth/                    # CORS proxy, credential restore, provider mapping
-├── tools/                   # Excel tools (read, write, search, format, comments, etc.)
-├── conventions/             # Composable cell styles, format presets, style resolver
-├── context/                 # Blueprint, selection auto-read, change tracker
-├── prompt/system-prompt.ts  # Model-agnostic system prompt builder
-├── commands/                # Slash command registry + extensions
-│   ├── types.ts             # Command registry + types
-│   ├── command-menu.ts      # Slash menu rendering
-│   ├── builtins.ts          # Public shim
-│   ├── builtins/            # Builtins split by domain (model/settings/session/export/etc.)
-│   └── extension-api.ts     # Extension API (overlay, widget, toast, events)
-├── extensions/              # Extension modules
-│   └── snake.ts             # Snake game (inline widget)
-├── ui/                      # Sidebar UI components (Lit + CSS)
-│   ├── pi-sidebar.ts
-│   ├── pi-input.ts
-│   ├── working-indicator.ts
-│   ├── tool-renderers.ts    # Render Excel tool output as markdown + collapsible sections
-│   ├── theme.css
-│   ├── provider-login.ts
-│   ├── toast.ts
-│   └── loading.ts
-└── utils/                   # small shared helpers (content/type guards/errors/format)
+├── taskpane/          # App init, session management, tab layout, context injection
+├── taskpane.html      # Entry HTML (loads Office.js + taskpane.ts)
+├── taskpane.ts        # Entry script
+├── boot.ts            # Pre-mount setup (CSS, patches)
+├── tools/             # 16 core tools + experimental tools + registry
+├── prompt/            # System prompt builder
+├── context/           # Workbook blueprint cache, selection/change tracking
+├── auth/              # OAuth providers, API proxy, credential restore
+├── models/            # Model ordering + version scoring
+├── ui/                # Sidebar component, tool renderers, theme CSS
+│   └── theme/         # Design tokens, component styles (DM Sans + teal-green palette)
+├── commands/          # Slash command registry + builtins
+├── extensions/        # Extension store, sandbox runtime, permissions
+├── integrations/      # Web Search + MCP Gateway integration catalog
+├── skills/            # Agent Skills catalog + runtime loader
+├── experiments/       # Feature flag definitions + toggle logic
+├── workbook/          # Workbook identity (hashed), session association, coordinator
+├── conventions/       # Formatting defaults (currency, negatives, dp)
+├── instructions/      # Persistent user/workbook instruction store
+├── compaction/        # Auto-compaction thresholds + logic
+├── storage/           # IndexedDB initialization
+├── files/             # Files workspace (experimental)
+├── audit/             # Workbook change audit log
+├── messages/          # Message conversion helpers
+├── debug/             # Debug mode utilities
+├── stubs/             # Browser stubs for Node-only deps (Bedrock, stream, etc.)
+├── compat/            # Compatibility patches (Lit, marked, model selector)
+└── utils/             # Shared helpers (HTML escape, type guards, errors)
+
+scripts/               # Dev helpers — CORS proxy, tmux/python bridges, manifest gen
+tests/                 # Unit + security tests (~50 test files)
+docs/                  # Design docs, install guide, deploy guide, threat model
+skills/                # Bundled Agent Skill definitions (web-search, mcp-gateway)
+public/assets/         # Add-in icons (16/32/80/128px)
 ```
 
-The agent loop runs client-side in Excel's webview (WebView2 on Windows, WKWebView on Mac). Tool calls execute locally via Office.js — no server round-trips for Excel operations.
+### Key design patterns
 
-## Development
+- **Tool registry as single source of truth** — `src/tools/registry.ts` defines all core tool names and construction. UI renderers, input humanizers, and prompt docs all derive from it.
+- **Workbook coordinator** — serializes mutating tool calls per-workbook to prevent concurrent writes from multiple session tabs.
+- **Auto-context** — the workbook blueprint, selection state, and recent changes are injected before each user message so the AI always knows what it's looking at.
+- **Execution policy** — each tool is classified as `read/none` or `mutate/content|structure` to determine locking and checkpoint behavior.
+- **Recovery checkpoints** — mutations automatically snapshot affected cells before writing, enabling one-click rollback.
+- **Extension sandbox** — untrusted extensions (inline code, remote URLs) run in an iframe sandbox by default; built-in/local modules run on the host.
 
-```bash
-# Type-check
-npx tsc --noEmit
+## Deployment
 
-# Build for production
-npx vite build
+The production build is a static site deployed to [Vercel](https://vercel.com). See [docs/deploy-vercel.md](docs/deploy-vercel.md) for maintainer setup.
 
-# Validate manifest
-npx office-addin-manifest validate manifest.xml
-```
+Users install by downloading `manifest.prod.xml` and uploading it in Excel — the manifest points to the hosted Vercel URL. Updates are automatic (close and reopen the taskpane).
 
-### CORS / proxy
+## Documentation
 
-**Dev:** the Vite dev server proxies API + OAuth calls to providers (`/api-proxy/*`, `/oauth-proxy/*`).
+| Doc | Description |
+|---|---|
+| [docs/install.md](docs/install.md) | Non-technical install guide |
+| [docs/deploy-vercel.md](docs/deploy-vercel.md) | Hosted deployment (Vercel) |
+| [docs/extensions.md](docs/extensions.md) | Extension authoring guide |
+| [docs/integrations-external-tools.md](docs/integrations-external-tools.md) | Web Search + MCP integration setup |
+| [docs/security-threat-model.md](docs/security-threat-model.md) | Security threat model |
+| [docs/compaction.md](docs/compaction.md) | Session compaction (`/compact`) |
+| [src/tools/DECISIONS.md](src/tools/DECISIONS.md) | Tool behavior decisions log |
+| [src/ui/README.md](src/ui/README.md) | UI architecture + Tailwind v4 notes |
 
-**Production:** some OAuth/token endpoints are blocked by browser CORS in Office webviews. Pi for Excel supports a **user-configurable CORS proxy**.
+## Credits
 
-For non-technical install + login troubleshooting, see: **[`docs/install.md`](./docs/install.md#oauth-logins-and-cors-helper)**.
-
-1. Start the local proxy (**recommended: HTTPS**):
-   ```bash
-   npm run proxy:https
-   ```
-   (defaults to `https://localhost:3003`)
-
-   **Security:** the proxy only accepts browser requests from Pi for Excel origins by default:
-   - `https://localhost:3000` (dev)
-   - `https://pi-for-excel.vercel.app` (hosted)
-
-   If you host the add-in on a different origin, set `ALLOWED_ORIGINS` (comma-separated):
-   ```bash
-   ALLOWED_ORIGINS="https://my-addin.example.com" npm run proxy:https
-   ```
-
-   By default, the proxy applies SSRF guardrails:
-   - blocks **loopback** target URLs: `localhost`, `127.0.0.1`, `::1`
-   - blocks **private/link-local** target URLs: `10/8`, `172.16/12`, `192.168/16`, `169.254/16`, `fc00::/7`, `fe80::/10`
-   - allows outbound hosts only from a built-in allowlist (Anthropic/OpenAI/GitHub/Google/Z-AI endpoints used by Pi for Excel)
-   - allows GitHub Enterprise OAuth/Copilot endpoint paths on custom domains for compatibility (`/login/device/code`, `/login/oauth/access_token`, `/copilot_internal/*`)
-
-   Override knobs:
-   ```bash
-   # Allow loopback targets (legacy local-service behavior)
-   ALLOW_LOOPBACK_TARGETS=1 npm run proxy:https
-
-   # Allow private/local targets broadly
-   ALLOW_PRIVATE_TARGETS=1 npm run proxy:https
-
-   # Replace default host allowlist (exact host match, comma-separated).
-   # When set, only these hosts are allowed (including any GitHub Enterprise hosts).
-   ALLOWED_TARGET_HOSTS="api.openai.com,oauth2.googleapis.com" npm run proxy:https
-
-   # Disable host allowlist entirely (not recommended)
-   ALLOW_ALL_TARGET_HOSTS=1 npm run proxy:https
-
-   # Fail closed when DNS lookup fails
-   STRICT_TARGET_RESOLUTION=1 npm run proxy:https
-   ```
-
-   If port 3003 is taken, pick another port:
-   ```bash
-   PORT=3005 npm run proxy:https
-   ```
-2. In Excel, run `/settings` → **Proxy** tab → enable **Use CORS Proxy** → set Proxy URL (e.g. `https://localhost:3003`).
-
-**macOS note:** the taskpane runs on **HTTPS**. WKWebView often blocks calling an **HTTP** proxy from an HTTPS add-in (mixed content). Use `npm run proxy:https` and a proxy URL like `https://localhost:<port>`.
-
-Also: our mkcert cert is for `localhost` by default — `https://127.0.0.1:<port>` will fail unless you generate a cert that includes `127.0.0.1`.
-
-API-key based providers often work without a proxy; OAuth-based logins typically require one.
-
-Proxy rejections return reason codes in plaintext (e.g. `blocked_target_loopback`, `blocked_target_private_ip`, `blocked_target_not_allowlisted`).
-
-### Experimental tmux bridge (local helper)
-
-Start the local bridge:
-
-```bash
-# Stub mode (safe default, no real shell execution)
-npm run tmux:bridge:https
-
-# Real tmux mode
-TMUX_BRIDGE_MODE=tmux npm run tmux:bridge:https
-```
-
-Then enable and configure in the add-in:
-
-```bash
-/experimental on tmux-bridge
-/experimental tmux-bridge-url https://localhost:3337
-# optional, if bridge requires bearer auth
-/experimental tmux-bridge-token <token>
-# diagnostics
-/experimental tmux-status
-```
-
-Bridge endpoints:
-- `GET /health`
-- `POST /v1/tmux`
-
-See full request/response contract: [`docs/tmux-bridge-contract.md`](./docs/tmux-bridge-contract.md)
-
-### Experimental Python / LibreOffice bridge (local helper)
-
-Start the local bridge:
-
-```bash
-# Stub mode (safe default; deterministic fake responses)
-npm run python:bridge:https
-
-# Real local execution mode (runs local python/libreoffice binaries)
-PYTHON_BRIDGE_MODE=real npm run python:bridge:https
-```
-
-Then enable and configure in the add-in:
-
-```bash
-/experimental on python-bridge
-/experimental python-bridge-url https://localhost:3340
-# optional, if bridge requires bearer auth
-/experimental python-bridge-token <token>
-```
-
-You can also do this in **/extensions → Local Python / LibreOffice bridge** with one click (`Enable + save URL`).
-
-Bridge endpoints:
-- `GET /health`
-- `POST /v1/python-run`
-- `POST /v1/libreoffice-convert`
-
-Bridge-backed tools:
-- `python_run`
-- `libreoffice_convert`
-- `python_transform_range` (read range → run Python → write output)
-
-For safety, the first Python/LibreOffice bridge execution for a given bridge URL requires user confirmation.
-
-See full request/response contract: [`docs/python-bridge-contract.md`](./docs/python-bridge-contract.md)
-
-### Extension loading safety
-
-`loadExtension()` blocks remote `http(s)` module URLs by default.
-
-- Allowed by default: local module specifiers (`./`, `../`, `/`), blob URLs (used by pasted-code installs), and inline function activators
-- Blocked by default: remote extension URLs
-- Local specifiers must resolve to bundled extension modules (currently `src/extensions/*.{ts,js}`)
-- Temporary unsafe opt-in for local experiments:
-
-```bash
-/experimental on remote-extension-urls
-```
-
-  (Equivalent low-level toggle: `localStorage.setItem("pi.allowRemoteExtensionUrls", "1")`)
-
-See also: [`docs/extensions.md`](./docs/extensions.md).
-
-## Roadmap
-
-### Shipped in v0.1.0
-- [x] 13 Excel tools (read, write, search, format, trace, structure)
-- [x] Auto-context injection (workbook blueprint, selection auto-read, change tracking)
-- [x] Multi-provider auth (OAuth + API keys for Anthropic, OpenAI, Google, GitHub Copilot, Antigravity)
-- [x] Persistent sessions with auto-save and `/resume`
-- [x] Write verification (auto-reads back, checks for errors)
-- [x] Custom sidebar UI (Lit components, light theme, frosted glass)
-- [x] Slash command system with fuzzy search
-- [x] Extension system with widget API
-- [x] Keyboard shortcuts (Escape, Shift+Tab, Ctrl+O)
-- [x] Maintainability refactor — modularized taskpane + slash command builtins
-
-### Shipped in v0.2.0-pre
-- [x] Tool consolidation: 14 → 10 tools — one tool per distinct verb, no overlap ([#14](https://github.com/tmustier/pi-for-excel/issues/14) §A, §6)
-- [x] `view_settings` tool — gridlines, headings, freeze panes, tab color
-- [x] `read_range` gains `mode: "csv"` (absorbs `get_range_as_csv`)
-- [x] `get_workbook_overview` gains `sheet` param for sheet-level detail (absorbs `get_all_objects`, closes [#8](https://github.com/tmustier/pi-for-excel/issues/8))
-- [x] `search_workbook` gains `context_rows` for surrounding data (closes [#7](https://github.com/tmustier/pi-for-excel/issues/7))
-- [x] Compact collapsible tool cards with action verbs + markdown rendering
-- [x] Consecutive same-tool grouping with expand/collapse
-- [x] Full ESLint upgrade — type-aware `recommendedTypeChecked` preset, 0 errors/warnings
-- [x] Architecture: modularized taskpane into 8 focused modules, builtins split by domain
-
-### Shipped in v0.3.0-pre
-- [x] Composable cell styles — 6 format presets + 5 structural styles, CSS-like composition ([#1](https://github.com/tmustier/pi-for-excel/issues/1))
-- [x] `comments` tool — read, add, update, reply, delete, resolve/reopen cell comments ([#2](https://github.com/tmustier/pi-for-excel/issues/2))
-- [x] `read_range` detailed mode surfaces comments within range
-- [x] `format_cells` gains `style`, `number_format_dp`, `currency_symbol`, `border_color`, individual border edges
-- [x] Markdown rendering in tool output cards ([#15](https://github.com/tmustier/pi-for-excel/issues/15))
-- [x] Clickable cell references — navigate to range with highlight glow ([#6](https://github.com/tmustier/pi-for-excel/issues/6) partial)
-- [x] Revised welcome copy + expandable hint prompts ([#11](https://github.com/tmustier/pi-for-excel/issues/11))
-- [x] Humanized tool card inputs/outputs (color names, format labels)
-- [x] Blueprint invalidation after structural changes
-- [x] UI polish: queue layout, thinking/tool card styling, case-insensitive model search
-- [x] Experimental tmux bridge: `/experimental` feature flags + local helper + gated `tmux` tool ([#3](https://github.com/tmustier/pi-for-excel/issues/3))
-- [x] Experimental Python / LibreOffice bridge: gated `python_run` + `libreoffice_convert` + `python_transform_range`, local helper, first-run approval per bridge URL, and `/experimental python-bridge-*` config ([#25](https://github.com/tmustier/pi-for-excel/issues/25))
-
-### Up next
-- [ ] New tools: charts, tables, data validation ([#18](https://github.com/tmustier/pi-for-excel/issues/18))
-- [ ] Progressive disclosure ([#18](https://github.com/tmustier/pi-for-excel/issues/18)) — on-demand tool injection as tool count grows
-- [ ] Conventions Phase 2 ([#1](https://github.com/tmustier/pi-for-excel/issues/1)) — user-configurable via settings UI, workbook-scoped
-- [ ] Native Excel styles vs. custom style system ([#19](https://github.com/tmustier/pi-for-excel/issues/19))
-- [ ] Auto-compaction ([#20](https://github.com/tmustier/pi-for-excel/issues/20)) — context window budget management for long conversations
-- [ ] Change approval UI ([#6](https://github.com/tmustier/pi-for-excel/issues/6)) — structured approval flow for overwrites
-- [ ] Header bar UX ([#12](https://github.com/tmustier/pi-for-excel/issues/12)) — session switcher, workbook indicator
-- [ ] Extension platform follow-ups ([#13](https://github.com/tmustier/pi-for-excel/issues/13)) — sandbox/permissions, widget API evolution, docs polish
-
-### Future
-- [ ] Production CORS solution ([#4](https://github.com/tmustier/pi-for-excel/issues/4)) — service worker or hosted relay
-- [ ] Distribution: non-technical install ([#16](https://github.com/tmustier/pi-for-excel/issues/16)) — hosted build + production manifest
-- [ ] Python code execution via Pyodide
-- [ ] SpreadsheetBench evaluation (target >43%)
-- [ ] Per-workbook instructions (like AGENTS.md)
-- [ ] On-demand tier 2 tools: named ranges, protection, page layout, images, hyperlinks
-- [ ] Pivot tables and slicers
-- [ ] Pi TUI ↔ Excel session import/export
-
-## Prior Art & Credits
-
-- [Pi](https://pi.dev) by [@badlogic](https://github.com/badlogic) (Mario Zechner) — the agent framework powering this project (source: https://github.com/badlogic/pi-mono). Pi for Excel uses pi-agent-core, pi-ai, and pi-web-ui for the agent loop, LLM abstraction, and session storage.
+- [Pi](https://github.com/badlogic/pi-mono) by [@badlogic](https://github.com/badlogic) (Mario Zechner) — the agent framework powering this project. Pi for Excel uses pi-agent-core, pi-ai, and pi-web-ui for the agent loop, LLM abstraction, and session storage.
 - [whimsical.ts](https://github.com/mitsuhiko/agent-stuff/blob/main/pi-extensions/whimsical.ts) by [@mitsuhiko](https://github.com/mitsuhiko) (Armin Ronacher) — the rotating "Working…" messages are adapted from his Pi extension, rewritten for a spreadsheet/finance audience.
-- [Microsoft Copilot Agent Mode](https://techcommunity.microsoft.com/) — JS code gen + reflection, 57.2% SpreadsheetBench
-- [Univer](https://univer.ai) — Canvas-based spreadsheet runtime, 68.86% SpreadsheetBench (different architecture)
 
 ## License
 
-MIT
+[MIT](LICENSE) © Thomas Mustier
