@@ -130,7 +130,7 @@ function confirmExtensionInstall(args: {
 function createSectionTitle(text: string): HTMLHeadingElement {
   const title = document.createElement("h3");
   title.textContent = text;
-  title.style.cssText = "font-size: 13px; margin: 0; font-weight: 600;";
+  title.className = "pi-overlay-section-title";
   return title;
 }
 
@@ -138,9 +138,7 @@ function createButton(text: string): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = text;
-  button.style.cssText =
-    "padding: 6px 10px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08); "
-    + "background: oklch(0 0 0 / 0.02); cursor: pointer; font-size: 12px;";
+  button.className = "pi-overlay-btn pi-overlay-btn--ghost";
   return button;
 }
 
@@ -148,24 +146,14 @@ function createInput(placeholder: string): HTMLInputElement {
   const input = document.createElement("input");
   input.type = "text";
   input.placeholder = placeholder;
-  input.style.cssText =
-    "width: 100%; padding: 7px 9px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.12); "
-    + "font-size: 12px; font-family: var(--font-sans); background: white;";
+  input.className = "pi-overlay-input";
   return input;
 }
 
 function createBadge(text: string, color: "ok" | "warn" | "muted"): HTMLSpanElement {
   const badge = document.createElement("span");
   badge.textContent = text;
-  const palette =
-    color === "ok"
-      ? "background: oklch(0.58 0.14 160 / 0.12); color: oklch(0.42 0.1 160); border-color: oklch(0.58 0.14 160 / 0.4);"
-      : color === "warn"
-        ? "background: oklch(0.67 0.17 35 / 0.12); color: oklch(0.5 0.12 35); border-color: oklch(0.67 0.17 35 / 0.35);"
-        : "background: oklch(0 0 0 / 0.03); color: var(--muted-foreground); border-color: oklch(0 0 0 / 0.08);";
-
-  badge.style.cssText =
-    `font-size: 10px; padding: 2px 6px; border-radius: 999px; border: 1px solid; ${palette}`;
+  badge.className = `pi-overlay-badge pi-overlay-badge--${color}`;
   return badge;
 }
 
@@ -173,10 +161,7 @@ function createReadOnlyCodeBlock(text: string): HTMLTextAreaElement {
   const area = document.createElement("textarea");
   area.readOnly = true;
   area.value = text;
-  area.style.cssText =
-    "width: 100%; min-height: 84px; resize: vertical; border-radius: 8px; "
-    + "border: 1px solid oklch(0 0 0 / 0.1); padding: 8px; font-size: 11px; "
-    + "font-family: var(--font-mono); background: oklch(0 0 0 / 0.02);";
+  area.className = "pi-overlay-code";
   return area;
 }
 
@@ -226,24 +211,21 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
   overlay.className = "pi-welcome-overlay";
 
   const card = document.createElement("div");
-  card.className = "pi-welcome-card";
-  card.style.cssText =
-    "text-align: left; width: min(760px, 92vw); max-height: 88vh; overflow: hidden; "
-    + "display: flex; flex-direction: column; gap: 12px;";
+  card.className = "pi-welcome-card pi-overlay-card pi-ext-card";
 
   const header = document.createElement("div");
-  header.style.cssText = "display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;";
+  header.className = "pi-overlay-header";
 
   const titleWrap = document.createElement("div");
-  titleWrap.style.cssText = "display: flex; flex-direction: column; gap: 4px;";
+  titleWrap.className = "pi-overlay-title-wrap";
 
   const title = document.createElement("h2");
   title.textContent = "Extensions Manager";
-  title.style.cssText = "font-size: 16px; font-weight: 600; margin: 0;";
+  title.className = "pi-overlay-title";
 
   const subtitle = document.createElement("p");
   subtitle.textContent = "Extensions can read/write workbook data. Only enable code you trust.";
-  subtitle.style.cssText = "margin: 0; font-size: 11px; color: var(--muted-foreground);";
+  subtitle.className = "pi-overlay-subtitle";
 
   titleWrap.append(title, subtitle);
 
@@ -259,38 +241,36 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
   header.append(titleWrap, closeButton);
 
   const body = document.createElement("div");
-  body.style.cssText = "overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px;";
+  body.className = "pi-overlay-body";
 
   const installedSection = document.createElement("section");
-  installedSection.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
+  installedSection.className = "pi-overlay-section";
   installedSection.appendChild(createSectionTitle("Installed"));
 
   const installedList = document.createElement("div");
-  installedList.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
+  installedList.className = "pi-overlay-list";
   installedSection.appendChild(installedList);
 
   const localBridgeSection = document.createElement("section");
-  localBridgeSection.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
+  localBridgeSection.className = "pi-overlay-section";
   localBridgeSection.appendChild(createSectionTitle("Local Python / LibreOffice bridge (experimental)"));
 
   const localBridgeCard = document.createElement("div");
-  localBridgeCard.style.cssText =
-    "display: flex; flex-direction: column; gap: 8px; border: 1px solid oklch(0 0 0 / 0.08); "
-    + "background: oklch(0 0 0 / 0.015); border-radius: 10px; padding: 9px;";
+  localBridgeCard.className = "pi-overlay-surface pi-ext-local-bridge-card";
 
   const localBridgeStatusRow = document.createElement("div");
-  localBridgeStatusRow.style.cssText = "display: flex; justify-content: space-between; align-items: center; gap: 10px;";
+  localBridgeStatusRow.className = "pi-ext-local-bridge-status-row";
 
   const localBridgeStatusText = document.createElement("div");
-  localBridgeStatusText.style.cssText = "font-size: 12px; color: var(--muted-foreground);";
+  localBridgeStatusText.className = "pi-ext-local-bridge-status-text";
 
   const localBridgeStatusBadgeSlot = document.createElement("div");
-  localBridgeStatusBadgeSlot.style.cssText = "display: flex; align-items: center;";
+  localBridgeStatusBadgeSlot.className = "pi-ext-local-bridge-status-badge";
 
   localBridgeStatusRow.append(localBridgeStatusText, localBridgeStatusBadgeSlot);
 
   const localBridgeUrlRow = document.createElement("div");
-  localBridgeUrlRow.style.cssText = "display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center;";
+  localBridgeUrlRow.className = "pi-ext-local-bridge-url-row";
 
   const localBridgeUrlInput = createInput("https://localhost:3340");
   const localBridgeEnableButton = createButton("Enable + save URL");
@@ -307,17 +287,17 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
   const localBridgeHint = document.createElement("p");
   localBridgeHint.textContent =
     "One-step setup from this menu: enable python-bridge + save URL (same as two /experimental commands).";
-  localBridgeHint.style.cssText = "margin: 0; font-size: 11px; color: var(--muted-foreground);";
+  localBridgeHint.className = "pi-overlay-hint";
 
   localBridgeCard.append(localBridgeStatusRow, localBridgeUrlRow, localBridgeHint);
   localBridgeSection.appendChild(localBridgeCard);
 
   const installUrlSection = document.createElement("section");
-  installUrlSection.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
+  installUrlSection.className = "pi-overlay-section";
   installUrlSection.appendChild(createSectionTitle("Install from URL"));
 
   const installUrlRow = document.createElement("div");
-  installUrlRow.style.cssText = "display: grid; grid-template-columns: 160px 1fr auto; gap: 8px; align-items: center;";
+  installUrlRow.className = "pi-ext-install-url-row";
 
   const installUrlName = createInput("Name");
   const installUrlInput = createInput("https://example.com/pi-extension.js");
@@ -327,36 +307,33 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
 
   const installUrlHint = document.createElement("p");
   installUrlHint.textContent = "Remote URLs require /experimental on remote-extension-urls.";
-  installUrlHint.style.cssText = "margin: 0; font-size: 11px; color: var(--muted-foreground);";
+  installUrlHint.className = "pi-overlay-hint";
 
   installUrlSection.append(installUrlRow, installUrlHint);
 
   const installCodeSection = document.createElement("section");
-  installCodeSection.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
+  installCodeSection.className = "pi-overlay-section";
   installCodeSection.appendChild(createSectionTitle("Install from pasted code"));
 
   const installCodeName = createInput("Name");
   const installCodeText = document.createElement("textarea");
   installCodeText.placeholder = "export function activate(api) { ... }";
-  installCodeText.style.cssText =
-    "width: 100%; min-height: 120px; resize: vertical; border-radius: 8px; "
-    + "border: 1px solid oklch(0 0 0 / 0.12); padding: 8px; font-size: 12px; "
-    + "font-family: var(--font-mono); background: white;";
+  installCodeText.className = "pi-ext-install-code";
 
   const installCodeActions = document.createElement("div");
-  installCodeActions.style.cssText = "display: flex; justify-content: flex-end;";
+  installCodeActions.className = "pi-overlay-actions";
   const installCodeButton = createButton("Install code");
   installCodeActions.appendChild(installCodeButton);
 
   installCodeSection.append(installCodeName, installCodeText, installCodeActions);
 
   const templateSection = document.createElement("section");
-  templateSection.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
+  templateSection.className = "pi-overlay-section";
   templateSection.appendChild(createSectionTitle("LLM prompt template"));
 
   const templateCode = createReadOnlyCodeBlock(EXTENSION_PROMPT_TEMPLATE);
   const templateActions = document.createElement("div");
-  templateActions.style.cssText = "display: flex; justify-content: flex-end;";
+  templateActions.className = "pi-overlay-actions";
   const copyTemplateButton = createButton("Copy template");
   templateActions.appendChild(copyTemplateButton);
 
@@ -409,33 +386,29 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
 
   const createInstalledRow = (status: ExtensionRuntimeStatus): HTMLDivElement => {
     const row = document.createElement("div");
-    row.style.cssText =
-      "display: flex; flex-direction: column; gap: 8px; border: 1px solid oklch(0 0 0 / 0.08); "
-      + "background: oklch(0 0 0 / 0.015); border-radius: 10px; padding: 9px;";
+    row.className = "pi-overlay-surface pi-ext-installed-row";
 
     const allCapabilities = listAllExtensionCapabilities();
     const grantedCapabilities = new Set(status.grantedCapabilities);
 
     const top = document.createElement("div");
-    top.style.cssText = "display: flex; justify-content: space-between; gap: 10px; align-items: flex-start;";
+    top.className = "pi-ext-installed-row__top";
 
     const info = document.createElement("div");
-    info.style.cssText = "display: flex; flex-direction: column; gap: 4px; min-width: 0;";
+    info.className = "pi-ext-installed-row__info";
 
     const name = document.createElement("strong");
     name.textContent = status.name;
-    name.style.cssText = "font-size: 13px;";
+    name.className = "pi-ext-installed-row__name";
 
     const source = document.createElement("code");
     source.textContent = status.sourceLabel;
-    source.style.cssText =
-      "font-size: 10px; color: var(--muted-foreground); font-family: var(--font-mono); "
-      + "white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; max-width: 430px;";
+    source.className = "pi-ext-installed-row__source";
 
     info.append(name, source);
 
     const badges = document.createElement("div");
-    badges.style.cssText = "display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;";
+    badges.className = "pi-overlay-badges";
 
     if (!status.enabled) {
       badges.appendChild(createBadge("disabled", "muted"));
@@ -471,19 +444,19 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     top.append(info, badges);
 
     const details = document.createElement("div");
-    details.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
+    details.className = "pi-ext-installed-row__details";
 
     if (status.commandNames.length > 0) {
       const commands = document.createElement("div");
       commands.textContent = `Commands: ${status.commandNames.map((name) => `/${name}`).join(", ")}`;
-      commands.style.cssText = "font-size: 11px; color: var(--muted-foreground);";
+      commands.className = "pi-ext-installed-row__line";
       details.appendChild(commands);
     }
 
     if (status.toolNames.length > 0) {
       const tools = document.createElement("div");
       tools.textContent = `Tools: ${status.toolNames.join(", ")}`;
-      tools.style.cssText = "font-size: 11px; color: var(--muted-foreground);";
+      tools.className = "pi-ext-installed-row__line";
       details.appendChild(tools);
     }
 
@@ -493,26 +466,22 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     } else {
       permissions.textContent = "Permissions: all capabilities active (extension-permissions experiment is off)";
     }
-    permissions.style.cssText = "font-size: 11px; color: var(--muted-foreground);";
+    permissions.className = "pi-ext-installed-row__line";
     details.appendChild(permissions);
 
     if (!status.permissionsEnforced) {
       const configuredPermissions = document.createElement("div");
       configuredPermissions.textContent = `Configured (inactive): ${formatCapabilityList(status.grantedCapabilities)}`;
-      configuredPermissions.style.cssText = "font-size: 11px; color: var(--muted-foreground);";
+      configuredPermissions.className = "pi-ext-installed-row__line";
       details.appendChild(configuredPermissions);
     }
 
     const permissionsEditor = document.createElement("div");
-    permissionsEditor.style.cssText =
-      "display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); "
-      + "gap: 5px 10px; margin-top: 4px;";
+    permissionsEditor.className = "pi-ext-installed-row__permissions-editor";
 
     for (const capability of allCapabilities) {
       const toggleLabel = document.createElement("label");
-      toggleLabel.style.cssText =
-        "display: inline-flex; align-items: center; gap: 6px; font-size: 11px; "
-        + "color: var(--muted-foreground); user-select: none;";
+      toggleLabel.className = "pi-ext-installed-row__perm-toggle";
 
       const toggle = document.createElement("input");
       toggle.type = "checkbox";
@@ -526,7 +495,7 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
       if (riskLabel) {
         const risk = document.createElement("span");
         risk.textContent = `(${riskLabel})`;
-        risk.style.cssText = "font-size: 10px; color: oklch(0.52 0.13 35);";
+        risk.className = "pi-ext-installed-row__risk";
         toggleText.append(" ", risk);
       }
 
@@ -571,12 +540,12 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     if (status.lastError) {
       const errorLine = document.createElement("div");
       errorLine.textContent = `Last error: ${status.lastError}`;
-      errorLine.style.cssText = "font-size: 11px; color: oklch(0.52 0.13 35);";
+      errorLine.className = "pi-ext-installed-row__error";
       details.appendChild(errorLine);
     }
 
     const actions = document.createElement("div");
-    actions.style.cssText = "display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap;";
+    actions.className = "pi-overlay-actions pi-overlay-actions--wrap";
 
     const toggleButton = createButton(status.enabled ? "Disable" : "Enable");
     toggleButton.addEventListener("click", () => {
@@ -623,7 +592,7 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     if (statuses.length === 0) {
       const empty = document.createElement("div");
       empty.textContent = "No extensions installed.";
-      empty.style.cssText = "font-size: 12px; color: var(--muted-foreground);";
+      empty.className = "pi-overlay-empty";
       installedList.appendChild(empty);
       return;
     }

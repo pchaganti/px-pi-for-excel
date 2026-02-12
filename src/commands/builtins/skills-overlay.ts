@@ -74,9 +74,7 @@ function createButton(text: string): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = text;
-  button.style.cssText =
-    "padding: 6px 10px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08); "
-    + "background: oklch(0 0 0 / 0.02); cursor: pointer; font-size: 12px;";
+  button.className = "pi-overlay-btn pi-overlay-btn--ghost";
   return button;
 }
 
@@ -84,31 +82,21 @@ function createInput(placeholder: string, type: "text" | "password" = "text"): H
   const input = document.createElement("input");
   input.type = type;
   input.placeholder = placeholder;
-  input.style.cssText =
-    "width: 100%; padding: 7px 9px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.12); "
-    + "font-size: 12px; font-family: var(--font-sans); background: white;";
+  input.className = "pi-overlay-input";
   return input;
 }
 
 function createSectionTitle(text: string): HTMLHeadingElement {
   const title = document.createElement("h3");
   title.textContent = text;
-  title.style.cssText = "font-size: 13px; margin: 0; font-weight: 600;";
+  title.className = "pi-overlay-section-title";
   return title;
 }
 
 function createBadge(text: string, tone: "ok" | "warn" | "muted"): HTMLSpanElement {
   const badge = document.createElement("span");
   badge.textContent = text;
-  const palette =
-    tone === "ok"
-      ? "background: oklch(0.58 0.14 160 / 0.12); color: oklch(0.42 0.1 160); border-color: oklch(0.58 0.14 160 / 0.4);"
-      : tone === "warn"
-        ? "background: oklch(0.67 0.17 35 / 0.12); color: oklch(0.5 0.12 35); border-color: oklch(0.67 0.17 35 / 0.35);"
-        : "background: oklch(0 0 0 / 0.03); color: var(--muted-foreground); border-color: oklch(0 0 0 / 0.08);";
-
-  badge.style.cssText =
-    `font-size: 10px; padding: 2px 6px; border-radius: 999px; border: 1px solid; ${palette}`;
+  badge.className = `pi-overlay-badge pi-overlay-badge--${tone}`;
   return badge;
 }
 
@@ -305,28 +293,26 @@ function createSkillCard(args: {
   const { skill, snapshot } = args;
 
   const card = document.createElement("div");
-  card.style.cssText =
-    "display: flex; flex-direction: column; gap: 7px; border: 1px solid oklch(0 0 0 / 0.08); "
-    + "background: oklch(0 0 0 / 0.015); border-radius: 10px; padding: 9px;";
+  card.className = "pi-overlay-surface pi-skills-card";
 
   const top = document.createElement("div");
-  top.style.cssText = "display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;";
+  top.className = "pi-skills-card__top";
 
   const textWrap = document.createElement("div");
-  textWrap.style.cssText = "display: flex; flex-direction: column; gap: 3px;";
+  textWrap.className = "pi-skills-card__text-wrap";
 
   const title = document.createElement("strong");
   title.textContent = skill.title;
-  title.style.cssText = "font-size: 13px;";
+  title.className = "pi-skills-card__title";
 
   const description = document.createElement("span");
   description.textContent = skill.description;
-  description.style.cssText = "font-size: 11px; color: var(--muted-foreground);";
+  description.className = "pi-skills-card__description";
 
   textWrap.append(title, description);
 
   const badges = document.createElement("div");
-  badges.style.cssText = "display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;";
+  badges.className = "pi-overlay-badges";
 
   if (isEnabledInList(snapshot.activeSkillIds, skill.id) && snapshot.externalToolsEnabled) {
     badges.appendChild(createBadge("active", "ok"));
@@ -339,15 +325,15 @@ function createSkillCard(args: {
   top.append(textWrap, badges);
 
   const warning = document.createElement("div");
-  warning.style.cssText = "font-size: 11px; color: oklch(0.55 0.12 35);";
+  warning.className = "pi-skills-card__warning";
   warning.textContent = skill.warning ?? "";
-  warning.style.display = skill.warning ? "block" : "none";
+  warning.hidden = !skill.warning;
 
   const toggles = document.createElement("div");
-  toggles.style.cssText = "display: flex; gap: 14px; flex-wrap: wrap;";
+  toggles.className = "pi-skills-card__toggles";
 
   const sessionLabel = document.createElement("label");
-  sessionLabel.style.cssText = "display: inline-flex; align-items: center; gap: 6px; font-size: 12px;";
+  sessionLabel.className = "pi-skills-card__toggle-label";
 
   const sessionToggle = document.createElement("input");
   sessionToggle.type = "checkbox";
@@ -358,7 +344,7 @@ function createSkillCard(args: {
   sessionLabel.append(sessionToggle, document.createTextNode("Enable for this session"));
 
   const workbookLabel = document.createElement("label");
-  workbookLabel.style.cssText = "display: inline-flex; align-items: center; gap: 6px; font-size: 12px;";
+  workbookLabel.className = "pi-skills-card__toggle-label";
 
   const workbookToggle = document.createElement("input");
   workbookToggle.type = "checkbox";
@@ -392,24 +378,21 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   overlay.className = "pi-welcome-overlay";
 
   const card = document.createElement("div");
-  card.className = "pi-welcome-card";
-  card.style.cssText =
-    "text-align: left; width: min(760px, 92vw); max-height: 88vh; overflow: hidden; "
-    + "display: flex; flex-direction: column; gap: 12px;";
+  card.className = "pi-welcome-card pi-overlay-card pi-skills-dialog";
 
   const header = document.createElement("div");
-  header.style.cssText = "display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;";
+  header.className = "pi-overlay-header";
 
   const titleWrap = document.createElement("div");
-  titleWrap.style.cssText = "display: flex; flex-direction: column; gap: 4px;";
+  titleWrap.className = "pi-overlay-title-wrap";
 
   const title = document.createElement("h2");
   title.textContent = "Skills";
-  title.style.cssText = "font-size: 16px; font-weight: 600; margin: 0;";
+  title.className = "pi-overlay-title";
 
   const subtitle = document.createElement("p");
   subtitle.textContent = "Skills can inject instructions and external tools. Keep external access opt-in.";
-  subtitle.style.cssText = "margin: 0; font-size: 11px; color: var(--muted-foreground);";
+  subtitle.className = "pi-overlay-subtitle";
 
   titleWrap.append(title, subtitle);
 
@@ -421,19 +404,17 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   header.append(titleWrap, closeButton);
 
   const body = document.createElement("div");
-  body.style.cssText = "overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px;";
+  body.className = "pi-overlay-body";
 
   const externalSection = document.createElement("section");
-  externalSection.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
+  externalSection.className = "pi-overlay-section";
   externalSection.appendChild(createSectionTitle("External tools gate"));
 
   const externalCard = document.createElement("div");
-  externalCard.style.cssText =
-    "display: flex; flex-direction: column; gap: 8px; border: 1px solid oklch(0 0 0 / 0.08); "
-    + "background: oklch(0 0 0 / 0.015); border-radius: 10px; padding: 9px;";
+  externalCard.className = "pi-overlay-surface";
 
   const externalToggleLabel = document.createElement("label");
-  externalToggleLabel.style.cssText = "display: flex; align-items: center; gap: 8px; font-size: 12px;";
+  externalToggleLabel.className = "pi-skills-toggle-label";
 
   const externalToggle = document.createElement("input");
   externalToggle.type = "checkbox";
@@ -444,33 +425,31 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   externalToggleLabel.append(externalToggle, externalToggleText);
 
   const activeSummary = document.createElement("div");
-  activeSummary.style.cssText = "font-size: 11px; color: var(--muted-foreground);";
+  activeSummary.className = "pi-skills-active-summary";
 
   externalCard.append(externalToggleLabel, activeSummary);
   externalSection.appendChild(externalCard);
 
   const skillsSection = document.createElement("section");
-  skillsSection.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
+  skillsSection.className = "pi-overlay-section";
   skillsSection.appendChild(createSectionTitle("Skill bundles"));
 
   const skillsList = document.createElement("div");
-  skillsList.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
+  skillsList.className = "pi-overlay-list";
   skillsSection.appendChild(skillsList);
 
   const webSearchSection = document.createElement("section");
-  webSearchSection.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
+  webSearchSection.className = "pi-overlay-section";
   webSearchSection.appendChild(createSectionTitle("Web search config"));
 
   const webSearchCard = document.createElement("div");
-  webSearchCard.style.cssText =
-    "display: flex; flex-direction: column; gap: 8px; border: 1px solid oklch(0 0 0 / 0.08); "
-    + "background: oklch(0 0 0 / 0.015); border-radius: 10px; padding: 9px;";
+  webSearchCard.className = "pi-overlay-surface";
 
   const webSearchStatus = document.createElement("div");
-  webSearchStatus.style.cssText = "font-size: 12px; color: var(--muted-foreground);";
+  webSearchStatus.className = "pi-skills-web-search-status";
 
   const webSearchInputRow = document.createElement("div");
-  webSearchInputRow.style.cssText = "display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center;";
+  webSearchInputRow.className = "pi-skills-web-search-row";
 
   const webSearchApiKeyInput = createInput("Brave API key", "password");
   const webSearchSaveButton = createButton("Save key");
@@ -479,37 +458,35 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   webSearchInputRow.append(webSearchApiKeyInput, webSearchSaveButton, webSearchClearButton);
 
   const webSearchHint = document.createElement("p");
-  webSearchHint.style.cssText = "margin: 0; font-size: 11px; color: var(--muted-foreground);";
+  webSearchHint.className = "pi-overlay-hint";
   webSearchHint.textContent = "Used by the web_search tool. Queries may be routed through your configured proxy.";
 
   webSearchCard.append(webSearchStatus, webSearchInputRow, webSearchHint);
   webSearchSection.appendChild(webSearchCard);
 
   const mcpSection = document.createElement("section");
-  mcpSection.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
+  mcpSection.className = "pi-overlay-section";
   mcpSection.appendChild(createSectionTitle("MCP servers"));
 
   const mcpList = document.createElement("div");
-  mcpList.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
+  mcpList.className = "pi-overlay-list";
 
   const mcpAddCard = document.createElement("div");
-  mcpAddCard.style.cssText =
-    "display: flex; flex-direction: column; gap: 8px; border: 1px solid oklch(0 0 0 / 0.08); "
-    + "background: oklch(0 0 0 / 0.015); border-radius: 10px; padding: 9px;";
+  mcpAddCard.className = "pi-overlay-surface";
 
   const mcpAddTitle = document.createElement("div");
   mcpAddTitle.textContent = "Add server";
-  mcpAddTitle.style.cssText = "font-size: 12px; font-weight: 600;";
+  mcpAddTitle.className = "pi-skills-mcp-add-title";
 
   const mcpAddRow = document.createElement("div");
-  mcpAddRow.style.cssText = "display: grid; grid-template-columns: 150px 1fr 150px auto auto; gap: 8px; align-items: center;";
+  mcpAddRow.className = "pi-skills-mcp-add-row";
 
   const mcpNameInput = createInput("Name");
   const mcpUrlInput = createInput("https://example.com/mcp");
   const mcpTokenInput = createInput("Bearer token (optional)", "password");
 
   const mcpEnabledLabel = document.createElement("label");
-  mcpEnabledLabel.style.cssText = "display: inline-flex; align-items: center; gap: 6px; font-size: 12px;";
+  mcpEnabledLabel.className = "pi-skills-toggle-label";
   const mcpEnabledInput = document.createElement("input");
   mcpEnabledInput.type = "checkbox";
   mcpEnabledInput.checked = true;
@@ -520,7 +497,7 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   mcpAddRow.append(mcpNameInput, mcpUrlInput, mcpTokenInput, mcpEnabledLabel, mcpAddButton);
 
   const mcpHint = document.createElement("p");
-  mcpHint.style.cssText = "margin: 0; font-size: 11px; color: var(--muted-foreground);";
+  mcpHint.className = "pi-overlay-hint";
   mcpHint.textContent = "Server URL, optional bearer token, and one-click connection test.";
 
   mcpAddCard.append(mcpAddTitle, mcpAddRow, mcpHint);
@@ -578,30 +555,26 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
 
   const renderMcpServerRow = (server: McpServerConfig): HTMLElement => {
     const row = document.createElement("div");
-    row.style.cssText =
-      "display: flex; flex-direction: column; gap: 7px; border: 1px solid oklch(0 0 0 / 0.08); "
-      + "background: oklch(0 0 0 / 0.015); border-radius: 10px; padding: 9px;";
+    row.className = "pi-overlay-surface pi-skills-mcp-row";
 
     const top = document.createElement("div");
-    top.style.cssText = "display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;";
+    top.className = "pi-skills-mcp-row__top";
 
     const info = document.createElement("div");
-    info.style.cssText = "display: flex; flex-direction: column; gap: 3px; min-width: 0;";
+    info.className = "pi-skills-mcp-row__info";
 
     const name = document.createElement("strong");
     name.textContent = server.name;
-    name.style.cssText = "font-size: 13px;";
+    name.className = "pi-skills-mcp-row__name";
 
     const url = document.createElement("code");
     url.textContent = server.url;
-    url.style.cssText =
-      "font-size: 10px; color: var(--muted-foreground); font-family: var(--font-mono); "
-      + "white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; max-width: 430px;";
+    url.className = "pi-skills-mcp-row__url";
 
     info.append(name, url);
 
     const badges = document.createElement("div");
-    badges.style.cssText = "display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;";
+    badges.className = "pi-overlay-badges";
     badges.appendChild(createBadge(server.enabled ? "enabled" : "disabled", server.enabled ? "ok" : "muted"));
     if (server.token) {
       badges.appendChild(createBadge("token set", "muted"));
@@ -610,7 +583,7 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
     top.append(info, badges);
 
     const actions = document.createElement("div");
-    actions.style.cssText = "display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap;";
+    actions.className = "pi-overlay-actions pi-overlay-actions--wrap";
 
     const testButton = createButton("Test");
     const removeButton = createButton("Remove");
@@ -701,7 +674,7 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
     if (currentSnapshot.mcpServers.length === 0) {
       const empty = document.createElement("div");
       empty.textContent = "No MCP servers configured.";
-      empty.style.cssText = "font-size: 12px; color: var(--muted-foreground);";
+      empty.className = "pi-overlay-empty";
       mcpList.appendChild(empty);
     } else {
       for (const server of currentSnapshot.mcpServers) {

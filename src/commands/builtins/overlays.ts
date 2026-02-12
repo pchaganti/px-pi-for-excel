@@ -55,18 +55,22 @@ export async function showProviderPicker(): Promise<void> {
   overlay.id = "pi-login-overlay";
   overlay.className = "pi-welcome-overlay";
 
-  overlay.innerHTML = `
-    <div class="pi-welcome-card" style="text-align: left; max-width: 340px;">
-      <h2 style="font-size: 16px; font-weight: 600; margin: 0 0 4px; font-family: var(--font-sans);">Providers</h2>
-      <p style="font-size: 12px; color: var(--muted-foreground); margin: 0 0 12px; font-family: var(--font-sans);">Connect providers to use their models.</p>
-      <div class="pi-login-providers" style="display: flex; flex-direction: column; gap: 4px;"></div>
-    </div>
-  `;
+  const card = document.createElement("div");
+  card.className = "pi-welcome-card pi-overlay-card pi-provider-picker-card";
 
-  const list = overlay.querySelector<HTMLDivElement>(".pi-login-providers");
-  if (!list) {
-    throw new Error("Provider list container not found");
-  }
+  const title = document.createElement("h2");
+  title.className = "pi-overlay-title";
+  title.textContent = "Providers";
+
+  const subtitle = document.createElement("p");
+  subtitle.className = "pi-overlay-subtitle";
+  subtitle.textContent = "Connect providers to use their models.";
+
+  const list = document.createElement("div");
+  list.className = "pi-welcome-providers pi-provider-picker-list";
+
+  card.append(title, subtitle, list);
+  overlay.appendChild(card);
 
   const expandedRef: { current: HTMLElement | null } = { current: null };
 
@@ -112,14 +116,13 @@ function buildResumeListItem(session: SessionMetadata): HTMLButtonElement {
   const btn = document.createElement("button");
   btn.className = "pi-welcome-provider pi-resume-item";
   btn.dataset.id = session.id;
-  btn.style.cssText = "display: flex; flex-direction: column; align-items: flex-start; gap: 2px;";
 
   const title = document.createElement("span");
-  title.style.cssText = "font-size: 13px; font-weight: 500;";
+  title.className = "pi-resume-item__title";
   title.textContent = session.title || "Untitled";
 
   const meta = document.createElement("span");
-  meta.style.cssText = "font-size: 11px; color: var(--muted-foreground);";
+  meta.className = "pi-resume-item__meta";
   meta.textContent = `${session.messageCount || 0} messages · ${formatRelativeDate(session.lastModified)}`;
 
   btn.append(title, meta);
@@ -132,8 +135,7 @@ function buildWorkbookFilterRow(opts: {
   onToggle: (checked: boolean) => void;
 }): HTMLElement {
   const row = document.createElement("label");
-  row.style.cssText =
-    "display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted-foreground); margin: 0 0 10px; user-select: none;";
+  row.className = "pi-resume-workbook-filter";
 
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
@@ -143,7 +145,7 @@ function buildWorkbookFilterRow(opts: {
   labelText.textContent = "Show sessions from all workbooks";
 
   const workbookHint = document.createElement("span");
-  workbookHint.style.cssText = "font-family: var(--font-mono); opacity: 0.7; margin-left: auto;";
+  workbookHint.className = "pi-resume-workbook-filter__hint";
   workbookHint.textContent = opts.workbookLabel;
 
   checkbox.addEventListener("change", () => {
@@ -202,51 +204,35 @@ export async function showResumeDialog(opts: {
   overlay.className = "pi-welcome-overlay";
 
   const card = document.createElement("div");
-  card.className = "pi-welcome-card";
-  card.style.cssText =
-    "text-align: left; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;";
+  card.className = "pi-welcome-card pi-overlay-card pi-resume-dialog";
 
   const title = document.createElement("h2");
-  title.style.cssText =
-    "font-size: 16px; font-weight: 600; margin: 0 0 12px; font-family: var(--font-sans); flex-shrink: 0;";
+  title.className = "pi-overlay-title pi-resume-dialog__title";
   title.textContent = "Resume Session";
 
   card.appendChild(title);
 
   const targetControls = document.createElement("div");
-  targetControls.style.cssText = "display: flex; gap: 6px; margin: 0 0 8px;";
+  targetControls.className = "pi-resume-target-controls";
 
   const openInNewTabButton = document.createElement("button");
   openInNewTabButton.type = "button";
-  openInNewTabButton.style.cssText =
-    "padding: 6px 10px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08); background: oklch(0 0 0 / 0.02); cursor: pointer; font-size: 12px; font-family: var(--font-sans);";
+  openInNewTabButton.className = "pi-overlay-btn pi-overlay-btn--ghost pi-resume-target-btn";
   openInNewTabButton.textContent = "Open in new tab";
 
   const replaceCurrentButton = document.createElement("button");
   replaceCurrentButton.type = "button";
-  replaceCurrentButton.style.cssText =
-    "padding: 6px 10px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08); background: oklch(0 0 0 / 0.02); cursor: pointer; font-size: 12px; font-family: var(--font-sans);";
+  replaceCurrentButton.className = "pi-overlay-btn pi-overlay-btn--ghost pi-resume-target-btn";
   replaceCurrentButton.textContent = "Replace current";
 
   const targetHint = document.createElement("div");
-  targetHint.style.cssText = "font-size: 11px; color: var(--muted-foreground); margin: 0 0 10px;";
+  targetHint.className = "pi-resume-target-hint";
 
   const syncTargetButtons = () => {
     const isNewTab = selectedTarget === "new_tab";
 
-    openInNewTabButton.style.background = isNewTab
-      ? "oklch(0.57 0.15 165 / 0.16)"
-      : "oklch(0 0 0 / 0.02)";
-    openInNewTabButton.style.borderColor = isNewTab
-      ? "oklch(0.57 0.15 165 / 0.45)"
-      : "oklch(0 0 0 / 0.08)";
-
-    replaceCurrentButton.style.background = !isNewTab
-      ? "oklch(0.57 0.15 165 / 0.16)"
-      : "oklch(0 0 0 / 0.02)";
-    replaceCurrentButton.style.borderColor = !isNewTab
-      ? "oklch(0.57 0.15 165 / 0.45)"
-      : "oklch(0 0 0 / 0.08)";
+    openInNewTabButton.classList.toggle("is-active", isNewTab);
+    replaceCurrentButton.classList.toggle("is-active", !isNewTab);
 
     openInNewTabButton.setAttribute("aria-pressed", String(isNewTab));
     replaceCurrentButton.setAttribute("aria-pressed", String(!isNewTab));
@@ -269,7 +255,6 @@ export async function showResumeDialog(opts: {
 
   const list = document.createElement("div");
   list.className = "pi-resume-list";
-  list.style.cssText = "overflow-y: auto; display: flex; flex-direction: column; gap: 4px;";
 
   if (workbookId) {
     card.appendChild(
@@ -307,8 +292,7 @@ export async function showResumeDialog(opts: {
 
     if (sessions.length === 0) {
       const empty = document.createElement("div");
-      empty.style.cssText =
-        "font-size: 12px; color: var(--muted-foreground); padding: 10px 2px;";
+      empty.className = "pi-overlay-empty pi-resume-list-empty";
       empty.textContent = "No sessions available for this workbook.";
       list.appendChild(empty);
       return;
@@ -412,26 +396,40 @@ export function showShortcutsDialog(): void {
   const overlay = document.createElement("div");
   overlay.id = "pi-shortcuts-overlay";
   overlay.className = "pi-welcome-overlay";
-  overlay.innerHTML = `
-    <div class="pi-welcome-card" style="text-align: left;">
-      <h2 style="font-size: 16px; font-weight: 600; margin: 0 0 12px; font-family: var(--font-sans);">Keyboard Shortcuts</h2>
-      <div style="display: flex; flex-direction: column; gap: 6px;">
-        ${shortcuts
-          .map(
-            ([key, desc]) => `
-          <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-            <kbd style="font-family: var(--font-mono); font-size: 11px; padding: 2px 6px; background: oklch(0 0 0 / 0.05); border-radius: 4px; white-space: nowrap;">${key}</kbd>
-            <span style="font-size: 12.5px; color: var(--muted-foreground); font-family: var(--font-sans);">${desc}</span>
-          </div>
-        `,
-          )
-          .join("")}
-      </div>
-      <button class="pi-shortcuts-close" style="margin-top: 16px; width: 100%; padding: 8px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08); background: oklch(0 0 0 / 0.03); cursor: pointer; font-family: var(--font-sans); font-size: 13px;">Close</button>
-    </div>
-  `;
 
-  const closeButton = overlay.querySelector<HTMLButtonElement>(".pi-shortcuts-close");
+  const card = document.createElement("div");
+  card.className = "pi-welcome-card pi-overlay-card pi-shortcuts-dialog";
+
+  const title = document.createElement("h2");
+  title.className = "pi-overlay-title";
+  title.textContent = "Keyboard Shortcuts";
+
+  const list = document.createElement("div");
+  list.className = "pi-shortcuts-list";
+
+  for (const [key, desc] of shortcuts) {
+    const row = document.createElement("div");
+    row.className = "pi-shortcuts-row";
+
+    const keyEl = document.createElement("kbd");
+    keyEl.className = "pi-shortcuts-key";
+    keyEl.textContent = key;
+
+    const descEl = document.createElement("span");
+    descEl.className = "pi-shortcuts-desc";
+    descEl.textContent = desc;
+
+    row.append(keyEl, descEl);
+    list.appendChild(row);
+  }
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--full";
+  closeButton.textContent = "Close";
+
+  card.append(title, list, closeButton);
+  overlay.appendChild(card);
 
   let closed = false;
   const closeOverlay = () => {
