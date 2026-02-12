@@ -126,7 +126,7 @@ Core workbook tools:
 - **view_settings** — control gridlines, headings, freeze panes, tab color, sheet visibility, sheet activation, and standard width
 - **instructions** — update persistent user/workbook instructions (append or replace)
 - **conventions** — read/update formatting defaults (currency, negatives, zeros, decimal places)
-- **workbook_history** — list/restore/delete automatic recovery checkpoints for supported workbook mutations (\`write_cells\`, \`fill_formula\`, \`python_transform_range\`, \`format_cells\`, \`conditional_format\`, \`comments\`)
+- **workbook_history** — list/restore/delete automatic recovery checkpoints for supported workbook mutations (\`write_cells\`, \`fill_formula\`, \`python_transform_range\`, \`format_cells\`, \`conditional_format\`, \`comments\`, and supported \`modify_structure\` actions)
 - **extensions_manager** — list/install/reload/enable/disable/uninstall sidebar extensions from code (for extension authoring from chat)
 
 Other tools may be available depending on enabled experiments/skills.
