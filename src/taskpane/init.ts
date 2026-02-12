@@ -27,9 +27,14 @@ import { applyExperimentalToolGates } from "../tools/experimental-tool-gates.js"
 import { withWorkbookCoordinator } from "../tools/with-workbook-coordinator.js";
 import { registerBuiltins } from "../commands/builtins.js";
 import { showExtensionsDialog } from "../commands/builtins/extensions-overlay.js";
-import type { ResumeDialogTarget } from "../commands/builtins/resume-target.js";
-import { showInstructionsDialog, showResumeDialog } from "../commands/builtins/overlays.js";
 import { ExtensionRuntimeManager } from "../extensions/runtime-manager.js";
+import type { ResumeDialogTarget } from "../commands/builtins/resume-target.js";
+import {
+  showInstructionsDialog,
+  showProviderPicker,
+  showResumeDialog,
+  showShortcutsDialog,
+} from "../commands/builtins/overlays.js";
 import { wireCommandMenu } from "../commands/command-menu.js";
 import { commandRegistry } from "../commands/types.js";
 import {
@@ -44,7 +49,7 @@ import { showActionToast, showToast } from "../ui/toast.js";
 import { PiSidebar } from "../ui/pi-sidebar.js";
 import { setActiveProviders } from "../compat/model-selector-patch.js";
 import { createWorkbookCoordinator } from "../workbook/coordinator.js";
-import { formatWorkbookLabel, getWorkbookContext } from "../workbook/context.js";
+import { getWorkbookContext } from "../workbook/context.js";
 
 import { createContextInjector } from "./context-injection.js";
 import { pickDefaultModel } from "./default-model.js";
@@ -351,7 +356,6 @@ export async function initTaskpane(opts: {
 
   const refreshWorkbookState = async () => {
     const workbookContext = await resolveWorkbookContext();
-    sidebar.workbookLabel = formatWorkbookLabel(workbookContext);
     sidebar.requestUpdate();
 
     await refreshSystemPromptForAllRuntimes(workbookContext.workbookId);
@@ -794,6 +798,32 @@ export async function initTaskpane(opts: {
 
   sidebar.onCloseTab = (runtimeId: string) => {
     void closeRuntimeWithRecovery(runtimeId);
+  };
+
+  sidebar.onOpenInstructions = () => {
+    void showInstructionsDialog({
+      onSaved: async () => { await refreshWorkbookState(); },
+    });
+  };
+
+  sidebar.onOpenSettings = () => {
+    void showProviderPicker();
+  };
+
+  sidebar.onOpenResumePicker = () => {
+    void showResumeDialog({
+      defaultTarget: "new_tab",
+      onOpenInNewTab: async (sessionData: SessionData) => {
+        await openSessionInNewTab(sessionData);
+      },
+      onReplaceCurrent: async (sessionData: SessionData) => {
+        await replaceActiveRuntimeSession(sessionData);
+      },
+    });
+  };
+
+  sidebar.onOpenShortcuts = () => {
+    showShortcutsDialog();
   };
 
   // Bootstrap from persisted tab layout; fallback to legacy single-runtime restore.

@@ -6,6 +6,7 @@ Short, topic-based docs (mirrors Pi's layout). Keep deeper decisions close to th
 - [Draft: agent instructions (AGENTS.md equivalent)](./design-agent-instructions.md) — [#30](https://github.com/tmustier/pi-for-excel/issues/30)
 - [Draft: multi-session workflows in one workbook (tabs + delegate + team)](./design-multi-session-workbook.md)
 - [Draft: session resume + tab recovery UX](./design-session-resume-ux.md)
+- [Draft: sidebar header chrome](./design-sidebar-header.md)
 - [Draft: extension sandbox + permissions model](./design-extension-sandbox-permissions.md) — [#79](https://github.com/tmustier/pi-for-excel/issues/79)
 
 ## Architecture & Process
@@ -25,6 +26,7 @@ Short, topic-based docs (mirrors Pi's layout). Keep deeper decisions close to th
 ## Tools
 - [Tool behavior decisions](../src/tools/DECISIONS.md)
 - [Experimental tmux bridge contract (v1 stub)](./tmux-bridge-contract.md)
+- [Experimental Python / LibreOffice bridge contract (v1)](./python-bridge-contract.md)
 
 ## Research (local only)
 Research notes live in `research/` but are gitignored except `POC-LEARNINGS.md`.
