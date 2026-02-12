@@ -102,11 +102,23 @@ export function createConditionalFormatTool(): AgentTool<typeof schema> {
         }
 
         if (!params.type) {
+          const message = "type is required when action is \"add\".";
+
+          await getWorkbookChangeAuditLog().append({
+            toolName: "conditional_format",
+            toolCallId,
+            blocked: true,
+            outputAddress: params.range,
+            changedCount: 0,
+            changes: [],
+            summary: `error: ${message}`,
+          });
+
           return {
             content: [
               {
                 type: "text",
-                text: "Error: type is required when action is \"add\".",
+                text: `Error: ${message}`,
               },
             ],
             details: undefined,
