@@ -15,7 +15,7 @@
 
 import { html, nothing, type TemplateResult } from "lit";
 import { cellRef, cellRefDisplay } from "./cell-link.js";
-import type { DepNodeDetail } from "../tools/tool-details.js";
+import type { DepNodeDetail, TraceDependenciesMode } from "../tools/tool-details.js";
 import { isExcelError } from "../utils/format.js";
 
 /* ── Number format application ──────────────────────────────── */
@@ -148,41 +148,87 @@ function cellPartOf(address: string): string {
  * is on the same sheet, we show just the cell ref (e.g. "G44") instead
  * of the full "n-Operations!G44" to reduce noise.
  */
-function renderNode(
+function childLabel(mode: TraceDependenciesMode, count: number): string {
+  const singular = mode === "dependents" ? "dependent" : "precedent";
+  return `${count} ${singular}${count === 1 ? "" : "s"}`;
+}
+
+function renderNodeHeader(
   node: DepNodeDetail,
   isRoot: boolean,
   parentSheet: string,
+  mode: TraceDependenciesMode,
 ): TemplateResult {
   const valStr = fmtValue(node.value, node.numberFormat);
-  const hasFormula = !!node.formula;
   const hasChildren = node.precedents.length > 0;
-  const isLeaf = !hasFormula && !hasChildren;
-
   const nodeSheet = sheetOf(node.address);
   const sameSheet = !isRoot && nodeSheet !== "" && nodeSheet === parentSheet;
 
-  // Show abbreviated cell ref for same-sheet, full address for cross-sheet / root
+  // Show abbreviated cell ref for same-sheet, full address for cross-sheet / root.
   const addrDisplay = sameSheet
     ? cellRefDisplay(cellPartOf(node.address), node.address)
     : cellRef(node.address);
 
   return html`
-    <div class="pi-dep-node ${isRoot ? "pi-dep-node--root" : ""} ${isLeaf ? "pi-dep-node--leaf" : ""}">
-      <div class="pi-dep-node__row">
-        ${valStr
-          ? html`<span class="pi-dep-node__val ${isExcelError(node.value) ? "pi-dep-node__val--err" : ""}">${valStr}</span>`
-          : nothing}
-        <span class="pi-dep-node__addr">${addrDisplay}</span>
-      </div>
-      ${hasFormula
-        ? html`<code class="pi-dep-node__formula" title=${node.formula}>${node.formula}</code>`
+    <div class="pi-dep-node__row">
+      ${valStr
+        ? html`<span class="pi-dep-node__val ${isExcelError(node.value) ? "pi-dep-node__val--err" : ""}">${valStr}</span>`
         : nothing}
+      <span class="pi-dep-node__addr">${addrDisplay}</span>
       ${hasChildren
-        ? html`<div class="pi-dep-node__children">
-            ${node.precedents.map((child) => renderNode(child, false, nodeSheet))}
-          </div>`
+        ? html`<span class="pi-dep-node__meta">${childLabel(mode, node.precedents.length)}</span>`
         : nothing}
     </div>
+    ${node.formula
+      ? html`<code class="pi-dep-node__formula" title=${node.formula}>${node.formula}</code>`
+      : nothing}
+  `;
+}
+
+function renderNode(
+  node: DepNodeDetail,
+  isRoot: boolean,
+  parentSheet: string,
+  depth: number,
+  mode: TraceDependenciesMode,
+): TemplateResult {
+  const hasFormula = !!node.formula;
+  const hasChildren = node.precedents.length > 0;
+  const isLeaf = !hasFormula && !hasChildren;
+  const nodeSheet = sheetOf(node.address);
+
+  const children = hasChildren
+    ? html`<div class="pi-dep-node__children">
+        ${node.precedents.map((child) => renderNode(child, false, nodeSheet, depth + 1, mode))}
+      </div>`
+    : nothing;
+
+  if (!hasChildren) {
+    return html`
+      <div class="pi-dep-node ${isRoot ? "pi-dep-node--root" : ""} ${isLeaf ? "pi-dep-node--leaf" : ""}">
+        ${renderNodeHeader(node, isRoot, parentSheet, mode)}
+      </div>
+    `;
+  }
+
+  if (isRoot) {
+    return html`
+      <div class="pi-dep-node pi-dep-node--root">
+        ${renderNodeHeader(node, true, parentSheet, mode)}
+        ${children}
+      </div>
+    `;
+  }
+
+  const openByDefault = depth <= 1;
+
+  return html`
+    <details class="pi-dep-node pi-dep-node--branch" ?open=${openByDefault}>
+      <summary class="pi-dep-node__summary">
+        ${renderNodeHeader(node, false, parentSheet, mode)}
+      </summary>
+      ${children}
+    </details>
   `;
 }
 
@@ -190,6 +236,9 @@ function renderNode(
  * Render a dependency tree as a visual HTML tree.
  * Used by the trace_dependencies tool result renderer.
  */
-export function renderDepTree(root: DepNodeDetail): TemplateResult {
-  return html`<div class="pi-dep-tree">${renderNode(root, true, "")}</div>`;
+export function renderDepTree(
+  root: DepNodeDetail,
+  mode: TraceDependenciesMode = "precedents",
+): TemplateResult {
+  return html`<div class="pi-dep-tree">${renderNode(root, true, "", 0, mode)}</div>`;
 }

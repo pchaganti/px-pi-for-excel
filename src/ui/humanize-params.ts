@@ -504,6 +504,14 @@ function humanizeTraceDependencies(p: Record<string, unknown>): ParamItem[] {
   if (p.cell) {
     items.push({ label: "Cell", value: cellRef(str(p.cell)) });
   }
+
+  const mode = str(p.mode);
+  if (mode === "dependents") {
+    items.push({ label: "Direction", value: "Dependents (downstream impact)" });
+  } else if (mode === "precedents") {
+    items.push({ label: "Direction", value: "Precedents (upstream inputs)" });
+  }
+
   const depth = num(p.depth);
   if (depth !== undefined && depth !== 2) {
     items.push({

@@ -121,7 +121,7 @@ Core workbook tools:
 - **format_cells** — apply formatting (bold, colors, number format, borders, etc.)
 - **conditional_format** — add or clear conditional formatting rules (formula or cell-value)
 - **comments** — read, add, update, reply, delete, resolve/reopen cell comments
-- **trace_dependencies** — show the formula dependency tree for a cell
+- **trace_dependencies** — trace formula lineage for a cell (mode: \`precedents\` upstream or \`dependents\` downstream)
 - **view_settings** — control gridlines, headings, freeze panes, tab color, sheet visibility, sheet activation, and standard width
 - **instructions** — update persistent user/workbook instructions (append or replace)
 - **conventions** — read/update formatting defaults (currency, negatives, zeros, decimal places)

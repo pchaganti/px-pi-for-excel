@@ -64,18 +64,28 @@ export interface CommentsDetails {
   recovery?: RecoveryCheckpointDetails;
 }
 
+export type TraceDependenciesMode = "precedents" | "dependents";
+export type TraceDependencySource = "api" | "formula_scan" | "mixed" | "none";
+
 export interface DepNodeDetail {
   address: string;
   value: unknown;
   /** Excel number format string, e.g. "0.00%", "#,##0", "$#,##0.00". */
   numberFormat?: string;
   formula?: string;
+  /** Child nodes in traversal order (precedents for precedents mode, dependents for dependents mode). */
   precedents: DepNodeDetail[];
 }
 
 export interface TraceDependenciesDetails {
   kind: "trace_dependencies";
   root: DepNodeDetail;
+  mode?: TraceDependenciesMode;
+  maxDepth?: number;
+  nodeCount?: number;
+  edgeCount?: number;
+  source?: TraceDependencySource;
+  truncated?: boolean;
 }
 
 export interface ReadRangeCsvDetails {
@@ -280,6 +290,14 @@ function isOptionalBoolean(value: unknown): value is boolean | undefined {
   return value === undefined || typeof value === "boolean";
 }
 
+function isOptionalTraceDependenciesMode(value: unknown): value is TraceDependenciesMode | undefined {
+  return value === undefined || value === "precedents" || value === "dependents";
+}
+
+function isOptionalTraceDependencySource(value: unknown): value is TraceDependencySource | undefined {
+  return value === undefined || value === "api" || value === "formula_scan" || value === "mixed" || value === "none";
+}
+
 function isOptionalStringArray(value: unknown): value is string[] | undefined {
   return value === undefined || (Array.isArray(value) && value.every((item) => typeof item === "string"));
 }
@@ -472,8 +490,18 @@ export function isTraceDependenciesDetails(value: unknown): value is TraceDepend
   if (!isRecord(value)) return false;
   if (value.kind !== "trace_dependencies") return false;
   if (!isRecord(value.root)) return false;
+
   const root = value.root;
-  return typeof root.address === "string" && Array.isArray(root.precedents);
+  if (!(typeof root.address === "string" && Array.isArray(root.precedents))) return false;
+
+  return (
+    isOptionalTraceDependenciesMode(value.mode) &&
+    isOptionalNumber(value.maxDepth) &&
+    isOptionalNumber(value.nodeCount) &&
+    isOptionalNumber(value.edgeCount) &&
+    isOptionalTraceDependencySource(value.source) &&
+    isOptionalBoolean(value.truncated)
+  );
 }
 
 export function isTmuxBridgeDetails(value: unknown): value is TmuxBridgeDetails {

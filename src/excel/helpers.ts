@@ -123,9 +123,27 @@ export function cellAtOffset(rangeStart: string, rowOffset: number, colOffset: n
 // Guarded API calls
 // ============================================================================
 
+function isOfficeItemNotFound(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+
+  if ("code" in error && typeof error.code === "string") {
+    return error.code === "ItemNotFound";
+  }
+
+  if ("message" in error && typeof error.message === "string") {
+    return /item\s*not\s*found/iu.test(error.message);
+  }
+
+  return false;
+}
+
 /**
- * Safely call getDirectPrecedents() — returns null if it throws
- * (fails on empty cells, preview API).
+ * Safely call getDirectPrecedents().
+ *
+ * Returns:
+ * - `string[][]` when API succeeds
+ * - `[]` when the API is available but there are no precedents
+ * - `null` when the API is unavailable/failing (so callers can use fallback logic)
  */
 export async function getDirectPrecedentsSafe(
   context: Excel.RequestContext,
@@ -139,7 +157,36 @@ export async function getDirectPrecedentsSafe(
     // a comma-separated list of address blocks.
     return precedents.addresses
       .map((s) => s.split(",").map((x) => x.trim()).filter(Boolean));
-  } catch {
+  } catch (error: unknown) {
+    if (isOfficeItemNotFound(error)) {
+      return [];
+    }
+    return null;
+  }
+}
+
+/**
+ * Safely call getDirectDependents().
+ *
+ * Returns:
+ * - `string[][]` when API succeeds
+ * - `[]` when the API is available but there are no dependents
+ * - `null` when the API is unavailable/failing (so callers can use fallback logic)
+ */
+export async function getDirectDependentsSafe(
+  context: Excel.RequestContext,
+  range: Excel.Range,
+): Promise<string[][] | null> {
+  try {
+    const dependents = range.getDirectDependents();
+    dependents.load("addresses");
+    await context.sync();
+    return dependents.addresses
+      .map((s) => s.split(",").map((x) => x.trim()).filter(Boolean));
+  } catch (error: unknown) {
+    if (isOfficeItemNotFound(error)) {
+      return [];
+    }
     return null;
   }
 }

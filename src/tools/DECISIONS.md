@@ -125,10 +125,12 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Rationale:** the syntax-highlighted code block (language "csv") produced garbled output with numbers in red and keywords in blue. A proper table with row/column headers is immediately readable.
 
 ## Dependency tree rendering (`trace_dependencies`)
-- **UI:** dependency trees are rendered as structured HTML with clickable cell refs, code-styled formulas, and thread-style left-border indentation.
+- **Modes:** `trace_dependencies` supports both `mode: "precedents"` (upstream inputs) and `mode: "dependents"` (downstream impact).
+- **UI:** dependency trees are rendered as structured HTML with clickable cell refs, code-styled formulas, and collapsible branch nodes for on-demand deep expansion.
 - **Agent text:** unchanged — still the ASCII tree with `├──`/`└──`/`│` connectors.
-- **Implementation:** `TraceDependenciesDetails` passes the `DepNodeDetail` tree to the UI. `src/ui/render-dep-tree.ts` renders the visual tree.
-- **Rationale:** ASCII art rendered via `<markdown-block>` lacked interactivity and visual hierarchy. Clickable addresses + clean CSS indentation is much more usable.
+- **Implementation:** `TraceDependenciesDetails` carries `mode` + tree metadata; `src/ui/render-dep-tree.ts` renders the visual tree and supports branch expand/collapse.
+- **Fallback behavior:** tool prefers Office.js direct precedent/dependent APIs and falls back to formula parsing/scanning when APIs are unavailable.
+- **Rationale:** ASCII art via `<markdown-block>` lacked interactivity and visual hierarchy. Clickable addresses + collapsible branches make formula navigation significantly more usable.
 
 ## Experimental tmux bridge tool (`tmux`)
 - **Availability:** non-core experimental tool, always registered via `createAllTools()`; execution is gated by `applyExperimentalToolGates()`.
