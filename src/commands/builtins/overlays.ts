@@ -440,15 +440,19 @@ export async function showRecoveryDialog(opts: {
 
   const title = document.createElement("h2");
   title.className = "pi-overlay-title";
-  title.textContent = "Backups";
+  title.textContent = "Backups (Beta)";
 
   const subtitle = document.createElement("p");
   subtitle.className = "pi-overlay-subtitle";
-  subtitle.textContent = "Saved before each Pi edit. Restore with one click.";
+  subtitle.textContent = "Saved before Pi edits, in between saves. Entries are sheet-specific in this workbook.";
 
   const workbookTag = document.createElement("p");
   workbookTag.className = "pi-overlay-workbook-tag";
-  workbookTag.textContent = opts.workbookLabel;
+  workbookTag.textContent = `Workbook: ${opts.workbookLabel}`;
+
+  const saveBoundaryHint = document.createElement("p");
+  saveBoundaryHint.className = "pi-overlay-hint";
+  saveBoundaryHint.textContent = "Backups reset after you save this workbook.";
 
   const toolbar = document.createElement("div");
   toolbar.className = "pi-recovery-toolbar";
@@ -480,7 +484,7 @@ export async function showRecoveryDialog(opts: {
   closeButton.textContent = "Close";
 
   footer.append(closeButton);
-  card.append(title, subtitle, workbookTag, toolbar, list, footer);
+  card.append(title, subtitle, workbookTag, saveBoundaryHint, toolbar, list, footer);
   overlay.appendChild(card);
 
   let checkpoints: RecoveryCheckpointSummary[] = [];

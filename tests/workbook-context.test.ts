@@ -51,6 +51,48 @@ void test("extracts workbook basename from document URL path", async () => {
   }
 });
 
+void test("normalizes workbook identity by ignoring query/hash URL parts", async () => {
+  const restoreFirst = setOfficeDocumentUrl("https://example.com/reports/Forecast.xlsx?session=abc#sheet=1");
+  let firstId: string | null = null;
+
+  try {
+    const first = await getWorkbookContext();
+    firstId = first.workbookId;
+    assert.equal(first.source, "document.url");
+  } finally {
+    restoreFirst();
+  }
+
+  const restoreSecond = setOfficeDocumentUrl("https://example.com/reports/Forecast.xlsx?session=xyz#sheet=2");
+  try {
+    const second = await getWorkbookContext();
+    assert.equal(second.source, "document.url");
+    assert.equal(firstId, second.workbookId);
+  } finally {
+    restoreSecond();
+  }
+});
+
+void test("produces different workbook identities for different workbook paths", async () => {
+  const restoreFirst = setOfficeDocumentUrl("https://example.com/reports/Forecast-A.xlsx?x=1");
+  let firstId: string | null = null;
+
+  try {
+    const first = await getWorkbookContext();
+    firstId = first.workbookId;
+  } finally {
+    restoreFirst();
+  }
+
+  const restoreSecond = setOfficeDocumentUrl("https://example.com/reports/Forecast-B.xlsx?x=1");
+  try {
+    const second = await getWorkbookContext();
+    assert.notEqual(firstId, second.workbookId);
+  } finally {
+    restoreSecond();
+  }
+});
+
 void test("returns null workbook name when Office document URL is unavailable", async () => {
   const restore = setOfficeDocumentUrl(null);
 

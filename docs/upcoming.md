@@ -98,7 +98,7 @@ https://github.com/tmustier/pi-for-excel/issues/27
 **Status note:** rollback UX is now in place:
 - automatic backups for `write_cells`, `fill_formula`, `python_transform_range`, `format_cells` (with scoped limits), `conditional_format`, mutating `comments` actions, and supported `modify_structure` actions (`rename_sheet`, `hide_sheet`, `unhide_sheet`)
 - new `workbook_history` tool (list / restore / delete / clear)
-- post-write action toast with one-click **Revert**
+- backup browser overlay (menu + `/history`) plus `/revert` for latest-backup rollback
 - dedicated backup browser overlay (menu + `/history`) with restore/delete/clear controls
 - restore creates an inverse backup so rollbacks are themselves reversible
 - unsupported mutation tools/actions (including unsupported `format_cells` variants such as `merge` and unsupported `modify_structure` variants) explicitly report when no backup is created

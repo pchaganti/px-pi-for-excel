@@ -12,7 +12,7 @@ export interface WorkbookContext {
    * A stable, local-only identifier when available.
    *
    * Current strategy:
-   * - if `Office.context.document.url` exists, return a SHA-256 hash of it
+   * - if `Office.context.document.url` exists, normalize it (drop query/hash) and return a SHA-256 hash
    * - otherwise return null (ephemeral/unknown)
    */
   workbookId: string | null;
@@ -46,9 +46,13 @@ function bufferToHex(buf: ArrayBuffer): string {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function stripQueryAndHash(raw: string): string {
+  return raw.split(/[?#]/, 1)[0]?.trim() ?? "";
+}
+
 function getWorkbookNameFromUrl(url: string): string | null {
   const readName = (raw: string): string | null => {
-    const cleaned = raw.split(/[?#]/, 1)[0]?.trim();
+    const cleaned = stripQueryAndHash(raw);
     if (!cleaned) return null;
 
     try {
@@ -74,6 +78,21 @@ function getWorkbookNameFromUrl(url: string): string | null {
   const normalized = url.replace(/\\/g, "/");
   const fromPath = normalized.split("/").at(-1);
   return fromPath ? readName(fromPath) : null;
+}
+
+function normalizeWorkbookIdentitySource(url: string): string {
+  const trimmed = url.trim();
+  if (trimmed.length === 0) return trimmed;
+
+  try {
+    const parsed = new URL(trimmed);
+    parsed.search = "";
+    parsed.hash = "";
+    parsed.pathname = parsed.pathname.replace(/\\/g, "/");
+    return parsed.toString();
+  } catch {
+    return stripQueryAndHash(trimmed).replace(/\\/g, "/");
+  }
 }
 
 export function formatWorkbookLabel(context: WorkbookContext): string {
@@ -129,7 +148,8 @@ export async function getWorkbookContext(): Promise<WorkbookContext> {
     };
   }
 
-  const hash = await sha256Hex(url);
+  const identitySource = normalizeWorkbookIdentitySource(url);
+  const hash = await sha256Hex(identitySource);
   return {
     workbookId: `url_sha256:${hash}`,
     workbookName: getWorkbookNameFromUrl(url),

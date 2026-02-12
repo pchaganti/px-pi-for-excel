@@ -48,9 +48,9 @@ Replace cumbersome up-front approval selectors with a low-friction workflow:
   - `restore`
   - `delete`
   - `clear`
-- One-click UI affordances:
-  - post-write action toast with **Revert**
+- UI affordances:
   - checkpoint browser overlay (menu + `/history`) for restore/delete/clear
+  - `/revert` command for latest-backup rollback
 - Restore is itself reversible:
   - restoring creates an inverse `restore_snapshot` checkpoint
 - Local persistence:

@@ -235,9 +235,10 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Automatic backups:** successful `write_cells`, `fill_formula`, `python_transform_range`, `format_cells`, `conditional_format`, mutating `comments` actions, and supported `modify_structure` actions (`rename_sheet`, `hide_sheet`, `unhide_sheet`) store pre-mutation snapshots in local `workbook.recovery-snapshots.v1`.
 - **Safety limits:** backup capture is skipped for very large writes (> `MAX_RECOVERY_CELLS`) to avoid oversized local state.
 - **Workbook identity guardrails:** append/list/delete/clear/restore paths are scoped to the active workbook identity; restore rejects identity-less or cross-workbook backups.
+- **Save boundary behavior:** backups are intended as "in between saves" recovery points and are cleared after the workbook transitions from dirty → saved.
 - **Restore UX:** `workbook_history` can list/restore/delete/clear backups; restores also create an inverse backup (`restore_snapshot`) so users can undo a mistaken restore.
 - **Coverage signaling:** unsupported `modify_structure` actions and mutating `view_settings` actions explicitly report when no backup was created.
 - **Current `modify_structure` backup limits:** captures/restores only `rename_sheet`, `hide_sheet`, and `unhide_sheet` actions.
 - **Current `format_cells` backup limits:** captures/restores core range-format properties (font/fill/number format/alignment/wrap/borders) plus row/column dimensions (`column_width`, `row_height`, `auto_fit`). Mutations involving `merge` currently skip backup capture with an explicit note.
-- **Quick affordance:** after a backed-up write, UI shows an action toast with **Revert**.
+- **Quick affordance:** users can restore via `/history` (Backups overlay) or `/revert` (latest backup).
 - **Rationale:** addresses #27 by shifting from cumbersome up-front approvals to versioned recovery with explicit user-controlled rollback.

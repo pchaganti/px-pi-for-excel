@@ -22,7 +22,7 @@ Pi for Excel gives you a conversational AI assistant that can read, write, and f
 | `explain_formula` | Plain-language formula explanation with cited cell references |
 | `view_settings` | Gridlines, headings, freeze panes, tab color, sheet visibility |
 | `comments` | Read, add, update, reply, resolve/reopen cell comments |
-| `workbook_history` | List/restore automatic recovery checkpoints for workbook mutations |
+| `workbook_history` | List/restore automatic in-between-saves backups for workbook mutations |
 | `instructions` | Persistent user-level and workbook-level guidance for the AI |
 | `conventions` | Configurable formatting defaults (currency, negatives, zeros, decimal places) |
 | `skills` | Bundled Agent Skills for task-specific workflows |
