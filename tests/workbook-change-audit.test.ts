@@ -100,3 +100,33 @@ void test("workbook change audit log clear removes persisted entries", async () 
   await log.clear();
   assert.equal((await log.list()).length, 0);
 });
+
+void test("workbook change audit log accepts non-cell mutation tool entries", async () => {
+  const settingsStore = createInMemorySettingsStore();
+
+  const log = new WorkbookChangeAuditLog({
+    getSettingsStore: () => Promise.resolve(settingsStore),
+    getWorkbookContext: (): Promise<WorkbookContext> => Promise.resolve({
+      workbookId: "url_sha256:test789",
+      workbookName: "Ops.xlsx",
+      source: "document.url",
+    }),
+    now: () => 1700000000100,
+    createId: () => "entry-ops",
+  });
+
+  await log.append({
+    toolName: "modify_structure",
+    toolCallId: "call-3",
+    blocked: false,
+    changedCount: 2,
+    changes: [],
+    summary: "inserted 2 row(s)",
+  });
+
+  const entries = await log.list();
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0]?.toolName, "modify_structure");
+  assert.equal(entries[0]?.summary, "inserted 2 row(s)");
+  assert.equal(entries[0]?.changedCount, 2);
+});

@@ -182,14 +182,15 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Rationale:** keep one shared artifact space while preserving workbook context and transparency on who accessed/changed files.
 
 ## Workbook mutation change previews + audit log (slice)
-- **Scope in this slice:** `write_cells`, `fill_formula`, and `python_transform_range` now compute before/after cell diffs.
-- **Structured details:** each tool returns `changes` metadata (`changedCount` + sampled cell-level before/after, including formula deltas) for tool-card rendering.
+- **Cell-diff scope:** `write_cells`, `fill_formula`, and `python_transform_range` compute before/after cell diffs.
+- **Structured details:** these tools return `changes` metadata (`changedCount` + sampled cell-level before/after, including formula deltas) for tool-card rendering.
 - **UI rendering:** tool cards include a dedicated **Changes** section with clickable cell addresses.
 - **Compact status receipts:** mutation card headers include changed/error counts when available (e.g., `— 24 changed, 1 error`) for at-a-glance comprehension.
 - **Context efficiency:**
   - diff samples are intentionally bounded (default sample limit = 12 changed cells)
   - `write_cells` verification output shows a bounded preview for large writes instead of dumping full tables
-- **Persistence:** successful/blocked mutations in the scoped tools are appended to local `workbook.change-audit.v1` for future export/history UX.
+- **Audit coverage extension:** `format_cells`, `conditional_format`, and `modify_structure` now also append structured entries to `workbook.change-audit.v1` (operation-focused summaries, not per-cell value diffs).
+- **Export option:** `/export audit` writes the persisted workbook mutation audit log as JSON (download by default, `clipboard` optional).
 - **Rationale:** improve user trust with concrete, navigable deltas while keeping implementation incremental and low-risk.
 
 ## Workbook recovery checkpoints (`workbook_history`)

@@ -9,6 +9,7 @@ import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { FormatCellsDetails } from "./tool-details.js";
 import { excelRun, getRange, parseRangeRef, qualifiedAddress } from "../excel/helpers.js";
+import { getWorkbookChangeAuditLog } from "../audit/workbook-change-audit.js";
 import { getErrorMessage } from "../utils/errors.js";
 import { resolveStyles } from "../conventions/index.js";
 import type { BorderWeight } from "../conventions/index.js";
@@ -140,7 +141,7 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
       "Does NOT modify cell values — use write_cells for that.",
     parameters: schema,
     execute: async (
-      _toolCallId: string,
+      toolCallId: string,
       params: Params,
     ): Promise<AgentToolResult<FormatCellsDetails>> => {
       try {
@@ -176,12 +177,10 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
           resolved.target.load("address");
 
           const requestedColumnWidth = params.column_width;
-          const hasNumberFormat = styleResult.excelNumberFormat !== undefined;
 
-          const needsAreas = resolved.isMultiRange && (hasNumberFormat || params.merge !== undefined);
           if (!resolved.isMultiRange) {
             resolved.target.load("rowCount,columnCount");
-          } else if (needsAreas) {
+          } else {
             resolved.target.areas.load("items/rowCount,items/columnCount");
           }
 
@@ -190,6 +189,10 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
           const sheet = resolved.sheet;
           const target = resolved.target;
           const isMultiRange = resolved.isMultiRange;
+
+          const cellCount = isMultiRange
+            ? resolved.target.areas.items.reduce((total, area) => total + (area.rowCount * area.columnCount), 0)
+            : resolved.target.rowCount * resolved.target.columnCount;
 
           const applied: string[] = [];
           const warnings: string[] = [...styleResult.warnings];
@@ -355,7 +358,7 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
             }
           }
 
-          return { sheetName: sheet.name, address: target.address, applied, warnings, isMultiRange };
+          return { sheetName: sheet.name, address: target.address, applied, warnings, isMultiRange, cellCount };
         });
 
         const fullAddr = result.isMultiRange
@@ -364,7 +367,8 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
         const warningText = result.warnings.length
           ? `\n\n⚠️ ${result.warnings.join("\n")}`
           : "";
-        return {
+
+        const toolResult: AgentToolResult<FormatCellsDetails> = {
           content: [
             {
               type: "text",
@@ -377,9 +381,34 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
             warningsCount: result.warnings.length,
           },
         };
+
+        await getWorkbookChangeAuditLog().append({
+          toolName: "format_cells",
+          toolCallId,
+          blocked: false,
+          outputAddress: fullAddr,
+          changedCount: result.cellCount,
+          changes: [],
+          summary: `formatted ${result.cellCount} cell(s)` +
+            (result.warnings.length > 0 ? ` with ${result.warnings.length} warning(s)` : ""),
+        });
+
+        return toolResult;
       } catch (e: unknown) {
+        const message = getErrorMessage(e);
+
+        await getWorkbookChangeAuditLog().append({
+          toolName: "format_cells",
+          toolCallId,
+          blocked: true,
+          outputAddress: params.range,
+          changedCount: 0,
+          changes: [],
+          summary: `error: ${message}`,
+        });
+
         return {
-          content: [{ type: "text", text: `Error formatting: ${getErrorMessage(e)}` }],
+          content: [{ type: "text", text: `Error formatting: ${message}` }],
           details: { kind: "format_cells", address: params.range },
         };
       }

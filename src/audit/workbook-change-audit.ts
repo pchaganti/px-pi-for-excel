@@ -9,7 +9,13 @@ import type { WorkbookCellChange } from "./cell-diff.js";
 const AUDIT_SETTING_KEY = "workbook.change-audit.v1";
 const MAX_AUDIT_ENTRIES = 500;
 
-export type WorkbookAuditToolName = "write_cells" | "fill_formula" | "python_transform_range";
+export type WorkbookAuditToolName =
+  | "write_cells"
+  | "fill_formula"
+  | "python_transform_range"
+  | "format_cells"
+  | "conditional_format"
+  | "modify_structure";
 
 export interface WorkbookChangeAuditEntry {
   id: string;
@@ -21,6 +27,7 @@ export interface WorkbookChangeAuditEntry {
   outputAddress?: string;
   changedCount: number;
   changes: WorkbookCellChange[];
+  summary?: string;
   workbookId?: string;
   workbookLabel?: string;
 }
@@ -33,6 +40,7 @@ export interface AppendWorkbookChangeAuditEntryArgs {
   outputAddress?: string;
   changedCount: number;
   changes: WorkbookCellChange[];
+  summary?: string;
 }
 
 interface SettingsStoreLike {
@@ -92,7 +100,14 @@ async function defaultGetSettingsStore(): Promise<SettingsStoreLike | null> {
 }
 
 function isWorkbookAuditToolName(value: unknown): value is WorkbookAuditToolName {
-  return value === "write_cells" || value === "fill_formula" || value === "python_transform_range";
+  return (
+    value === "write_cells" ||
+    value === "fill_formula" ||
+    value === "python_transform_range" ||
+    value === "format_cells" ||
+    value === "conditional_format" ||
+    value === "modify_structure"
+  );
 }
 
 function isWorkbookCellChange(value: unknown): value is WorkbookCellChange {
@@ -132,6 +147,7 @@ function parseAuditEntry(value: unknown): WorkbookChangeAuditEntry | null {
     outputAddress: typeof value.outputAddress === "string" ? value.outputAddress : undefined,
     changedCount: value.changedCount,
     changes: value.changes,
+    summary: typeof value.summary === "string" ? value.summary : undefined,
     workbookId: typeof value.workbookId === "string" ? value.workbookId : undefined,
     workbookLabel: typeof value.workbookLabel === "string" ? value.workbookLabel : undefined,
   };
@@ -235,6 +251,7 @@ export class WorkbookChangeAuditLog {
       outputAddress: args.outputAddress,
       changedCount: args.changedCount,
       changes: args.changes,
+      summary: args.summary,
       workbookId,
       workbookLabel,
     };
