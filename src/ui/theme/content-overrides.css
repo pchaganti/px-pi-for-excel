@@ -21,8 +21,17 @@ user-message > div {
 
 assistant-message { margin-right: var(--pill-inset); }
 
-/* Indent prose so it aligns with pill header text.
-   (Applied in theme/unstable-overrides.css due upstream utility coupling.) */
+/* Added by applyMessageStyleHooks() so we don't depend on utility classes. */
+.pi-assistant-body {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+/* Indent prose so it aligns with pill header text. */
+.pi-assistant-body > markdown-block {
+  margin-left: var(--pill-text-indent);
+}
+
 /* ── Tool cards — compact, collapsed by default ──────────── */
 
 /* Card base — used for inprogress + error; complete overrides below */
@@ -637,8 +646,13 @@ tool-message {
   border-top: 1px solid oklch(0.45 0.12 160 / 0.07);
 }
 
-/* Fallback: hide pi-web-ui default wrapper if it appears.
-   Rule lives in theme/unstable-overrides.css (utility-coupled selector). */
+/* Fallback wrapper for tool messages that don't use custom renderers. */
+.pi-tool-card-fallback {
+  border: 1px solid var(--border);
+  background: var(--pi-inner-bg);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 3px var(--alpha-4);
+}
 
 /* Markdown — readable at sidebar width */
 markdown-block { line-height: 1.6; }
@@ -704,8 +718,31 @@ thinking-block markdown-block {
   overflow-y: auto;
 }
 
-/* Thinking shimmer/spinner utility-coupled selectors live in
-   theme/unstable-overrides.css. */
+/* Added by applyMessageStyleHooks() so we don't depend on utility classes. */
+.pi-thinking-label--streaming {
+  animation-duration: 1.2s;
+  --tw-gradient-from: oklch(0.55 0 0);
+  --tw-gradient-via: oklch(0.15 0 0);
+  --tw-gradient-to: oklch(0.55 0 0);
+}
+
+/* Spinner on thinking header while streaming. */
+.pi-thinking-label--streaming::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-right: 6px;
+  vertical-align: middle;
+  background-color: var(--foreground);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2v4'/%3E%3Cpath d='m16.2 7.8 2.9-2.9'/%3E%3Cpath d='M18 12h4'/%3E%3Cpath d='m16.2 16.2 2.9 2.9'/%3E%3Cpath d='M12 18v4'/%3E%3Cpath d='m4.9 19.1 2.9-2.9'/%3E%3Cpath d='M2 12h4'/%3E%3Cpath d='m4.9 4.9 2.9 2.9'/%3E%3C/svg%3E");
+  -webkit-mask-size: contain;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2v4'/%3E%3Cpath d='m16.2 7.8 2.9-2.9'/%3E%3Cpath d='M18 12h4'/%3E%3Cpath d='m16.2 16.2 2.9 2.9'/%3E%3Cpath d='M12 18v4'/%3E%3Cpath d='m4.9 19.1 2.9-2.9'/%3E%3Cpath d='M2 12h4'/%3E%3Cpath d='m4.9 4.9 2.9 2.9'/%3E%3C/svg%3E");
+  mask-size: contain;
+  animation: pi-think-spin 0.7s linear infinite;
+}
+
 @keyframes pi-think-spin {
   to { transform: rotate(360deg); }
 }
@@ -725,6 +762,25 @@ thinking-block markdown-block {
 /* Ctrl+O toggle — tool cards: keep normal card styling.
    (We collapse/expand the tool body by toggling max-h-* classes in JS.) */
 
-/* Utility-coupled hide-internals / usage / abort / streaming cursor rules live in
-   theme/unstable-overrides.css. */
+.pi-hide-internals .pi-assistant-body {
+  gap: 8px;
+}
+
+/* Usage/cost — hidden (context % in status bar is enough) */
+.pi-assistant-usage {
+  display: none;
+}
+
+/* Abort message — indent to align with content */
+.pi-assistant-aborted {
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+  font-style: italic;
+  padding-left: 12px;
+}
+
+/* Streaming cursor — hidden; the pi-working indicator already signals activity */
+.pi-streaming-cursor {
+  display: none;
+}
 

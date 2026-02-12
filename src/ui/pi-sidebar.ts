@@ -16,6 +16,7 @@ import { ChevronRight } from "lucide";
 import "./pi-input.js";
 import "./working-indicator.js";
 import { initToolGrouping } from "./tool-grouping.js";
+import { applyMessageStyleHooks } from "./message-style-hooks.js";
 import type { PiInput } from "./pi-input.js";
 import { isDebugEnabled, formatK } from "../debug/debug.js";
 import {
@@ -250,7 +251,11 @@ export class PiSidebar extends LitElement {
     this._setupAutoScroll();
 
     const inner = this.querySelector<HTMLElement>(".pi-messages__inner");
-    if (!inner || this._groupingRoot === inner) return;
+    if (!inner) return;
+
+    applyMessageStyleHooks(inner);
+
+    if (this._groupingRoot === inner) return;
 
     this._cleanupGrouping?.();
     this._cleanupGrouping = initToolGrouping(inner);

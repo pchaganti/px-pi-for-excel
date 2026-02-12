@@ -50,7 +50,7 @@ Tailwind v4 puts all utilities inside `@layer utilities`. Unlayered CSS always b
 | 6. Working indicator | `.pi-working` — pulsing "Working…" bar shown during streaming |
 | 7–10. Chrome | Status bar (model picker + ctx + thinking), toast, slash command menu, welcome overlay |
 | 10b. Overlay primitives | Shared classes for builtins overlays (tabs, textarea, buttons, footer actions) |
-| 11. Content overrides | **Targeted** pi-web-ui tweaks — user bubble color, sidebar-width margins, tool card borders |
+| 11. Content overrides | **Targeted** pi-web-ui tweaks — user bubble color, sidebar-width margins, tool card borders, semantic classes from message style hooks |
 | 12–13. Dialogs, unstable overrides, Queue | Stable dialog styling + isolated utility-coupled overrides + steer/follow-up queue |
 
 > Note: `theme.css` is an entrypoint; styles are split into `src/ui/theme/*.css` and imported in order:
@@ -69,6 +69,7 @@ pi-web-ui uses Light DOM (`createRenderRoot() { return this; }`), so styles leak
 
 - **Prefer CSS variables** (`--background`, `--border`, `--primary`, etc.) — pi-web-ui reads these.
 - **Use element-scoped selectors** like `user-message .mx-4` or `tool-message .border` — not bare class names.
+- For message internals, prefer adding semantic classes in `src/ui/message-style-hooks.ts` (`applyMessageStyleHooks`) and target those classes in CSS.
 - **Use `!important` sparingly** — only needed when overriding Tailwind utility classes that also use `!important` or when specificity within `@layer` can't be beaten otherwise.
 - **Don't target deep Tailwind internals** like `.px-2.pb-2 > .flex.gap-2:last-child > button:last-child`. These break on library updates. Target the custom element tag or a stable class name.
 - If you must target utility internals, place the rule in `src/ui/theme/unstable-overrides.css` with a short comment.
@@ -79,6 +80,7 @@ pi-web-ui uses Light DOM (`createRenderRoot() { return this; }`), so styles leak
 |---|---|---|
 | `pi-sidebar.ts` | ChatPanel + AgentInterface | Owns layout, subscribes to Agent, renders message-list + streaming container + working indicator |
 | `pi-input.ts` | MessageEditor | Auto-growing textarea, send/abort button, fires `pi-send` / `pi-abort` events |
+| `message-style-hooks.ts` | — | Stamps semantic classes on pi-web-ui message internals (`pi-assistant-body`, `pi-tool-card-fallback`, etc.) to avoid brittle utility selectors |
 | `toast.ts` | — | `showToast(msg, duration)` — positions a fixed notification |
 | `loading.ts` | — | Splash screen shown during init |
 | `provider-login.ts` | — | API key entry rows for the welcome overlay |
