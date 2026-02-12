@@ -67,6 +67,8 @@ export interface RecoveryFormatSelection {
   horizontalAlignment?: boolean;
   verticalAlignment?: boolean;
   wrapText?: boolean;
+  columnWidth?: boolean;
+  rowHeight?: boolean;
   borderTop?: boolean;
   borderBottom?: boolean;
   borderLeft?: boolean;
@@ -96,6 +98,8 @@ export interface RecoveryFormatAreaState {
   horizontalAlignment?: string;
   verticalAlignment?: string;
   wrapText?: boolean;
+  columnWidths?: number[];
+  rowHeights?: number[];
   borderTop?: RecoveryFormatBorderState;
   borderBottom?: RecoveryFormatBorderState;
   borderLeft?: RecoveryFormatBorderState;
@@ -424,6 +428,8 @@ function cloneRecoveryFormatSelection(selection: RecoveryFormatSelection): Recov
     horizontalAlignment: selection.horizontalAlignment,
     verticalAlignment: selection.verticalAlignment,
     wrapText: selection.wrapText,
+    columnWidth: selection.columnWidth,
+    rowHeight: selection.rowHeight,
     borderTop: selection.borderTop,
     borderBottom: selection.borderBottom,
     borderLeft: selection.borderLeft,
@@ -461,6 +467,8 @@ function cloneRecoveryFormatAreaState(area: RecoveryFormatAreaState): RecoveryFo
     horizontalAlignment: area.horizontalAlignment,
     verticalAlignment: area.verticalAlignment,
     wrapText: area.wrapText,
+    columnWidths: area.columnWidths ? [...area.columnWidths] : undefined,
+    rowHeights: area.rowHeights ? [...area.rowHeights] : undefined,
     borderTop: area.borderTop ? cloneRecoveryFormatBorderState(area.borderTop) : undefined,
     borderBottom: area.borderBottom ? cloneRecoveryFormatBorderState(area.borderBottom) : undefined,
     borderLeft: area.borderLeft ? cloneRecoveryFormatBorderState(area.borderLeft) : undefined,
@@ -495,6 +503,8 @@ function hasSelectedFormatProperty(selection: RecoveryFormatSelection): boolean 
     selection.horizontalAlignment === true ||
     selection.verticalAlignment === true ||
     selection.wrapText === true ||
+    selection.columnWidth === true ||
+    selection.rowHeight === true ||
     selection.borderTop === true ||
     selection.borderBottom === true ||
     selection.borderLeft === true ||
@@ -633,6 +643,8 @@ interface PreparedFormatAreaCapture {
   address: string;
   rowCount: number;
   columnCount: number;
+  columnFormats: Excel.RangeFormat[];
+  rowFormats: Excel.RangeFormat[];
   borders: Partial<Record<RecoveryBorderKey, Excel.RangeBorder>>;
 }
 
@@ -685,6 +697,8 @@ async function captureFormatRangeStateWithSelection(
       address: qualifyAddressWithSheet(target.sheetName, area.address),
       rowCount: area.rowCount,
       columnCount: area.columnCount,
+      columnFormats: [],
+      rowFormats: [],
       borders: {},
     };
 
@@ -702,6 +716,22 @@ async function captureFormatRangeStateWithSelection(
 
     if (selection.horizontalAlignment === true || selection.verticalAlignment === true || selection.wrapText === true) {
       area.format.load("horizontalAlignment,verticalAlignment,wrapText");
+    }
+
+    if (selection.columnWidth === true) {
+      for (let columnIndex = 0; columnIndex < area.columnCount; columnIndex += 1) {
+        const columnFormat = area.getColumn(columnIndex).format;
+        columnFormat.load("columnWidth");
+        prepared.columnFormats.push(columnFormat);
+      }
+    }
+
+    if (selection.rowHeight === true) {
+      for (let rowIndex = 0; rowIndex < area.rowCount; rowIndex += 1) {
+        const rowFormat = area.getRow(rowIndex).format;
+        rowFormat.load("rowHeight");
+        prepared.rowFormats.push(rowFormat);
+      }
     }
 
     if (needsBorderLoad) {
@@ -860,6 +890,54 @@ async function captureFormatRangeStateWithSelection(
       areaState.wrapText = wrapText;
     }
 
+    if (selection.columnWidth === true) {
+      const columnWidths: number[] = [];
+      for (const columnFormat of prepared.columnFormats) {
+        const width = normalizeOptionalNumber(columnFormat.columnWidth);
+        if (width === undefined) {
+          return {
+            supported: false,
+            reason: "Format checkpoint capture failed: column width is mixed or unsupported.",
+          };
+        }
+
+        columnWidths.push(width);
+      }
+
+      if (columnWidths.length !== prepared.columnCount) {
+        return {
+          supported: false,
+          reason: "Format checkpoint capture failed: column-width count mismatch.",
+        };
+      }
+
+      areaState.columnWidths = columnWidths;
+    }
+
+    if (selection.rowHeight === true) {
+      const rowHeights: number[] = [];
+      for (const rowFormat of prepared.rowFormats) {
+        const height = normalizeOptionalNumber(rowFormat.rowHeight);
+        if (height === undefined) {
+          return {
+            supported: false,
+            reason: "Format checkpoint capture failed: row height is mixed or unsupported.",
+          };
+        }
+
+        rowHeights.push(height);
+      }
+
+      if (rowHeights.length !== prepared.rowCount) {
+        return {
+          supported: false,
+          reason: "Format checkpoint capture failed: row-height count mismatch.",
+        };
+      }
+
+      areaState.rowHeights = rowHeights;
+    }
+
     for (const borderKey of RECOVERY_BORDER_KEYS) {
       if (selection[borderKey] !== true) continue;
 
@@ -949,6 +1027,20 @@ function applyFormatRangeStateToArea(range: Excel.Range, state: RecoveryFormatAr
     range.format.wrapText = state.wrapText;
   }
 
+  if (Array.isArray(state.columnWidths)) {
+    for (let columnIndex = 0; columnIndex < state.columnWidths.length; columnIndex += 1) {
+      const width = state.columnWidths[columnIndex];
+      range.getColumn(columnIndex).format.columnWidth = width;
+    }
+  }
+
+  if (Array.isArray(state.rowHeights)) {
+    for (let rowIndex = 0; rowIndex < state.rowHeights.length; rowIndex += 1) {
+      const height = state.rowHeights[rowIndex];
+      range.getRow(rowIndex).format.rowHeight = height;
+    }
+  }
+
   for (const borderKey of RECOVERY_BORDER_KEYS) {
     const borderState = state[borderKey];
     if (!borderState) continue;
@@ -1006,10 +1098,23 @@ export async function applyFormatCellsState(
     for (const loaded of loadedAreas) {
       const { areaState, range } = loaded;
 
-      if (typeof areaState.numberFormat !== "undefined") {
+      const requiresExactShape =
+        typeof areaState.numberFormat !== "undefined" ||
+        typeof areaState.columnWidths !== "undefined" ||
+        typeof areaState.rowHeights !== "undefined";
+
+      if (requiresExactShape) {
         if (range.rowCount !== areaState.rowCount || range.columnCount !== areaState.columnCount) {
           throw new Error("Format checkpoint range shape changed and cannot be restored safely.");
         }
+      }
+
+      if (Array.isArray(areaState.columnWidths) && areaState.columnWidths.length !== areaState.columnCount) {
+        throw new Error("Format checkpoint is invalid: column-width data does not match range shape.");
+      }
+
+      if (Array.isArray(areaState.rowHeights) && areaState.rowHeights.length !== areaState.rowCount) {
+        throw new Error("Format checkpoint is invalid: row-height data does not match range shape.");
       }
 
       applyFormatRangeStateToArea(range, areaState);
