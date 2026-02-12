@@ -29,6 +29,10 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
+function formatCapabilityList(capabilities: readonly string[]): string {
+  return capabilities.length > 0 ? capabilities.join(", ") : "(none)";
+}
+
 function createSectionTitle(text: string): HTMLHeadingElement {
   const title = document.createElement("h3");
   title.textContent = text;
@@ -346,6 +350,19 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
       badges.appendChild(createBadge("pending", "muted"));
     }
 
+    const trustBadgeColor = status.trust === "remote-url" || status.trust === "inline-code"
+      ? "warn"
+      : "muted";
+    badges.appendChild(createBadge(status.trustLabel, trustBadgeColor));
+
+    badges.appendChild(
+      createBadge(`${status.effectiveCapabilities.length} permission${status.effectiveCapabilities.length === 1 ? "" : "s"}`, "muted"),
+    );
+
+    if (!status.permissionsEnforced) {
+      badges.appendChild(createBadge("gates off", "warn"));
+    }
+
     if (status.toolNames.length > 0) {
       badges.appendChild(createBadge(`${status.toolNames.length} tool${status.toolNames.length === 1 ? "" : "s"}`, "muted"));
     }
@@ -371,6 +388,22 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
       tools.textContent = `Tools: ${status.toolNames.join(", ")}`;
       tools.style.cssText = "font-size: 11px; color: var(--muted-foreground);";
       details.appendChild(tools);
+    }
+
+    const permissions = document.createElement("div");
+    if (status.permissionsEnforced) {
+      permissions.textContent = `Permissions: ${formatCapabilityList(status.effectiveCapabilities)}`;
+    } else {
+      permissions.textContent = "Permissions: all capabilities active (extension-permissions experiment is off)";
+    }
+    permissions.style.cssText = "font-size: 11px; color: var(--muted-foreground);";
+    details.appendChild(permissions);
+
+    if (!status.permissionsEnforced) {
+      const configuredPermissions = document.createElement("div");
+      configuredPermissions.textContent = `Configured (inactive): ${formatCapabilityList(status.grantedCapabilities)}`;
+      configuredPermissions.style.cssText = "font-size: 11px; color: var(--muted-foreground);";
+      details.appendChild(configuredPermissions);
     }
 
     if (status.lastError) {
