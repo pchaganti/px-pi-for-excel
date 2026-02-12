@@ -43,6 +43,14 @@ void test("formulaReferencesTargetCell matches cells inside ranges", () => {
   assert.equal(formulaReferencesTargetCell(formula, "Calc", "Sheet2!E7"), false);
 });
 
+void test("extractFormulaReferences ignores A1-like tokens inside quoted literals", () => {
+  const formula = "=IF(A1=\"B2\", A1, 0)";
+  const refs = extractFormulaReferences(formula, "Calc");
+
+  assert.deepEqual(refs.map((ref) => ref.startAddress), ["Calc!A1"]);
+  assert.equal(formulaReferencesTargetCell(formula, "Calc", "Calc!B2"), false);
+});
+
 void test("summarizeTraceTree returns node and edge counts", () => {
   const tree: DepNodeDetail = {
     address: "Sheet1!D10",

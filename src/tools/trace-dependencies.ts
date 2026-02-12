@@ -29,11 +29,12 @@ import type {
 } from "./tool-details.js";
 import {
   extractFormulaReferences,
-  formulaReferencesParsedTarget,
   normalizeTraceMode,
   normalizeTraversalAddress,
   parseQualifiedCellAddress,
+  parsedReferencesContainTarget,
   summarizeTraceTree,
+  type ParsedFormulaReference,
 } from "./trace-dependencies-logic.js";
 
 const schema = Type.Object({
@@ -57,10 +58,16 @@ const schema = Type.Object({
 
 type Params = Static<typeof schema>;
 
+interface FormulaDependentCandidate {
+  dependentAddress: string;
+  references: ParsedFormulaReference[];
+}
+
 interface TraceBuildState {
   usedApi: boolean;
   usedFormulaScan: boolean;
   truncated: boolean;
+  dependentFormulaCandidates: FormulaDependentCandidate[] | null;
 }
 
 const MAX_DEPTH = 5;
@@ -96,33 +103,69 @@ async function loadLeafNode(
   };
 }
 
-async function findDirectDependentsByFormulaScan(
-  context: Excel.RequestContext,
-  targetAddress: string,
-  state: TraceBuildState,
-): Promise<string[]> {
-  const target = parseQualifiedCellAddress(targetAddress, "");
-  if (!target) return [];
+function estimateAddressCellCount(address: string): number {
+  const parsed = parseRangeRef(address);
+  const areas = parsed.address.split(",").map((part) => part.trim()).filter((part) => part.length > 0);
 
+  let total = 0;
+  for (const area of areas) {
+    const [rawStart, rawEnd] = area.split(":");
+    if (!rawStart) continue;
+
+    const startToken = rawStart.replace(/\$/gu, "").trim();
+    const endToken = (rawEnd ?? rawStart).replace(/\$/gu, "").trim();
+    if (!startToken || !endToken) continue;
+
+    try {
+      const start = parseCell(startToken);
+      const end = parseCell(endToken);
+      const width = Math.abs(end.col - start.col) + 1;
+      const height = Math.abs(end.row - start.row) + 1;
+      total += width * height;
+    } catch {
+      // Skip malformed area segment.
+    }
+  }
+
+  return total;
+}
+
+async function buildDependentFormulaCandidates(
+  context: Excel.RequestContext,
+  state: TraceBuildState,
+): Promise<FormulaDependentCandidate[]> {
   const worksheets = context.workbook.worksheets;
   worksheets.load("items/name");
   await context.sync();
 
-  const usedRanges: Array<{ sheetName: string; range: Excel.Range }> = [];
+  const rangesToInspect: Array<{ sheetName: string; range: Excel.Range }> = [];
   for (const worksheet of worksheets.items) {
     const usedRange = worksheet.getUsedRangeOrNullObject();
-    usedRange.load("isNullObject,address,formulas");
-    usedRanges.push({ sheetName: worksheet.name, range: usedRange });
+    usedRange.load("isNullObject,address");
+    rangesToInspect.push({ sheetName: worksheet.name, range: usedRange });
   }
   await context.sync();
 
-  const dependents = new Set<string>();
-  let scannedFormulaCells = 0;
+  let remainingCellBudget = MAX_DEPENDENT_SCAN_FORMULA_CELLS;
+  const loadedRanges: Array<{
+    sheetName: string;
+    range: Excel.Range;
+    startCol: number;
+    startRow: number;
+  }> = [];
 
-  for (const { sheetName, range } of usedRanges) {
-    if (range.isNullObject) continue;
+  for (const candidate of rangesToInspect) {
+    if (candidate.range.isNullObject) continue;
 
-    const parsedRange = parseRangeRef(range.address);
+    const cellCount = estimateAddressCellCount(candidate.range.address);
+    if (cellCount <= 0) continue;
+
+    if (cellCount > remainingCellBudget) {
+      state.truncated = true;
+      continue;
+    }
+
+    const parsedRange = parseRangeRef(candidate.range.address);
     const startToken = parsedRange.address.split(":")[0]?.replace(/\$/gu, "").trim();
     if (!startToken) continue;
 
@@ -133,7 +176,24 @@ async function findDirectDependentsByFormulaScan(
       continue;
     }
 
-    const formulasGrid: unknown = range.formulas;
+    candidate.range.load("formulas");
+    loadedRanges.push({
+      sheetName: candidate.sheetName,
+      range: candidate.range,
+      startCol: startCellRef.col,
+      startRow: startCellRef.row,
+    });
+    remainingCellBudget -= cellCount;
+  }
+
+  if (loadedRanges.length > 0) {
+    await context.sync();
+  }
+
+  const formulaCandidates: FormulaDependentCandidate[] = [];
+
+  for (const loaded of loadedRanges) {
+    const formulasGrid: unknown = loaded.range.formulas;
     if (!Array.isArray(formulasGrid)) continue;
 
     for (const [rowIndex, rowValue] of formulasGrid.entries()) {
@@ -144,27 +204,45 @@ async function findDirectDependentsByFormulaScan(
           continue;
         }
 
-        scannedFormulaCells += 1;
-        if (scannedFormulaCells > MAX_DEPENDENT_SCAN_FORMULA_CELLS) {
-          state.truncated = true;
-          return [...dependents];
-        }
+        const references = extractFormulaReferences(formulaValue, loaded.sheetName);
+        if (references.length === 0) continue;
 
-        if (!formulaReferencesParsedTarget(formulaValue, sheetName, target)) {
-          continue;
-        }
-
-        const dependentAddress = qualifiedAddress(
-          sheetName,
-          cellAddress(startCellRef.col + colIndex, startCellRef.row + rowIndex),
-        );
-        dependents.add(dependentAddress);
-
-        if (dependents.size >= MAX_CHILDREN_PER_NODE) {
-          state.truncated = true;
-          return [...dependents];
-        }
+        formulaCandidates.push({
+          dependentAddress: qualifiedAddress(
+            loaded.sheetName,
+            cellAddress(loaded.startCol + colIndex, loaded.startRow + rowIndex),
+          ),
+          references,
+        });
       }
+    }
+  }
+
+  return formulaCandidates;
+}
+
+async function findDirectDependentsByFormulaScan(
+  context: Excel.RequestContext,
+  targetAddress: string,
+  state: TraceBuildState,
+): Promise<string[]> {
+  const target = parseQualifiedCellAddress(targetAddress, "");
+  if (!target) return [];
+
+  if (!state.dependentFormulaCandidates) {
+    state.dependentFormulaCandidates = await buildDependentFormulaCandidates(context, state);
+  }
+
+  const dependents = new Set<string>();
+  for (const candidate of state.dependentFormulaCandidates) {
+    if (!parsedReferencesContainTarget(candidate.references, target)) {
+      continue;
+    }
+
+    dependents.add(candidate.dependentAddress);
+    if (dependents.size >= MAX_CHILDREN_PER_NODE) {
+      state.truncated = true;
+      break;
     }
   }
 
@@ -193,7 +271,7 @@ async function resolveChildAddresses(
 
   if (mode === "precedents") {
     const precedents = await getDirectPrecedentsSafe(context, range);
-    if (precedents && precedents.length > 0) {
+    if (precedents !== null) {
       state.usedApi = true;
       for (const group of precedents) {
         for (const address of group) {
@@ -224,7 +302,7 @@ async function resolveChildAddresses(
   }
 
   const dependents = await getDirectDependentsSafe(context, range);
-  if (dependents && dependents.length > 0) {
+  if (dependents !== null) {
     state.usedApi = true;
     for (const group of dependents) {
       for (const address of group) {
@@ -371,6 +449,7 @@ export function createTraceDependenciesTool(): AgentTool<typeof schema> {
           usedApi: false,
           usedFormulaScan: false,
           truncated: false,
+          dependentFormulaCandidates: null,
         };
 
         const tree = await excelRun(async (context) => {

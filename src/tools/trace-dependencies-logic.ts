@@ -26,6 +26,10 @@ function normalizeSheetKey(sheetName: string): string {
   return sheetName.trim().toLowerCase();
 }
 
+function stripQuotedStringLiterals(formula: string): string {
+  return formula.replace(/"(?:[^"]|"")*"/gu, "");
+}
+
 export function parseQualifiedCellAddress(cellRef: string, defaultSheet: string): ParsedCellAddress | null {
   try {
     const parsed = parseRangeRef(cellRef);
@@ -54,8 +58,9 @@ export function normalizeTraversalAddress(address: string, defaultSheet: string)
 export function extractFormulaReferences(formula: string, currentSheet: string): ParsedFormulaReference[] {
   const references: ParsedFormulaReference[] = [];
   const seen = new Set<string>();
+  const searchFormula = stripQuotedStringLiterals(formula);
 
-  for (const match of formula.matchAll(FORMULA_REF_PATTERN)) {
+  for (const match of searchFormula.matchAll(FORMULA_REF_PATTERN)) {
     const token = match[0];
     if (!token) continue;
 
@@ -107,15 +112,13 @@ export function extractFormulaReferences(formula: string, currentSheet: string):
   return references;
 }
 
-export function formulaReferencesParsedTarget(
-  formula: string,
-  currentSheet: string,
+export function parsedReferencesContainTarget(
+  references: readonly ParsedFormulaReference[],
   target: ParsedCellAddress,
 ): boolean {
   const targetSheetKey = normalizeSheetKey(target.sheet);
-  const refs = extractFormulaReferences(formula, currentSheet);
 
-  return refs.some((ref) => {
+  return references.some((ref) => {
     if (normalizeSheetKey(ref.sheet) !== targetSheetKey) return false;
 
     return (
@@ -125,6 +128,15 @@ export function formulaReferencesParsedTarget(
       target.row <= ref.endRow
     );
   });
+}
+
+export function formulaReferencesParsedTarget(
+  formula: string,
+  currentSheet: string,
+  target: ParsedCellAddress,
+): boolean {
+  const refs = extractFormulaReferences(formula, currentSheet);
+  return parsedReferencesContainTarget(refs, target);
 }
 
 export function formulaReferencesTargetCell(
