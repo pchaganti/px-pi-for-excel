@@ -269,7 +269,10 @@ export function installKeyboardShortcuts(opts: {
     ) {
       e.preventDefault();
       e.stopPropagation();
-      blurTextEntryTarget(targetNode);
+      const blurred = blurTextEntryTarget(targetNode);
+      if (blurred) {
+        sidebar.focusTabNavigationAnchor();
+      }
       return;
     }
 

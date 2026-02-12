@@ -133,6 +133,28 @@ export class PiSidebar extends LitElement {
   getInput(): PiInput | undefined { return this._input ?? undefined; }
   getTextarea(): HTMLTextAreaElement | undefined { return this._input?.getTextarea(); }
 
+  focusTabNavigationAnchor(): boolean {
+    const activeTab = this.querySelector<HTMLButtonElement>(".pi-session-tab.is-active .pi-session-tab__main");
+    if (activeTab) {
+      activeTab.focus();
+      return true;
+    }
+
+    const firstTab = this.querySelector<HTMLButtonElement>(".pi-session-tab__main");
+    if (firstTab) {
+      firstTab.focus();
+      return true;
+    }
+
+    const utilitiesButton = this.querySelector<HTMLButtonElement>(".pi-utilities-btn");
+    if (utilitiesButton) {
+      utilitiesButton.focus();
+      return true;
+    }
+
+    return false;
+  }
+
   /** Force re-sync from agent state (e.g. after replaceMessages). */
   syncFromAgent(): void {
     if (!this.agent) return;

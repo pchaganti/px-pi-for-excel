@@ -63,7 +63,6 @@ import { showFilesWorkspaceDialog } from "../ui/files-dialog.js";
 import {
   PI_REQUEST_INPUT_FOCUS_EVENT,
   moveCursorToEnd,
-  requestChatInputFocus,
 } from "../ui/input-focus.js";
 import { showActionToast, showToast } from "../ui/toast.js";
 import { PiSidebar } from "../ui/pi-sidebar.js";
@@ -408,6 +407,7 @@ export async function initTaskpane(opts: {
   const tabLayoutSignature = (layout: WorkbookTabLayout): string => JSON.stringify(layout);
 
   let previousActiveRuntimeId: string | null = null;
+  let suppressNextInputAutofocus = false;
   let tabLayoutPersistenceEnabled = false;
   let lastPersistedTabLayoutSignature: string | null = null;
   let tabLayoutPersistChain: Promise<void> = Promise.resolve();
@@ -472,9 +472,10 @@ export async function initTaskpane(opts: {
     if (activeRuntimeId !== previousActiveRuntimeId) {
       previousActiveRuntimeId = activeRuntimeId;
       document.dispatchEvent(new CustomEvent("pi:active-runtime-changed"));
-      if (activeRuntimeId) {
+      if (activeRuntimeId && !suppressNextInputAutofocus) {
         focusChatInputSoon();
       }
+      suppressNextInputAutofocus = false;
     }
 
     maybePersistTabLayout();
@@ -1190,8 +1191,11 @@ export async function initTaskpane(opts: {
         return;
       }
 
+      suppressNextInputAutofocus = true;
       runtimeManager.switchRuntime(tabs[nextIndex].runtimeId);
-      requestChatInputFocus();
+      requestAnimationFrame(() => {
+        sidebar.focusTabNavigationAnchor();
+      });
     },
   });
 
