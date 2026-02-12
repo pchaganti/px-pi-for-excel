@@ -523,6 +523,21 @@ function humanizeTraceDependencies(p: Record<string, unknown>): ParamItem[] {
   return items;
 }
 
+function humanizeExplainFormula(p: Record<string, unknown>): ParamItem[] {
+  const items: ParamItem[] = [];
+
+  if (p.cell) {
+    items.push({ label: "Cell", value: cellRef(str(p.cell)) });
+  }
+
+  const maxReferences = num(p.max_references);
+  if (maxReferences !== undefined && maxReferences !== 8) {
+    items.push({ label: "Max references", value: String(maxReferences) });
+  }
+
+  return items;
+}
+
 function humanizeComments(p: Record<string, unknown>): ParamItem[] {
   const items: ParamItem[] = [];
 
@@ -881,6 +896,7 @@ const CORE_HUMANIZERS = {
   modify_structure: humanizeModifyStructure,
   conditional_format: humanizeConditionalFormat,
   trace_dependencies: humanizeTraceDependencies,
+  explain_formula: humanizeExplainFormula,
   view_settings: humanizeViewSettings,
   get_workbook_overview: humanizeGetWorkbookOverview,
   comments: humanizeComments,

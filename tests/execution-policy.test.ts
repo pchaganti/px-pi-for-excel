@@ -22,6 +22,11 @@ void test("classifies trace_dependencies (precedents/dependents) as read-only", 
   );
 });
 
+void test("classifies explain_formula as read-only", () => {
+  assert.equal(getToolExecutionMode("explain_formula", { cell: "Sheet1!D10" }), "read");
+  assert.equal(getToolContextImpact("explain_formula", { cell: "Sheet1!D10" }), "none");
+});
+
 void test("classifies modify_structure as structure-impact mutate", () => {
   assert.equal(getToolExecutionMode("modify_structure", { action: "add_sheet" }), "mutate");
   assert.equal(getToolContextImpact("modify_structure", { action: "add_sheet" }), "structure");

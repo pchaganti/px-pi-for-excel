@@ -65,6 +65,12 @@ void test("system prompt documents trace_dependencies precedents/dependents mode
   assert.match(prompt, /`dependents`/i);
 });
 
+void test("system prompt lists explain_formula tool", () => {
+  const prompt = buildSystemPrompt();
+  assert.match(prompt, /\*\*explain_formula\*\*/);
+  assert.match(prompt, /plain language/i);
+});
+
 void test("system prompt mentions optional files workspace capability", () => {
   const prompt = buildSystemPrompt();
   assert.match(prompt, /\*\*files\*\*/);
