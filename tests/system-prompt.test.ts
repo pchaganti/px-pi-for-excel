@@ -8,9 +8,9 @@ void test("system prompt includes default placeholders when instructions are abs
   const prompt = buildSystemPrompt();
 
   assert.match(prompt, /## Rules/);
-  assert.match(prompt, /\(No rules set\.\)/);
   assert.match(prompt, /### All my files/);
   assert.match(prompt, /### This file/);
+  assert.match(prompt, /\(No rules set\.\)/);
 });
 
 void test("system prompt embeds provided user and workbook instructions", () => {

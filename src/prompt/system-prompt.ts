@@ -8,6 +8,7 @@
 import type { ResolvedConventions } from "../conventions/types.js";
 import { diffFromDefaults } from "../conventions/store.js";
 import { ACTIVE_INTEGRATIONS_PROMPT_HEADING } from "../integrations/naming.js";
+import { buildCoreToolPromptLines } from "../tools/capabilities.js";
 
 export interface ActiveIntegrationPromptEntry {
   id: string;
@@ -161,25 +162,12 @@ function buildConventionOverridesSection(
 
 const IDENTITY = `You are Pi, an AI assistant embedded in Microsoft Excel as a sidebar add-in. You help users understand, analyze, and modify their spreadsheets.`;
 
+const CORE_TOOL_PROMPT_LINES = buildCoreToolPromptLines();
+
 const TOOLS = `## Tools
 
 Core workbook tools:
-- **get_workbook_overview** — structural blueprint (sheets, headers, named ranges, tables); optional sheet-level detail for charts, pivots, shapes
-- **read_range** — read cell values/formulas in three formats: compact (markdown), csv (values-only), or detailed (with formatting + comments)
-- **write_cells** — write values/formulas with overwrite protection and auto-verification
-- **fill_formula** — fill a single formula across a range (AutoFill with relative refs)
-- **search_workbook** — find text, values, or formula references across all sheets; context_rows for surrounding data
-- **modify_structure** — insert/delete rows/columns, add/rename/delete sheets
-- **format_cells** — apply formatting (bold, colors, number format, borders, etc.)
-- **conditional_format** — add or clear conditional formatting rules (formula or cell-value)
-- **comments** — read, add, update, reply, delete, resolve/reopen cell comments
-- **trace_dependencies** — trace formula lineage for a cell (mode: \`precedents\` upstream or \`dependents\` downstream)
-- **explain_formula** — explain a single formula cell in plain language with cited direct references
-- **view_settings** — control gridlines, headings, freeze panes, tab color, sheet visibility, sheet activation, and standard width
-- **instructions** — update persistent rules for all files or this file (append or replace)
-- **conventions** — read/update formatting defaults (currency, negatives, zeros, decimal places)
-- **workbook_history** — list/restore/delete automatic backups created before Pi edits for supported workbook mutations (\`write_cells\`, \`fill_formula\`, \`python_transform_range\`, \`format_cells\`, \`conditional_format\`, \`comments\`, and supported \`modify_structure\` actions)
-- **skills** — list/read bundled Agent Skills (SKILL.md) for task-specific workflows
+${CORE_TOOL_PROMPT_LINES}
 - **extensions_manager** — list/install/reload/enable/disable/uninstall sidebar extensions from code (for extension authoring from chat)
 - **execute_office_js** — run direct Office.js against the active workbook when structured tools cannot express the operation (experimental; explanation + user approval required)
 

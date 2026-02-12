@@ -9,7 +9,8 @@
 import { html, nothing, type TemplateResult } from "lit";
 import { cellRef, cellRefs } from "./cell-link.js";
 import { formatColorLabel } from "./color-names.js";
-import type { CoreToolName } from "../tools/registry.js";
+import type { AuxiliaryUiToolName } from "../tools/capabilities.js";
+import type { CoreToolName } from "../tools/names.js";
 
 /* ── Types ──────────────────────────────────────────────────── */
 
@@ -944,13 +945,13 @@ const CORE_HUMANIZERS = {
   skills: humanizeSkills,
 } satisfies Record<CoreToolName, HumanizerFn>;
 
-const EXTRA_HUMANIZERS: Record<string, HumanizerFn> = {
+const EXTRA_HUMANIZERS = {
   web_search: humanizeWebSearch,
   mcp: humanizeMcp,
   files: humanizeFiles,
   python_transform_range: humanizePythonTransformRange,
   execute_office_js: humanizeExecuteOfficeJs,
-};
+} satisfies Record<AuxiliaryUiToolName, HumanizerFn>;
 
 const HUMANIZERS: Record<string, HumanizerFn> = {
   ...CORE_HUMANIZERS,

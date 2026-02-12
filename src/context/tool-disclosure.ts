@@ -1,6 +1,6 @@
 import type { Context, Tool } from "@mariozechner/pi-ai";
 
-import { CORE_TOOL_NAMES, type CoreToolName } from "../tools/registry.js";
+import { CORE_TOOL_NAMES, type CoreToolName } from "../tools/names.js";
 
 export type ToolBundleId = "none" | "core" | "analysis" | "formatting" | "structure" | "comments" | "full";
 

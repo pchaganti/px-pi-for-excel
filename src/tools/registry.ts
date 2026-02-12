@@ -30,27 +30,8 @@ import {
   type SkillsToolDependencies,
 } from "./skills.js";
 
-/** Canonical list of core tool names (single source of truth). */
-export const CORE_TOOL_NAMES = [
-  "get_workbook_overview",
-  "read_range",
-  "write_cells",
-  "fill_formula",
-  "search_workbook",
-  "modify_structure",
-  "format_cells",
-  "conditional_format",
-  "trace_dependencies",
-  "explain_formula",
-  "view_settings",
-  "comments",
-  "instructions",
-  "conventions",
-  "workbook_history",
-  "skills",
-] as const;
-
-export type CoreToolName = (typeof CORE_TOOL_NAMES)[number];
+export { CORE_TOOL_NAMES } from "./names.js";
+export type { CoreToolName } from "./names.js";
 
 // We intentionally erase per-tool parameter typing at the list boundary.
 // Each tool still validates its own schema at runtime.

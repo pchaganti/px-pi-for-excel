@@ -14,7 +14,7 @@ import { renderCollapsibleToolCardHeader, renderToolCardHeader } from "./tool-ca
 import { cellRef, cellRefDisplay, cellRefs } from "./cell-link.js";
 import { humanizeToolInput } from "./humanize-params.js";
 import { humanizeColorsInText } from "./color-names.js";
-import { CORE_TOOL_NAMES, type CoreToolName } from "../tools/registry.js";
+import { UI_TOOL_NAMES, type UiToolName } from "../tools/capabilities.js";
 import {
   isCommentsDetails,
   isConditionalFormatDetails,
@@ -44,8 +44,7 @@ import { renderDepTree } from "./render-dep-tree.js";
 import "@mariozechner/mini-lit/dist/MarkdownBlock.js";
 
 type ToolState = "inprogress" | "complete" | "error";
-type ExtraToolName = "web_search" | "mcp" | "files" | "python_transform_range";
-type SupportedToolName = CoreToolName | ExtraToolName;
+type SupportedToolName = UiToolName;
 
 /* ── Helpers ────────────────────────────────────────────────── */
 
@@ -1156,13 +1155,7 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
   };
 }
 
-const CUSTOM_RENDERED_TOOL_NAMES: SupportedToolName[] = [
-  ...CORE_TOOL_NAMES,
-  "web_search",
-  "mcp",
-  "files",
-  "python_transform_range",
-];
+const CUSTOM_RENDERED_TOOL_NAMES: readonly SupportedToolName[] = UI_TOOL_NAMES;
 
 for (const name of CUSTOM_RENDERED_TOOL_NAMES) {
   registerToolRenderer(name, createExcelMarkdownRenderer(name));
