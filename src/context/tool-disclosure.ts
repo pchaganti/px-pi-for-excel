@@ -27,6 +27,7 @@ const TOOL_BUNDLES = {
     "write_cells",
     "fill_formula",
     "trace_dependencies",
+    "explain_formula",
     "instructions",
     "conventions",
     "workbook_history",

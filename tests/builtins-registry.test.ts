@@ -53,7 +53,7 @@ void test("builtins registry wires /experimental, /extensions, and /integrations
   assert.match(source, /\.\.\.createExtensionsCommands\(context\)/);
 
   const extensionApiSource = await readFile(new URL("../src/commands/extension-api.ts", import.meta.url), "utf8");
-  assert.match(extensionApiSource, /import\.meta\.glob\("\.\.\/extensions\/\*\.\{ts,js\}"\)/);
+  assert.match(extensionApiSource, /\.glob\("\.\.\/extensions\/\*\.\{ts,js\}"\)/);
   assert.match(extensionApiSource, /Local extension module/);
   assert.match(extensionApiSource, /isCapabilityEnabled/);
   assert.match(extensionApiSource, /commands\.register/);
@@ -70,6 +70,8 @@ void test("builtins registry wires /experimental, /extensions, and /integrations
   assert.match(runtimeManagerSource, /async setExtensionCapability\(/);
   assert.match(runtimeManagerSource, /setExtensionCapabilityAllowed\(/);
   assert.match(runtimeManagerSource, /await this\.reloadExtension\(entry\.id\);/);
+  assert.match(runtimeManagerSource, /activateExtensionInSandbox/);
+  assert.match(runtimeManagerSource, /extension_sandbox_runtime/);
 
   const extensionsOverlaySource = await readFile(
     new URL("../src/commands/builtins/extensions-overlay.ts", import.meta.url),
@@ -79,6 +81,10 @@ void test("builtins registry wires /experimental, /extensions, and /integrations
   assert.match(extensionsOverlaySource, /toggle\.type = "checkbox"/);
   assert.match(extensionsOverlaySource, /confirmExtensionInstall\(/);
   assert.match(extensionsOverlaySource, /confirmExtensionEnable\(/);
+  assert.match(extensionsOverlaySource, /Sandbox runtime \(default for untrusted sources\)/);
+  assert.match(extensionsOverlaySource, /setExperimentalFeatureEnabled\("extension_sandbox_runtime", true\)/);
+  assert.match(extensionsOverlaySource, /setExperimentalFeatureEnabled\("extension_sandbox_runtime", false\)/);
+  assert.match(extensionsOverlaySource, /Rollback mode is active: this untrusted extension runs in host runtime/);
   assert.match(extensionsOverlaySource, /higher-risk permissions/);
   assert.match(extensionsOverlaySource, /Updated permissions for/);
   assert.match(extensionsOverlaySource, /reload failed \(see Last error\)/);
@@ -87,10 +93,16 @@ void test("builtins registry wires /experimental, /extensions, and /integrations
   assert.match(extensionsDocsSource, /## Permission review\/revoke/);
   assert.match(extensionsDocsSource, /Install from URL\/code asks for confirmation/);
   assert.match(extensionsDocsSource, /extensions\.registry\.v2/);
+  assert.match(extensionsDocsSource, /extension-widget-v2/);
 
   const experimentalFlagsSource = await readFile(new URL("../src/experiments/flags.ts", import.meta.url), "utf8");
   assert.match(experimentalFlagsSource, /extension_permission_gates/);
   assert.match(experimentalFlagsSource, /extension-permissions/);
+  assert.match(experimentalFlagsSource, /extension_sandbox_runtime/);
+  assert.match(experimentalFlagsSource, /extension-sandbox/);
+  assert.match(experimentalFlagsSource, /defaultEnabled:\s*true/);
+  assert.match(experimentalFlagsSource, /extension_widget_v2/);
+  assert.match(experimentalFlagsSource, /extension-widget-v2/);
 });
 
 void test("taskpane init keeps getIntegrationToolNames imported when used", async () => {

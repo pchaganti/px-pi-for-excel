@@ -8,6 +8,12 @@
 import type { WorkbookCellChangeSummary } from "../audit/cell-diff.js";
 import { isRecord } from "../utils/type-guards.js";
 
+export interface RecoveryCheckpointDetails {
+  status: "checkpoint_created" | "not_available";
+  snapshotId?: string;
+  reason?: string;
+}
+
 export interface WriteCellsDetails {
   kind: "write_cells";
   blocked: boolean;
@@ -16,6 +22,7 @@ export interface WriteCellsDetails {
   existingCount?: number;
   formulaErrorCount?: number;
   changes?: WorkbookCellChangeSummary;
+  recovery?: RecoveryCheckpointDetails;
 }
 
 export interface FillFormulaDetails {
@@ -26,6 +33,7 @@ export interface FillFormulaDetails {
   existingCount?: number;
   formulaErrorCount?: number;
   changes?: WorkbookCellChangeSummary;
+  recovery?: RecoveryCheckpointDetails;
 }
 
 export interface FormatCellsDetails {
@@ -33,7 +41,38 @@ export interface FormatCellsDetails {
   /** Sheet-qualified range when known. May be a multi-range string. */
   address?: string;
   warningsCount?: number;
+  recovery?: RecoveryCheckpointDetails;
 }
+
+export interface ConditionalFormatDetails {
+  kind: "conditional_format";
+  action?: "add" | "clear";
+  address?: string;
+  recovery?: RecoveryCheckpointDetails;
+}
+
+export interface ModifyStructureDetails {
+  kind: "modify_structure";
+  action?: string;
+  recovery?: RecoveryCheckpointDetails;
+}
+
+export interface CommentsDetails {
+  kind: "comments";
+  action?: string;
+  address?: string;
+  recovery?: RecoveryCheckpointDetails;
+}
+
+export interface ViewSettingsDetails {
+  kind: "view_settings";
+  action?: string;
+  address?: string;
+  recovery?: RecoveryCheckpointDetails;
+}
+
+export type TraceDependenciesMode = "precedents" | "dependents";
+export type TraceDependencySource = "api" | "formula_scan" | "mixed" | "none";
 
 export interface DepNodeDetail {
   address: string;
@@ -41,12 +80,36 @@ export interface DepNodeDetail {
   /** Excel number format string, e.g. "0.00%", "#,##0", "$#,##0.00". */
   numberFormat?: string;
   formula?: string;
+  /** Child nodes in traversal order (precedents for precedents mode, dependents for dependents mode). */
   precedents: DepNodeDetail[];
 }
 
 export interface TraceDependenciesDetails {
   kind: "trace_dependencies";
   root: DepNodeDetail;
+  mode?: TraceDependenciesMode;
+  maxDepth?: number;
+  nodeCount?: number;
+  edgeCount?: number;
+  source?: TraceDependencySource;
+  truncated?: boolean;
+}
+
+export interface ExplainFormulaReferenceDetail {
+  address: string;
+  valuePreview?: string;
+  formulaPreview?: string;
+}
+
+export interface ExplainFormulaDetails {
+  kind: "explain_formula";
+  cell: string;
+  hasFormula: boolean;
+  formula?: string;
+  valuePreview?: string;
+  explanation: string;
+  references: ExplainFormulaReferenceDetail[];
+  truncated?: boolean;
 }
 
 export interface ReadRangeCsvDetails {
@@ -109,6 +172,7 @@ export interface PythonTransformRangeDetails {
   colsWritten?: number;
   formulaErrorCount?: number;
   changes?: WorkbookCellChangeSummary;
+  recovery?: RecoveryCheckpointDetails;
   error?: string;
 }
 
@@ -224,7 +288,12 @@ export type ExcelToolDetails =
   | WriteCellsDetails
   | FillFormulaDetails
   | FormatCellsDetails
+  | ConditionalFormatDetails
+  | ModifyStructureDetails
+  | CommentsDetails
+  | ViewSettingsDetails
   | TraceDependenciesDetails
+  | ExplainFormulaDetails
   | ReadRangeCsvDetails
   | TmuxBridgeDetails
   | PythonBridgeDetails
@@ -247,8 +316,32 @@ function isOptionalBoolean(value: unknown): value is boolean | undefined {
   return value === undefined || typeof value === "boolean";
 }
 
+function isOptionalTraceDependenciesMode(value: unknown): value is TraceDependenciesMode | undefined {
+  return value === undefined || value === "precedents" || value === "dependents";
+}
+
+function isOptionalTraceDependencySource(value: unknown): value is TraceDependencySource | undefined {
+  return value === undefined || value === "api" || value === "formula_scan" || value === "mixed" || value === "none";
+}
+
 function isOptionalStringArray(value: unknown): value is string[] | undefined {
   return value === undefined || (Array.isArray(value) && value.every((item) => typeof item === "string"));
+}
+
+function isRecoveryCheckpointDetails(value: unknown): value is RecoveryCheckpointDetails {
+  if (!isRecord(value)) return false;
+
+  const status = value.status;
+  if (status !== "checkpoint_created" && status !== "not_available") return false;
+
+  return (
+    isOptionalString(value.snapshotId) &&
+    isOptionalString(value.reason)
+  );
+}
+
+function isOptionalRecoveryCheckpointDetails(value: unknown): value is RecoveryCheckpointDetails | undefined {
+  return value === undefined || isRecoveryCheckpointDetails(value);
 }
 
 function isWorkbookCellChange(value: unknown): value is WorkbookCellChangeSummary["sample"][number] {
@@ -341,7 +434,8 @@ export function isWriteCellsDetails(value: unknown): value is WriteCellsDetails 
     isOptionalString(value.address) &&
     isOptionalNumber(value.existingCount) &&
     isOptionalNumber(value.formulaErrorCount) &&
-    isOptionalWorkbookCellChangeSummary(value.changes)
+    isOptionalWorkbookCellChangeSummary(value.changes) &&
+    isOptionalRecoveryCheckpointDetails(value.recovery)
   );
 }
 
@@ -355,7 +449,8 @@ export function isFillFormulaDetails(value: unknown): value is FillFormulaDetail
     isOptionalString(value.address) &&
     isOptionalNumber(value.existingCount) &&
     isOptionalNumber(value.formulaErrorCount) &&
-    isOptionalWorkbookCellChangeSummary(value.changes)
+    isOptionalWorkbookCellChangeSummary(value.changes) &&
+    isOptionalRecoveryCheckpointDetails(value.recovery)
   );
 }
 
@@ -366,7 +461,54 @@ export function isFormatCellsDetails(value: unknown): value is FormatCellsDetail
 
   return (
     isOptionalString(value.address) &&
-    isOptionalNumber(value.warningsCount)
+    isOptionalNumber(value.warningsCount) &&
+    isOptionalRecoveryCheckpointDetails(value.recovery)
+  );
+}
+
+export function isConditionalFormatDetails(value: unknown): value is ConditionalFormatDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "conditional_format") return false;
+
+  const action = value.action;
+  const validAction = action === undefined || action === "add" || action === "clear";
+  if (!validAction) return false;
+
+  return (
+    isOptionalString(value.address) &&
+    isOptionalRecoveryCheckpointDetails(value.recovery)
+  );
+}
+
+export function isModifyStructureDetails(value: unknown): value is ModifyStructureDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "modify_structure") return false;
+
+  return (
+    isOptionalString(value.action) &&
+    isOptionalRecoveryCheckpointDetails(value.recovery)
+  );
+}
+
+export function isCommentsDetails(value: unknown): value is CommentsDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "comments") return false;
+
+  return (
+    isOptionalString(value.action) &&
+    isOptionalString(value.address) &&
+    isOptionalRecoveryCheckpointDetails(value.recovery)
+  );
+}
+
+export function isViewSettingsDetails(value: unknown): value is ViewSettingsDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "view_settings") return false;
+
+  return (
+    isOptionalString(value.action) &&
+    isOptionalString(value.address) &&
+    isOptionalRecoveryCheckpointDetails(value.recovery)
   );
 }
 
@@ -385,8 +527,44 @@ export function isTraceDependenciesDetails(value: unknown): value is TraceDepend
   if (!isRecord(value)) return false;
   if (value.kind !== "trace_dependencies") return false;
   if (!isRecord(value.root)) return false;
+
   const root = value.root;
-  return typeof root.address === "string" && Array.isArray(root.precedents);
+  if (!(typeof root.address === "string" && Array.isArray(root.precedents))) return false;
+
+  return (
+    isOptionalTraceDependenciesMode(value.mode) &&
+    isOptionalNumber(value.maxDepth) &&
+    isOptionalNumber(value.nodeCount) &&
+    isOptionalNumber(value.edgeCount) &&
+    isOptionalTraceDependencySource(value.source) &&
+    isOptionalBoolean(value.truncated)
+  );
+}
+
+function isExplainFormulaReferenceDetail(value: unknown): value is ExplainFormulaReferenceDetail {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.address === "string" &&
+    isOptionalString(value.valuePreview) &&
+    isOptionalString(value.formulaPreview)
+  );
+}
+
+export function isExplainFormulaDetails(value: unknown): value is ExplainFormulaDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "explain_formula") return false;
+
+  return (
+    typeof value.cell === "string" &&
+    typeof value.hasFormula === "boolean" &&
+    isOptionalString(value.formula) &&
+    isOptionalString(value.valuePreview) &&
+    typeof value.explanation === "string" &&
+    Array.isArray(value.references) &&
+    value.references.every((reference) => isExplainFormulaReferenceDetail(reference)) &&
+    isOptionalBoolean(value.truncated)
+  );
 }
 
 export function isTmuxBridgeDetails(value: unknown): value is TmuxBridgeDetails {
@@ -454,6 +632,7 @@ export function isPythonTransformRangeDetails(value: unknown): value is PythonTr
     isOptionalNumber(value.colsWritten) &&
     isOptionalNumber(value.formulaErrorCount) &&
     isOptionalWorkbookCellChangeSummary(value.changes) &&
+    isOptionalRecoveryCheckpointDetails(value.recovery) &&
     isOptionalString(value.error)
   );
 }

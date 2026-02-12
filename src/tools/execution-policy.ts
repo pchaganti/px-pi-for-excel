@@ -13,6 +13,7 @@ const ALWAYS_READ_TOOLS = new Set<string>([
   "read_range",
   "search_workbook",
   "trace_dependencies",
+  "explain_formula",
   // Instructions and conventions mutate local prompt/config state, not workbook cells/structure.
   "instructions",
   "conventions",
@@ -24,6 +25,8 @@ const ALWAYS_READ_TOOLS = new Set<string>([
   "mcp",
   // Workspace file operations do not mutate the workbook.
   "files",
+  // Extension registry operations mutate local settings/runtime, not workbook content.
+  "extensions_manager",
 ]);
 
 const ALWAYS_MUTATE_TOOLS = new Set<string>([

@@ -10,8 +10,17 @@ import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { FormatCellsDetails } from "./tool-details.js";
 import { excelRun, getRange, parseRangeRef, qualifiedAddress } from "../excel/helpers.js";
 import { getWorkbookChangeAuditLog } from "../audit/workbook-change-audit.js";
+import { dispatchWorkbookSnapshotCreated } from "../workbook/recovery-events.js";
+import { getWorkbookRecoveryLog, MAX_RECOVERY_CELLS } from "../workbook/recovery-log.js";
+import { captureFormatCellsState, type RecoveryFormatSelection } from "../workbook/recovery-states.js";
 import { getErrorMessage } from "../utils/errors.js";
 import { resolveStyles } from "../conventions/index.js";
+import {
+  CHECKPOINT_SKIPPED_NOTE,
+  CHECKPOINT_SKIPPED_REASON,
+  recoveryCheckpointCreated,
+  recoveryCheckpointUnavailable,
+} from "./recovery-metadata.js";
 import type { BorderWeight } from "../conventions/index.js";
 import { getResolvedConventions } from "../conventions/store.js";
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
@@ -130,6 +139,107 @@ function isVerticalAlignment(value: string): value is VerticalAlignment {
   return value === "Top" || value === "Center" || value === "Bottom";
 }
 
+interface ResolvedFormatPropertiesForCheckpoint {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  fontColor?: string;
+  fontSize?: number;
+  fontName?: string;
+  fillColor?: string;
+  horizontalAlignment?: string;
+  verticalAlignment?: string;
+  wrapText?: boolean;
+  borderTop?: BorderWeight;
+  borderBottom?: BorderWeight;
+  borderLeft?: BorderWeight;
+  borderRight?: BorderWeight;
+}
+
+interface FormatCheckpointPlan {
+  selection: RecoveryFormatSelection;
+  unsupportedReason: string | null;
+}
+
+function buildFormatCheckpointPlan(
+  params: Params,
+  props: ResolvedFormatPropertiesForCheckpoint,
+  hasNumberFormat: boolean,
+): FormatCheckpointPlan {
+  const selection: RecoveryFormatSelection = {
+    numberFormat: hasNumberFormat || undefined,
+    fillColor: props.fillColor !== undefined || undefined,
+    fontColor: props.fontColor !== undefined || undefined,
+    bold: props.bold !== undefined || undefined,
+    italic: props.italic !== undefined || undefined,
+    underlineStyle: props.underline !== undefined || undefined,
+    fontName: props.fontName !== undefined || undefined,
+    fontSize: props.fontSize !== undefined || undefined,
+    horizontalAlignment: props.horizontalAlignment !== undefined || undefined,
+    verticalAlignment: props.verticalAlignment !== undefined || undefined,
+    wrapText: props.wrapText !== undefined || undefined,
+  };
+
+  const hasShorthand = params.borders !== undefined;
+  const hasParamEdges =
+    params.border_top !== undefined ||
+    params.border_bottom !== undefined ||
+    params.border_left !== undefined ||
+    params.border_right !== undefined;
+  const hasStyleEdges =
+    props.borderTop !== undefined ||
+    props.borderBottom !== undefined ||
+    props.borderLeft !== undefined ||
+    props.borderRight !== undefined;
+
+  if (hasShorthand && !hasParamEdges && !hasStyleEdges) {
+    selection.borderTop = true;
+    selection.borderBottom = true;
+    selection.borderLeft = true;
+    selection.borderRight = true;
+    selection.borderInsideHorizontal = true;
+    selection.borderInsideVertical = true;
+  } else {
+    selection.borderTop = params.border_top !== undefined || props.borderTop !== undefined || undefined;
+    selection.borderBottom = params.border_bottom !== undefined || props.borderBottom !== undefined || undefined;
+    selection.borderLeft = params.border_left !== undefined || props.borderLeft !== undefined || undefined;
+    selection.borderRight = params.border_right !== undefined || props.borderRight !== undefined || undefined;
+  }
+
+  const unsupported: string[] = [];
+  if (params.column_width !== undefined) unsupported.push("column width");
+  if (params.row_height !== undefined) unsupported.push("row height");
+  if (params.auto_fit === true) unsupported.push("auto-fit");
+  if (params.merge !== undefined) unsupported.push("merge/unmerge");
+
+  if (unsupported.length > 0) {
+    return {
+      selection,
+      unsupportedReason:
+        `Format checkpoints for ${unsupported.join(", ")} are not yet supported in \`format_cells\`.`,
+    };
+  }
+
+  const hasSelectedProperty = Object.values(selection).some((value) => value === true);
+  if (!hasSelectedProperty) {
+    return {
+      selection,
+      unsupportedReason: "No restorable format properties were changed.",
+    };
+  }
+
+  return {
+    selection,
+    unsupportedReason: null,
+  };
+}
+
+function appendResultNote(result: AgentToolResult<FormatCellsDetails>, note: string): void {
+  const first = result.content[0];
+  if (!first || first.type !== "text") return;
+  first.text = `${first.text}\n\n${note}`;
+}
+
 export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDetails> {
   return {
     name: "format_cells",
@@ -170,6 +280,34 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
           borderRight: params.border_right as BorderWeight | undefined,
         }, conventionConfig);
         const props = styleResult.properties;
+
+        const checkpointPlan = buildFormatCheckpointPlan(params, props, styleResult.excelNumberFormat !== undefined);
+
+        let checkpointCapture: {
+          supported: boolean;
+          state?: Awaited<ReturnType<typeof captureFormatCellsState>>["state"];
+          reason?: string;
+        };
+
+        if (checkpointPlan.unsupportedReason) {
+          checkpointCapture = {
+            supported: false,
+            reason: checkpointPlan.unsupportedReason,
+          };
+        } else {
+          try {
+            checkpointCapture = await captureFormatCellsState(
+              params.range,
+              checkpointPlan.selection,
+              { maxCellCount: MAX_RECOVERY_CELLS },
+            );
+          } catch (captureError: unknown) {
+            checkpointCapture = {
+              supported: false,
+              reason: `Format checkpoint capture failed: ${getErrorMessage(captureError)}`,
+            };
+          }
+        }
 
         const result = await excelRun(async (context) => {
           const resolved = resolveFormatTarget(context, params.range);
@@ -381,6 +519,33 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
             warningsCount: result.warnings.length,
           },
         };
+
+        if (!checkpointCapture.supported || !checkpointCapture.state) {
+          const reason = checkpointCapture.reason ?? CHECKPOINT_SKIPPED_REASON;
+          toolResult.details.recovery = recoveryCheckpointUnavailable(reason);
+          appendResultNote(toolResult, CHECKPOINT_SKIPPED_NOTE);
+        } else {
+          const checkpoint = await getWorkbookRecoveryLog().appendFormatCells({
+            toolName: "format_cells",
+            toolCallId,
+            address: fullAddr,
+            changedCount: result.cellCount,
+            formatRangeState: checkpointCapture.state,
+          });
+
+          if (!checkpoint) {
+            toolResult.details.recovery = recoveryCheckpointUnavailable(CHECKPOINT_SKIPPED_REASON);
+            appendResultNote(toolResult, CHECKPOINT_SKIPPED_NOTE);
+          } else {
+            toolResult.details.recovery = recoveryCheckpointCreated(checkpoint.id);
+            dispatchWorkbookSnapshotCreated({
+              snapshotId: checkpoint.id,
+              toolName: checkpoint.toolName,
+              address: checkpoint.address,
+              changedCount: checkpoint.changedCount,
+            });
+          }
+        }
 
         await getWorkbookChangeAuditLog().append({
           toolName: "format_cells",

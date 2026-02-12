@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  buildChangeExplanation,
+  MAX_EXPLANATION_PROMPT_CHARS,
+  MAX_EXPLANATION_TEXT_CHARS,
+} from "../src/audit/change-explanation.ts";
+import {
   WorkbookChangeAuditLog,
   type AppendWorkbookChangeAuditEntryArgs,
 } from "../src/audit/workbook-change-audit.ts";
@@ -64,6 +69,19 @@ function firstText(result: unknown): string {
   }
 
   return first.text;
+}
+
+function viewSettingsDetails(result: unknown): Record<string, unknown> {
+  if (!isRecord(result)) {
+    throw new Error("Expected tool result object");
+  }
+
+  const details = result.details;
+  if (!isRecord(details)) {
+    throw new Error("Expected tool result details object");
+  }
+
+  return details;
 }
 
 function createAuditCapture(): {
@@ -254,6 +272,30 @@ void test("comments tool appends audit entries for mutating actions", async () =
       summary: "updated comment at Sheet1!A1",
     }),
     appendAuditEntry: auditCapture.appendAuditEntry,
+    captureCommentThread: () => Promise.resolve({
+      exists: true,
+      content: "Before",
+      resolved: false,
+      replies: [],
+    }),
+    appendRecoverySnapshot: () => Promise.resolve({
+      id: "checkpoint-1",
+      at: 1700000000000,
+      toolName: "comments",
+      toolCallId: "tool-call-comments-success",
+      address: "Sheet1!A1",
+      changedCount: 1,
+      cellCount: 1,
+      beforeValues: [],
+      beforeFormulas: [],
+      snapshotKind: "comment_thread",
+      commentThreadState: {
+        exists: true,
+        content: "Before",
+        resolved: false,
+        replies: [],
+      },
+    }),
   });
 
   const result = await tool.execute("tool-call-comments-success", {
@@ -263,6 +305,17 @@ void test("comments tool appends audit entries for mutating actions", async () =
   });
 
   assert.match(firstText(result), /Updated comment/u);
+  if (isRecord(result.details)) {
+    assert.equal(result.details.kind, "comments");
+    if (isRecord(result.details.recovery)) {
+      assert.equal(result.details.recovery.status, "checkpoint_created");
+    } else {
+      throw new Error("Expected recovery metadata for comments mutation");
+    }
+  } else {
+    throw new Error("Expected comments details in tool result");
+  }
+
   assert.equal(auditCapture.entries.length, 1);
   assert.equal(auditCapture.entries[0]?.toolName, "comments");
   assert.equal(auditCapture.entries[0]?.blocked, false);
@@ -308,10 +361,20 @@ void test("view_settings tool appends audit entries for mutate success and failu
   });
 
   assert.match(firstText(successResult), /Activated sheet/u);
+  assert.match(firstText(successResult), /Recovery checkpoint not created/u);
   assert.equal(successAuditCapture.entries.length, 1);
   assert.equal(successAuditCapture.entries[0]?.toolName, "view_settings");
   assert.equal(successAuditCapture.entries[0]?.blocked, false);
   assert.equal(successAuditCapture.entries[0]?.outputAddress, "Sheet2");
+
+  const successDetails = viewSettingsDetails(successResult);
+  assert.equal(successDetails.kind, "view_settings");
+  assert.equal(successDetails.action, "activate");
+  assert.equal(successDetails.address, "Sheet2");
+  assert.equal(
+    isRecord(successDetails.recovery) ? successDetails.recovery.status : undefined,
+    "not_available",
+  );
 
   const errorAuditCapture = createAuditCapture();
   const errorTool = createViewSettingsTool({
@@ -324,10 +387,20 @@ void test("view_settings tool appends audit entries for mutate success and failu
   });
 
   assert.match(firstText(errorResult), /sheet is required for activate/u);
+  assert.match(firstText(errorResult), /Recovery checkpoint not created/u);
   assert.equal(errorAuditCapture.entries.length, 1);
   assert.equal(errorAuditCapture.entries[0]?.toolName, "view_settings");
   assert.equal(errorAuditCapture.entries[0]?.blocked, true);
   assert.equal(errorAuditCapture.entries[0]?.changedCount, 0);
+
+  const errorDetails = viewSettingsDetails(errorResult);
+  assert.equal(errorDetails.kind, "view_settings");
+  assert.equal(errorDetails.action, "activate");
+  assert.equal(errorDetails.address, undefined);
+  assert.equal(
+    isRecord(errorDetails.recovery) ? errorDetails.recovery.status : undefined,
+    "not_available",
+  );
 });
 
 void test("workbook_history restore appends audit entries for success and missing snapshot", async () => {
@@ -383,4 +456,79 @@ void test("workbook_history restore appends audit entries for success and missin
   assert.equal(missingAuditCapture.entries[0]?.toolName, "workbook_history");
   assert.equal(missingAuditCapture.entries[0]?.blocked, true);
   assert.equal(missingAuditCapture.entries[0]?.changedCount, 0);
+});
+
+void test("buildChangeExplanation shapes citations and prompt from change metadata", () => {
+  const explanation = buildChangeExplanation({
+    toolName: "write_cells",
+    blocked: false,
+    changedCount: 4,
+    summary: "wrote budget deltas",
+    outputAddress: "Sheet1!A1:B2",
+    changes: {
+      changedCount: 4,
+      truncated: false,
+      sample: [
+        {
+          address: "Sheet1!A1",
+          beforeValue: "10",
+          afterValue: "12",
+        },
+        {
+          address: "Sheet1!B2",
+          beforeValue: "=SUM(B3:B10)",
+          afterValue: "=SUM(B3:B11)",
+          beforeFormula: "=SUM(B3:B10)",
+          afterFormula: "=SUM(B3:B11)",
+        },
+      ],
+    },
+  });
+
+  assert.match(explanation.prompt, /Tool: write_cells/u);
+  assert.match(explanation.prompt, /Sample changes:/u);
+  assert.match(explanation.prompt, /Sheet1!A1/u);
+
+  assert.match(explanation.text, /changed 4 cell/u);
+  assert.match(explanation.text, /Inspect:/u);
+  assert.ok(explanation.citations.includes("Sheet1!A1"));
+  assert.ok(explanation.citations.includes("Sheet1!B2"));
+  assert.ok(explanation.citations.includes("Sheet1!A1:B2"));
+  assert.equal(explanation.usedFallback, false);
+});
+
+void test("buildChangeExplanation enforces prompt and text budgets", () => {
+  const longSummary = "x".repeat(MAX_EXPLANATION_PROMPT_CHARS + 200);
+
+  const explanation = buildChangeExplanation({
+    toolName: "python_transform_range",
+    blocked: false,
+    changedCount: 128,
+    summary: longSummary,
+    outputAddress: "Sheet1!A1:Z99",
+    changes: {
+      changedCount: 128,
+      truncated: true,
+      sample: [...Array(10).keys()].map((index) => ({
+        address: `Sheet1!A${index + 1}`,
+        beforeValue: "before-" + "v".repeat(120),
+        afterValue: "after-" + "w".repeat(120),
+      })),
+    },
+  });
+
+  assert.equal(explanation.prompt.length <= MAX_EXPLANATION_PROMPT_CHARS, true);
+  assert.equal(explanation.text.length <= MAX_EXPLANATION_TEXT_CHARS, true);
+  assert.equal(explanation.truncated, true);
+});
+
+void test("buildChangeExplanation falls back gracefully on sparse metadata", () => {
+  const explanation = buildChangeExplanation({
+    toolName: "modify_structure",
+    blocked: false,
+  });
+
+  assert.equal(explanation.citations.length, 0);
+  assert.equal(explanation.usedFallback, true);
+  assert.match(explanation.text, /Not enough audit metadata/u);
 });

@@ -14,7 +14,11 @@ import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.
 import type { SessionData } from "@mariozechner/pi-web-ui/dist/storage/types.js";
 
 import { createOfficeStreamFn } from "../auth/stream-proxy.js";
-import { isLoopbackProxyUrl } from "../auth/proxy-validation.js";
+import {
+  DEFAULT_LOCAL_PROXY_URL,
+  PROXY_HELPER_DOCS_URL,
+  isLoopbackProxyUrl,
+} from "../auth/proxy-validation.js";
 import { restoreCredentials } from "../auth/restore.js";
 import { invalidateBlueprint } from "../context/blueprint.js";
 import { ChangeTracker } from "../context/change-tracker.js";
@@ -61,6 +65,10 @@ import { buildSystemPrompt } from "../prompt/system-prompt.js";
 import { initAppStorage } from "../storage/init-app-storage.js";
 import { renderError } from "../ui/loading.js";
 import { showFilesWorkspaceDialog } from "../ui/files-dialog.js";
+import {
+  PI_REQUEST_INPUT_FOCUS_EVENT,
+  moveCursorToEnd,
+} from "../ui/input-focus.js";
 import { showActionToast, showToast } from "../ui/toast.js";
 import { PiSidebar } from "../ui/pi-sidebar.js";
 import { setActiveProviders } from "../compat/model-selector-patch.js";
@@ -96,6 +104,7 @@ import {
   type RuntimeTabSnapshot,
   type SessionRuntime,
 } from "./session-runtime-manager.js";
+import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
 import { isRecord } from "../utils/type-guards.js";
 
 const BUSY_ALLOWED_COMMANDS = new Set([
@@ -171,6 +180,9 @@ function parseWorkbookSnapshotCreatedDetail(value: unknown): WorkbookSnapshotCre
     rawToolName === "write_cells" ||
     rawToolName === "fill_formula" ||
     rawToolName === "python_transform_range" ||
+    rawToolName === "format_cells" ||
+    rawToolName === "conditional_format" ||
+    rawToolName === "comments" ||
     rawToolName === "restore_snapshot"
       ? rawToolName
       : null;
@@ -412,6 +424,7 @@ export async function initTaskpane(opts: {
   const tabLayoutSignature = (layout: WorkbookTabLayout): string => JSON.stringify(layout);
 
   let previousActiveRuntimeId: string | null = null;
+  let suppressNextInputAutofocus = false;
   let tabLayoutPersistenceEnabled = false;
   let lastPersistedTabLayoutSignature: string | null = null;
   let tabLayoutPersistChain: Promise<void> = Promise.resolve();
@@ -439,6 +452,34 @@ export async function initTaskpane(opts: {
       });
   };
 
+  const focusChatInput = (): void => {
+    if (doesOverlayClaimEscape(document.activeElement)) {
+      return;
+    }
+
+    const input = sidebar.getInput();
+    if (!input) {
+      return;
+    }
+
+    input.focus();
+
+    const textarea = sidebar.getTextarea();
+    if (textarea) {
+      moveCursorToEnd(textarea);
+    }
+  };
+
+  const focusChatInputSoon = (): void => {
+    requestAnimationFrame(() => {
+      focusChatInput();
+    });
+  };
+
+  document.addEventListener(PI_REQUEST_INPUT_FOCUS_EVENT, () => {
+    focusChatInputSoon();
+  });
+
   runtimeManager.subscribe((tabs) => {
     sidebar.sessionTabs = tabs;
     sidebar.lockNotice = getActiveLockNotice(tabs);
@@ -448,6 +489,10 @@ export async function initTaskpane(opts: {
     if (activeRuntimeId !== previousActiveRuntimeId) {
       previousActiveRuntimeId = activeRuntimeId;
       document.dispatchEvent(new CustomEvent("pi:active-runtime-changed"));
+      if (activeRuntimeId && !suppressNextInputAutofocus) {
+        focusChatInputSoon();
+      }
+      suppressNextInputAutofocus = false;
     }
 
     maybePersistTabLayout();
@@ -526,7 +571,7 @@ export async function initTaskpane(opts: {
     if (detail.toolName === "restore_snapshot") return;
 
     const changedLabel = detail.changedCount > 0
-      ? `${detail.changedCount.toLocaleString()} cell${detail.changedCount === 1 ? "" : "s"}`
+      ? `${detail.changedCount.toLocaleString()} change${detail.changedCount === 1 ? "" : "s"}`
       : "range";
 
     showActionToast({
@@ -564,7 +609,9 @@ export async function initTaskpane(opts: {
 
       runtimeActiveIntegrationIds.set(runtimeId, activeIntegrationIds);
 
-      const coreTools = createAllTools().filter(isRuntimeAgentTool);
+      const coreTools = createAllTools({
+        getExtensionManager: () => extensionManager,
+      }).filter(isRuntimeAgentTool);
       const gatedCoreTools = await applyExperimentalToolGates(coreTools);
       const allTools = [
         ...gatedCoreTools,
@@ -693,7 +740,7 @@ export async function initTaskpane(opts: {
           if (isLikelyCorsErrorMessage(err)) {
             showErrorBanner(
               errorRoot,
-              "Network error (likely CORS). Start the local HTTPS proxy (npm run proxy:https) and enable it in /settings → Proxy.",
+              `Network error (likely CORS). If you're using OAuth, enable /settings → Proxy with ${DEFAULT_LOCAL_PROXY_URL} and retry. Guide: ${PROXY_HELPER_DOCS_URL}`,
             );
           } else {
             showErrorBanner(errorRoot, `LLM error: ${err}`);
@@ -1146,6 +1193,25 @@ export async function initTaskpane(opts: {
     },
     onReopenLastClosed: () => {
       void reopenLastClosed();
+    },
+    onSwitchAdjacentTab: (direction: -1 | 1) => {
+      const tabs = runtimeManager.snapshotTabs();
+      if (tabs.length <= 1) {
+        return;
+      }
+
+      const activeIndex = tabs.findIndex((tab) => tab.isActive);
+      if (activeIndex < 0) {
+        return;
+      }
+
+      const nextIndex = (activeIndex + direction + tabs.length) % tabs.length;
+
+      suppressNextInputAutofocus = true;
+      runtimeManager.switchRuntime(tabs[nextIndex].runtimeId);
+      requestAnimationFrame(() => {
+        sidebar.focusTabNavigationAnchor();
+      });
     },
   });
 

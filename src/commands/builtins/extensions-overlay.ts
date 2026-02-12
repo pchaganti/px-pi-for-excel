@@ -15,6 +15,7 @@ import { validateOfficeProxyUrl } from "../../auth/proxy-validation.js";
 import { dispatchExperimentalToolConfigChanged } from "../../experiments/events.js";
 import { isExperimentalFeatureEnabled, setExperimentalFeatureEnabled } from "../../experiments/flags.js";
 import { PYTHON_BRIDGE_URL_SETTING_KEY } from "../../tools/experimental-tool-gates.js";
+import { requestChatInputFocus } from "../../ui/input-focus.js";
 import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
 import { showToast } from "../../ui/toast.js";
 
@@ -251,6 +252,40 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
   installedList.className = "pi-overlay-list";
   installedSection.appendChild(installedList);
 
+  const sandboxSection = document.createElement("section");
+  sandboxSection.className = "pi-overlay-section";
+  sandboxSection.appendChild(createSectionTitle("Sandbox runtime (default for untrusted sources)"));
+
+  const sandboxCard = document.createElement("div");
+  sandboxCard.className = "pi-overlay-surface pi-ext-local-bridge-card";
+
+  const sandboxStatusRow = document.createElement("div");
+  sandboxStatusRow.className = "pi-ext-local-bridge-status-row";
+
+  const sandboxStatusText = document.createElement("div");
+  sandboxStatusText.className = "pi-ext-local-bridge-status-text";
+
+  const sandboxStatusBadgeSlot = document.createElement("div");
+  sandboxStatusBadgeSlot.className = "pi-ext-local-bridge-status-badge";
+
+  sandboxStatusRow.append(sandboxStatusText, sandboxStatusBadgeSlot);
+
+  const sandboxActions = document.createElement("div");
+  sandboxActions.className = "pi-overlay-actions";
+
+  const sandboxEnableButton = createButton("Re-enable sandbox runtime");
+  const sandboxDisableButton = createButton("Enable rollback mode");
+
+  sandboxActions.append(sandboxEnableButton, sandboxDisableButton);
+
+  const sandboxHint = document.createElement("p");
+  sandboxHint.textContent =
+    "Inline-code and remote-URL extensions run in sandbox by default. Use rollback mode only as a temporary safety valve if sandbox rollout causes issues.";
+  sandboxHint.className = "pi-overlay-hint";
+
+  sandboxCard.append(sandboxStatusRow, sandboxActions, sandboxHint);
+  sandboxSection.appendChild(sandboxCard);
+
   const localBridgeSection = document.createElement("section");
   localBridgeSection.className = "pi-overlay-section";
   localBridgeSection.appendChild(createSectionTitle("Local Python / LibreOffice bridge (experimental)"));
@@ -339,7 +374,14 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
 
   templateSection.append(templateCode, templateActions);
 
-  body.append(installedSection, localBridgeSection, installUrlSection, installCodeSection, templateSection);
+  body.append(
+    installedSection,
+    sandboxSection,
+    localBridgeSection,
+    installUrlSection,
+    installCodeSection,
+    templateSection,
+  );
 
   card.append(header, body);
   overlay.appendChild(card);
@@ -352,6 +394,36 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     localBridgeEnableButton.disabled = busy;
     localBridgeSaveUrlButton.disabled = busy;
     localBridgeDisableButton.disabled = busy;
+    sandboxEnableButton.disabled = busy;
+    sandboxDisableButton.disabled = busy;
+  };
+
+  const renderSandboxState = (): void => {
+    const statuses = manager.list();
+    const sandboxEnabled = isExperimentalFeatureEnabled("extension_sandbox_runtime");
+    const untrusted = statuses.filter((status) => status.trust === "inline-code" || status.trust === "remote-url");
+    const sandboxed = untrusted.filter((status) => status.runtimeMode === "sandbox-iframe");
+
+    if (sandboxEnabled) {
+      if (untrusted.length > 0) {
+        sandboxStatusText.textContent =
+          `Default-on — ${sandboxed.length}/${untrusted.length} untrusted extension${untrusted.length === 1 ? "" : "s"} in sandbox runtime.`;
+      } else {
+        sandboxStatusText.textContent = "Default-on — no untrusted extensions installed.";
+      }
+    } else if (untrusted.length > 0) {
+      sandboxStatusText.textContent =
+        `Rollback mode — ${untrusted.length} untrusted extension${untrusted.length === 1 ? "" : "s"} currently run in host runtime.`;
+    } else {
+      sandboxStatusText.textContent = "Rollback mode — no untrusted extensions installed.";
+    }
+
+    sandboxStatusBadgeSlot.replaceChildren(
+      createBadge(sandboxEnabled ? "default on" : "rollback", sandboxEnabled ? "ok" : "warn"),
+    );
+
+    sandboxEnableButton.disabled = sandboxEnabled;
+    sandboxDisableButton.disabled = !sandboxEnabled;
   };
 
   const renderLocalBridgeState = async (): Promise<void> => {
@@ -380,6 +452,7 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     } finally {
       setBusy(false);
       renderInstalledList();
+      renderSandboxState();
       void renderLocalBridgeState();
     }
   };
@@ -420,10 +493,16 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
       badges.appendChild(createBadge("pending", "muted"));
     }
 
-    const trustBadgeColor = status.trust === "remote-url" || status.trust === "inline-code"
-      ? "warn"
-      : "muted";
+    const trustIsUntrusted = status.trust === "remote-url" || status.trust === "inline-code";
+    const trustBadgeColor = trustIsUntrusted ? "warn" : "muted";
     badges.appendChild(createBadge(status.trustLabel, trustBadgeColor));
+
+    const runtimeBadgeColor = status.runtimeMode === "sandbox-iframe"
+      ? "ok"
+      : trustIsUntrusted
+        ? "warn"
+        : "muted";
+    badges.appendChild(createBadge(status.runtimeLabel, runtimeBadgeColor));
 
     badges.appendChild(
       createBadge(`${status.effectiveCapabilities.length} permission${status.effectiveCapabilities.length === 1 ? "" : "s"}`, "muted"),
@@ -468,6 +547,19 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     }
     permissions.className = "pi-ext-installed-row__line";
     details.appendChild(permissions);
+
+    const runtime = document.createElement("div");
+    runtime.textContent = `Runtime: ${status.runtimeLabel}`;
+    runtime.className = "pi-ext-installed-row__line";
+    details.appendChild(runtime);
+
+    if ((status.trust === "inline-code" || status.trust === "remote-url") && status.runtimeMode === "host") {
+      const runtimeWarning = document.createElement("div");
+      runtimeWarning.textContent =
+        "Rollback mode is active: this untrusted extension runs in host runtime. Re-enable sandbox runtime above.";
+      runtimeWarning.className = "pi-ext-installed-row__error";
+      details.appendChild(runtimeWarning);
+    }
 
     if (!status.permissionsEnforced) {
       const configuredPermissions = document.createElement("div");
@@ -645,6 +737,27 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     });
   });
 
+  sandboxEnableButton.addEventListener("click", () => {
+    void runAction(() => {
+      setExperimentalFeatureEnabled("extension_sandbox_runtime", true);
+      showToast("Sandbox runtime re-enabled for untrusted extensions.");
+    });
+  });
+
+  sandboxDisableButton.addEventListener("click", () => {
+    const confirmed = window.confirm(
+      "Enable rollback mode? Untrusted extensions will run in host runtime until sandbox is re-enabled.",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    void runAction(() => {
+      setExperimentalFeatureEnabled("extension_sandbox_runtime", false);
+      showToast("Rollback mode enabled: untrusted extensions now run in host runtime.");
+    });
+  });
+
   installUrlButton.addEventListener("click", () => {
     const name = installUrlName.value.trim();
     const url = installUrlInput.value.trim();
@@ -710,6 +823,7 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
 
   const unsubscribe = manager.subscribe(() => {
     renderInstalledList();
+    renderSandboxState();
     void renderLocalBridgeState();
   });
 
@@ -728,6 +842,7 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     cleanupEscape();
     unsubscribe();
     overlay.remove();
+    requestChatInputFocus();
   };
 
   overlayClosers.set(overlay, closeOverlay);
@@ -742,5 +857,6 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
 
   document.body.appendChild(overlay);
   renderInstalledList();
+  renderSandboxState();
   void renderLocalBridgeState();
 }

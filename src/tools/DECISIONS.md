@@ -125,10 +125,19 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Rationale:** the syntax-highlighted code block (language "csv") produced garbled output with numbers in red and keywords in blue. A proper table with row/column headers is immediately readable.
 
 ## Dependency tree rendering (`trace_dependencies`)
-- **UI:** dependency trees are rendered as structured HTML with clickable cell refs, code-styled formulas, and thread-style left-border indentation.
+- **Modes:** `trace_dependencies` supports both `mode: "precedents"` (upstream inputs) and `mode: "dependents"` (downstream impact).
+- **UI:** dependency trees are rendered as structured HTML with clickable cell refs, code-styled formulas, and collapsible branch nodes for on-demand deep expansion.
 - **Agent text:** unchanged — still the ASCII tree with `├──`/`└──`/`│` connectors.
-- **Implementation:** `TraceDependenciesDetails` passes the `DepNodeDetail` tree to the UI. `src/ui/render-dep-tree.ts` renders the visual tree.
-- **Rationale:** ASCII art rendered via `<markdown-block>` lacked interactivity and visual hierarchy. Clickable addresses + clean CSS indentation is much more usable.
+- **Implementation:** `TraceDependenciesDetails` carries `mode` + tree metadata; `src/ui/render-dep-tree.ts` renders the visual tree and supports branch expand/collapse.
+- **Fallback behavior:** tool prefers Office.js direct precedent/dependent APIs and falls back to formula parsing/scanning when APIs are unavailable.
+- **Rationale:** ASCII art via `<markdown-block>` lacked interactivity and visual hierarchy. Clickable addresses + collapsible branches make formula navigation significantly more usable.
+
+## Formula explanation workflow (`explain_formula`)
+- **Scope:** `explain_formula` targets a single cell and returns a concise natural-language explanation, current value preview, formula text, and direct reference citations.
+- **Reference preview policy:** loads and previews a bounded set of direct references (`max_references`, default 8, max 20) to keep response latency predictable.
+- **Fallback behavior:** if the target is not a formula cell, returns an explicit static-value explanation instead of failing silently.
+- **UI:** explanation card renders clickable reference citations with value previews.
+- **Rationale:** users need plain-English interpretation without losing inspectability; bounded reference previews preserve responsiveness on dense workbooks.
 
 ## Experimental tmux bridge tool (`tmux`)
 - **Availability:** non-core experimental tool, always registered via `createAllTools()`; execution is gated by `applyExperimentalToolGates()`.
@@ -172,6 +181,28 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **MCP integration:** configurable server registry (`mcp.servers.v1`), UI add/remove/test, and a single `mcp` gateway tool for list/search/describe/call flows.
 - **Rationale:** satisfy issue #24 with explicit consent, clear attribution, and minimal overlap with the extension system.
 
+## Extension manager tool (`extensions_manager`)
+- **Availability:** always registered via `createAllTools()`.
+- **Purpose:** lets the agent manage extension lifecycle from chat (`list`, `install_code`, `set_enabled`, `reload`, `uninstall`).
+- **Default install policy:** `install_code` replaces existing extensions with the same name unless `replace_existing=false` is provided.
+- **Execution policy:** treated as `read/none` for workbook coordination (mutates local extension registry/runtime only, not workbook cells/structure).
+- **Rationale:** supports non-engineer extension authoring by allowing users to ask Pi to generate + install an extension directly.
+
+## Extension sandbox UI bridge (`extension-sandbox`)
+- **Activation model:** default-on for untrusted sources with a temporary rollback kill switch via `/experimental off extension-sandbox`.
+- **Surface:** inline-code + remote-url extensions route to iframe runtime by default; built-in/local modules remain host-side.
+- **UI model:** sandbox may only send a structured UI tree (allowed tag set, sanitized class names/action ids), never raw HTML.
+- **Interactivity:** host supports explicit action callbacks via `data-pi-action` markers mapped to click dispatch inside the sandbox.
+- **Rationale:** incremental security hardening—default isolation for untrusted code without reopening HTML injection risk.
+
+## Experimental extension widget API v2 (`extension-widget-v2`)
+- **Activation:** opt-in via `/experimental on extension-widget-v2`; default behavior stays on legacy `widget.show/dismiss` semantics.
+- **API:** additive `widget.upsert/remove/clear` methods with stable widget ids.
+- **Placement/order:** widgets sort deterministically by `(order asc, createdAt asc, id asc)` within `above-input` / `below-input` buckets.
+- **Ownership model:** widgets are extension-owned (`ownerId`) and auto-cleared on extension teardown/reload/uninstall.
+- **Compatibility:** legacy `widget.show/dismiss` remains supported and maps to a reserved legacy widget id when v2 is enabled.
+- **Rationale:** establish predictable multi-widget lifecycle semantics before richer layout controls.
+
 ## Experimental files workspace tool (`files`)
 - **Availability:** non-core experimental tool, always registered; execution hard-gated by `files-workspace` flag.
 - **Backend strategy:** native folder handle (when permitted) → OPFS → in-memory fallback.
@@ -192,13 +223,16 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
   - `write_cells` verification output shows a bounded preview for large writes instead of dumping full tables
 - **Audit coverage extension:** `format_cells`, `conditional_format`, `modify_structure`, mutating `comments` actions, mutating `view_settings` actions, and `workbook_history` restore now append structured entries to `workbook.change-audit.v1` (operation-focused summaries, not per-cell value diffs).
 - **Export option:** `/export audit` writes the persisted workbook mutation audit log as JSON (download by default, `clipboard` optional).
+- **Optional explanation UX:** mutation tool cards expose an on-demand **Explain these changes** drawer that synthesizes a concise explanation + clickable citations from structured audit metadata, with bounded payload/text limits.
 - **Rationale:** improve user trust with concrete, navigable deltas while keeping implementation incremental and low-risk.
 
 ## Workbook recovery checkpoints (`workbook_history`)
 - **Goal:** prefer low-friction workflows over pre-execution approval selectors by making rollback easy and reliable.
-- **Automatic checkpoints:** successful `write_cells`, `fill_formula`, and `python_transform_range` writes store pre-write range snapshots in local `workbook.recovery-snapshots.v1`.
+- **Automatic checkpoints:** successful `write_cells`, `fill_formula`, `python_transform_range`, `format_cells`, `conditional_format`, and mutating `comments` actions store pre-mutation snapshots in local `workbook.recovery-snapshots.v1`.
 - **Safety limits:** checkpoint capture is skipped for very large writes (> `MAX_RECOVERY_CELLS`) to avoid oversized local state.
 - **Workbook identity guardrails:** append/list/delete/clear/restore paths are scoped to the active workbook identity; restore rejects identity-less or cross-workbook checkpoints.
 - **Restore UX:** `workbook_history` can list/restore/delete/clear checkpoints; restores also create an inverse checkpoint (`restore_snapshot`) so users can undo a mistaken restore.
+- **Coverage signaling:** non-checkpointed mutation tools (`modify_structure`, and mutating `view_settings` actions) explicitly report when no recovery checkpoint was created.
+- **Current `format_cells` checkpoint limits:** captures/restores core range-format properties (font/fill/number format/alignment/wrap/borders). Mutations involving `column_width`, `row_height`, `auto_fit`, or `merge` currently skip checkpoint capture with an explicit note.
 - **Quick affordance:** after a checkpointed write, UI shows an action toast with **Revert**.
 - **Rationale:** addresses #27 by shifting from cumbersome up-front approvals to versioned recovery with explicit user-controlled rollback.

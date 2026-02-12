@@ -6,8 +6,11 @@ import {
   getResumeTargetLabel,
 } from "../src/commands/builtins/resume-target.ts";
 import {
+  getAdjacentTabDirectionFromShortcut,
+  isFocusInputShortcut,
   isReopenLastClosedShortcut,
   shouldAbortFromEscape,
+  shouldBlurEditorFromEscape,
 } from "../src/taskpane/keyboard-shortcuts.ts";
 import { RecentlyClosedStack } from "../src/taskpane/recently-closed.ts";
 import {
@@ -147,6 +150,191 @@ void test("Cmd/Ctrl+Shift+T detection ignores Alt-modified chords", () => {
       ctrlKey: false,
       shiftKey: true,
       altKey: true,
+    }),
+    false,
+  );
+});
+
+void test("F2 focuses chat input only without modifiers", () => {
+  assert.equal(
+    isFocusInputShortcut({
+      key: "F2",
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    isFocusInputShortcut({
+      key: "F2",
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+    }),
+    false,
+  );
+
+  assert.equal(
+    isFocusInputShortcut({
+      key: "f2",
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    false,
+  );
+});
+
+void test("Arrow and fallback tab-switch shortcuts resolve expected direction", () => {
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "ArrowLeft",
+      repeat: false,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    -1,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "ArrowRight",
+      repeat: false,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    1,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "Right",
+      code: "ArrowRight",
+      repeat: false,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    1,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "Unidentified",
+      keyCode: 37,
+      repeat: false,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    -1,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "[",
+      repeat: false,
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+    }),
+    -1,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "]",
+      repeat: false,
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+    }),
+    1,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "PageUp",
+      repeat: false,
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    }),
+    -1,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "PageDown",
+      repeat: false,
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    }),
+    1,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "ArrowLeft",
+      repeat: true,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    null,
+  );
+});
+
+void test("Escape exits editor focus only when not streaming", () => {
+  assert.equal(
+    shouldBlurEditorFromEscape({
+      key: "Escape",
+      isInEditor: true,
+      isStreaming: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldBlurEditorFromEscape({
+      key: "Esc",
+      isInEditor: true,
+      isStreaming: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldBlurEditorFromEscape({
+      key: "Escape",
+      isInEditor: true,
+      isStreaming: true,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldBlurEditorFromEscape({
+      key: "Enter",
+      isInEditor: true,
+      isStreaming: false,
     }),
     false,
   );

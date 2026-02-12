@@ -126,11 +126,13 @@ Core workbook tools:
 - **format_cells** — apply formatting (bold, colors, number format, borders, etc.)
 - **conditional_format** — add or clear conditional formatting rules (formula or cell-value)
 - **comments** — read, add, update, reply, delete, resolve/reopen cell comments
-- **trace_dependencies** — show the formula dependency tree for a cell
+- **trace_dependencies** — trace formula lineage for a cell (mode: \`precedents\` upstream or \`dependents\` downstream)
+- **explain_formula** — explain a single formula cell in plain language with cited direct references
 - **view_settings** — control gridlines, headings, freeze panes, tab color, sheet visibility, sheet activation, and standard width
 - **instructions** — update persistent user/workbook instructions (append or replace)
 - **conventions** — read/update formatting defaults (currency, negatives, zeros, decimal places)
-- **workbook_history** — list/restore/delete automatic recovery checkpoints for workbook edits
+- **workbook_history** — list/restore/delete automatic recovery checkpoints for supported workbook mutations (\`write_cells\`, \`fill_formula\`, \`python_transform_range\`, \`format_cells\`, \`conditional_format\`, \`comments\`)
+- **extensions_manager** — list/install/reload/enable/disable/uninstall sidebar extensions from code (for extension authoring from chat)
 
 Other tools may be available depending on enabled experiments/integrations.
 If **files** is available, use it for workspace artifacts (list/read/write/delete files).`;
@@ -142,7 +144,8 @@ const WORKFLOW = `## Workflow
 3. **Overwrite protection.** write_cells blocks if the target has data. Ask the user before setting allow_overwrite=true.
 4. **Prefer formulas** over hardcoded values. Put assumptions in separate cells and reference them.
 5. **Plan complex tasks.** For multi-step operations, present a plan and get approval first.
-6. **Analysis = read-only.** When the user asks about data, read and answer in chat. Only write when asked to modify.`;
+6. **Analysis = read-only.** When the user asks about data, read and answer in chat. Only write when asked to modify.
+7. **Extension requests.** If the user asks to create/update an extension, generate code and use **extensions_manager** so it is installed directly.`;
 
 const CONVENTIONS = `## Conventions
 

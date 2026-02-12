@@ -53,7 +53,10 @@
   background: var(--white-alpha-25);
   color: var(--muted-foreground);
   min-width: 0;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    border-color var(--duration-fast),
+    box-shadow var(--duration-fast);
 }
 
 .pi-session-tab:hover {
@@ -67,18 +70,40 @@
   color: var(--foreground);
 }
 
+.pi-session-tab:focus-within {
+  border-color: var(--green-alpha-30);
+  box-shadow: 0 0 0 2px var(--green-alpha-12);
+}
+
+.pi-session-tab.is-active:focus-within {
+  border-color: var(--pi-green);
+  box-shadow: 0 0 0 2px var(--green-alpha-14);
+}
+
 .pi-session-tab__main {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
   border: none;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: inherit;
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   padding: 4px 8px;
   cursor: pointer;
+  -webkit-appearance: none;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+  caret-color: transparent;
+}
+
+.pi-session-tab__main:focus,
+.pi-session-tab__main:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .pi-session-tab__title {
@@ -105,20 +130,43 @@
 }
 
 .pi-session-tab__close {
-  border: none;
-  background: transparent;
-  color: var(--white-alpha-70);
-  font-size: var(--text-sm);
+  border: 1px solid var(--alpha-12);
+  background: var(--white-alpha-55);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1;
   width: 20px;
   height: 20px;
-  border-radius: var(--radius-xs);
+  margin-right: 3px;
+  border-radius: 999px;
   cursor: pointer;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast),
+    border-color var(--duration-fast),
+    opacity var(--duration-fast);
+}
+
+.pi-session-tab.is-active .pi-session-tab__close {
+  background: oklch(1 0 0 / 0.58);
+  border-color: var(--green-alpha-20);
+  color: oklch(0.43 0.02 160);
 }
 
 .pi-session-tab__close:hover {
-  background: var(--white-alpha-20);
+  background: oklch(0.58 0.22 27 / 0.95);
+  border-color: oklch(0.58 0.22 27 / 0.75);
   color: white;
+}
+
+.pi-session-tab__close:focus,
+.pi-session-tab__close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--green-alpha-12);
 }
 
 .pi-session-tabs__new {
@@ -150,8 +198,15 @@
 }
 
 .pi-session-tab__close:disabled:hover {
-  background: transparent;
+  background: var(--white-alpha-55);
+  border-color: var(--alpha-12);
   color: var(--muted-foreground);
+}
+
+.pi-session-tab.is-active .pi-session-tab__close:disabled:hover {
+  background: oklch(1 0 0 / 0.58);
+  border-color: var(--green-alpha-20);
+  color: oklch(0.43 0.02 160);
 }
 
 /* ── Utilities menu (⋯ in tab strip) ── */
@@ -1672,6 +1727,15 @@ pi-working-indicator {
   background: var(--muted);
   padding: 1px 4px;
   border-radius: var(--radius-xs);
+}
+
+.pi-welcome-proxy__hint a {
+  color: var(--pi-green);
+  text-decoration: underline;
+}
+
+.pi-welcome-proxy__hint a:hover {
+  color: var(--pi-green-strong);
 }
 
 .pi-welcome-providers {

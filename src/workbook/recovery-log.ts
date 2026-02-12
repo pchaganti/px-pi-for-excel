@@ -8,6 +8,19 @@
 import { excelRun, getRange } from "../excel/helpers.js";
 import { formatWorkbookLabel, getWorkbookContext, type WorkbookContext } from "./context.js";
 import { isRecord } from "../utils/type-guards.js";
+import {
+  applyCommentThreadState,
+  applyConditionalFormatState,
+  applyFormatCellsState,
+  cloneRecoveryCommentThreadState,
+  cloneRecoveryConditionalFormatRules,
+  cloneRecoveryFormatRangeState,
+  type RecoveryCommentThreadState,
+  type RecoveryConditionalFormatCaptureResult,
+  type RecoveryConditionalFormatRule,
+  type RecoveryFormatBorderState,
+  type RecoveryFormatRangeState,
+} from "./recovery-states.js";
 
 const RECOVERY_SETTING_KEY = "workbook.recovery-snapshots.v1";
 const MAX_RECOVERY_ENTRIES = 120;
@@ -17,7 +30,16 @@ export type WorkbookRecoveryToolName =
   | "write_cells"
   | "fill_formula"
   | "python_transform_range"
+  | "format_cells"
+  | "conditional_format"
+  | "comments"
   | "restore_snapshot";
+
+export type WorkbookRecoverySnapshotKind =
+  | "range_values"
+  | "format_cells_state"
+  | "conditional_format_rules"
+  | "comment_thread";
 
 export interface WorkbookRecoverySnapshot {
   id: string;
@@ -29,6 +51,10 @@ export interface WorkbookRecoverySnapshot {
   cellCount: number;
   beforeValues: unknown[][];
   beforeFormulas: unknown[][];
+  snapshotKind?: WorkbookRecoverySnapshotKind;
+  formatRangeState?: RecoveryFormatRangeState;
+  conditionalFormatRules?: RecoveryConditionalFormatRule[];
+  commentThreadState?: RecoveryCommentThreadState;
   workbookId?: string;
   workbookLabel?: string;
   restoredFromSnapshotId?: string;
@@ -41,6 +67,34 @@ export interface AppendWorkbookRecoverySnapshotArgs {
   changedCount?: number;
   beforeValues: unknown[][];
   beforeFormulas: unknown[][];
+  restoredFromSnapshotId?: string;
+}
+
+export interface AppendFormatCellsRecoverySnapshotArgs {
+  toolName: WorkbookRecoveryToolName;
+  toolCallId: string;
+  address: string;
+  changedCount?: number;
+  formatRangeState: RecoveryFormatRangeState;
+  restoredFromSnapshotId?: string;
+}
+
+export interface AppendConditionalFormatRecoverySnapshotArgs {
+  toolName: WorkbookRecoveryToolName;
+  toolCallId: string;
+  address: string;
+  changedCount?: number;
+  cellCount: number;
+  conditionalFormatRules: RecoveryConditionalFormatRule[];
+  restoredFromSnapshotId?: string;
+}
+
+export interface AppendCommentThreadRecoverySnapshotArgs {
+  toolName: WorkbookRecoveryToolName;
+  toolCallId: string;
+  address: string;
+  changedCount?: number;
+  commentThreadState: RecoveryCommentThreadState;
   restoredFromSnapshotId?: string;
 }
 
@@ -67,6 +121,18 @@ interface WorkbookRecoveryLogDependencies {
   now: () => number;
   createId: () => string;
   applySnapshot: (address: string, values: unknown[][]) => Promise<WorkbookRangeState>;
+  applyFormatCellsSnapshot: (
+    address: string,
+    state: RecoveryFormatRangeState,
+  ) => Promise<RecoveryFormatRangeState>;
+  applyConditionalFormatSnapshot: (
+    address: string,
+    rules: RecoveryConditionalFormatRule[],
+  ) => Promise<RecoveryConditionalFormatCaptureResult>;
+  applyCommentThreadSnapshot: (
+    address: string,
+    state: RecoveryCommentThreadState,
+  ) => Promise<RecoveryCommentThreadState>;
 }
 
 interface PersistedWorkbookRecoveryPayload {
@@ -130,11 +196,35 @@ async function defaultApplySnapshot(address: string, values: unknown[][]): Promi
   });
 }
 
+async function defaultApplyFormatCellsSnapshot(
+  address: string,
+  state: RecoveryFormatRangeState,
+): Promise<RecoveryFormatRangeState> {
+  return applyFormatCellsState(address, state);
+}
+
+async function defaultApplyConditionalFormatSnapshot(
+  address: string,
+  rules: RecoveryConditionalFormatRule[],
+): Promise<RecoveryConditionalFormatCaptureResult> {
+  return applyConditionalFormatState(address, rules);
+}
+
+async function defaultApplyCommentThreadSnapshot(
+  address: string,
+  state: RecoveryCommentThreadState,
+): Promise<RecoveryCommentThreadState> {
+  return applyCommentThreadState(address, state);
+}
+
 function isWorkbookRecoveryToolName(value: unknown): value is WorkbookRecoveryToolName {
   return (
     value === "write_cells" ||
     value === "fill_formula" ||
     value === "python_transform_range" ||
+    value === "format_cells" ||
+    value === "conditional_format" ||
+    value === "comments" ||
     value === "restore_snapshot"
   );
 }
@@ -262,33 +352,249 @@ function countChangedCells(args: {
   return changedCount;
 }
 
+function parseWorkbookRecoverySnapshotKind(value: unknown): WorkbookRecoverySnapshotKind {
+  return value === "conditional_format_rules" ||
+      value === "comment_thread" ||
+      value === "format_cells_state" ||
+      value === "range_values"
+    ? value
+    : "range_values";
+}
+
+function isRecoveryFormatSelection(value: unknown): value is RecoveryFormatRangeState["selection"] {
+  if (!isRecord(value)) return false;
+
+  const keys: Array<keyof RecoveryFormatRangeState["selection"]> = [
+    "numberFormat",
+    "fillColor",
+    "fontColor",
+    "bold",
+    "italic",
+    "underlineStyle",
+    "fontName",
+    "fontSize",
+    "horizontalAlignment",
+    "verticalAlignment",
+    "wrapText",
+    "borderTop",
+    "borderBottom",
+    "borderLeft",
+    "borderRight",
+    "borderInsideHorizontal",
+    "borderInsideVertical",
+  ];
+
+  for (const key of keys) {
+    const candidate = value[key];
+    if (candidate !== undefined && typeof candidate !== "boolean") {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function isStringGrid(value: unknown): value is string[][] {
+  return Array.isArray(value) &&
+    value.every((row) => Array.isArray(row) && row.every((cell) => typeof cell === "string"));
+}
+
+function isRecoveryFormatBorderState(value: unknown): value is RecoveryFormatBorderState {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.style === "string" &&
+    (value.weight === undefined || typeof value.weight === "string") &&
+    (value.color === undefined || typeof value.color === "string")
+  );
+}
+
+function isRecoveryFormatAreaState(value: unknown): value is RecoveryFormatRangeState["areas"][number] {
+  if (!isRecord(value)) return false;
+  if (typeof value.address !== "string") return false;
+  if (typeof value.rowCount !== "number") return false;
+  if (typeof value.columnCount !== "number") return false;
+
+  if (value.numberFormat !== undefined && !isStringGrid(value.numberFormat)) return false;
+  if (value.fillColor !== undefined && typeof value.fillColor !== "string") return false;
+  if (value.fontColor !== undefined && typeof value.fontColor !== "string") return false;
+  if (value.bold !== undefined && typeof value.bold !== "boolean") return false;
+  if (value.italic !== undefined && typeof value.italic !== "boolean") return false;
+  if (value.underlineStyle !== undefined && typeof value.underlineStyle !== "string") return false;
+  if (value.fontName !== undefined && typeof value.fontName !== "string") return false;
+  if (value.fontSize !== undefined && typeof value.fontSize !== "number") return false;
+  if (value.horizontalAlignment !== undefined && typeof value.horizontalAlignment !== "string") return false;
+  if (value.verticalAlignment !== undefined && typeof value.verticalAlignment !== "string") return false;
+  if (value.wrapText !== undefined && typeof value.wrapText !== "boolean") return false;
+
+  if (value.borderTop !== undefined && !isRecoveryFormatBorderState(value.borderTop)) return false;
+  if (value.borderBottom !== undefined && !isRecoveryFormatBorderState(value.borderBottom)) return false;
+  if (value.borderLeft !== undefined && !isRecoveryFormatBorderState(value.borderLeft)) return false;
+  if (value.borderRight !== undefined && !isRecoveryFormatBorderState(value.borderRight)) return false;
+  if (value.borderInsideHorizontal !== undefined && !isRecoveryFormatBorderState(value.borderInsideHorizontal)) {
+    return false;
+  }
+  if (value.borderInsideVertical !== undefined && !isRecoveryFormatBorderState(value.borderInsideVertical)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isRecoveryFormatRangeState(value: unknown): value is RecoveryFormatRangeState {
+  if (!isRecord(value)) return false;
+  if (!isRecoveryFormatSelection(value.selection)) return false;
+  if (!Array.isArray(value.areas) || !value.areas.every((area) => isRecoveryFormatAreaState(area))) return false;
+  if (typeof value.cellCount !== "number") return false;
+
+  return true;
+}
+
+function isRecoveryConditionalFormatRule(value: unknown): value is RecoveryConditionalFormatRule {
+  if (!isRecord(value)) return false;
+
+  const type = value.type;
+  if (type !== "custom" && type !== "cell_value") return false;
+
+  const operator = value.operator;
+  const validOperator = operator === undefined || (
+    operator === "Between" ||
+    operator === "NotBetween" ||
+    operator === "EqualTo" ||
+    operator === "NotEqualTo" ||
+    operator === "GreaterThan" ||
+    operator === "LessThan" ||
+    operator === "GreaterThanOrEqual" ||
+    operator === "LessThanOrEqual"
+  );
+
+  if (!validOperator) return false;
+
+  return (
+    (value.stopIfTrue === undefined || typeof value.stopIfTrue === "boolean") &&
+    (value.formula === undefined || typeof value.formula === "string") &&
+    (value.formula1 === undefined || typeof value.formula1 === "string") &&
+    (value.formula2 === undefined || typeof value.formula2 === "string") &&
+    (value.fillColor === undefined || typeof value.fillColor === "string") &&
+    (value.fontColor === undefined || typeof value.fontColor === "string") &&
+    (value.bold === undefined || typeof value.bold === "boolean") &&
+    (value.italic === undefined || typeof value.italic === "boolean") &&
+    (value.underline === undefined || typeof value.underline === "boolean") &&
+    (value.appliesToAddress === undefined || typeof value.appliesToAddress === "string")
+  );
+}
+
+function isRecoveryCommentThreadState(value: unknown): value is RecoveryCommentThreadState {
+  if (!isRecord(value)) return false;
+  if (typeof value.exists !== "boolean") return false;
+  if (typeof value.content !== "string") return false;
+  if (typeof value.resolved !== "boolean") return false;
+  if (!Array.isArray(value.replies)) return false;
+
+  return value.replies.every((reply) => typeof reply === "string");
+}
+
 function parseWorkbookRecoverySnapshot(value: unknown): WorkbookRecoverySnapshot | null {
   if (!isRecord(value)) return null;
 
   if (!isWorkbookRecoveryToolName(value.toolName)) return null;
   if (typeof value.toolCallId !== "string") return null;
   if (typeof value.address !== "string") return null;
-  if (!isGrid(value.beforeValues)) return null;
-  if (!isGrid(value.beforeFormulas)) return null;
+
+  const snapshotKind = parseWorkbookRecoverySnapshotKind(value.snapshotKind);
+
+  const beforeValues = isGrid(value.beforeValues)
+    ? cloneGrid(value.beforeValues)
+    : [];
+  const beforeFormulas = isGrid(value.beforeFormulas)
+    ? cloneGrid(value.beforeFormulas)
+    : [];
+
+  if (snapshotKind === "range_values" && (!isGrid(value.beforeValues) || !isGrid(value.beforeFormulas))) {
+    return null;
+  }
+
+  let conditionalFormatRules: RecoveryConditionalFormatRule[] = [];
+  if (Array.isArray(value.conditionalFormatRules)) {
+    conditionalFormatRules = [];
+    for (const rule of value.conditionalFormatRules) {
+      if (!isRecoveryConditionalFormatRule(rule)) {
+        return null;
+      }
+
+      conditionalFormatRules.push(rule);
+    }
+  }
+
+  const formatRangeState = isRecoveryFormatRangeState(value.formatRangeState)
+    ? cloneRecoveryFormatRangeState(value.formatRangeState)
+    : undefined;
+
+  const commentThreadState = isRecoveryCommentThreadState(value.commentThreadState)
+    ? cloneRecoveryCommentThreadState(value.commentThreadState)
+    : undefined;
+
+  if (snapshotKind === "format_cells_state" && !formatRangeState) {
+    return null;
+  }
+
+  if (snapshotKind === "conditional_format_rules" && !Array.isArray(value.conditionalFormatRules)) {
+    return null;
+  }
+
+  if (snapshotKind === "comment_thread" && !commentThreadState) {
+    return null;
+  }
 
   const id = typeof value.id === "string" ? value.id : defaultCreateId();
   const at = typeof value.at === "number" ? value.at : Date.now();
-  const cellCount = typeof value.cellCount === "number" ? Math.max(0, value.cellCount) : 0;
 
-  return {
+  const cellCountFromGrid = gridStats(beforeValues, beforeFormulas).cellCount;
+  const fallbackCellCount = snapshotKind === "range_values"
+    ? cellCountFromGrid
+    : snapshotKind === "format_cells_state"
+      ? (formatRangeState?.cellCount ?? 0)
+      : snapshotKind === "conditional_format_rules"
+        ? conditionalFormatRules.length
+        : 1;
+
+  const cellCount = typeof value.cellCount === "number"
+    ? Math.max(0, value.cellCount)
+    : fallbackCellCount;
+
+  const changedCount = typeof value.changedCount === "number"
+    ? Math.max(0, value.changedCount)
+    : cellCount;
+
+  const snapshot: WorkbookRecoverySnapshot = {
     id,
     at,
     toolName: value.toolName,
     toolCallId: value.toolCallId,
     address: value.address,
-    changedCount: typeof value.changedCount === "number" ? Math.max(0, value.changedCount) : 0,
+    changedCount,
     cellCount,
-    beforeValues: cloneGrid(value.beforeValues),
-    beforeFormulas: cloneGrid(value.beforeFormulas),
+    beforeValues,
+    beforeFormulas,
+    snapshotKind,
     workbookId: typeof value.workbookId === "string" ? value.workbookId : undefined,
     workbookLabel: typeof value.workbookLabel === "string" ? value.workbookLabel : undefined,
     restoredFromSnapshotId: typeof value.restoredFromSnapshotId === "string" ? value.restoredFromSnapshotId : undefined,
   };
+
+  if (snapshotKind === "format_cells_state" && formatRangeState) {
+    snapshot.formatRangeState = cloneRecoveryFormatRangeState(formatRangeState);
+  }
+
+  if (snapshotKind === "conditional_format_rules") {
+    snapshot.conditionalFormatRules = cloneRecoveryConditionalFormatRules(conditionalFormatRules);
+  }
+
+  if (snapshotKind === "comment_thread") {
+    snapshot.commentThreadState = commentThreadState;
+  }
+
+  return snapshot;
 }
 
 function parsePersistedSnapshots(payload: unknown): WorkbookRecoverySnapshot[] {
@@ -335,6 +641,12 @@ export class WorkbookRecoveryLog {
       now: dependencies.now ?? defaultNow,
       createId: dependencies.createId ?? defaultCreateId,
       applySnapshot: dependencies.applySnapshot ?? defaultApplySnapshot,
+      applyFormatCellsSnapshot:
+        dependencies.applyFormatCellsSnapshot ?? defaultApplyFormatCellsSnapshot,
+      applyConditionalFormatSnapshot:
+        dependencies.applyConditionalFormatSnapshot ?? defaultApplyConditionalFormatSnapshot,
+      applyCommentThreadSnapshot:
+        dependencies.applyCommentThreadSnapshot ?? defaultApplyCommentThreadSnapshot,
     };
   }
 
@@ -369,7 +681,34 @@ export class WorkbookRecoveryLog {
     }
   }
 
-  private async appendWithContext(
+  private async resolveWorkbookIdentity(
+    workbookContextOverride?: WorkbookContext,
+  ): Promise<{ workbookContext: WorkbookContext; workbookId: string; workbookLabel?: string } | null> {
+    try {
+      const workbookContext = workbookContextOverride ?? await this.dependencies.getWorkbookContext();
+      if (!workbookContext.workbookId) {
+        return null;
+      }
+
+      return {
+        workbookContext,
+        workbookId: workbookContext.workbookId,
+        workbookLabel: formatWorkbookLabel(workbookContext),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private async appendSnapshot(
+    snapshot: WorkbookRecoverySnapshot,
+  ): Promise<WorkbookRecoverySnapshot> {
+    this.snapshots = [snapshot, ...this.snapshots].slice(0, MAX_RECOVERY_ENTRIES);
+    await this.persist();
+    return snapshot;
+  }
+
+  private async appendRangeWithContext(
     args: AppendWorkbookRecoverySnapshotArgs,
     workbookContextOverride?: WorkbookContext,
   ): Promise<WorkbookRecoverySnapshot | null> {
@@ -384,22 +723,10 @@ export class WorkbookRecoveryLog {
       ? Math.max(0, Math.floor(args.changedCount))
       : stats.cellCount;
 
-    let workbookId: string | undefined;
-    let workbookLabel: string | undefined;
+    const workbookIdentity = await this.resolveWorkbookIdentity(workbookContextOverride);
+    if (!workbookIdentity) return null;
 
-    try {
-      const workbookContext = workbookContextOverride ?? await this.dependencies.getWorkbookContext();
-      if (!workbookContext.workbookId) {
-        return null;
-      }
-
-      workbookId = workbookContext.workbookId;
-      workbookLabel = formatWorkbookLabel(workbookContext);
-    } catch {
-      return null;
-    }
-
-    const snapshot: WorkbookRecoverySnapshot = {
+    return this.appendSnapshot({
       id: this.dependencies.createId(),
       at: this.dependencies.now(),
       toolName: args.toolName,
@@ -409,20 +736,132 @@ export class WorkbookRecoveryLog {
       cellCount: stats.cellCount,
       beforeValues: values,
       beforeFormulas: formulas,
-      workbookId,
-      workbookLabel,
+      snapshotKind: "range_values",
+      workbookId: workbookIdentity.workbookId,
+      workbookLabel: workbookIdentity.workbookLabel,
       restoredFromSnapshotId: args.restoredFromSnapshotId,
-    };
+    });
+  }
 
-    this.snapshots = [snapshot, ...this.snapshots].slice(0, MAX_RECOVERY_ENTRIES);
-    await this.persist();
+  private async appendFormatCellsWithContext(
+    args: AppendFormatCellsRecoverySnapshotArgs,
+    workbookContextOverride?: WorkbookContext,
+  ): Promise<WorkbookRecoverySnapshot | null> {
+    const formatRangeState = cloneRecoveryFormatRangeState(args.formatRangeState);
+    if (formatRangeState.cellCount <= 0) return null;
+    if (formatRangeState.cellCount > MAX_RECOVERY_CELLS) return null;
 
-    return snapshot;
+    const workbookIdentity = await this.resolveWorkbookIdentity(workbookContextOverride);
+    if (!workbookIdentity) return null;
+
+    const changedCount = typeof args.changedCount === "number"
+      ? Math.max(0, Math.floor(args.changedCount))
+      : formatRangeState.cellCount;
+
+    return this.appendSnapshot({
+      id: this.dependencies.createId(),
+      at: this.dependencies.now(),
+      toolName: args.toolName,
+      toolCallId: args.toolCallId,
+      address: args.address,
+      changedCount,
+      cellCount: formatRangeState.cellCount,
+      beforeValues: [],
+      beforeFormulas: [],
+      snapshotKind: "format_cells_state",
+      formatRangeState,
+      workbookId: workbookIdentity.workbookId,
+      workbookLabel: workbookIdentity.workbookLabel,
+      restoredFromSnapshotId: args.restoredFromSnapshotId,
+    });
+  }
+
+  private async appendConditionalFormatWithContext(
+    args: AppendConditionalFormatRecoverySnapshotArgs,
+    workbookContextOverride?: WorkbookContext,
+  ): Promise<WorkbookRecoverySnapshot | null> {
+    const rules = cloneRecoveryConditionalFormatRules(args.conditionalFormatRules);
+    const normalizedCellCount = Math.max(0, Math.floor(args.cellCount));
+    if (normalizedCellCount <= 0) return null;
+
+    const workbookIdentity = await this.resolveWorkbookIdentity(workbookContextOverride);
+    if (!workbookIdentity) return null;
+
+    const changedCount = typeof args.changedCount === "number"
+      ? Math.max(0, Math.floor(args.changedCount))
+      : normalizedCellCount;
+
+    return this.appendSnapshot({
+      id: this.dependencies.createId(),
+      at: this.dependencies.now(),
+      toolName: args.toolName,
+      toolCallId: args.toolCallId,
+      address: args.address,
+      changedCount,
+      cellCount: normalizedCellCount,
+      beforeValues: [],
+      beforeFormulas: [],
+      snapshotKind: "conditional_format_rules",
+      conditionalFormatRules: rules,
+      workbookId: workbookIdentity.workbookId,
+      workbookLabel: workbookIdentity.workbookLabel,
+      restoredFromSnapshotId: args.restoredFromSnapshotId,
+    });
+  }
+
+  private async appendCommentThreadWithContext(
+    args: AppendCommentThreadRecoverySnapshotArgs,
+    workbookContextOverride?: WorkbookContext,
+  ): Promise<WorkbookRecoverySnapshot | null> {
+    const workbookIdentity = await this.resolveWorkbookIdentity(workbookContextOverride);
+    if (!workbookIdentity) return null;
+
+    const changedCount = typeof args.changedCount === "number"
+      ? Math.max(0, Math.floor(args.changedCount))
+      : 1;
+
+    return this.appendSnapshot({
+      id: this.dependencies.createId(),
+      at: this.dependencies.now(),
+      toolName: args.toolName,
+      toolCallId: args.toolCallId,
+      address: args.address,
+      changedCount,
+      cellCount: 1,
+      beforeValues: [],
+      beforeFormulas: [],
+      snapshotKind: "comment_thread",
+      commentThreadState: cloneRecoveryCommentThreadState(args.commentThreadState),
+      workbookId: workbookIdentity.workbookId,
+      workbookLabel: workbookIdentity.workbookLabel,
+      restoredFromSnapshotId: args.restoredFromSnapshotId,
+    });
   }
 
   async append(args: AppendWorkbookRecoverySnapshotArgs): Promise<WorkbookRecoverySnapshot | null> {
     await this.ensureLoaded();
-    return this.appendWithContext(args);
+    return this.appendRangeWithContext(args);
+  }
+
+  async appendFormatCells(
+    args: AppendFormatCellsRecoverySnapshotArgs,
+  ): Promise<WorkbookRecoverySnapshot | null> {
+    await this.ensureLoaded();
+    return this.appendFormatCellsWithContext(args);
+  }
+
+  async appendConditionalFormat(
+    args: AppendConditionalFormatRecoverySnapshotArgs,
+  ): Promise<WorkbookRecoverySnapshot | null> {
+    await this.ensureLoaded();
+    return this.appendConditionalFormatWithContext(args);
+  }
+
+  async appendCommentThread(
+    args: AppendCommentThreadRecoverySnapshotArgs,
+  ): Promise<WorkbookRecoverySnapshot | null> {
+    await this.ensureLoaded();
+    return this.appendCommentThreadWithContext(args);
   }
 
   async list(opts: { limit?: number; workbookId?: string | null } = {}): Promise<WorkbookRecoverySnapshot[]> {
@@ -510,6 +949,91 @@ export class WorkbookRecoveryLog {
       throw new Error("Snapshot belongs to a different workbook.");
     }
 
+    const snapshotKind = snapshot.snapshotKind ?? "range_values";
+
+    if (snapshotKind === "format_cells_state") {
+      const targetState = snapshot.formatRangeState;
+      if (!targetState) {
+        throw new Error("Format checkpoint data is missing.");
+      }
+
+      const currentState = await this.dependencies.applyFormatCellsSnapshot(snapshot.address, targetState);
+      const inverseSnapshot = await this.appendFormatCellsWithContext(
+        {
+          toolName: "restore_snapshot",
+          toolCallId: `restore:${snapshot.id}`,
+          address: snapshot.address,
+          changedCount: snapshot.changedCount,
+          formatRangeState: currentState,
+          restoredFromSnapshotId: snapshot.id,
+        },
+        workbookContext,
+      );
+
+      return {
+        restoredSnapshotId: snapshot.id,
+        inverseSnapshotId: inverseSnapshot?.id ?? null,
+        address: snapshot.address,
+        changedCount: snapshot.changedCount,
+      };
+    }
+
+    if (snapshotKind === "conditional_format_rules") {
+      const rules = snapshot.conditionalFormatRules ?? [];
+      const currentState = await this.dependencies.applyConditionalFormatSnapshot(snapshot.address, rules);
+
+      if (!currentState.supported) {
+        throw new Error(currentState.reason ?? "Conditional format checkpoint cannot be restored safely.");
+      }
+
+      const inverseSnapshot = await this.appendConditionalFormatWithContext(
+        {
+          toolName: "restore_snapshot",
+          toolCallId: `restore:${snapshot.id}`,
+          address: snapshot.address,
+          changedCount: snapshot.changedCount,
+          cellCount: snapshot.cellCount,
+          conditionalFormatRules: currentState.rules,
+          restoredFromSnapshotId: snapshot.id,
+        },
+        workbookContext,
+      );
+
+      return {
+        restoredSnapshotId: snapshot.id,
+        inverseSnapshotId: inverseSnapshot?.id ?? null,
+        address: snapshot.address,
+        changedCount: snapshot.changedCount,
+      };
+    }
+
+    if (snapshotKind === "comment_thread") {
+      const targetState = snapshot.commentThreadState;
+      if (!targetState) {
+        throw new Error("Comment checkpoint data is missing.");
+      }
+
+      const currentState = await this.dependencies.applyCommentThreadSnapshot(snapshot.address, targetState);
+      const inverseSnapshot = await this.appendCommentThreadWithContext(
+        {
+          toolName: "restore_snapshot",
+          toolCallId: `restore:${snapshot.id}`,
+          address: snapshot.address,
+          changedCount: snapshot.changedCount,
+          commentThreadState: currentState,
+          restoredFromSnapshotId: snapshot.id,
+        },
+        workbookContext,
+      );
+
+      return {
+        restoredSnapshotId: snapshot.id,
+        inverseSnapshotId: inverseSnapshot?.id ?? null,
+        address: snapshot.address,
+        changedCount: snapshot.changedCount,
+      };
+    }
+
     const restoreValues = toRestoreValues(snapshot.beforeValues, snapshot.beforeFormulas);
     const currentState = await this.dependencies.applySnapshot(snapshot.address, restoreValues);
 
@@ -520,7 +1044,7 @@ export class WorkbookRecoveryLog {
       afterFormulas: snapshot.beforeFormulas,
     });
 
-    const inverseSnapshot = await this.appendWithContext(
+    const inverseSnapshot = await this.appendRangeWithContext(
       {
         toolName: "restore_snapshot",
         toolCallId: `restore:${snapshot.id}`,

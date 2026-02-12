@@ -2,7 +2,7 @@
 
 Pi for Excel supports runtime extensions that can register slash commands, register tools, and render small UI elements in the sidebar.
 
-> Status: MVP. Extensions currently run in the same taskpane context (no sandbox/permission boundary yet).
+> Status: MVP+ (in progress). Inline-code and remote-URL extensions now run in sandbox runtime by default; built-in/local-module extensions stay on host runtime. Additive Widget API v2 is behind `/experimental on extension-widget-v2`.
 
 ## Quick start
 
@@ -13,6 +13,23 @@ Pi for Excel supports runtime extensions that can register slash commands, regis
    - **URL module** (requires explicit unsafe opt-in)
 3. Enable/disable/reload/uninstall from the same manager.
 4. Review and edit capability permissions per extension (changes auto-reload enabled extensions).
+
+## Create extensions directly from chat
+
+You can ask Pi to build and install an extension without leaving the conversation.
+
+Example prompt:
+
+```txt
+Create an extension named "Quick KPI" that adds /kpi-summary.
+The command should read the active sheet, find numeric columns, and show a small widget with totals.
+Then install it.
+```
+
+Pi can use the `extensions_manager` tool to:
+- list installed extensions
+- install an extension from generated code
+- enable/disable, reload, and uninstall extensions
 
 ## Install source types
 
@@ -58,6 +75,7 @@ Registers an agent-callable tool.
 
 Notes:
 - `parameters` should be a JSON-schema/TypeBox-compatible object.
+- In sandbox runtime, plain JSON schema objects are accepted and wrapped safely by the host bridge.
 - Tool names must not conflict with core built-in tools.
 - Tool names must be unique across enabled extensions.
 
@@ -71,7 +89,21 @@ Subscribe to runtime events (returns unsubscribe function).
 Show or dismiss a full-screen overlay.
 
 ### `widget.show(el)` / `widget.dismiss()`
-Show or dismiss an inline widget slot above the input area.
+Show or dismiss the legacy inline widget slot above the input area.
+
+### `widget.upsert(spec)` / `widget.remove(id)` / `widget.clear()` (Widget API v2)
+Additive widget lifecycle API (experimental):
+- `upsert` creates/updates by stable `spec.id`
+- `remove` unmounts one widget by id
+- `clear` unmounts all widgets owned by the extension
+
+Enable with:
+
+```txt
+/experimental on extension-widget-v2
+```
+
+`upsert(spec)` supports optional metadata: `title`, `placement` (`above-input` | `below-input`), `order`, `collapsible`, `collapsed`, `minHeightPx`, `maxHeightPx`.
 
 ### `toast(message)`
 Show a short toast notification.
@@ -137,6 +169,30 @@ High-risk capabilities include:
 - `agent.read`
 - `agent.events.read`
 
+## Sandbox runtime (default-on)
+
+Sandboxed runtime execution is now the default for untrusted extension sources.
+
+Default behavior:
+- inline-code and remote-URL extensions run in an iframe sandbox runtime
+- built-in/local-module extensions stay on host runtime
+- `/extensions` shows runtime mode per extension
+
+Rollback kill switch (temporary rollout safety valve):
+
+```txt
+/experimental off extension-sandbox   # rollback: untrusted extensions run in host runtime
+/experimental on extension-sandbox    # re-enable sandbox default behavior
+```
+
+You can also toggle rollback mode directly in `/extensions` via the **Sandbox runtime (default for untrusted sources)** card.
+
+Current sandbox bridge limitations (intentional for this slice):
+- `api.agent` is not available in sandbox runtime
+- widget/overlay rendering uses a **structured, sanitized UI tree** (no raw HTML / no `innerHTML`)
+- interactive callbacks are limited to explicit action markers (`data-pi-action`), which dispatch click events back inside sandbox runtime
+- Widget API v2 (`widget.upsert/remove/clear`) is available only when `extension-widget-v2` is enabled
+
 ## Local module authoring (repo contributors)
 
 Local module specifiers are used for built-ins (for example the seeded Snake extension).
@@ -167,5 +223,6 @@ If a local specifier is not bundled, loading fails with a clear error.
 
 - Extensions can read/write workbook data through registered tools and host APIs.
 - Remote URL loading is intentionally off by default.
-- There is no hard sandbox boundary in MVP; only run trusted extension code.
+- Untrusted extension sources (`inline-code`, `remote-url`) default to sandbox runtime; trusted local/built-in modules stay host-side.
+- If you must roll back quickly, use `/experimental off extension-sandbox` (and re-enable with `/experimental on extension-sandbox` once stable).
 - Experimental capability gates can be enabled with `/experimental on extension-permissions`.

@@ -8,9 +8,11 @@ import type { Agent, AgentMessage, ThinkingLevel } from "@mariozechner/pi-agent-
 import { supportsXhigh } from "@mariozechner/pi-ai";
 
 import type { PiSidebar } from "../ui/pi-sidebar.js";
+import { moveCursorToEnd } from "../ui/input-focus.js";
 import { showToast } from "../ui/toast.js";
 
 import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
+import { blurTextEntryTarget, isTextEntryTarget } from "../utils/text-entry.js";
 import { commandRegistry } from "../commands/types.js";
 import {
   handleCommandMenuKey,
@@ -37,6 +39,25 @@ interface ReopenShortcutEventLike {
   altKey: boolean;
 }
 
+interface FocusInputShortcutEventLike {
+  key: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+}
+
+interface AdjacentTabShortcutEventLike {
+  key: string;
+  code?: string;
+  keyCode?: number;
+  repeat: boolean;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+}
+
 const THINKING_COLORS: Record<ThinkingLevel, string> = {
   off: "#a0a0a0",
   minimal: "#767676",
@@ -47,6 +68,14 @@ const THINKING_COLORS: Record<ThinkingLevel, string> = {
 };
 
 const BUSY_ALLOWED_COMMANDS = new Set(["compact", "new", "resume", "reopen"]);
+
+function isInsideSessionTabs(target: EventTarget | null | undefined): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return target.closest(".pi-session-tabs") !== null;
+}
 
 function setExcelToolCardsExpanded(expanded: boolean): void {
   const toolMessages = document.querySelectorAll("tool-message");
@@ -140,6 +169,56 @@ export function isReopenLastClosedShortcut(event: ReopenShortcutEventLike): bool
   return event.key.toLowerCase() === "t";
 }
 
+export function isFocusInputShortcut(event: FocusInputShortcutEventLike): boolean {
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false;
+  return event.key === "F2";
+}
+
+export function getAdjacentTabDirectionFromShortcut(
+  event: AdjacentTabShortcutEventLike,
+): -1 | 1 | null {
+  if (event.repeat) return null;
+
+  const key = event.key;
+  const code = event.code;
+  const keyCode = event.keyCode;
+
+  // Fallback chords for hosts that swallow plain arrow keys.
+  if (event.metaKey && event.shiftKey && !event.ctrlKey && !event.altKey) {
+    if (key === "[") return -1;
+    if (key === "]") return 1;
+    return null;
+  }
+
+  if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+    if (key === "PageUp") return -1;
+    if (key === "PageDown") return 1;
+  }
+
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return null;
+
+  if (key === "ArrowLeft" || key === "Left" || code === "ArrowLeft" || keyCode === 37) {
+    return -1;
+  }
+
+  if (key === "ArrowRight" || key === "Right" || code === "ArrowRight" || keyCode === 39) {
+    return 1;
+  }
+
+  return null;
+}
+
+export function shouldBlurEditorFromEscape(opts: {
+  key: string;
+  isInEditor: boolean;
+  isStreaming: boolean;
+}): boolean {
+  if (opts.key !== "Escape" && opts.key !== "Esc") return false;
+  if (!opts.isInEditor) return false;
+  if (opts.isStreaming) return false;
+  return true;
+}
+
 export function shouldAbortFromEscape(opts: {
   isStreaming: boolean;
   hasAgent: boolean;
@@ -158,6 +237,7 @@ export function installKeyboardShortcuts(opts: {
   sidebar: PiSidebar;
   markUserAborted: (agent: Agent) => void;
   onReopenLastClosed?: () => void;
+  onSwitchAdjacentTab?: (direction: -1 | 1) => void;
 }): () => void {
   const {
     getActiveAgent,
@@ -166,6 +246,7 @@ export function installKeyboardShortcuts(opts: {
     sidebar,
     markUserAborted,
     onReopenLastClosed,
+    onSwitchAdjacentTab,
   } = opts;
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -176,11 +257,33 @@ export function installKeyboardShortcuts(opts: {
 
     const agent = getActiveAgent();
     const textarea = sidebar.getTextarea();
-    const targetNode = e.target instanceof Node ? e.target : null;
+    const eventTarget = e.target instanceof Node ? e.target : null;
+    const keyTarget = eventTarget ?? (document.activeElement instanceof Node ? document.activeElement : null);
+    const isInSidebarInput = keyTarget instanceof Element
+      ? keyTarget.closest(".pi-input-card") !== null
+      : false;
     const isInEditor = Boolean(
-      textarea && targetNode && (targetNode === textarea || textarea.contains(targetNode)),
+      isInSidebarInput
+      || (textarea && keyTarget && (keyTarget === textarea || textarea.contains(keyTarget))),
     );
     const isStreaming = agent?.state.isStreaming ?? false;
+
+    // F2 — focus chat input
+    if (isFocusInputShortcut(e)) {
+      const input = sidebar.getInput();
+      if (!input) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      input.focus();
+
+      const activeTextarea = sidebar.getTextarea();
+      if (activeTextarea) {
+        moveCursorToEnd(activeTextarea);
+      }
+
+      return;
+    }
 
     // ESC — dismiss command menu
     if (e.key === "Escape" && isCommandMenuVisible()) {
@@ -189,11 +292,32 @@ export function installKeyboardShortcuts(opts: {
       return;
     }
 
-    const escapeClaimedByOverlay = e.key === "Escape" && doesOverlayClaimEscape(targetNode);
+    const isEscapeKey = e.key === "Escape" || e.key === "Esc";
+    const escapeClaimedByOverlay = isEscapeKey && doesOverlayClaimEscape(keyTarget);
+
+    // ESC — leave editor focus (when not streaming)
+    if (
+      shouldBlurEditorFromEscape({
+        key: e.key,
+        isInEditor,
+        isStreaming,
+      })
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      const blurred = blurTextEntryTarget(keyTarget);
+      if (blurred) {
+        requestAnimationFrame(() => {
+          sidebar.focusTabNavigationAnchor();
+        });
+      }
+      return;
+    }
 
     // ESC — abort (only when no overlay/dialog is claiming Escape)
     if (
-      e.key === "Escape"
+      isEscapeKey
       && shouldAbortFromEscape({
         isStreaming,
         hasAgent: agent !== null,
@@ -212,6 +336,19 @@ export function installKeyboardShortcuts(opts: {
       if (!onReopenLastClosed) return;
       e.preventDefault();
       onReopenLastClosed();
+      return;
+    }
+
+    // ←/→ — switch tabs when editor is not focused
+    const adjacentTabDirection = getAdjacentTabDirectionFromShortcut(e);
+    if (
+      adjacentTabDirection
+      && onSwitchAdjacentTab
+      && !isTextEntryTarget(keyTarget)
+      && !isInsideSessionTabs(keyTarget)
+    ) {
+      e.preventDefault();
+      onSwitchAdjacentTab(adjacentTabDirection);
       return;
     }
 

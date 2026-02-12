@@ -11,19 +11,31 @@ import type { ToolRenderer, ToolRenderResult } from "@mariozechner/pi-web-ui/dis
 import { html, type TemplateResult } from "lit";
 import { createRef, ref } from "lit/directives/ref.js";
 import { renderCollapsibleToolCardHeader, renderToolCardHeader } from "./tool-card-header.js";
-import { cellRef, cellRefs } from "./cell-link.js";
+import { cellRef, cellRefDisplay, cellRefs } from "./cell-link.js";
 import { humanizeToolInput } from "./humanize-params.js";
 import { humanizeColorsInText } from "./color-names.js";
 import { CORE_TOOL_NAMES, type CoreToolName } from "../tools/registry.js";
 import {
+  isCommentsDetails,
+  isConditionalFormatDetails,
+  isExplainFormulaDetails,
   isFillFormulaDetails,
   isFormatCellsDetails,
+  isModifyStructureDetails,
   isPythonTransformRangeDetails,
   isReadRangeCsvDetails,
   isTraceDependenciesDetails,
+  isViewSettingsDetails,
+  isWorkbookHistoryDetails,
   isWriteCellsDetails,
+  type RecoveryCheckpointDetails,
   type WriteCellsDetails,
 } from "../tools/tool-details.js";
+import { getToolExecutionMode } from "../tools/execution-policy.js";
+import {
+  buildChangeExplanation,
+  type ChangeExplanationInput,
+} from "../audit/change-explanation.js";
 import { renderCsvTable } from "./render-csv-table.js";
 import { renderDepTree } from "./render-dep-tree.js";
 
@@ -269,6 +281,232 @@ function renderWorkbookCellDiff(details: unknown): TemplateResult {
   `;
 }
 
+function renderExplainFormulaDetails(details: unknown): TemplateResult | null {
+  if (!isExplainFormulaDetails(details)) return null;
+
+  if (!details.hasFormula) {
+    return html`<div class="pi-tool-card__plain-text">${details.explanation}</div>`;
+  }
+
+  return html`
+    <div class="pi-formula-explain">
+      <div class="pi-tool-card__plain-text">${details.explanation}</div>
+      <div class="pi-formula-explain__formula">
+        <span class="pi-formula-explain__label">Formula:</span>
+        <code>${details.formula}</code>
+      </div>
+      <div class="pi-formula-explain__refs">
+        <div class="pi-formula-explain__label">Direct references (${details.references.length})</div>
+        <ul class="pi-formula-explain__list">
+          ${details.references.length > 0
+            ? details.references.map((reference) => html`
+              <li>
+                ${cellRefs(reference.address)}
+                ${reference.valuePreview ? html`<span class="pi-formula-explain__preview"> → ${reference.valuePreview}</span>` : html``}
+              </li>
+            `)
+            : html`<li>(No direct references detected)</li>`}
+        </ul>
+      </div>
+      ${details.truncated
+        ? html`<div class="pi-tool-card__diff-note">Showing the first ${details.references.length} reference(s).</div>`
+        : html``}
+    </div>
+  `;
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function extractResultError(resultText: string | undefined): string | undefined {
+  if (!resultText) return undefined;
+
+  const summary = resultSummary(resultText);
+  if (!summary) return undefined;
+
+  const normalized = summary.replace(/^\s*⚠️\s*/u, "").trim();
+  if (/^error\b/ui.test(normalized)) {
+    return normalized.replace(/^error:\s*/ui, "").trim();
+  }
+
+  return undefined;
+}
+
+function buildChangeExplanationInputForTool(
+  toolName: SupportedToolName,
+  params: unknown,
+  resultText: string | undefined,
+  details: unknown,
+): ChangeExplanationInput | null {
+  if (getToolExecutionMode(toolName, params) !== "mutate") return null;
+
+  const p = safeParseParams(params);
+  const range = optionalString(p.range);
+  const startCell = optionalString(p.start_cell);
+  const sheet = optionalString(p.sheet);
+  const action = optionalString(p.action);
+
+  const summary = resultSummary(resultText ?? "") ?? undefined;
+  const error = extractResultError(resultText);
+  const blockedFromText = Boolean(resultText && isBlocked(resultText));
+
+  if (isWriteCellsDetails(details)) {
+    return {
+      toolName,
+      blocked: details.blocked,
+      changedCount: details.changes?.changedCount,
+      summary,
+      error,
+      outputAddress: details.address ?? startCell,
+      changes: details.changes,
+    };
+  }
+
+  if (isFillFormulaDetails(details)) {
+    return {
+      toolName,
+      blocked: details.blocked,
+      changedCount: details.changes?.changedCount,
+      summary,
+      error,
+      outputAddress: details.address ?? range,
+      changes: details.changes,
+    };
+  }
+
+  if (isPythonTransformRangeDetails(details)) {
+    return {
+      toolName,
+      blocked: details.blocked || blockedFromText,
+      changedCount: details.changes?.changedCount,
+      summary,
+      error: details.error ?? error,
+      inputAddress: details.inputAddress,
+      outputAddress: details.outputAddress,
+      changes: details.changes,
+    };
+  }
+
+  if (isWorkbookHistoryDetails(details) && details.action === "restore") {
+    const historyError = optionalString(details.error);
+    return {
+      toolName,
+      blocked: blockedFromText || Boolean(historyError),
+      changedCount: details.changedCount,
+      summary,
+      error: historyError ?? error,
+      outputAddress: details.address,
+    };
+  }
+
+  if (toolName === "format_cells") {
+    const detailsAddress = isFormatCellsDetails(details) ? details.address : undefined;
+    return {
+      toolName,
+      blocked: blockedFromText,
+      summary,
+      error,
+      outputAddress: detailsAddress ?? range,
+    };
+  }
+
+  if (toolName === "conditional_format") {
+    return {
+      toolName,
+      blocked: blockedFromText,
+      summary,
+      error,
+      outputAddress: range,
+    };
+  }
+
+  if (toolName === "modify_structure") {
+    return {
+      toolName,
+      blocked: blockedFromText,
+      summary,
+      error,
+      outputAddress: range ?? sheet,
+    };
+  }
+
+  if (toolName === "comments") {
+    return {
+      toolName,
+      blocked: blockedFromText,
+      changedCount: blockedFromText ? 0 : 1,
+      summary,
+      error,
+      outputAddress: range,
+    };
+  }
+
+  if (toolName === "view_settings") {
+    const outputAddress = range ?? sheet;
+    return {
+      toolName,
+      blocked: blockedFromText,
+      changedCount: blockedFromText ? 0 : 1,
+      summary,
+      error,
+      outputAddress,
+    };
+  }
+
+  if (toolName === "workbook_history" && action === "restore") {
+    return {
+      toolName,
+      blocked: blockedFromText,
+      summary,
+      error,
+    };
+  }
+
+  return null;
+}
+
+function renderCitations(citations: readonly string[]): TemplateResult {
+  if (citations.length === 0) {
+    return html`<span class="pi-tool-card__explain-citations-empty">No range citations available.</span>`;
+  }
+
+  return html`${citations.map((address, index) => html`${index > 0 ? html`, ` : html``}${cellRefs(address)}`)}`;
+}
+
+function renderChangeExplanationSection(
+  toolName: SupportedToolName,
+  params: unknown,
+  resultText: string | undefined,
+  details: unknown,
+): TemplateResult {
+  const input = buildChangeExplanationInputForTool(toolName, params, resultText, details);
+  if (!input) return html``;
+
+  const explanation = buildChangeExplanation(input);
+
+  return html`
+    <div class="pi-tool-card__section">
+      <details class="pi-tool-card__explain">
+        <summary class="pi-tool-card__explain-toggle">Explain these changes</summary>
+        <div class="pi-tool-card__explain-body">
+          <div class="pi-tool-card__plain-text">${explanation.text}</div>
+          <div class="pi-tool-card__explain-citations">
+            <span class="pi-tool-card__explain-citations-label">Citations:</span>
+            ${renderCitations(explanation.citations)}
+          </div>
+          ${explanation.usedFallback
+            ? html`<div class="pi-tool-card__diff-note">Limited metadata available; explanation is high-level.</div>`
+            : html``}
+          ${explanation.truncated
+            ? html`<div class="pi-tool-card__diff-note">Explanation uses a bounded metadata sample.</div>`
+            : html``}
+        </div>
+      </details>
+    </div>
+  `;
+}
+
 /* ── Human-readable descriptions ────────────────────────────── */
 
 /** Strip "(N×M)" / "(NxM)" dimension notation — not intuitive for users. */
@@ -297,6 +535,12 @@ function compactRange(range: string): string {
     return `${first}!${parsed.map((p) => p.addr).join(",")}`;
   }
   return range;
+}
+
+function qualifyRangeAddress(range: string | undefined, sheet: string | undefined): string | undefined {
+  if (!range) return undefined;
+  if (range.includes("!")) return range;
+  return sheet ? `${sheet}!${range}` : range;
 }
 
 /**
@@ -372,6 +616,38 @@ function mutationBadge(changedCount: number | undefined, errorCount: number | un
   return parts.length > 0 ? ` — ${parts.join(", ")}` : "";
 }
 
+function withRecoveryBadge(base: string, recovery: RecoveryCheckpointDetails | undefined): string {
+  if (!recovery || recovery.status !== "not_available") {
+    return base;
+  }
+
+  return base.length > 0 ? `${base}, no checkpoint` : " — no checkpoint";
+}
+
+function recoveryBadgeForDetails(details: unknown): string {
+  if (isFormatCellsDetails(details)) {
+    return withRecoveryBadge("", details.recovery);
+  }
+
+  if (isConditionalFormatDetails(details)) {
+    return withRecoveryBadge("", details.recovery);
+  }
+
+  if (isModifyStructureDetails(details)) {
+    return withRecoveryBadge("", details.recovery);
+  }
+
+  if (isCommentsDetails(details)) {
+    return withRecoveryBadge("", details.recovery);
+  }
+
+  if (isViewSettingsDetails(details)) {
+    return withRecoveryBadge("", details.recovery);
+  }
+
+  return "";
+}
+
 /** Append error / blocked badge to the detail string. */
 function badge(
   toolName: SupportedToolName,
@@ -380,18 +656,27 @@ function badge(
 ): string {
   if (toolName === "write_cells" && isWriteCellsDetails(details)) {
     if (details.blocked) return " — blocked";
-    return mutationBadge(details.changes?.changedCount, details.formulaErrorCount);
+    return withRecoveryBadge(
+      mutationBadge(details.changes?.changedCount, details.formulaErrorCount),
+      details.recovery,
+    );
   }
 
   if (toolName === "fill_formula" && isFillFormulaDetails(details)) {
     if (details.blocked) return " — blocked";
-    return mutationBadge(details.changes?.changedCount, details.formulaErrorCount);
+    return withRecoveryBadge(
+      mutationBadge(details.changes?.changedCount, details.formulaErrorCount),
+      details.recovery,
+    );
   }
 
   if (toolName === "python_transform_range" && isPythonTransformRangeDetails(details)) {
     if (details.blocked) return " — blocked";
     if (typeof details.error === "string" && details.error.length > 0) return " — error";
-    return mutationBadge(details.changes?.changedCount, details.formulaErrorCount);
+    return withRecoveryBadge(
+      mutationBadge(details.changes?.changedCount, details.formulaErrorCount),
+      details.recovery,
+    );
   }
 
   if (!resultText) return "";
@@ -493,20 +778,40 @@ function describeToolCall(
     case "format_cells": {
       const addr = isFormatCellsDetails(details) ? details.address : undefined;
       const resolved = addr ?? range;
-      return { action: "Format", detail: resolved ? compactRange(resolved) : "cells", address: resolved };
+      const recovery = recoveryBadgeForDetails(details);
+      return {
+        action: "Format",
+        detail: (resolved ? compactRange(resolved) : "cells") + recovery,
+        address: resolved,
+      };
     }
-    case "conditional_format":
-      return { action: "Cond. format", detail: range ? compactRange(range) : "cells", address: range };
+    case "conditional_format": {
+      const recovery = recoveryBadgeForDetails(details);
+      return {
+        action: "Cond. format",
+        detail: (range ? compactRange(range) : "cells") + recovery,
+        address: range,
+      };
+    }
 
     // ── Result-text tools (split first word as action) ──
     case "modify_structure": {
-      if (resultText) { const s = resultSummary(resultText); if (s) return splitFirstWord(s); }
+      const recovery = recoveryBadgeForDetails(details);
+
+      if (resultText) {
+        const s = resultSummary(resultText);
+        if (s) {
+          const parts = splitFirstWord(s);
+          return { ...parts, detail: `${parts.detail}${recovery}` };
+        }
+      }
+
       const act = p.action as string | undefined;
       const name = (p.name ?? p.new_name) as string | undefined;
-      if (act === "add_sheet") return { action: "Add", detail: name ? `sheet "${name}"` : "sheet" };
-      if (act === "rename_sheet") return { action: "Rename", detail: name ? `to "${name}"` : "sheet" };
-      if (act === "delete_sheet") return { action: "Delete", detail: "sheet" };
-      return { action: "Modify", detail: "structure" };
+      if (act === "add_sheet") return { action: "Add", detail: `${name ? `sheet "${name}"` : "sheet"}${recovery}` };
+      if (act === "rename_sheet") return { action: "Rename", detail: `${name ? `to "${name}"` : "sheet"}${recovery}` };
+      if (act === "delete_sheet") return { action: "Delete", detail: `sheet${recovery}` };
+      return { action: "Modify", detail: `structure${recovery}` };
     }
     case "search_workbook": {
       if (resultText) { const s = resultSummary(resultText); if (s) return splitFirstWord(s); }
@@ -517,30 +822,79 @@ function describeToolCall(
     // ── Other tools ──
     case "trace_dependencies": {
       const cell = (p.cell ?? p.range) as string | undefined;
-      return { action: "Trace", detail: cell ?? "dependencies", address: cell };
+      const mode = p.mode === "dependents" ? "dependents" : "precedents";
+      return {
+        action: mode === "dependents" ? "Trace dependents" : "Trace precedents",
+        detail: cell ?? mode,
+        address: cell,
+      };
+    }
+    case "explain_formula": {
+      const cell = p.cell as string | undefined;
+      return {
+        action: "Explain formula",
+        detail: cell ?? "cell",
+        address: cell,
+      };
     }
     case "comments": {
       const op = p.action as string | undefined;
       const addr = range ? compactRange(range) : "range";
+      const recovery = recoveryBadgeForDetails(details);
 
       switch (op) {
         case "read":
           return { action: "Comments", detail: addr, address: range };
         case "add":
-          return { action: "Add", detail: `comment ${addr}`, address: range };
+          return { action: "Add", detail: `comment ${addr}${recovery}`, address: range };
         case "update":
-          return { action: "Update", detail: `comment ${addr}`, address: range };
+          return { action: "Update", detail: `comment ${addr}${recovery}`, address: range };
         case "reply":
-          return { action: "Reply", detail: addr, address: range };
+          return { action: "Reply", detail: `${addr}${recovery}`, address: range };
         case "delete":
-          return { action: "Delete", detail: `comment ${addr}`, address: range };
+          return { action: "Delete", detail: `comment ${addr}${recovery}`, address: range };
         case "resolve":
-          return { action: "Resolve", detail: addr, address: range };
+          return { action: "Resolve", detail: `${addr}${recovery}`, address: range };
         case "reopen":
-          return { action: "Reopen", detail: addr, address: range };
+          return { action: "Reopen", detail: `${addr}${recovery}`, address: range };
         default:
-          return { action: "Comment", detail: addr, address: range };
+          return { action: "Comment", detail: `${addr}${recovery}`, address: range };
       }
+    }
+    case "view_settings": {
+      const op = p.action as string | undefined;
+      const targetSheet = p.sheet as string | undefined;
+      const targetSheetLabel = targetSheet ?? "active sheet";
+      const targetRange = p.range as string | undefined;
+      const detailsAddress = isViewSettingsDetails(details) ? details.address : undefined;
+      const qualifiedRange = detailsAddress ?? qualifyRangeAddress(targetRange, targetSheet);
+      const recovery = recoveryBadgeForDetails(details);
+
+      if (!op || op === "get") {
+        return { action: "View", detail: "settings" };
+      }
+
+      if (op === "activate") {
+        return { action: "Activate", detail: `${targetSheetLabel}${recovery}` };
+      }
+
+      if (op === "freeze_at") {
+        const freezeTarget = qualifiedRange ?? targetSheetLabel;
+        return {
+          action: "Freeze",
+          detail: `${compactRange(freezeTarget)}${recovery}`,
+          address: qualifiedRange,
+        };
+      }
+
+      if (op.startsWith("hide_") || op.startsWith("show_")) {
+        return {
+          action: op.startsWith("hide_") ? "Hide" : "Show",
+          detail: `${op.replace(/^(hide_|show_)/u, "").replace(/_/gu, " ")} (${targetSheetLabel})${recovery}`,
+        };
+      }
+
+      return { action: "Set", detail: `${op.replace(/_/gu, " ")} (${targetSheetLabel})${recovery}` };
     }
     case "instructions": {
       const level = p.level as string | undefined;
@@ -614,7 +968,7 @@ function describeToolCall(
     }
     default: {
       if (resultText) { const s = resultSummary(resultText); if (s) return splitFirstWord(s); }
-      return { action: toolName.replace(/_/g, " "), detail: "" };
+      return { action: "Tool", detail: "" };
     }
   }
 }
@@ -644,7 +998,9 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
       const resultText = result ? splitToolResultContent(result).text : undefined;
       const desc = describeToolCall(toolName, params, resultText, result?.details);
       const detailContent = desc.address
-        ? cellRefs(desc.address)
+        ? (desc.detail && desc.detail !== desc.address
+          ? cellRefDisplay(desc.detail, desc.address)
+          : cellRefs(desc.address))
         : desc.detail;
       const title = html`<span class="pi-tool-card__title"><strong>${desc.action}</strong>${desc.detail ? html` <span class="pi-tool-card__detail-text">${detailContent}</span>` : ""}</span>`;
 
@@ -658,9 +1014,18 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
         const csvTable = isReadRangeCsvDetails(result.details)
           ? renderCsvTable(result.details)
           : null;
-        const depTree = isTraceDependenciesDetails(result.details)
-          ? renderDepTree(result.details.root)
+        const traceDetails = isTraceDependenciesDetails(result.details)
+          ? result.details
           : null;
+        const depTree = traceDetails
+          ? renderDepTree(traceDetails.root, traceDetails.mode ?? "precedents")
+          : null;
+        const depSectionLabel = traceDetails
+          ? traceDetails.mode === "dependents"
+            ? "Dependents"
+            : "Precedents"
+          : "Dependencies";
+        const formulaExplanation = renderExplainFormulaDetails(result.details);
 
         return {
           content: html`
@@ -682,8 +1047,10 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
                     </div>
                   ` : ""}
                   <div class="pi-tool-card__section">
-                    <div class="pi-tool-card__section-label">${depTree !== null ? "Dependencies" : csvTable !== null ? "Data" : "Result"}</div>
-                    ${csvTable !== null
+                    <div class="pi-tool-card__section-label">${formulaExplanation !== null ? "Formula explanation" : depTree !== null ? depSectionLabel : csvTable !== null ? "Data" : "Result"}</div>
+                    ${formulaExplanation !== null
+                      ? formulaExplanation
+                      : csvTable !== null
                       ? csvTable
                       : depTree !== null
                       ? depTree
@@ -711,6 +1078,7 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
                     ${renderImages(images)}
                   </div>
                   ${renderWorkbookCellDiff(result.details)}
+                  ${renderChangeExplanationSection(toolName, params, text, result.details)}
                 </div>
               </div>
             </div>

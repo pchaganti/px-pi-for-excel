@@ -96,14 +96,15 @@ Delivered for this phase:
 https://github.com/tmustier/pi-for-excel/issues/27
 
 **Status note:** rollback UX is now in place:
-- automatic pre-write checkpoints for `write_cells`, `fill_formula`, and `python_transform_range`
+- automatic checkpoints for `write_cells`, `fill_formula`, `python_transform_range`, `format_cells` (with scoped limits), `conditional_format`, and mutating `comments` actions
 - new `workbook_history` tool (list / restore / delete / clear)
 - post-write action toast with one-click **Revert**
 - dedicated checkpoint browser overlay (menu + `/history`) with restore/delete/clear controls
 - restore creates an inverse checkpoint so rollbacks are themselves reversible
+- non-checkpointed mutation tools (and unsupported `format_cells` variants) explicitly report when no checkpoint is created
 
 **Remaining follow-up:**
-- broader tool coverage (format/structure/comment mutations)
+- broader remaining coverage (`modify_structure`, unsupported `format_cells` variants, plus additional conditional-format rule types)
 - richer history UX (search/filter/export, retention controls)
 - feasibility deep-dive for full-file snapshots vs range snapshots in Office.js
 
@@ -188,9 +189,11 @@ https://github.com/tmustier/pi-for-excel/issues/22
 ### #29 — Explainability: trace precedents/dependents + explain formula UX
 https://github.com/tmustier/pi-for-excel/issues/29
 
-**What it’s asking:** dependents tracing and an “explain this formula” workflow; UI should allow navigation.
+**Status note:** explainability workflow is now in place:
+- `trace_dependencies` supports both directions (`mode: precedents|dependents`) with structured metadata and clickable, collapsible tree rendering
+- `explain_formula` provides plain-language explanations for single formula cells with cited direct references
 
-**Implication:** suggests a shift from “text-only tool outputs” to “structured graph/tree outputs” rendered interactively. Again: `details` metadata is the bridge.
+**Implication:** future enhancements can stay additive (richer narratives, deeper lineage controls) on top of structured `details` metadata and clickable citations.
 
 ---
 
@@ -220,10 +223,11 @@ https://github.com/tmustier/pi-for-excel/issues/13
 **Status note:** MVP is now shipped (extension manager UI, dynamic loading, persisted registry, extension tool registration, lifecycle cleanup).
 
 **Remaining tracked follow-ups:**
-- #79 — sandbox + permissions model (design draft: `docs/design-extension-sandbox-permissions.md`)
+- #111 — graduate sandbox runtime for untrusted sources (default-on rollout + rollback switch)
 - #80 — widget API evolution
 
 **Recently closed:**
+- #79 — sandbox + permissions model (delivered via #84/#86/#92/#107)
 - #81 — extension authoring docs (merged in #82)
 
 **Implication:** keep extension architecture additive while we harden:

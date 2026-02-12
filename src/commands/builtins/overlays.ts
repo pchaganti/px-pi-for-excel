@@ -10,6 +10,7 @@ import {
   getResumeTargetLabel,
   type ResumeDialogTarget,
 } from "./resume-target.js";
+import { requestChatInputFocus } from "../../ui/input-focus.js";
 import { showToast } from "../../ui/toast.js";
 import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../../workbook/context.js";
@@ -37,6 +38,9 @@ export type RecoveryCheckpointToolName =
   | "write_cells"
   | "fill_formula"
   | "python_transform_range"
+  | "format_cells"
+  | "conditional_format"
+  | "comments"
   | "restore_snapshot";
 
 export interface RecoveryCheckpointSummary {
@@ -56,6 +60,12 @@ function formatRecoveryToolLabel(toolName: RecoveryCheckpointToolName): string {
       return "Fill formula";
     case "python_transform_range":
       return "Python transform";
+    case "format_cells":
+      return "Format cells";
+    case "conditional_format":
+      return "Conditional format";
+    case "comments":
+      return "Comments";
     case "restore_snapshot":
       return "Restore";
     default:
@@ -131,6 +141,7 @@ export async function showProviderPicker(): Promise<void> {
     overlayClosers.delete(overlay);
     cleanupEscape();
     overlay.remove();
+    requestChatInputFocus();
   };
   const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
   overlayClosers.set(overlay, closeOverlay);
@@ -345,6 +356,7 @@ export async function showResumeDialog(opts: {
     overlayClosers.delete(overlay);
     cleanupEscape();
     overlay.remove();
+    requestChatInputFocus();
   };
   const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
   overlayClosers.set(overlay, closeOverlay);
@@ -472,7 +484,7 @@ export async function showRecoveryDialog(opts: {
   let busy = false;
 
   const formatChangedLabel = (changedCount: number): string =>
-    `${changedCount.toLocaleString()} cell${changedCount === 1 ? "" : "s"}`;
+    `${changedCount.toLocaleString()} change${changedCount === 1 ? "" : "s"}`;
 
   const shortId = (id: string): string => (id.length > 12 ? id.slice(0, 12) : id);
 
@@ -518,7 +530,7 @@ export async function showRecoveryDialog(opts: {
 
       const meta = document.createElement("div");
       meta.className = "pi-recovery-item__meta";
-      meta.textContent = `${formatChangedLabel(checkpoint.changedCount)} changed · #${shortId(checkpoint.id)}`;
+      meta.textContent = `${formatChangedLabel(checkpoint.changedCount)} · #${shortId(checkpoint.id)}`;
 
       const actions = document.createElement("div");
       actions.className = "pi-recovery-item__actions";
@@ -655,6 +667,7 @@ export async function showRecoveryDialog(opts: {
     overlayClosers.delete(overlay);
     cleanupEscape();
     overlay.remove();
+    requestChatInputFocus();
   };
 
   const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
@@ -687,12 +700,16 @@ export function showShortcutsDialog(): void {
   const shortcuts = [
     ["Enter", "Send message"],
     ["Shift+Tab", "Cycle thinking level"],
-    ["Esc", "Dismiss menu/dialog (or abort if none open)"],
+    ["Esc", "Exit input focus, dismiss overlays, or abort streaming"],
     ["Enter (streaming)", "Steer — redirect agent"],
     ["⌥Enter", "Queue follow-up message"],
     ["/", "Open command menu"],
     ["↑↓", "Navigate command menu"],
+    ["←/→", "Switch chats (after Esc exits input focus, wraps)"],
+    ["⌘⇧[/⌘⇧]", "Switch chats (fallback on macOS hosts)"],
+    ["Ctrl+PageUp/PageDown", "Switch chats (fallback on Windows hosts)"],
     ["⌘/Ctrl+⇧T", "Reopen last closed tab"],
+    ["F2", "Focus chat input"],
     ["F6", "Focus: Sheet ↔ Sidebar"],
     ["⇧F6", "Focus: reverse direction"],
   ];
@@ -757,6 +774,7 @@ export function showShortcutsDialog(): void {
     overlayClosers.delete(overlay);
     cleanupEscape();
     overlay.remove();
+    requestChatInputFocus();
   };
   const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
   overlayClosers.set(overlay, closeOverlay);

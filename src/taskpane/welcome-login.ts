@@ -5,8 +5,14 @@
 import type { ProviderKeysStore } from "@mariozechner/pi-web-ui/dist/storage/stores/provider-keys-store.js";
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
+import { requestChatInputFocus } from "../ui/input-focus.js";
+import { installOverlayEscapeClose } from "../ui/overlay-escape.js";
 import { showToast } from "../ui/toast.js";
 import { setActiveProviders } from "../compat/model-selector-patch.js";
+import {
+  DEFAULT_LOCAL_PROXY_URL,
+  PROXY_HELPER_DOCS_URL,
+} from "../auth/proxy-validation.js";
 
 async function testLocalHttpsProxy(proxyUrl: string): Promise<boolean> {
   const controller = new AbortController();
@@ -26,15 +32,13 @@ async function testLocalHttpsProxy(proxyUrl: string): Promise<boolean> {
 export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise<void> {
   const { ALL_PROVIDERS, buildProviderRow } = await import("../ui/provider-login.js");
 
-  // Make Anthropic OAuth usable even before the user can access /settings.
-  // Prefer 3003 (3001 is commonly occupied by other local services).
+  // Make OAuth flows usable even before the user can access /settings.
   try {
     const storage = getAppStorage();
     const enabled = await storage.settings.get("proxy.enabled");
     const url = await storage.settings.get("proxy.url");
 
-    const preferred = "https://localhost:3003";
-    const currentUrl = typeof url === "string" && url.trim().length > 0 ? url.trim() : preferred;
+    const currentUrl = typeof url === "string" && url.trim().length > 0 ? url.trim() : DEFAULT_LOCAL_PROXY_URL;
 
     if (url === null) {
       await storage.settings.set("proxy.url", currentUrl);
@@ -54,6 +58,20 @@ export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise
   return new Promise<void>((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "pi-welcome-overlay";
+
+    let closed = false;
+    const closeOverlay = () => {
+      if (closed) {
+        return;
+      }
+
+      closed = true;
+      cleanupEscape();
+      overlay.remove();
+      requestChatInputFocus();
+      resolve();
+    };
+    const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
     overlay.innerHTML = `
       <div class="pi-welcome-card" style="text-align: left;">
         <div class="pi-welcome-logo" style="text-align: center;">π</div>
@@ -72,7 +90,11 @@ export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise
             <input class="pi-welcome-proxy__url" type="text" spellcheck="false" />
             <button class="pi-welcome-proxy__save" type="button">Save</button>
           </div>
-          <div class="pi-welcome-proxy__hint">Required for Anthropic OAuth in Excel. Start the proxy with <code>npm run proxy:https</code>.</div>
+          <div class="pi-welcome-proxy__hint">
+            Needed only when OAuth login is blocked by CORS.
+            Keep this URL at <code>${DEFAULT_LOCAL_PROXY_URL}</code>, run a local HTTPS proxy helper, then enable this toggle.
+            <a href="${PROXY_HELPER_DOCS_URL}" target="_blank" rel="noopener noreferrer">Step-by-step guide</a>.
+          </div>
         </div>
 
         <div class="pi-welcome-providers"></div>
@@ -95,10 +117,10 @@ export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise
         const enabled = await storage.settings.get("proxy.enabled");
         const url = await storage.settings.get("proxy.url");
         proxyEnabledEl.checked = Boolean(enabled);
-        proxyUrlEl.value = typeof url === "string" && url.trim().length > 0 ? url.trim() : "https://localhost:3003";
+        proxyUrlEl.value = typeof url === "string" && url.trim().length > 0 ? url.trim() : DEFAULT_LOCAL_PROXY_URL;
       } catch {
         proxyEnabledEl.checked = false;
-        proxyUrlEl.value = "https://localhost:3003";
+        proxyUrlEl.value = DEFAULT_LOCAL_PROXY_URL;
       }
     };
 
@@ -131,8 +153,7 @@ export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise
             setActiveProviders(new Set(updated));
             document.dispatchEvent(new CustomEvent("pi:providers-changed"));
             showToast(`${label} connected`);
-            overlay.remove();
-            resolve();
+            closeOverlay();
           })();
         },
         onDisconnected: (_row, _id, label) => {
@@ -146,6 +167,12 @@ export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise
       });
       providerList.appendChild(row);
     }
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        closeOverlay();
+      }
+    });
 
     document.body.appendChild(overlay);
   });

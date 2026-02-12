@@ -12,6 +12,7 @@ import {
   USER_INSTRUCTIONS_SOFT_LIMIT,
   WORKBOOK_INSTRUCTIONS_SOFT_LIMIT,
 } from "../../instructions/store.js";
+import { requestChatInputFocus } from "../../ui/input-focus.js";
 import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
 import { showToast } from "../../ui/toast.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../../workbook/context.js";
@@ -139,6 +140,7 @@ export async function showInstructionsDialog(opts?: {
     overlayClosers.delete(overlay);
     cleanupEscape();
     overlay.remove();
+    requestChatInputFocus();
   };
   const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
   overlayClosers.set(overlay, closeOverlay);

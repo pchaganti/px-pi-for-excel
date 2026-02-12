@@ -19,6 +19,7 @@ import { createModifyStructureTool } from "./modify-structure.js";
 import { createFormatCellsTool } from "./format-cells.js";
 import { createConditionalFormatTool } from "./conditional-format.js";
 import { createTraceDependenciesTool } from "./trace-dependencies.js";
+import { createExplainFormulaTool } from "./explain-formula.js";
 import { createViewSettingsTool } from "./view-settings.js";
 import { createCommentsTool } from "./comments.js";
 import { createInstructionsTool } from "./instructions.js";
@@ -36,6 +37,7 @@ export const CORE_TOOL_NAMES = [
   "format_cells",
   "conditional_format",
   "trace_dependencies",
+  "explain_formula",
   "view_settings",
   "comments",
   "instructions",
@@ -61,6 +63,7 @@ export function createCoreTools(): AnyCoreTool[] {
     createFormatCellsTool(),
     createConditionalFormatTool(),
     createTraceDependenciesTool(),
+    createExplainFormulaTool(),
     createViewSettingsTool(),
     createCommentsTool(),
     createInstructionsTool(),

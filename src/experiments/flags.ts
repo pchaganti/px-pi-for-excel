@@ -1,8 +1,8 @@
 /**
  * Experimental feature flags.
  *
- * These flags are opt-in, local-only toggles intended for power users and
- * in-progress capabilities. Features can read these synchronously at runtime.
+ * These flags are local-only toggles for in-progress capabilities and rollout
+ * controls. Most are opt-in; some can be default-on with a persisted override.
  */
 
 import { ALLOW_REMOTE_EXTENSION_URLS_STORAGE_KEY } from "../commands/extension-source-policy.js";
@@ -14,7 +14,9 @@ export type ExperimentalFeatureId =
   | "mcp_tools"
   | "files_workspace"
   | "remote_extension_urls"
-  | "extension_permission_gates";
+  | "extension_permission_gates"
+  | "extension_sandbox_runtime"
+  | "extension_widget_v2";
 
 export type ExperimentalFeatureWiring = "wired" | "flag-only";
 
@@ -29,6 +31,8 @@ export interface ExperimentalFeatureDefinition {
   warning?: string;
   wiring: ExperimentalFeatureWiring;
   storageKey: string;
+  /** Used when no explicit value has been persisted yet. */
+  defaultEnabled?: boolean;
 }
 
 const EXPERIMENTAL_FEATURES = [
@@ -87,6 +91,28 @@ const EXPERIMENTAL_FEATURES = [
     wiring: "wired",
     storageKey: "pi.experimental.extensionPermissionGates",
   },
+  {
+    id: "extension_sandbox_runtime",
+    slug: "extension-sandbox",
+    aliases: ["extensions-sandbox", "sandboxed-extensions"],
+    title: "Extension sandbox runtime",
+    description:
+      "Default-on for inline/remote extensions. Disable only to enable temporary rollback mode.",
+    warning:
+      "Security-sensitive: disabling this runs untrusted extensions in host runtime and reduces isolation.",
+    wiring: "wired",
+    storageKey: "pi.experimental.extensionSandboxRuntime",
+    defaultEnabled: true,
+  },
+  {
+    id: "extension_widget_v2",
+    slug: "extension-widget-v2",
+    aliases: ["extensions-widget-v2", "widget-v2", "extension-widgets"],
+    title: "Extension widget API v2",
+    description: "Enable additive multi-widget lifecycle APIs (upsert/remove/clear) with deterministic placement.",
+    wiring: "wired",
+    storageKey: "pi.experimental.extensionWidgetV2",
+  },
 ] as const satisfies readonly ExperimentalFeatureDefinition[];
 
 export interface ExperimentalFeatureSnapshot extends ExperimentalFeatureDefinition {
@@ -97,7 +123,11 @@ function normalizeFeatureToken(input: string): string {
   return input.trim().toLowerCase().replace(/[\s_]+/g, "-");
 }
 
-function parseStoredBoolean(raw: string | null): boolean {
+function parseStoredBoolean(raw: string | null): boolean | null {
+  if (raw === null) {
+    return null;
+  }
+
   return raw === "1" || raw === "true";
 }
 
@@ -160,7 +190,13 @@ export function resolveExperimentalFeature(input: string): ExperimentalFeatureDe
 
 export function isExperimentalFeatureEnabled(featureId: ExperimentalFeatureId): boolean {
   const feature = getFeatureDefinition(featureId);
-  return parseStoredBoolean(safeGetItem(feature.storageKey));
+  const stored = parseStoredBoolean(safeGetItem(feature.storageKey));
+
+  if (stored !== null) {
+    return stored;
+  }
+
+  return feature.defaultEnabled ?? false;
 }
 
 export function setExperimentalFeatureEnabled(

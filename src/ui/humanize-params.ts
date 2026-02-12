@@ -504,12 +504,35 @@ function humanizeTraceDependencies(p: Record<string, unknown>): ParamItem[] {
   if (p.cell) {
     items.push({ label: "Cell", value: cellRef(str(p.cell)) });
   }
+
+  const mode = str(p.mode);
+  if (mode === "dependents") {
+    items.push({ label: "Direction", value: "Dependents (downstream impact)" });
+  } else if (mode === "precedents") {
+    items.push({ label: "Direction", value: "Precedents (upstream inputs)" });
+  }
+
   const depth = num(p.depth);
   if (depth !== undefined && depth !== 2) {
     items.push({
       label: "Depth",
       value: String(depth) + " level" + (depth !== 1 ? "s" : ""),
     });
+  }
+
+  return items;
+}
+
+function humanizeExplainFormula(p: Record<string, unknown>): ParamItem[] {
+  const items: ParamItem[] = [];
+
+  if (p.cell) {
+    items.push({ label: "Cell", value: cellRef(str(p.cell)) });
+  }
+
+  const maxReferences = num(p.max_references);
+  if (maxReferences !== undefined && maxReferences !== 8) {
+    items.push({ label: "Max references", value: String(maxReferences) });
   }
 
   return items;
@@ -873,6 +896,7 @@ const CORE_HUMANIZERS = {
   modify_structure: humanizeModifyStructure,
   conditional_format: humanizeConditionalFormat,
   trace_dependencies: humanizeTraceDependencies,
+  explain_formula: humanizeExplainFormula,
   view_settings: humanizeViewSettings,
   get_workbook_overview: humanizeGetWorkbookOverview,
   comments: humanizeComments,
