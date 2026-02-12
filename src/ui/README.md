@@ -51,7 +51,7 @@ Tailwind v4 puts all utilities inside `@layer utilities`. Unlayered CSS always b
 | 7–10. Chrome | Status bar (model picker + ctx + thinking), toast, slash command menu, welcome overlay |
 | 10b. Overlay primitives | Shared classes for builtins overlays (tabs, textarea, buttons, footer actions) |
 | 11. Content overrides | **Targeted** pi-web-ui tweaks — user bubble color, sidebar-width margins, tool card borders, semantic classes from message style hooks |
-| 12–13. Dialogs, unstable overrides, Queue | Stable dialog styling + isolated utility-coupled overrides + steer/follow-up queue |
+| 12–13. Dialogs, unstable overrides, Queue | Stable dialog styling via runtime hooks + (currently empty) unstable override buffer + steer/follow-up queue |
 
 > Note: `theme.css` is an entrypoint; styles are split into `src/ui/theme/*.css` and imported in order:
 > - `theme/tokens.css` (1)
@@ -81,6 +81,7 @@ pi-web-ui uses Light DOM (`createRenderRoot() { return this; }`), so styles leak
 | `pi-sidebar.ts` | ChatPanel + AgentInterface | Owns layout, subscribes to Agent, renders message-list + streaming container + working indicator |
 | `pi-input.ts` | MessageEditor | Auto-growing textarea, send/abort button, fires `pi-send` / `pi-abort` events |
 | `message-style-hooks.ts` | — | Stamps semantic classes on pi-web-ui message internals (`pi-assistant-body`, `pi-tool-card-fallback`, etc.) to avoid brittle utility selectors |
+| `dialog-style-hooks.ts` | — | Stamps semantic classes on dialog internals (`pi-dialog-card`, `pi-model-selector-item-*`) so dialog CSS avoids utility selectors |
 | `toast.ts` | — | `showToast(msg, duration)` — positions a fixed notification |
 | `loading.ts` | — | Splash screen shown during init |
 | `provider-login.ts` | — | API key entry rows for the welcome overlay |
