@@ -19,6 +19,7 @@ const TOOL_BUNDLES = {
     "instructions",
     "conventions",
     "workbook_history",
+    "skills",
   ],
   analysis: [
     "get_workbook_overview",
@@ -31,6 +32,7 @@ const TOOL_BUNDLES = {
     "instructions",
     "conventions",
     "workbook_history",
+    "skills",
   ],
   formatting: [
     "get_workbook_overview",
@@ -44,6 +46,7 @@ const TOOL_BUNDLES = {
     "instructions",
     "conventions",
     "workbook_history",
+    "skills",
   ],
   structure: [
     "get_workbook_overview",
@@ -56,6 +59,7 @@ const TOOL_BUNDLES = {
     "instructions",
     "conventions",
     "workbook_history",
+    "skills",
   ],
   comments: [
     "get_workbook_overview",
@@ -67,6 +71,7 @@ const TOOL_BUNDLES = {
     "instructions",
     "conventions",
     "workbook_history",
+    "skills",
   ],
   full: CORE_TOOL_NAMES,
 } as const satisfies Record<ActiveToolBundleId, readonly CoreToolName[]>;
