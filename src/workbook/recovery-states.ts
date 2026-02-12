@@ -69,6 +69,7 @@ export interface RecoveryFormatSelection {
   wrapText?: boolean;
   columnWidth?: boolean;
   rowHeight?: boolean;
+  mergedAreas?: boolean;
   borderTop?: boolean;
   borderBottom?: boolean;
   borderLeft?: boolean;
@@ -100,6 +101,7 @@ export interface RecoveryFormatAreaState {
   wrapText?: boolean;
   columnWidths?: number[];
   rowHeights?: number[];
+  mergedAreas?: string[];
   borderTop?: RecoveryFormatBorderState;
   borderBottom?: RecoveryFormatBorderState;
   borderLeft?: RecoveryFormatBorderState;
@@ -430,6 +432,7 @@ function cloneRecoveryFormatSelection(selection: RecoveryFormatSelection): Recov
     wrapText: selection.wrapText,
     columnWidth: selection.columnWidth,
     rowHeight: selection.rowHeight,
+    mergedAreas: selection.mergedAreas,
     borderTop: selection.borderTop,
     borderBottom: selection.borderBottom,
     borderLeft: selection.borderLeft,
@@ -469,6 +472,7 @@ function cloneRecoveryFormatAreaState(area: RecoveryFormatAreaState): RecoveryFo
     wrapText: area.wrapText,
     columnWidths: area.columnWidths ? [...area.columnWidths] : undefined,
     rowHeights: area.rowHeights ? [...area.rowHeights] : undefined,
+    mergedAreas: area.mergedAreas ? [...area.mergedAreas] : undefined,
     borderTop: area.borderTop ? cloneRecoveryFormatBorderState(area.borderTop) : undefined,
     borderBottom: area.borderBottom ? cloneRecoveryFormatBorderState(area.borderBottom) : undefined,
     borderLeft: area.borderLeft ? cloneRecoveryFormatBorderState(area.borderLeft) : undefined,
@@ -505,6 +509,7 @@ function hasSelectedFormatProperty(selection: RecoveryFormatSelection): boolean 
     selection.wrapText === true ||
     selection.columnWidth === true ||
     selection.rowHeight === true ||
+    selection.mergedAreas === true ||
     selection.borderTop === true ||
     selection.borderBottom === true ||
     selection.borderLeft === true ||
@@ -514,30 +519,24 @@ function hasSelectedFormatProperty(selection: RecoveryFormatSelection): boolean 
   );
 }
 
-function isDimensionOnlySelection(selection: RecoveryFormatSelection): boolean {
-  const hasDimensionSelection = selection.columnWidth === true || selection.rowHeight === true;
-  if (!hasDimensionSelection) {
-    return false;
-  }
-
+function hasAreaScalarSelection(selection: RecoveryFormatSelection): boolean {
   return (
-    selection.numberFormat !== true &&
-    selection.fillColor !== true &&
-    selection.fontColor !== true &&
-    selection.bold !== true &&
-    selection.italic !== true &&
-    selection.underlineStyle !== true &&
-    selection.fontName !== true &&
-    selection.fontSize !== true &&
-    selection.horizontalAlignment !== true &&
-    selection.verticalAlignment !== true &&
-    selection.wrapText !== true &&
-    selection.borderTop !== true &&
-    selection.borderBottom !== true &&
-    selection.borderLeft !== true &&
-    selection.borderRight !== true &&
-    selection.borderInsideHorizontal !== true &&
-    selection.borderInsideVertical !== true
+    selection.fillColor === true ||
+    selection.fontColor === true ||
+    selection.bold === true ||
+    selection.italic === true ||
+    selection.underlineStyle === true ||
+    selection.fontName === true ||
+    selection.fontSize === true ||
+    selection.horizontalAlignment === true ||
+    selection.verticalAlignment === true ||
+    selection.wrapText === true ||
+    selection.borderTop === true ||
+    selection.borderBottom === true ||
+    selection.borderLeft === true ||
+    selection.borderRight === true ||
+    selection.borderInsideHorizontal === true ||
+    selection.borderInsideVertical === true
   );
 }
 
@@ -546,19 +545,86 @@ export interface RecoveryFormatAreaShape {
   columnCount: number;
 }
 
+function estimateMergedAreasUnitCount(area: RecoveryFormatAreaShape): number {
+  const cellCount = area.rowCount * area.columnCount;
+
+  if (cellCount <= 1) {
+    return cellCount;
+  }
+
+  // A merged block must contain at least two cells, so this bounds merge-dense sheets
+  // without pretending merged-area payloads are constant-size.
+  return Math.floor(cellCount / 2);
+}
+
 export function estimateFormatCaptureCellCount(
   areas: readonly RecoveryFormatAreaShape[],
   selection: RecoveryFormatSelection,
 ): number {
-  if (!isDimensionOnlySelection(selection)) {
-    return areas.reduce((count, area) => count + (area.rowCount * area.columnCount), 0);
-  }
+  const includeAreaScalarUnits = hasAreaScalarSelection(selection);
 
   return areas.reduce((count, area) => {
-    const columnUnits = selection.columnWidth === true ? area.columnCount : 0;
-    const rowUnits = selection.rowHeight === true ? area.rowCount : 0;
-    return count + columnUnits + rowUnits;
+    let areaCount = count;
+
+    if (selection.numberFormat === true) {
+      areaCount += area.rowCount * area.columnCount;
+    }
+
+    if (selection.columnWidth === true) {
+      areaCount += area.columnCount;
+    }
+
+    if (selection.rowHeight === true) {
+      areaCount += area.rowCount;
+    }
+
+    if (selection.mergedAreas === true) {
+      areaCount += estimateMergedAreasUnitCount(area);
+    }
+
+    if (includeAreaScalarUnits) {
+      areaCount += 1;
+    }
+
+    return areaCount;
   }, 0);
+}
+
+function normalizeRecoveryAddress(address: string): string {
+  return address.trim();
+}
+
+function dedupeRecoveryAddresses(addresses: readonly string[]): string[] {
+  const unique = new Set<string>();
+  const ordered: string[] = [];
+
+  for (const rawAddress of addresses) {
+    const address = normalizeRecoveryAddress(rawAddress);
+    if (address.length === 0 || unique.has(address)) {
+      continue;
+    }
+
+    unique.add(address);
+    ordered.push(address);
+  }
+
+  return ordered;
+}
+
+function collectMergedAreaAddresses(state: RecoveryFormatRangeState): string[] {
+  const addresses: string[] = [];
+
+  for (const area of state.areas) {
+    if (!Array.isArray(area.mergedAreas)) {
+      continue;
+    }
+
+    for (const address of area.mergedAreas) {
+      addresses.push(address);
+    }
+  }
+
+  return dedupeRecoveryAddresses(addresses);
 }
 
 function splitRangeList(range: string): string[] {
@@ -692,6 +758,8 @@ interface PreparedFormatAreaCapture {
   columnCount: number;
   columnFormats: Excel.RangeFormat[];
   rowFormats: Excel.RangeFormat[];
+  mergedAreas?: Excel.RangeAreas;
+  mergedAreaAddresses: string[];
   borders: Partial<Record<RecoveryBorderKey, Excel.RangeBorder>>;
 }
 
@@ -743,6 +811,7 @@ async function captureFormatRangeStateWithSelection(
       columnCount: area.columnCount,
       columnFormats: [],
       rowFormats: [],
+      mergedAreaAddresses: [],
       borders: {},
     };
 
@@ -778,6 +847,12 @@ async function captureFormatRangeStateWithSelection(
       }
     }
 
+    if (selection.mergedAreas === true) {
+      const mergedAreas = area.getMergedAreasOrNullObject();
+      mergedAreas.load("isNullObject");
+      prepared.mergedAreas = mergedAreas;
+    }
+
     if (needsBorderLoad) {
       for (const borderKey of RECOVERY_BORDER_KEYS) {
         if (selection[borderKey] !== true) continue;
@@ -792,6 +867,34 @@ async function captureFormatRangeStateWithSelection(
   }
 
   await context.sync();
+
+  if (selection.mergedAreas === true) {
+    for (const prepared of preparedAreas) {
+      const mergedAreas = prepared.mergedAreas;
+      if (!mergedAreas || mergedAreas.isNullObject) {
+        prepared.mergedAreaAddresses = [];
+        continue;
+      }
+
+      mergedAreas.areas.load("items/address");
+    }
+
+    await context.sync();
+
+    for (const prepared of preparedAreas) {
+      const mergedAreas = prepared.mergedAreas;
+      if (!mergedAreas || mergedAreas.isNullObject) {
+        prepared.mergedAreaAddresses = [];
+        continue;
+      }
+
+      prepared.mergedAreaAddresses = dedupeRecoveryAddresses(
+        mergedAreas.areas.items.map((areaRange) =>
+          qualifyAddressWithSheet(target.sheetName, areaRange.address),
+        ),
+      );
+    }
+  }
 
   const areaStates: RecoveryFormatAreaState[] = [];
 
@@ -982,6 +1085,10 @@ async function captureFormatRangeStateWithSelection(
       areaState.rowHeights = rowHeights;
     }
 
+    if (selection.mergedAreas === true) {
+      areaState.mergedAreas = [...prepared.mergedAreaAddresses];
+    }
+
     for (const borderKey of RECOVERY_BORDER_KEYS) {
       if (selection[borderKey] !== true) continue;
 
@@ -1139,6 +1246,14 @@ export async function applyFormatCellsState(
 
     await context.sync();
 
+    const restoreMergedAreas = targetState.selection.mergedAreas === true;
+    const currentMergedAddresses = restoreMergedAreas
+      ? collectMergedAreaAddresses(previousState)
+      : [];
+    const targetMergedAddresses = restoreMergedAreas
+      ? collectMergedAreaAddresses(targetState)
+      : [];
+
     for (const loaded of loadedAreas) {
       const { areaState, range } = loaded;
 
@@ -1162,6 +1277,18 @@ export async function applyFormatCellsState(
       }
 
       applyFormatRangeStateToArea(range, areaState);
+    }
+
+    if (restoreMergedAreas) {
+      for (const mergedAddress of currentMergedAddresses) {
+        const { range } = getRange(context, mergedAddress);
+        range.unmerge();
+      }
+
+      for (const mergedAddress of targetMergedAddresses) {
+        const { range } = getRange(context, mergedAddress);
+        range.merge();
+      }
     }
 
     await context.sync();
