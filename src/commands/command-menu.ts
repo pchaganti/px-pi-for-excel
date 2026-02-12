@@ -12,7 +12,7 @@ import { escapeHtml } from "../utils/html.js";
 const SOURCE_BADGES: Record<string, string> = {
   builtin: "",
   extension: "ext",
-  skill: "skill",
+  integration: "integration",
   prompt: "prompt",
 };
 

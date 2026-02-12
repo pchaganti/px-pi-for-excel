@@ -72,7 +72,7 @@ Create a single **capability registry** module that owns:
   - `export type CoreToolName = (typeof CORE_TOOL_NAMES)[number]`
   - `export type ToolName = CoreToolName | (string & {})` // extension tools
   - `export function createCoreTools(): AgentTool[]`
-  - `export function registerTool(...)` // extensions/skills
+  - `export function registerTool(...)` // extensions/integrations
   - `export function getToolUi(...)` // humanizer/renderer hooks
 
 Then:

@@ -19,6 +19,7 @@ import { initToolGrouping } from "./tool-grouping.js";
 import { applyMessageStyleHooks } from "./message-style-hooks.js";
 import type { PiInput } from "./pi-input.js";
 import { isDebugEnabled, formatK } from "../debug/debug.js";
+import { INTEGRATIONS_LABEL } from "../integrations/naming.js";
 import {
   getPayloadStats,
   getLastContext,
@@ -83,7 +84,7 @@ export class PiSidebar extends LitElement {
   @property({ attribute: false }) onSelectTab?: (runtimeId: string) => void;
   @property({ attribute: false }) onCloseTab?: (runtimeId: string) => void;
   @property({ attribute: false }) onOpenInstructions?: () => void;
-  @property({ attribute: false }) onOpenSkills?: () => void;
+  @property({ attribute: false }) onOpenIntegrations?: () => void;
   @property({ attribute: false }) onOpenSettings?: () => void;
   @property({ attribute: false }) onOpenFiles?: () => void;
   @property({ attribute: false }) onFilesDrop?: (files: File[]) => void;
@@ -471,8 +472,8 @@ export class PiSidebar extends LitElement {
         <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenInstructions?.(); }}>
           Instructions…
         </button>
-        <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenSkills?.(); }}>
-          Skills…
+        <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenIntegrations?.(); }}>
+          ${INTEGRATIONS_LABEL}…
         </button>
         <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenSettings?.(); }}>
           Settings…

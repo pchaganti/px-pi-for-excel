@@ -2,7 +2,7 @@
  * Slash command system — types and registry.
  */
 
-export type CommandSource = "builtin" | "extension" | "skill" | "prompt";
+export type CommandSource = "builtin" | "extension" | "integration" | "prompt";
 
 export interface SlashCommand {
   /** Command name (without the leading `/`) */
