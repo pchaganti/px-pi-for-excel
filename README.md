@@ -54,31 +54,13 @@ Pi for Excel gives you a conversational AI assistant that can read, write, and f
 - Python / LibreOffice bridge — run Python scripts and convert files locally
 - Files workspace — shared artifact storage across sessions
 
-## Install (non-technical)
-
-No git, Node, or dev tools needed.
+## Install
 
 1. Download [`manifest.prod.xml`](https://pi-for-excel.vercel.app/manifest.prod.xml)
-
-2. **Sideload the manifest into Excel:**
-
-   **macOS** ([Microsoft docs](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/sideload-an-office-add-in-on-mac)):
-
-   Copy the manifest into Excel's sideload folder and restart Excel:
-   ```bash
-   cp manifest.prod.xml ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/
-   ```
-   Then open Excel → **Insert** → **My Add-ins** → you should see **Pi for Excel**.
-
-   **Windows** — you can try to install and run this on Windows — it might work! Follow the [Microsoft sideloading docs](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/sideload-office-add-ins-for-testing):
-
-   Open Excel → **Insert** → **My Add-ins** → **Upload My Add-in** → select `manifest.prod.xml`.
-
+2. Add it to Excel — see [**install guide**](docs/install.md) for step-by-step instructions (macOS + Windows)
 3. Click **Open Pi** in the ribbon
-4. Connect a provider via `/login` or the welcome screen (paste an API key or use OAuth)
+4. Connect a provider (paste an API key or sign in with OAuth)
 5. Start chatting — try `What sheets do I have?` or `Summarize my current selection`
-
-For detailed install instructions (including OAuth proxy setup), see [docs/install.md](docs/install.md).
 
 ## Developer Quick Start
 

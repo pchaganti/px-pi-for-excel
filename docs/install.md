@@ -1,60 +1,58 @@
-# Install Pi for Excel (recommended)
+# Install Pi for Excel
 
-Pi for Excel is an Excel taskpane add-in. Excel loads it from a manifest file that points to a hosted HTTPS app.
-
-This is the **non-technical install path**:
-- no git
-- no Node
-- no mkcert
-- no local dev server
+No coding or dev tools required — just download one file and add it to Excel.
 
 ---
 
-## 1) Download the production manifest
+## 1) Download the manifest file
 
-Download:
-- **https://pi-for-excel.vercel.app/manifest.prod.xml**
+Download this file and save it somewhere you can find it (e.g. your Desktop):
 
-Fallbacks (if the hosted link is temporarily unavailable):
-- Latest release assets: https://github.com/tmustier/pi-for-excel/releases/latest
-- Repo copy: https://github.com/tmustier/pi-for-excel/blob/main/manifest.prod.xml
+👉 **[manifest.prod.xml](https://pi-for-excel.vercel.app/manifest.prod.xml)**
 
-Keep the filename as `manifest.prod.xml`.
+<details>
+<summary>Alternate download links (if the above is unavailable)</summary>
+
+- Latest release: https://github.com/tmustier/pi-for-excel/releases/latest
+- Direct repo copy: https://github.com/tmustier/pi-for-excel/blob/main/manifest.prod.xml
+
+</details>
 
 ---
 
-## 2) Install in Excel
+## 2) Add it to Excel
 
-> Excel labels differ slightly by version (`Add-ins`, `Office Add-ins`, `My Add-ins`, `Upload My Add-in`, `Add from file`).
+### macOS
 
-### macOS (Excel desktop)
+1. Open Finder and press **Cmd + Shift + G** (Go to Folder)
+2. Paste this path and press Enter:
+   ```
+   ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef
+   ```
+3. Copy `manifest.prod.xml` into that folder
+4. Quit Excel completely (Cmd + Q) and reopen it
+5. Go to **Insert → My Add-ins** — you should see **Pi for Excel**
+6. Click it to open
 
-Sideload by copying the manifest into Excel's add-in folder ([Microsoft docs](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/sideload-an-office-add-in-on-mac)):
-
-```bash
-cp manifest.prod.xml ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/
-```
-
-Then:
-1. Quit Excel completely and reopen it
-2. Go to **Insert → My Add-ins**
-3. You should see **Pi for Excel**
-4. Click **Open Pi**
-
-> **Tip:** If the add-in doesn't appear, make sure the `wef/` folder exists. Create it if needed:
+> **Folder doesn't exist?** Create it first — open Terminal and run:
 > ```bash
 > mkdir -p ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef
 > ```
+> Then repeat from step 3.
 
-### Windows (Excel desktop)
+For more detail, see [Microsoft's guide for Mac](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/sideload-an-office-add-in-on-mac).
 
-You can try to install and run this on Windows — it might work! Follow the [Microsoft sideloading docs](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/sideload-office-add-ins-for-testing):
+### Windows
+
+You can try to install and run this on Windows — it might work!
 
 1. Open Excel
 2. Go to **Insert → My Add-ins**
-3. Choose **Upload My Add-in…**
-4. Select `manifest.prod.xml`
-5. Open **Pi for Excel**
+3. Click **Upload My Add-in…**
+4. Select the `manifest.prod.xml` file you downloaded
+5. Click **Open Pi** in the ribbon
+
+For more detail, see [Microsoft's guide for Windows](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/sideload-office-add-ins-for-testing).
 
 ---
 
