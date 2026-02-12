@@ -386,7 +386,7 @@ class SandboxRuntimeHost {
 
     if (gracefulDeactivate) {
       try {
-        await this.callSandbox("deactivate", {});
+        await this.callSandbox("deactivate", {}, { allowWhenDisposed: true });
       } catch (error: unknown) {
         console.warn(`[pi] Sandbox deactivate failed: ${getErrorMessage(error)}`);
       }
@@ -1013,8 +1013,14 @@ class SandboxRuntimeHost {
 </html>`;
   }
 
-  private async callSandbox(method: string, params: unknown): Promise<unknown> {
-    if (this.disposed) {
+  private async callSandbox(
+    method: string,
+    params: unknown,
+    options?: {
+      allowWhenDisposed?: boolean;
+    },
+  ): Promise<unknown> {
+    if (this.disposed && !options?.allowWhenDisposed) {
       throw new Error("Sandbox runtime is already disposed.");
     }
 

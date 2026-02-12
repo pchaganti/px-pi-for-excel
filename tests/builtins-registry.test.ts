@@ -53,7 +53,7 @@ void test("builtins registry wires /experimental, /extensions, and /skills comma
   assert.match(source, /\.\.\.createExtensionsCommands\(context\)/);
 
   const extensionApiSource = await readFile(new URL("../src/commands/extension-api.ts", import.meta.url), "utf8");
-  assert.match(extensionApiSource, /globValue\("\.\.\/extensions\/\*\.\{ts,js\}"\)/);
+  assert.match(extensionApiSource, /\.glob\("\.\.\/extensions\/\*\.\{ts,js\}"\)/);
   assert.match(extensionApiSource, /Local extension module/);
   assert.match(extensionApiSource, /isCapabilityEnabled/);
   assert.match(extensionApiSource, /commands\.register/);

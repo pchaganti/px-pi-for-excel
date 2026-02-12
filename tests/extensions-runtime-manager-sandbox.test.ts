@@ -115,6 +115,7 @@ void test("sandbox runtime source enforces capability gates and rejects unknown 
   assert.match(source, /case "widget_show": \{[\s\S]*this\.assertCapability\("ui\.widget"\)/);
   assert.match(source, /if \(method === "ui_action"\)/);
   assert.match(source, /Unknown sandbox UI action id:/);
+  assert.match(source, /allowWhenDisposed:\s*true/);
 });
 
 void test("sandbox activation failures are isolated per extension during initialize", async () => {

@@ -134,37 +134,33 @@ function defaultToast(message: string): void {
 
 type ExtensionModuleImporter = () => Promise<unknown>;
 
-type ImportMetaGlobFunction = (pattern: string) => unknown;
-
-function isImportMetaGlobFunction(value: unknown): value is ImportMetaGlobFunction {
-  return typeof value === "function";
-}
-
 function isExtensionModuleImporter(value: unknown): value is ExtensionModuleImporter {
   return typeof value === "function";
 }
 
 function resolveBundledLocalExtensionImporters(): Record<string, ExtensionModuleImporter> {
-  const globValue = Reflect.get(import.meta, "glob");
-  if (!isImportMetaGlobFunction(globValue)) {
-    return {};
-  }
+  try {
+    const rawImporters = (import.meta as ImportMeta & {
+      glob: (pattern: string) => unknown;
+    }).glob("../extensions/*.{ts,js}");
 
-  const rawImporters = globValue("../extensions/*.{ts,js}");
-  if (!isRecord(rawImporters)) {
-    return {};
-  }
-
-  const importers: Record<string, ExtensionModuleImporter> = {};
-  for (const [path, importer] of Object.entries(rawImporters)) {
-    if (!isExtensionModuleImporter(importer)) {
-      continue;
+    if (!isRecord(rawImporters)) {
+      return {};
     }
 
-    importers[path] = importer;
-  }
+    const importers: Record<string, ExtensionModuleImporter> = {};
+    for (const [path, importer] of Object.entries(rawImporters)) {
+      if (!isExtensionModuleImporter(importer)) {
+        continue;
+      }
 
-  return importers;
+      importers[path] = importer;
+    }
+
+    return importers;
+  } catch {
+    return {};
+  }
 }
 
 const BUNDLED_LOCAL_EXTENSION_IMPORTERS = resolveBundledLocalExtensionImporters();
