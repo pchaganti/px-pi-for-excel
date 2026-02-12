@@ -12,13 +12,29 @@ function stripBlockComments(css) {
   return css.replace(/\/\*[\s\S]*?\*\//g, (match) => match.replace(/[^\n]/g, " "));
 }
 
-async function listThemeFiles() {
-  const entries = await fs.readdir(THEME_ROOT, { withFileTypes: true });
-  const files = entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".css"))
-    .map((entry) => path.join(THEME_ROOT, entry.name))
-    .sort();
+async function collectCssFilesRecursively(dirPath) {
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  const files = [];
 
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      const nested = await collectCssFilesRecursively(fullPath);
+      files.push(...nested);
+      continue;
+    }
+
+    if (entry.isFile() && entry.name.endsWith(".css")) {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
+async function listThemeFiles() {
+  const files = await collectCssFilesRecursively(THEME_ROOT);
+  files.sort();
   return [ENTRY_FILE, ...files];
 }
 

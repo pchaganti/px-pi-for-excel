@@ -56,7 +56,7 @@ Run `npm run check:css-theme` to verify every `var(--token)` used in local theme
 > - `theme/tokens.css` (1)
 > - `theme/base.css` (2)
 > - `theme/components.css` (3–10)
-> - `theme/overlays.css` (10b)
+> - `theme/overlays.css` (10b) → imports `theme/overlays/{primitives,extensions,skills,provider-resume-shortcuts,experimental}.css`
 > - `theme/content-overrides.css` (11)
 > - `theme/dialogs.css` (12)
 > - `theme/queue.css` (13)

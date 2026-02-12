@@ -1,0 +1,107 @@
+/* Experimental feature manager */
+
+.pi-experimental-card {
+  width: min(560px, 94vw);
+  max-height: 84vh;
+}
+
+.pi-experimental-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pi-experimental-row {
+  padding: 10px 12px;
+  border: 1px solid var(--alpha-8);
+  border-radius: 10px;
+  background: var(--white-alpha-35);
+}
+
+.pi-experimental-row__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pi-experimental-row__title {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.pi-experimental-row__status {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+}
+
+.pi-experimental-row__status.is-enabled {
+  color: var(--pi-green);
+}
+
+.pi-experimental-row__description {
+  margin-top: 4px;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+}
+
+.pi-experimental-row__meta {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pi-experimental-row__command {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  background: var(--alpha-4);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.pi-experimental-row__toggle {
+  border: none;
+  background: var(--pi-green);
+  color: white;
+  font-weight: 600;
+}
+
+.pi-experimental-row__toggle:hover {
+  background: var(--pi-green-strong);
+}
+
+.pi-experimental-row__toggle.is-enabled {
+  background: oklch(0.92 0.02 30 / 0.85);
+  border: 1px solid var(--alpha-12);
+  color: var(--foreground);
+}
+
+.pi-experimental-row__toggle.is-enabled:hover {
+  background: oklch(0.9 0.02 30 / 0.85);
+}
+
+.pi-experimental-row__warning {
+  margin-top: 6px;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: oklch(0.58 0.16 40);
+}
+
+.pi-experimental-row__readiness,
+.pi-experimental-footer {
+  margin-top: 6px;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+}
+
+.pi-experimental-footer {
+  margin-top: 12px;
+}
