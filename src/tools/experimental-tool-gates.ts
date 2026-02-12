@@ -434,7 +434,9 @@ function defaultRequestOfficeJsExecuteApproval(
   request: OfficeJsExecuteApprovalRequest,
 ): Promise<boolean> {
   if (typeof window === "undefined" || typeof window.confirm !== "function") {
-    return Promise.resolve(true);
+    return Promise.reject(new Error(
+      "Office.js execution requires explicit user approval, but confirmation UI is unavailable.",
+    ));
   }
 
   return Promise.resolve(window.confirm(getOfficeJsApprovalMessage(request)));

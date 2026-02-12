@@ -218,6 +218,28 @@ void test("execute_office_js requires explicit user approval", async () => {
   assert.equal(executeCount, 0);
 });
 
+void test("execute_office_js fails closed when confirmation UI is unavailable", async () => {
+  let executeCount = 0;
+
+  const [officeTool] = await applyExperimentalToolGates([
+    createTestTool("execute_office_js", () => {
+      executeCount += 1;
+    }),
+  ], {
+    isOfficeJsExecuteExperimentEnabled: () => true,
+  });
+
+  await assert.rejects(
+    () => officeTool.execute("call-office", {
+      explanation: "Rebuild totals",
+      code: "return { ok: true };",
+    }),
+    /approval.*unavailable|confirmation UI is unavailable/i,
+  );
+
+  assert.equal(executeCount, 0);
+});
+
 void test("python bridge tools stay registered and hard-gated", async () => {
   let pythonExecuteCount = 0;
   let libreofficeExecuteCount = 0;

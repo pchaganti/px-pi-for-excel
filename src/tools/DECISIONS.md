@@ -184,7 +184,7 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 ## Experimental direct Office.js tool (`execute_office_js`)
 - **Availability:** non-core experimental tool, always registered via `createAllTools()`; execution is hard-gated by `applyExperimentalToolGates()` and `/experimental on office-js-execute`.
 - **Contract:** accepts `code` (async function body receiving `context: Excel.RequestContext`) plus a short user-facing `explanation`.
-- **Safety guards:** blocks nested `Excel.run(...)` usage (host already provides context), enforces explanation/code length limits, and requires explicit user confirmation on every execution.
+- **Safety guards:** blocks nested `Excel.run(...)` usage (host already provides context), enforces explanation/code length limits, requires explicit user confirmation on every execution, and fails closed if confirmation UI is unavailable.
 - **Result policy:** tool output must be JSON-serializable; non-serializable results are returned as deterministic errors.
 - **Audit/recovery:** appends operation-level entries to `workbook.change-audit.v1` and explicitly reports that no workbook checkpoint is created.
 - **Execution policy:** treated as `mutate/structure` to force conservative workbook-context refresh after execution.
