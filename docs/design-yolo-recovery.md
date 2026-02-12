@@ -53,6 +53,8 @@ Replace cumbersome up-front approval selectors with a low-friction workflow:
   - `workbook.recovery-snapshots.v1`
 - Safety cap:
   - snapshots are skipped above `MAX_RECOVERY_CELLS` to avoid oversized local state
+- Coverage signaling:
+  - non-checkpointed mutation tools now explicitly state when no checkpoint is created
 
 ## Why this is better than approval selectors for now
 

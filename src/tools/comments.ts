@@ -13,6 +13,12 @@ import {
   type AppendWorkbookChangeAuditEntryArgs,
 } from "../audit/workbook-change-audit.js";
 import { getErrorMessage } from "../utils/errors.js";
+import type { CommentsDetails } from "./tool-details.js";
+import {
+  NON_CHECKPOINTED_MUTATION_NOTE,
+  NON_CHECKPOINTED_MUTATION_REASON,
+  recoveryCheckpointUnavailable,
+} from "./recovery-metadata.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -117,7 +123,7 @@ const defaultDependencies: CommentsToolDependencies = {
 
 export function createCommentsTool(
   dependencies: Partial<CommentsToolDependencies> = {},
-): AgentTool<typeof schema> {
+): AgentTool<typeof schema, CommentsDetails> {
   const resolvedDependencies: CommentsToolDependencies = {
     dispatchAction: dependencies.dispatchAction ?? defaultDependencies.dispatchAction,
     appendAuditEntry: dependencies.appendAuditEntry ?? defaultDependencies.appendAuditEntry,
@@ -134,7 +140,7 @@ export function createCommentsTool(
     execute: async (
       toolCallId: string,
       params: Params,
-    ): Promise<AgentToolResult<undefined>> => {
+    ): Promise<AgentToolResult<CommentsDetails>> => {
       const isMutation = isMutatingCommentsAction(params.action);
 
       try {
@@ -152,7 +158,20 @@ export function createCommentsTool(
           });
         }
 
-        return { content: [{ type: "text", text: result.text }], details: undefined };
+        return {
+          content: [{
+            type: "text",
+            text: isMutation ? `${result.text}\n\n${NON_CHECKPOINTED_MUTATION_NOTE}` : result.text,
+          }],
+          details: {
+            kind: "comments",
+            action: params.action,
+            address: params.range,
+            recovery: isMutation
+              ? recoveryCheckpointUnavailable(NON_CHECKPOINTED_MUTATION_REASON)
+              : undefined,
+          },
+        };
       } catch (e: unknown) {
         const message = getErrorMessage(e);
 
@@ -170,7 +189,11 @@ export function createCommentsTool(
 
         return {
           content: [{ type: "text", text: `Error (${params.action} on "${params.range}"): ${message}` }],
-          details: undefined,
+          details: {
+            kind: "comments",
+            action: params.action,
+            address: params.range,
+          },
         };
       }
     },

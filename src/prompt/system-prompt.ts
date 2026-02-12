@@ -125,7 +125,7 @@ Core workbook tools:
 - **view_settings** — control gridlines, headings, freeze panes, tab color, sheet visibility, sheet activation, and standard width
 - **instructions** — update persistent user/workbook instructions (append or replace)
 - **conventions** — read/update formatting defaults (currency, negatives, zeros, decimal places)
-- **workbook_history** — list/restore/delete automatic recovery checkpoints for workbook edits
+- **workbook_history** — list/restore/delete automatic recovery checkpoints for value/formula writes (\`write_cells\`, \`fill_formula\`, \`python_transform_range\`)
 
 Other tools may be available depending on enabled experiments/skills.
 If **files** is available, use it for workspace artifacts (list/read/write/delete files).`;

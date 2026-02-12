@@ -35,6 +35,12 @@ import {
 } from "./python-run.js";
 import { countOccupiedCells } from "./write-cells.js";
 import type { PythonTransformRangeDetails } from "./tool-details.js";
+import {
+  CHECKPOINT_SKIPPED_NOTE,
+  CHECKPOINT_SKIPPED_REASON,
+  recoveryCheckpointCreated,
+  recoveryCheckpointUnavailable,
+} from "./recovery-metadata.js";
 
 const MIN_TIMEOUT_MS = 100;
 const MAX_TIMEOUT_MS = 120_000;
@@ -532,13 +538,21 @@ export function createPythonTransformRangeTool(
           });
 
           if (checkpoint) {
+            successResult.details.recovery = recoveryCheckpointCreated(checkpoint.id);
+
             dispatchWorkbookSnapshotCreated({
               snapshotId: checkpoint.id,
               toolName: checkpoint.toolName,
               address: checkpoint.address,
               changedCount: checkpoint.changedCount,
             });
+          } else {
+            successResult.details.recovery = recoveryCheckpointUnavailable(CHECKPOINT_SKIPPED_REASON);
+            appendResultNote(successResult, CHECKPOINT_SKIPPED_NOTE);
           }
+        } else {
+          successResult.details.recovery = recoveryCheckpointUnavailable(CHECKPOINT_SKIPPED_REASON);
+          appendResultNote(successResult, CHECKPOINT_SKIPPED_NOTE);
         }
 
         return successResult;
@@ -555,4 +569,11 @@ export function createPythonTransformRangeTool(
       }
     },
   };
+}
+
+function appendResultNote(result: AgentToolResult<PythonTransformRangeDetails>, note: string): void {
+  const first = result.content[0];
+  if (!first || first.type !== "text") return;
+
+  first.text = `${first.text}\n\n${note}`;
 }

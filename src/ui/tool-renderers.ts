@@ -11,17 +11,21 @@ import type { ToolRenderer, ToolRenderResult } from "@mariozechner/pi-web-ui/dis
 import { html, type TemplateResult } from "lit";
 import { createRef, ref } from "lit/directives/ref.js";
 import { renderCollapsibleToolCardHeader, renderToolCardHeader } from "./tool-card-header.js";
-import { cellRef, cellRefs } from "./cell-link.js";
+import { cellRef, cellRefDisplay, cellRefs } from "./cell-link.js";
 import { humanizeToolInput } from "./humanize-params.js";
 import { humanizeColorsInText } from "./color-names.js";
 import { CORE_TOOL_NAMES, type CoreToolName } from "../tools/registry.js";
 import {
+  isCommentsDetails,
+  isConditionalFormatDetails,
   isFillFormulaDetails,
   isFormatCellsDetails,
+  isModifyStructureDetails,
   isPythonTransformRangeDetails,
   isReadRangeCsvDetails,
   isTraceDependenciesDetails,
   isWriteCellsDetails,
+  type RecoveryCheckpointDetails,
   type WriteCellsDetails,
 } from "../tools/tool-details.js";
 import { renderCsvTable } from "./render-csv-table.js";
@@ -372,6 +376,34 @@ function mutationBadge(changedCount: number | undefined, errorCount: number | un
   return parts.length > 0 ? ` — ${parts.join(", ")}` : "";
 }
 
+function withRecoveryBadge(base: string, recovery: RecoveryCheckpointDetails | undefined): string {
+  if (!recovery || recovery.status !== "not_available") {
+    return base;
+  }
+
+  return base.length > 0 ? `${base}, no checkpoint` : " — no checkpoint";
+}
+
+function recoveryBadgeForDetails(details: unknown): string {
+  if (isFormatCellsDetails(details)) {
+    return withRecoveryBadge("", details.recovery);
+  }
+
+  if (isConditionalFormatDetails(details)) {
+    return withRecoveryBadge("", details.recovery);
+  }
+
+  if (isModifyStructureDetails(details)) {
+    return withRecoveryBadge("", details.recovery);
+  }
+
+  if (isCommentsDetails(details)) {
+    return withRecoveryBadge("", details.recovery);
+  }
+
+  return "";
+}
+
 /** Append error / blocked badge to the detail string. */
 function badge(
   toolName: SupportedToolName,
@@ -380,18 +412,27 @@ function badge(
 ): string {
   if (toolName === "write_cells" && isWriteCellsDetails(details)) {
     if (details.blocked) return " — blocked";
-    return mutationBadge(details.changes?.changedCount, details.formulaErrorCount);
+    return withRecoveryBadge(
+      mutationBadge(details.changes?.changedCount, details.formulaErrorCount),
+      details.recovery,
+    );
   }
 
   if (toolName === "fill_formula" && isFillFormulaDetails(details)) {
     if (details.blocked) return " — blocked";
-    return mutationBadge(details.changes?.changedCount, details.formulaErrorCount);
+    return withRecoveryBadge(
+      mutationBadge(details.changes?.changedCount, details.formulaErrorCount),
+      details.recovery,
+    );
   }
 
   if (toolName === "python_transform_range" && isPythonTransformRangeDetails(details)) {
     if (details.blocked) return " — blocked";
     if (typeof details.error === "string" && details.error.length > 0) return " — error";
-    return mutationBadge(details.changes?.changedCount, details.formulaErrorCount);
+    return withRecoveryBadge(
+      mutationBadge(details.changes?.changedCount, details.formulaErrorCount),
+      details.recovery,
+    );
   }
 
   if (!resultText) return "";
@@ -493,20 +534,40 @@ function describeToolCall(
     case "format_cells": {
       const addr = isFormatCellsDetails(details) ? details.address : undefined;
       const resolved = addr ?? range;
-      return { action: "Format", detail: resolved ? compactRange(resolved) : "cells", address: resolved };
+      const recovery = recoveryBadgeForDetails(details);
+      return {
+        action: "Format",
+        detail: (resolved ? compactRange(resolved) : "cells") + recovery,
+        address: resolved,
+      };
     }
-    case "conditional_format":
-      return { action: "Cond. format", detail: range ? compactRange(range) : "cells", address: range };
+    case "conditional_format": {
+      const recovery = recoveryBadgeForDetails(details);
+      return {
+        action: "Cond. format",
+        detail: (range ? compactRange(range) : "cells") + recovery,
+        address: range,
+      };
+    }
 
     // ── Result-text tools (split first word as action) ──
     case "modify_structure": {
-      if (resultText) { const s = resultSummary(resultText); if (s) return splitFirstWord(s); }
+      const recovery = recoveryBadgeForDetails(details);
+
+      if (resultText) {
+        const s = resultSummary(resultText);
+        if (s) {
+          const parts = splitFirstWord(s);
+          return { ...parts, detail: `${parts.detail}${recovery}` };
+        }
+      }
+
       const act = p.action as string | undefined;
       const name = (p.name ?? p.new_name) as string | undefined;
-      if (act === "add_sheet") return { action: "Add", detail: name ? `sheet "${name}"` : "sheet" };
-      if (act === "rename_sheet") return { action: "Rename", detail: name ? `to "${name}"` : "sheet" };
-      if (act === "delete_sheet") return { action: "Delete", detail: "sheet" };
-      return { action: "Modify", detail: "structure" };
+      if (act === "add_sheet") return { action: "Add", detail: `${name ? `sheet "${name}"` : "sheet"}${recovery}` };
+      if (act === "rename_sheet") return { action: "Rename", detail: `${name ? `to "${name}"` : "sheet"}${recovery}` };
+      if (act === "delete_sheet") return { action: "Delete", detail: `sheet${recovery}` };
+      return { action: "Modify", detail: `structure${recovery}` };
     }
     case "search_workbook": {
       if (resultText) { const s = resultSummary(resultText); if (s) return splitFirstWord(s); }
@@ -522,24 +583,25 @@ function describeToolCall(
     case "comments": {
       const op = p.action as string | undefined;
       const addr = range ? compactRange(range) : "range";
+      const recovery = recoveryBadgeForDetails(details);
 
       switch (op) {
         case "read":
           return { action: "Comments", detail: addr, address: range };
         case "add":
-          return { action: "Add", detail: `comment ${addr}`, address: range };
+          return { action: "Add", detail: `comment ${addr}${recovery}`, address: range };
         case "update":
-          return { action: "Update", detail: `comment ${addr}`, address: range };
+          return { action: "Update", detail: `comment ${addr}${recovery}`, address: range };
         case "reply":
-          return { action: "Reply", detail: addr, address: range };
+          return { action: "Reply", detail: `${addr}${recovery}`, address: range };
         case "delete":
-          return { action: "Delete", detail: `comment ${addr}`, address: range };
+          return { action: "Delete", detail: `comment ${addr}${recovery}`, address: range };
         case "resolve":
-          return { action: "Resolve", detail: addr, address: range };
+          return { action: "Resolve", detail: `${addr}${recovery}`, address: range };
         case "reopen":
-          return { action: "Reopen", detail: addr, address: range };
+          return { action: "Reopen", detail: `${addr}${recovery}`, address: range };
         default:
-          return { action: "Comment", detail: addr, address: range };
+          return { action: "Comment", detail: `${addr}${recovery}`, address: range };
       }
     }
     case "instructions": {
@@ -644,7 +706,9 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
       const resultText = result ? splitToolResultContent(result).text : undefined;
       const desc = describeToolCall(toolName, params, resultText, result?.details);
       const detailContent = desc.address
-        ? cellRefs(desc.address)
+        ? (desc.detail && desc.detail !== desc.address
+          ? cellRefDisplay(desc.detail, desc.address)
+          : cellRefs(desc.address))
         : desc.detail;
       const title = html`<span class="pi-tool-card__title"><strong>${desc.action}</strong>${desc.detail ? html` <span class="pi-tool-card__detail-text">${detailContent}</span>` : ""}</span>`;
 

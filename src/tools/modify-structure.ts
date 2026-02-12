@@ -10,6 +10,12 @@ import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun } from "../excel/helpers.js";
 import { getWorkbookChangeAuditLog } from "../audit/workbook-change-audit.js";
 import { getErrorMessage } from "../utils/errors.js";
+import type { ModifyStructureDetails } from "./tool-details.js";
+import {
+  NON_CHECKPOINTED_MUTATION_NOTE,
+  NON_CHECKPOINTED_MUTATION_REASON,
+  recoveryCheckpointUnavailable,
+} from "./recovery-metadata.js";
 
 // Helper for string enum (TypeBox doesn't have a built-in StringEnum)
 function StringEnum<T extends string[]>(values: [...T], opts?: { description?: string }) {
@@ -83,7 +89,7 @@ function columnNumberToLetter(position: number): string {
   return letter;
 }
 
-export function createModifyStructureTool(): AgentTool<typeof schema> {
+export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStructureDetails> {
   return {
     name: "modify_structure",
     label: "Modify Structure",
@@ -95,7 +101,7 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
     execute: async (
       toolCallId: string,
       params: Params,
-    ): Promise<AgentToolResult<undefined>> => {
+    ): Promise<AgentToolResult<ModifyStructureDetails>> => {
       try {
         const result = await excelRun<StructureMutationResult>(async (context) => {
           const action = params.action;
@@ -290,8 +296,12 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
         });
 
         return {
-          content: [{ type: "text", text: result.message }],
-          details: undefined,
+          content: [{ type: "text", text: `${result.message}\n\n${NON_CHECKPOINTED_MUTATION_NOTE}` }],
+          details: {
+            kind: "modify_structure",
+            action: params.action,
+            recovery: recoveryCheckpointUnavailable(NON_CHECKPOINTED_MUTATION_REASON),
+          },
         };
       } catch (e: unknown) {
         const message = getErrorMessage(e);
@@ -308,7 +318,10 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
 
         return {
           content: [{ type: "text", text: `Error: ${message}` }],
-          details: undefined,
+          details: {
+            kind: "modify_structure",
+            action: params.action,
+          },
         };
       }
     },

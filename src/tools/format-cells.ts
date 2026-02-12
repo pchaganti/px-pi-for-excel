@@ -12,6 +12,11 @@ import { excelRun, getRange, parseRangeRef, qualifiedAddress } from "../excel/he
 import { getWorkbookChangeAuditLog } from "../audit/workbook-change-audit.js";
 import { getErrorMessage } from "../utils/errors.js";
 import { resolveStyles } from "../conventions/index.js";
+import {
+  NON_CHECKPOINTED_MUTATION_NOTE,
+  NON_CHECKPOINTED_MUTATION_REASON,
+  recoveryCheckpointUnavailable,
+} from "./recovery-metadata.js";
 import type { BorderWeight } from "../conventions/index.js";
 import { getResolvedConventions } from "../conventions/store.js";
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
@@ -372,13 +377,14 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
           content: [
             {
               type: "text",
-              text: `Formatted **${fullAddr}**: ${result.applied.join(", ")}.${warningText}`,
+              text: `Formatted **${fullAddr}**: ${result.applied.join(", ")}.${warningText}\n\n${NON_CHECKPOINTED_MUTATION_NOTE}`,
             },
           ],
           details: {
             kind: "format_cells",
             address: fullAddr,
             warningsCount: result.warnings.length,
+            recovery: recoveryCheckpointUnavailable(NON_CHECKPOINTED_MUTATION_REASON),
           },
         };
 
