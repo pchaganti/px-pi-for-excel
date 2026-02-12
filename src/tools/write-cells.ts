@@ -20,6 +20,12 @@ import { dispatchWorkbookSnapshotCreated } from "../workbook/recovery-events.js"
 import { getWorkbookRecoveryLog } from "../workbook/recovery-log.js";
 import { formatAsMarkdownTable, findErrors } from "../utils/format.js";
 import { getErrorMessage } from "../utils/errors.js";
+import {
+  CHECKPOINT_SKIPPED_NOTE,
+  CHECKPOINT_SKIPPED_REASON,
+  recoveryCheckpointCreated,
+  recoveryCheckpointUnavailable,
+} from "./recovery-metadata.js";
 
 const schema = Type.Object({
   start_cell: Type.String({
@@ -214,12 +220,17 @@ export function createWriteCellsTool(): AgentTool<typeof schema, WriteCellsDetai
         });
 
         if (checkpoint) {
+          successResult.details.recovery = recoveryCheckpointCreated(checkpoint.id);
+
           dispatchWorkbookSnapshotCreated({
             snapshotId: checkpoint.id,
             toolName: checkpoint.toolName,
             address: checkpoint.address,
             changedCount: checkpoint.changedCount,
           });
+        } else {
+          successResult.details.recovery = recoveryCheckpointUnavailable(CHECKPOINT_SKIPPED_REASON);
+          appendResultNote(successResult, CHECKPOINT_SKIPPED_NOTE);
         }
 
         return successResult;
@@ -457,4 +468,11 @@ function formatSuccess(result: SuccessWriteCellsResult, rows: number, cols: numb
   };
 
   return { content: [{ type: "text", text: lines.join("\n") }], details };
+}
+
+function appendResultNote(result: AgentToolResult<WriteCellsDetails>, note: string): void {
+  const first = result.content[0];
+  if (!first || first.type !== "text") return;
+
+  first.text = `${first.text}\n\n${note}`;
 }

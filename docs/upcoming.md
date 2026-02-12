@@ -101,6 +101,7 @@ https://github.com/tmustier/pi-for-excel/issues/27
 - post-write action toast with one-click **Revert**
 - dedicated checkpoint browser overlay (menu + `/history`) with restore/delete/clear controls
 - restore creates an inverse checkpoint so rollbacks are themselves reversible
+- non-checkpointed mutation tools explicitly report when no checkpoint is created
 
 **Remaining follow-up:**
 - broader tool coverage (format/structure/comment mutations)

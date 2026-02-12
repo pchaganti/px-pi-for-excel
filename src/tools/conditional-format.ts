@@ -11,6 +11,12 @@ import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun, getRange, qualifiedAddress } from "../excel/helpers.js";
 import { getWorkbookChangeAuditLog } from "../audit/workbook-change-audit.js";
 import { getErrorMessage } from "../utils/errors.js";
+import type { ConditionalFormatDetails } from "./tool-details.js";
+import {
+  NON_CHECKPOINTED_MUTATION_NOTE,
+  NON_CHECKPOINTED_MUTATION_REASON,
+  recoveryCheckpointUnavailable,
+} from "./recovery-metadata.js";
 
 type CellValueOperator =
   | "Between"
@@ -85,7 +91,7 @@ const schema = Type.Object({
 
 type Params = Static<typeof schema>;
 
-export function createConditionalFormatTool(): AgentTool<typeof schema> {
+export function createConditionalFormatTool(): AgentTool<typeof schema, ConditionalFormatDetails> {
   return {
     name: "conditional_format",
     label: "Conditional Format",
@@ -95,7 +101,7 @@ export function createConditionalFormatTool(): AgentTool<typeof schema> {
     execute: async (
       toolCallId: string,
       params: Params,
-    ): Promise<AgentToolResult<undefined>> => {
+    ): Promise<AgentToolResult<ConditionalFormatDetails>> => {
       try {
         if (params.action === "clear") {
           return await clearFormats(toolCallId, params);
@@ -121,7 +127,10 @@ export function createConditionalFormatTool(): AgentTool<typeof schema> {
                 text: `Error: ${message}`,
               },
             ],
-            details: undefined,
+            details: {
+              kind: "conditional_format",
+              action: params.action,
+            },
           };
         }
 
@@ -141,14 +150,20 @@ export function createConditionalFormatTool(): AgentTool<typeof schema> {
 
         return {
           content: [{ type: "text", text: `Error: ${message}` }],
-          details: undefined,
+          details: {
+            kind: "conditional_format",
+            action: params.action,
+          },
         };
       }
     },
   };
 }
 
-async function clearFormats(toolCallId: string, params: Params): Promise<AgentToolResult<undefined>> {
+async function clearFormats(
+  toolCallId: string,
+  params: Params,
+): Promise<AgentToolResult<ConditionalFormatDetails>> {
   const result = await excelRun(async (context) => {
     const { sheet, range } = getRange(context, params.range);
     sheet.load("name");
@@ -181,14 +196,22 @@ async function clearFormats(toolCallId: string, params: Params): Promise<AgentTo
     content: [
       {
         type: "text",
-        text: `Cleared ${result.existing} conditional format(s) from **${fullAddr}**.`,
+        text: `Cleared ${result.existing} conditional format(s) from **${fullAddr}**.\n\n${NON_CHECKPOINTED_MUTATION_NOTE}`,
       },
     ],
-    details: undefined,
+    details: {
+      kind: "conditional_format",
+      action: "clear",
+      address: fullAddr,
+      recovery: recoveryCheckpointUnavailable(NON_CHECKPOINTED_MUTATION_REASON),
+    },
   };
 }
 
-async function addFormat(toolCallId: string, params: Params): Promise<AgentToolResult<undefined>> {
+async function addFormat(
+  toolCallId: string,
+  params: Params,
+): Promise<AgentToolResult<ConditionalFormatDetails>> {
   validateAddParams(params);
 
   const result = await excelRun(async (context) => {
@@ -253,10 +276,15 @@ async function addFormat(toolCallId: string, params: Params): Promise<AgentToolR
     content: [
       {
         type: "text",
-        text: `Added conditional format to **${fullAddr}** — ${details}.`,
+        text: `Added conditional format to **${fullAddr}** — ${details}.\n\n${NON_CHECKPOINTED_MUTATION_NOTE}`,
       },
     ],
-    details: undefined,
+    details: {
+      kind: "conditional_format",
+      action: "add",
+      address: fullAddr,
+      recovery: recoveryCheckpointUnavailable(NON_CHECKPOINTED_MUTATION_REASON),
+    },
   };
 }
 
