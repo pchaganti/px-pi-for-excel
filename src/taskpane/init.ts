@@ -594,7 +594,9 @@ export async function initTaskpane(opts: {
 
       runtimeActiveSkillIds.set(runtimeId, activeSkillIds);
 
-      const coreTools = createAllTools().filter(isRuntimeAgentTool);
+      const coreTools = createAllTools({
+        getExtensionManager: () => extensionManager,
+      }).filter(isRuntimeAgentTool);
       const gatedCoreTools = await applyExperimentalToolGates(coreTools);
       const allTools = [
         ...gatedCoreTools,

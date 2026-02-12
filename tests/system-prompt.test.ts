@@ -70,3 +70,9 @@ void test("system prompt mentions optional files workspace capability", () => {
   assert.match(prompt, /\*\*files\*\*/);
   assert.match(prompt, /workspace artifacts/i);
 });
+
+void test("system prompt mentions extension manager tool for chat-driven authoring", () => {
+  const prompt = buildSystemPrompt();
+  assert.match(prompt, /\*\*extensions_manager\*\*/);
+  assert.match(prompt, /extension authoring from chat/i);
+});
