@@ -30,15 +30,10 @@ function setActiveInstructionsTab(
     const button = tabButtons[tab];
     if (!button) continue;
 
-    if (tab === activeTab) {
-      button.style.background = "oklch(0.45 0.12 160 / 0.12)";
-      button.style.color = "var(--foreground)";
-      button.style.borderColor = "oklch(0.45 0.12 160 / 0.28)";
-    } else {
-      button.style.background = "oklch(0 0 0 / 0.04)";
-      button.style.color = "var(--muted-foreground)";
-      button.style.borderColor = "oklch(0 0 0 / 0.08)";
-    }
+    const isActive = tab === activeTab;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+    button.setAttribute("tabindex", isActive ? "0" : "-1");
   }
 }
 
@@ -75,63 +70,59 @@ export async function showInstructionsDialog(opts?: {
   overlay.className = "pi-welcome-overlay";
 
   const card = document.createElement("div");
-  card.className = "pi-welcome-card";
-  card.style.cssText = "text-align: left; width: min(520px, 92vw); max-height: 82vh;";
+  card.className = "pi-welcome-card pi-overlay-card";
 
   const title = document.createElement("h2");
-  title.style.cssText = "font-size: 16px; font-weight: 600; margin: 0 0 12px; font-family: var(--font-sans);";
+  title.className = "pi-overlay-title";
   title.textContent = "Instructions";
 
   const tabs = document.createElement("div");
-  tabs.style.cssText = "display: flex; gap: 8px; margin-bottom: 10px;";
+  tabs.className = "pi-overlay-tabs";
+  tabs.setAttribute("role", "tablist");
 
   const userTab = document.createElement("button");
   userTab.type = "button";
   userTab.textContent = "My Instructions";
-  userTab.style.cssText =
-    "padding: 6px 10px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08); background: oklch(0 0 0 / 0.04); cursor: pointer; font-size: 12px; font-family: var(--font-sans);";
+  userTab.className = "pi-overlay-tab";
+  userTab.setAttribute("role", "tab");
 
   const workbookTab = document.createElement("button");
   workbookTab.type = "button";
   workbookTab.textContent = "Workbook";
-  workbookTab.style.cssText =
-    "padding: 6px 10px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08); background: oklch(0 0 0 / 0.04); cursor: pointer; font-size: 12px; font-family: var(--font-sans);";
+  workbookTab.className = "pi-overlay-tab";
+  workbookTab.setAttribute("role", "tab");
 
   tabs.append(userTab, workbookTab);
 
   const workbookTag = document.createElement("div");
-  workbookTag.style.cssText =
-    "font-size: 11px; color: var(--muted-foreground); margin: -4px 0 8px; font-family: var(--font-mono);";
+  workbookTag.className = "pi-overlay-workbook-tag";
   workbookTag.textContent = `Workbook: ${workbookLabel}`;
 
   const textarea = document.createElement("textarea");
-  textarea.style.cssText =
-    "width: 100%; min-height: 220px; max-height: 42vh; resize: vertical; border: 1px solid oklch(0 0 0 / 0.12); border-radius: 10px; padding: 10px 12px; font-family: var(--font-sans); font-size: 13px; line-height: 1.45; background: oklch(1 0 0 / 0.70); color: var(--foreground); outline: none;";
+  textarea.className = "pi-overlay-textarea";
   textarea.placeholder = "Your preferences and habits, e.g.\n• Always use EUR for currencies\n• Format dates as dd-mmm-yyyy\n• Check circular references after writes";
 
   const footer = document.createElement("div");
-  footer.style.cssText = "margin-top: 10px; display: flex; flex-direction: column; gap: 6px;";
+  footer.className = "pi-overlay-footer";
 
   const counter = document.createElement("div");
-  counter.style.cssText = "font-size: 11px; color: var(--muted-foreground); font-family: var(--font-mono);";
+  counter.className = "pi-overlay-counter";
 
   const hint = document.createElement("div");
-  hint.style.cssText = "font-size: 11px; color: var(--muted-foreground); line-height: 1.4;";
+  hint.className = "pi-overlay-hint";
 
   const actions = document.createElement("div");
-  actions.style.cssText = "display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;";
+  actions.className = "pi-overlay-actions";
 
   const cancelBtn = document.createElement("button");
   cancelBtn.type = "button";
   cancelBtn.textContent = "Cancel";
-  cancelBtn.style.cssText =
-    "padding: 7px 12px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.12); background: oklch(0 0 0 / 0.04); cursor: pointer; font-size: 12px;";
+  cancelBtn.className = "pi-overlay-btn pi-overlay-btn--ghost";
 
   const saveBtn = document.createElement("button");
   saveBtn.type = "button";
   saveBtn.textContent = "Save";
-  saveBtn.style.cssText =
-    "padding: 7px 12px; border-radius: 8px; border: none; background: var(--pi-green); color: white; cursor: pointer; font-size: 12px; font-weight: 600;";
+  saveBtn.className = "pi-overlay-btn pi-overlay-btn--primary";
 
   actions.append(cancelBtn, saveBtn);
   footer.append(counter, hint, actions);
@@ -167,13 +158,11 @@ export async function showInstructionsDialog(opts?: {
 
       const count = userDraft.length;
       counter.textContent = formatCounterLabel(count, USER_INSTRUCTIONS_SOFT_LIMIT);
-      counter.style.color = count > USER_INSTRUCTIONS_SOFT_LIMIT
-        ? "var(--destructive, #e5484d)"
-        : "var(--muted-foreground)";
+      counter.classList.toggle("is-warning", count > USER_INSTRUCTIONS_SOFT_LIMIT);
 
       hint.textContent =
         "Private to your machine. These apply to all workbooks and can be updated automatically when you express preferences.";
-      workbookTag.style.display = "none";
+      workbookTag.hidden = true;
       return;
     }
 
@@ -183,9 +172,7 @@ export async function showInstructionsDialog(opts?: {
 
     const count = workbookDraft.length;
     counter.textContent = formatCounterLabel(count, WORKBOOK_INSTRUCTIONS_SOFT_LIMIT);
-    counter.style.color = count > WORKBOOK_INSTRUCTIONS_SOFT_LIMIT
-      ? "var(--destructive, #e5484d)"
-      : "var(--muted-foreground)";
+    counter.classList.toggle("is-warning", count > WORKBOOK_INSTRUCTIONS_SOFT_LIMIT);
 
     if (!workbookId) {
       hint.textContent =
@@ -195,7 +182,7 @@ export async function showInstructionsDialog(opts?: {
         "Saved for this workbook on this machine. The assistant should ask before adding workbook-level notes.";
     }
 
-    workbookTag.style.display = "block";
+    workbookTag.hidden = false;
   };
 
   const saveActiveDraft = () => {

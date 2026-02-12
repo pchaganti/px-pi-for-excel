@@ -16,60 +16,54 @@ const overlayClosers = new WeakMap<HTMLElement, () => void>();
 
 function applyStatusVisual(statusEl: HTMLSpanElement, enabled: boolean): void {
   statusEl.textContent = enabled ? "Enabled" : "Disabled";
-  statusEl.style.color = enabled ? "var(--pi-green)" : "var(--muted-foreground)";
+  statusEl.classList.toggle("is-enabled", enabled);
 }
 
 function applyToggleButtonVisual(button: HTMLButtonElement, enabled: boolean): void {
   button.textContent = enabled ? "Disable" : "Enable";
-  button.style.background = enabled ? "oklch(0.92 0.02 30 / 0.85)" : "var(--pi-green)";
-  button.style.color = enabled ? "var(--foreground)" : "white";
-  button.style.border = enabled ? "1px solid oklch(0 0 0 / 0.12)" : "none";
+  button.classList.toggle("is-enabled", enabled);
 }
 
 function buildFeatureRow(feature: ExperimentalFeatureSnapshot): HTMLElement {
   const row = document.createElement("div");
-  row.style.cssText =
-    "padding: 10px 12px; border: 1px solid oklch(0 0 0 / 0.08); border-radius: 10px; background: oklch(1 0 0 / 0.35);";
+  row.className = "pi-experimental-row";
 
   const header = document.createElement("div");
-  header.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 10px;";
+  header.className = "pi-experimental-row__header";
 
   const title = document.createElement("div");
-  title.style.cssText = "font-size: 13px; font-weight: 600; font-family: var(--font-sans);";
+  title.className = "pi-experimental-row__title";
   title.textContent = feature.title;
 
   const status = document.createElement("span");
-  status.style.cssText = "font-size: 11px; font-family: var(--font-mono);";
+  status.className = "pi-experimental-row__status";
 
   header.append(title, status);
 
   const description = document.createElement("div");
-  description.style.cssText = "margin-top: 4px; font-size: 12px; color: var(--muted-foreground); font-family: var(--font-sans);";
+  description.className = "pi-experimental-row__description";
   description.textContent = feature.description;
 
   const meta = document.createElement("div");
-  meta.style.cssText =
-    "margin-top: 6px; display: flex; align-items: center; justify-content: space-between; gap: 10px;";
+  meta.className = "pi-experimental-row__meta";
 
   const commandHint = document.createElement("code");
-  commandHint.style.cssText =
-    "font-size: 10px; color: var(--muted-foreground); font-family: var(--font-mono); background: oklch(0 0 0 / 0.04); padding: 2px 6px; border-radius: 6px;";
+  commandHint.className = "pi-experimental-row__command";
   commandHint.textContent = `/experimental toggle ${feature.slug}`;
 
   const toggleBtn = document.createElement("button");
   toggleBtn.type = "button";
-  toggleBtn.style.cssText =
-    "padding: 6px 10px; border-radius: 8px; font-family: var(--font-sans); font-size: 12px; font-weight: 600; cursor: pointer;";
+  toggleBtn.className = "pi-overlay-btn pi-experimental-row__toggle";
 
   meta.append(commandHint, toggleBtn);
 
   const warning = document.createElement("div");
-  warning.style.cssText = "margin-top: 6px; font-size: 11px; color: oklch(0.58 0.16 40); font-family: var(--font-sans);";
+  warning.className = "pi-experimental-row__warning";
   warning.textContent = feature.warning ?? "";
-  warning.style.display = feature.warning ? "block" : "none";
+  warning.hidden = !feature.warning;
 
   const readiness = document.createElement("div");
-  readiness.style.cssText = "margin-top: 6px; font-size: 11px; color: var(--muted-foreground); font-family: var(--font-sans);";
+  readiness.className = "pi-experimental-row__readiness";
   readiness.textContent =
     feature.wiring === "wired"
       ? "Ready now"
@@ -114,34 +108,32 @@ export function showExperimentalDialog(): void {
   overlay.className = "pi-welcome-overlay";
 
   const card = document.createElement("div");
-  card.className = "pi-welcome-card";
-  card.style.cssText = "text-align: left; max-width: 560px;";
+  card.className = "pi-welcome-card pi-overlay-card pi-experimental-card";
 
   const title = document.createElement("h2");
-  title.style.cssText = "font-size: 16px; font-weight: 600; margin: 0 0 6px; font-family: var(--font-sans);";
+  title.className = "pi-overlay-title";
   title.textContent = "Experimental Features";
 
   const subtitle = document.createElement("p");
-  subtitle.style.cssText = "font-size: 12px; color: var(--muted-foreground); margin: 0 0 12px; font-family: var(--font-sans);";
+  subtitle.className = "pi-overlay-subtitle";
   subtitle.textContent =
     "These toggles are local to this browser profile. Use carefully — some are security-sensitive.";
 
   const list = document.createElement("div");
-  list.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
+  list.className = "pi-experimental-list";
 
   for (const feature of getExperimentalFeatureSnapshots()) {
     list.appendChild(buildFeatureRow(feature));
   }
 
   const footer = document.createElement("p");
-  footer.style.cssText = "font-size: 11px; color: var(--muted-foreground); margin: 12px 0 0; font-family: var(--font-sans);";
+  footer.className = "pi-experimental-footer";
   footer.textContent =
     "Tip: use /experimental on <feature>, /experimental off <feature>, /experimental toggle <feature>, /experimental tmux-bridge-url <url>, /experimental tmux-bridge-token <token>, /experimental tmux-status, /experimental python-bridge-url <url>, or /experimental python-bridge-token <token>.";
 
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
-  closeBtn.style.cssText =
-    "margin-top: 12px; width: 100%; padding: 8px; border-radius: 8px; border: 1px solid oklch(0 0 0 / 0.08); background: oklch(0 0 0 / 0.03); cursor: pointer; font-family: var(--font-sans); font-size: 13px;";
+  closeBtn.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--full";
   closeBtn.textContent = "Close";
 
   let closed = false;

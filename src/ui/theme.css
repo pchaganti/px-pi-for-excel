@@ -18,6 +18,7 @@
 @import "./theme/tokens.css";
 @import "./theme/base.css";
 @import "./theme/components.css";
+@import "./theme/overlays.css";
 @import "./theme/content-overrides.css";
 @import "./theme/dialogs.css";
 @import "./theme/queue.css";

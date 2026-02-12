@@ -70,12 +70,15 @@
 
   --white-alpha-20: oklch(1 0 0 / 0.20);
   --white-alpha-25: oklch(1 0 0 / 0.25);
+  --white-alpha-35: oklch(1 0 0 / 0.35);
   --white-alpha-40: oklch(1 0 0 / 0.40);
   --white-alpha-45: oklch(1 0 0 / 0.45);
   --white-alpha-50: oklch(1 0 0 / 0.50);
+  --white-alpha-55: oklch(1 0 0 / 0.55);
   --white-alpha-60: oklch(1 0 0 / 0.60);
   --white-alpha-65: oklch(1 0 0 / 0.65);
   --white-alpha-70: oklch(1 0 0 / 0.70);
+  --white-alpha-80: oklch(1 0 0 / 0.80);
   --white-alpha-90: oklch(1 0 0 / 0.90);
 
   --green-alpha-6: oklch(0.45 0.12 160 / 0.06);
@@ -90,6 +93,7 @@
   --pi-green-strong: oklch(0.40 0.12 160);
   --pi-green-light: oklch(0.45 0.12 160 / 0.08);
   --pi-green-lighter: oklch(0.45 0.12 160 / 0.04);
+  --pi-yellow: oklch(0.72 0.16 84);
   --pi-surface: var(--sidebar);
 
   --pi-surface-translucent: oklch(0.98 0.002 90 / 0.85);

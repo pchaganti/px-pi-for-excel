@@ -35,6 +35,10 @@ The sidebar UI has two layers:
 
 Tailwind v4 puts all utilities inside `@layer utilities`. Unlayered CSS always beats layered CSS regardless of specificity. A bare `* { padding: 0 }` silently zeros out every `py-2`, `px-4`, `p-2.5` etc. in pi-web-ui. The `taskpane.html` inline `<style>` intentionally only sets `box-sizing: border-box` on `*`.
 
+### Theme guardrail
+
+Run `npm run check:css-theme` to verify every `var(--token)` used in local theme CSS resolves to a defined custom property (or has an explicit fallback).
+
 ### theme.css structure
 
 | Section | What it does |
@@ -44,6 +48,7 @@ Tailwind v4 puts all utilities inside `@layer utilities`. Unlayered CSS always b
 | 3–5. Our components | `.pi-messages`, `.pi-input-card`, `.pi-empty` — fully ours, no overrides needed |
 | 6. Working indicator | `.pi-working` — pulsing "Working…" bar shown during streaming |
 | 7–10. Chrome | Status bar (model picker + ctx + thinking), toast, slash command menu, welcome overlay |
+| 10b. Overlay primitives | Shared classes for builtins overlays (tabs, textarea, buttons, footer actions) |
 | 11. Content overrides | **Targeted** pi-web-ui tweaks — user bubble color, sidebar-width margins, tool card borders |
 | 12–13. Dialogs, Queue | Model selector glass treatment, steer/follow-up queue |
 
@@ -51,6 +56,7 @@ Tailwind v4 puts all utilities inside `@layer utilities`. Unlayered CSS always b
 > - `theme/tokens.css` (1)
 > - `theme/base.css` (2)
 > - `theme/components.css` (3–10)
+> - `theme/overlays.css` (10b)
 > - `theme/content-overrides.css` (11)
 > - `theme/dialogs.css` (12)
 > - `theme/queue.css` (13)

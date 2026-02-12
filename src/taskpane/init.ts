@@ -745,9 +745,12 @@ export async function initTaskpane(opts: {
 
     await runtime.persistence.saveSession({ force: true });
 
+    const closeTitle = runtimeManager.snapshotTabs().find((tab) => tab.runtimeId === runtimeId)?.title
+      ?? formatSessionTitle(runtime.persistence.getSessionTitle());
+
     const closedItem: RecentlyClosedItem = {
       sessionId: runtime.persistence.getSessionId(),
-      title: formatSessionTitle(runtime.persistence.getSessionTitle()),
+      title: closeTitle,
       closedAt: new Date().toISOString(),
       workbookId: await resolveWorkbookId(),
     };

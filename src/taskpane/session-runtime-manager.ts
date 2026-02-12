@@ -8,6 +8,7 @@ import type { PiSidebar } from "../ui/pi-sidebar.js";
 import type { ActionQueue } from "./action-queue.js";
 import type { QueueDisplay } from "./queue-display.js";
 import type { SessionPersistenceController } from "./sessions.js";
+import { resolveTabTitle } from "./session-title.js";
 
 export type RuntimeLockState = "idle" | "waiting_for_lock" | "holding_lock";
 
@@ -175,20 +176,18 @@ export class SessionRuntimeManager {
   }
 
   snapshotTabs(): RuntimeTabSnapshot[] {
-    return this.listRuntimes().map((runtime, index) => {
-      const hasExplicit = runtime.persistence.hasExplicitTitle();
-      const title = hasExplicit
-        ? runtime.persistence.getSessionTitle().trim()
-        : "";
-      return {
-        runtimeId: runtime.runtimeId,
-        title: title.length > 0 ? title : `Chat ${index + 1}`,
-        isActive: runtime.runtimeId === this.activeRuntimeId,
-        isStreaming: runtime.agent.state.isStreaming,
-        isBusy: runtime.agent.state.isStreaming || runtime.actionQueue.isBusy(),
-        lockState: runtime.lockState,
-      };
-    });
+    return this.listRuntimes().map((runtime, index) => ({
+      runtimeId: runtime.runtimeId,
+      title: resolveTabTitle({
+        hasExplicitTitle: runtime.persistence.hasExplicitTitle(),
+        sessionTitle: runtime.persistence.getSessionTitle(),
+        tabIndex: index,
+      }),
+      isActive: runtime.runtimeId === this.activeRuntimeId,
+      isStreaming: runtime.agent.state.isStreaming,
+      isBusy: runtime.agent.state.isStreaming || runtime.actionQueue.isBusy(),
+      lockState: runtime.lockState,
+    }));
   }
 
   subscribe(listener: RuntimeSnapshotListener): () => void {
