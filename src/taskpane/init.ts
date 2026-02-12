@@ -81,11 +81,11 @@ import { PiSidebar } from "../ui/pi-sidebar.js";
 import { setActiveProviders } from "../compat/model-selector-patch.js";
 import { createWorkbookCoordinator } from "../workbook/coordinator.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../workbook/context.js";
-import {
-  PI_WORKBOOK_SNAPSHOT_CREATED_EVENT,
-  type WorkbookSnapshotCreatedDetail,
-} from "../workbook/recovery-events.js";
 import { getWorkbookRecoveryLog, type WorkbookRecoverySnapshot } from "../workbook/recovery-log.js";
+import {
+  WorkbookSaveBoundaryMonitor,
+  startWorkbookSaveBoundaryPolling,
+} from "../workbook/save-boundary-monitor.js";
 
 import { createContextInjector } from "./context-injection.js";
 import { pickDefaultModel } from "./default-model.js";
@@ -173,38 +173,6 @@ function getActiveLockNotice(tabs: RuntimeTabSnapshot[]): string | null {
   }
 
   return null;
-}
-
-function parseWorkbookSnapshotCreatedDetail(value: unknown): WorkbookSnapshotCreatedDetail | null {
-  if (!isRecord(value)) return null;
-
-  const snapshotId = typeof value.snapshotId === "string" ? value.snapshotId : null;
-  const rawToolName = typeof value.toolName === "string" ? value.toolName : null;
-  const address = typeof value.address === "string" ? value.address : null;
-  const changedCount = typeof value.changedCount === "number" ? value.changedCount : null;
-
-  const toolName =
-    rawToolName === "write_cells" ||
-    rawToolName === "fill_formula" ||
-    rawToolName === "python_transform_range" ||
-    rawToolName === "format_cells" ||
-    rawToolName === "conditional_format" ||
-    rawToolName === "comments" ||
-    rawToolName === "modify_structure" ||
-    rawToolName === "restore_snapshot"
-      ? rawToolName
-      : null;
-
-  if (!snapshotId || !toolName || !address || changedCount === null) {
-    return null;
-  }
-
-  return {
-    snapshotId,
-    toolName,
-    address,
-    changedCount,
-  };
 }
 
 export async function initTaskpane(opts: {
@@ -398,6 +366,16 @@ export async function initTaskpane(opts: {
   const getActiveLockState = () => getActiveRuntime()?.lockState ?? "idle";
 
   const workbookRecoveryLog = getWorkbookRecoveryLog();
+  const saveBoundaryMonitor = new WorkbookSaveBoundaryMonitor({
+    clearBackupsForCurrentWorkbook: () => workbookRecoveryLog.clearForCurrentWorkbook(),
+  });
+  const stopSaveBoundaryPolling = startWorkbookSaveBoundaryPolling({
+    monitor: saveBoundaryMonitor,
+  });
+
+  window.addEventListener("beforeunload", () => {
+    stopSaveBoundaryPolling();
+  }, { once: true });
 
   const restoreCheckpointById = async (snapshotId: string): Promise<void> => {
     const activeRuntime = getActiveRuntime();
@@ -594,31 +572,6 @@ export async function initTaskpane(opts: {
 
   document.addEventListener(PI_INTEGRATIONS_CHANGED_EVENT, () => {
     void refreshCapabilitiesForAllRuntimes();
-  });
-
-  document.addEventListener(PI_WORKBOOK_SNAPSHOT_CREATED_EVENT, (event) => {
-    if (!(event instanceof CustomEvent)) return;
-
-    const detail = parseWorkbookSnapshotCreatedDetail(event.detail);
-    if (!detail) return;
-    if (detail.toolName === "restore_snapshot") return;
-
-    const changedLabel = detail.changedCount > 0
-      ? `${detail.changedCount.toLocaleString()} change${detail.changedCount === 1 ? "" : "s"}`
-      : "range";
-
-    showActionToast({
-      message: `Backup saved for ${detail.address} (${changedLabel})`,
-      actionLabel: "Revert",
-      duration: 10_000,
-      onAction: () => {
-        void restoreCheckpointById(detail.snapshotId)
-          .catch((error: unknown) => {
-            const message = error instanceof Error ? error.message : "Unknown error";
-            showToast(`Revert failed: ${message}`);
-          });
-      },
-    });
   });
 
   const createRuntime = async (optsForRuntime: {

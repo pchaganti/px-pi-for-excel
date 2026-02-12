@@ -71,7 +71,7 @@ export function createSessionLifecycleCommands(actions: SessionCommandActions): 
     },
     {
       name: "history",
-      description: "Browse workbook backups",
+      description: "Open Backups (Beta)",
       source: "builtin",
       execute: async () => {
         await actions.openRecoveryDialog();
