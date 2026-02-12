@@ -6,6 +6,10 @@
  * "Load failed" / "Connection error".
  */
 
+export const DEFAULT_LOCAL_PROXY_URL = "https://localhost:3003";
+export const PROXY_HELPER_DOCS_URL =
+  "https://github.com/tmustier/pi-for-excel/blob/main/docs/install.md#oauth-logins-and-cors-helper";
+
 export function normalizeProxyUrl(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
@@ -15,7 +19,7 @@ export function validateOfficeProxyUrl(url: string): string {
 
   if (!/^https?:\/\//i.test(normalized)) {
     throw new Error(
-      `Invalid Proxy URL: "${url}". Expected a full URL like https://localhost:3003`,
+      `Invalid Proxy URL: "${url}". Expected a full URL like ${DEFAULT_LOCAL_PROXY_URL}`,
     );
   }
 
@@ -24,7 +28,7 @@ export function validateOfficeProxyUrl(url: string): string {
     parsed = new URL(normalized);
   } catch {
     throw new Error(
-      `Invalid Proxy URL: "${url}". Expected a full URL like https://localhost:3003`,
+      `Invalid Proxy URL: "${url}". Expected a full URL like ${DEFAULT_LOCAL_PROXY_URL}`,
     );
   }
 
@@ -33,7 +37,7 @@ export function validateOfficeProxyUrl(url: string): string {
   if (typeof window !== "undefined" && window.location?.protocol === "https:" && parsed.protocol === "http:") {
     throw new Error(
       `Proxy URL is HTTP (${normalized}) but the add-in is served over HTTPS. Office webviews may block this as mixed content. ` +
-        `Use https://localhost:<port> and start the proxy with \"npm run proxy:https\".`,
+        `Use ${DEFAULT_LOCAL_PROXY_URL} and run a local HTTPS proxy helper. See ${PROXY_HELPER_DOCS_URL}.`,
     );
   }
 

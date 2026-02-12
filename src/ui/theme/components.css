@@ -1729,6 +1729,15 @@ pi-working-indicator {
   border-radius: var(--radius-xs);
 }
 
+.pi-welcome-proxy__hint a {
+  color: var(--pi-green);
+  text-decoration: underline;
+}
+
+.pi-welcome-proxy__hint a:hover {
+  color: var(--pi-green-strong);
+}
+
 .pi-welcome-providers {
   display: flex;
   flex-direction: column;

@@ -14,7 +14,11 @@ import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.
 import type { SessionData } from "@mariozechner/pi-web-ui/dist/storage/types.js";
 
 import { createOfficeStreamFn } from "../auth/stream-proxy.js";
-import { isLoopbackProxyUrl } from "../auth/proxy-validation.js";
+import {
+  DEFAULT_LOCAL_PROXY_URL,
+  PROXY_HELPER_DOCS_URL,
+  isLoopbackProxyUrl,
+} from "../auth/proxy-validation.js";
 import { restoreCredentials } from "../auth/restore.js";
 import { invalidateBlueprint } from "../context/blueprint.js";
 import { ChangeTracker } from "../context/change-tracker.js";
@@ -725,7 +729,7 @@ export async function initTaskpane(opts: {
           if (isLikelyCorsErrorMessage(err)) {
             showErrorBanner(
               errorRoot,
-              "Network error (likely CORS). Start the local HTTPS proxy (npm run proxy:https) and enable it in /settings → Proxy.",
+              `Network error (likely CORS). If you're using OAuth, enable /settings → Proxy with ${DEFAULT_LOCAL_PROXY_URL} and retry. Guide: ${PROXY_HELPER_DOCS_URL}`,
             );
           } else {
             showErrorBanner(errorRoot, `LLM error: ${err}`);
