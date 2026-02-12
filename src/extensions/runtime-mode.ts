@@ -12,13 +12,13 @@ export function isSandboxCandidateTrust(trust: StoredExtensionTrust): boolean {
 
 export function resolveExtensionRuntimeMode(
   trust: StoredExtensionTrust,
-  sandboxRuntimeEnabled: boolean,
+  sandboxHostFallbackEnabled: boolean,
 ): ExtensionRuntimeMode {
-  if (!sandboxRuntimeEnabled) {
+  if (!isSandboxCandidateTrust(trust)) {
     return "host";
   }
 
-  return isSandboxCandidateTrust(trust) ? "sandbox-iframe" : "host";
+  return sandboxHostFallbackEnabled ? "host" : "sandbox-iframe";
 }
 
 export function describeExtensionRuntimeMode(mode: ExtensionRuntimeMode): string {

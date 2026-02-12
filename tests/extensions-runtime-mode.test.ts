@@ -18,18 +18,18 @@ void test("isSandboxCandidateTrust only flags inline/remote trust", () => {
   assert.equal(isSandboxCandidateTrust("remote-url"), true);
 });
 
-void test("resolveExtensionRuntimeMode uses host runtime when sandbox flag is disabled", () => {
+void test("resolveExtensionRuntimeMode defaults untrusted sources to sandbox runtime", () => {
   assert.equal(resolveExtensionRuntimeMode("builtin", false), "host");
   assert.equal(resolveExtensionRuntimeMode("local-module", false), "host");
-  assert.equal(resolveExtensionRuntimeMode("inline-code", false), "host");
-  assert.equal(resolveExtensionRuntimeMode("remote-url", false), "host");
+  assert.equal(resolveExtensionRuntimeMode("inline-code", false), "sandbox-iframe");
+  assert.equal(resolveExtensionRuntimeMode("remote-url", false), "sandbox-iframe");
 });
 
-void test("resolveExtensionRuntimeMode routes inline/remote trust to sandbox when enabled", () => {
+void test("resolveExtensionRuntimeMode rollback flag routes untrusted sources to host runtime", () => {
   assert.equal(resolveExtensionRuntimeMode("builtin", true), "host");
   assert.equal(resolveExtensionRuntimeMode("local-module", true), "host");
-  assert.equal(resolveExtensionRuntimeMode("inline-code", true), "sandbox-iframe");
-  assert.equal(resolveExtensionRuntimeMode("remote-url", true), "sandbox-iframe");
+  assert.equal(resolveExtensionRuntimeMode("inline-code", true), "host");
+  assert.equal(resolveExtensionRuntimeMode("remote-url", true), "host");
 });
 
 void test("describeExtensionRuntimeMode returns user-facing labels", () => {

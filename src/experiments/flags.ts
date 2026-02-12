@@ -93,16 +93,13 @@ const EXPERIMENTAL_FEATURES = [
   },
   {
     id: "extension_sandbox_runtime",
-    slug: "extension-sandbox",
-    aliases: ["extensions-sandbox", "sandboxed-extensions"],
-    title: "Extension sandbox runtime",
-    description:
-      "Default-on for inline/remote extensions. Disable only to enable temporary rollback mode.",
-    warning:
-      "Security-sensitive: disabling this runs untrusted extensions in host runtime and reduces isolation.",
+    slug: "extension-sandbox-rollback",
+    aliases: ["extension-sandbox", "extensions-sandbox", "sandboxed-extensions", "extension-host-fallback"],
+    title: "Extension sandbox rollback",
+    description: "Temporarily route untrusted extensions back to host runtime (kill switch).",
+    warning: "Use only as a rollback path. Default behavior runs untrusted extensions in sandbox iframes.",
     wiring: "wired",
-    storageKey: "pi.experimental.extensionSandboxRuntime",
-    defaultEnabled: true,
+    storageKey: "pi.experimental.extensionSandboxHostFallback",
   },
   {
     id: "extension_widget_v2",

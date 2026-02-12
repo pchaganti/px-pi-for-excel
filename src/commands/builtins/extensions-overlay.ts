@@ -273,14 +273,14 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
   const sandboxActions = document.createElement("div");
   sandboxActions.className = "pi-overlay-actions";
 
-  const sandboxEnableButton = createButton("Re-enable sandbox runtime");
-  const sandboxDisableButton = createButton("Enable rollback mode");
+  const sandboxEnableButton = createButton("Enable host-runtime fallback");
+  const sandboxDisableButton = createButton("Disable host-runtime fallback");
 
   sandboxActions.append(sandboxEnableButton, sandboxDisableButton);
 
   const sandboxHint = document.createElement("p");
   sandboxHint.textContent =
-    "Untrusted extensions (inline code, remote URLs) run in isolation by default. Use rollback mode as a temporary safety valve if sandbox causes issues.";
+    "Default: inline-code and remote-URL extensions run in sandbox iframes. Enable host-runtime fallback only as a rollback kill switch. Built-in/local extensions always stay on host runtime.";
   sandboxHint.className = "pi-overlay-hint";
 
   sandboxCard.append(sandboxStatusRow, sandboxActions, sandboxHint);
@@ -400,30 +400,30 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
 
   const renderSandboxState = (): void => {
     const statuses = manager.list();
-    const sandboxEnabled = isExperimentalFeatureEnabled("extension_sandbox_runtime");
+    const rollbackEnabled = isExperimentalFeatureEnabled("extension_sandbox_runtime");
     const untrusted = statuses.filter((status) => status.trust === "inline-code" || status.trust === "remote-url");
     const sandboxed = untrusted.filter((status) => status.runtimeMode === "sandbox-iframe");
 
-    if (sandboxEnabled) {
+    if (rollbackEnabled) {
       if (untrusted.length > 0) {
         sandboxStatusText.textContent =
-          `Default-on — ${sandboxed.length}/${untrusted.length} untrusted extension${untrusted.length === 1 ? "" : "s"} in sandbox runtime.`;
+          `Rollback enabled — ${untrusted.length} untrusted extension${untrusted.length === 1 ? "" : "s"} currently run in host runtime.`;
       } else {
-        sandboxStatusText.textContent = "Default-on — no untrusted extensions installed.";
+        sandboxStatusText.textContent = "Rollback enabled — no untrusted extensions installed.";
       }
     } else if (untrusted.length > 0) {
       sandboxStatusText.textContent =
-        `Rollback mode — ${untrusted.length} untrusted extension${untrusted.length === 1 ? "" : "s"} currently run in host runtime.`;
+        `Default-on — ${sandboxed.length}/${untrusted.length} untrusted extension${untrusted.length === 1 ? "" : "s"} in sandbox runtime.`;
     } else {
-      sandboxStatusText.textContent = "Rollback mode — no untrusted extensions installed.";
+      sandboxStatusText.textContent = "Default-on — no untrusted extensions installed.";
     }
 
     sandboxStatusBadgeSlot.replaceChildren(
-      createBadge(sandboxEnabled ? "default on" : "rollback", sandboxEnabled ? "ok" : "warn"),
+      createBadge(rollbackEnabled ? "rollback" : "default-on", rollbackEnabled ? "warn" : "ok"),
     );
 
-    sandboxEnableButton.disabled = sandboxEnabled;
-    sandboxDisableButton.disabled = !sandboxEnabled;
+    sandboxEnableButton.disabled = rollbackEnabled;
+    sandboxDisableButton.disabled = !rollbackEnabled;
   };
 
   const renderLocalBridgeState = async (): Promise<void> => {
@@ -556,7 +556,7 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     if ((status.trust === "inline-code" || status.trust === "remote-url") && status.runtimeMode === "host") {
       const runtimeWarning = document.createElement("div");
       runtimeWarning.textContent =
-        "Rollback mode is active: this untrusted extension runs in host runtime. Re-enable sandbox runtime above.";
+        "Host-runtime fallback is enabled: this untrusted extension runs in host runtime. Disable fallback above to restore sandbox mode.";
       runtimeWarning.className = "pi-ext-installed-row__error";
       details.appendChild(runtimeWarning);
     }
@@ -738,23 +738,23 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
   });
 
   sandboxEnableButton.addEventListener("click", () => {
-    void runAction(() => {
-      setExperimentalFeatureEnabled("extension_sandbox_runtime", true);
-      showToast("Sandbox runtime re-enabled for untrusted extensions.");
-    });
-  });
-
-  sandboxDisableButton.addEventListener("click", () => {
     const confirmed = window.confirm(
-      "Enable rollback mode? Untrusted extensions will run in host runtime until sandbox is re-enabled.",
+      "Enable host-runtime fallback? Untrusted extensions will run in host runtime until fallback is disabled.",
     );
     if (!confirmed) {
       return;
     }
 
     void runAction(() => {
+      setExperimentalFeatureEnabled("extension_sandbox_runtime", true);
+      showToast("Extension host-runtime fallback enabled.");
+    });
+  });
+
+  sandboxDisableButton.addEventListener("click", () => {
+    void runAction(() => {
       setExperimentalFeatureEnabled("extension_sandbox_runtime", false);
-      showToast("Rollback mode enabled: untrusted extensions now run in host runtime.");
+      showToast("Extension host-runtime fallback disabled.");
     });
   });
 
