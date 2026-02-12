@@ -440,11 +440,11 @@ export async function showRecoveryDialog(opts: {
 
   const title = document.createElement("h2");
   title.className = "pi-overlay-title";
-  title.textContent = "Recovery Checkpoints";
+  title.textContent = "Backups";
 
   const subtitle = document.createElement("p");
   subtitle.className = "pi-overlay-subtitle";
-  subtitle.textContent = "Revert worksheet edits with one click. Restores also create rollback checkpoints.";
+  subtitle.textContent = "Saved before each Pi edit. Restore with one click.";
 
   const workbookTag = document.createElement("p");
   workbookTag.className = "pi-overlay-workbook-tag";
@@ -507,9 +507,9 @@ export async function showRecoveryDialog(opts: {
     if (checkpoints.length === 0) {
       const empty = document.createElement("div");
       empty.className = "pi-overlay-empty";
-      empty.textContent = "No checkpoints for this workbook yet.";
+      empty.textContent = "No backups for this workbook yet.";
       list.appendChild(empty);
-      statusText.textContent = "No checkpoints";
+      statusText.textContent = "No backups";
       clearButton.disabled = true;
       return;
     }
@@ -572,7 +572,7 @@ export async function showRecoveryDialog(opts: {
       deleteButton.addEventListener("click", () => {
         if (busy) return;
 
-        const proceed = window.confirm("Delete this checkpoint?");
+        const proceed = window.confirm("Delete this backup?");
         if (!proceed) return;
 
         void (async () => {
@@ -582,7 +582,7 @@ export async function showRecoveryDialog(opts: {
           try {
             const deleted = await opts.onDelete(checkpoint.id);
             if (!deleted) {
-              showToast("Checkpoint not found");
+              showToast("Backup not found");
             }
 
             checkpoints = await opts.loadCheckpoints();
@@ -610,7 +610,7 @@ export async function showRecoveryDialog(opts: {
       list.appendChild(item);
     }
 
-    statusText.textContent = `${checkpoints.length} checkpoint${checkpoints.length === 1 ? "" : "s"}`;
+    statusText.textContent = `${checkpoints.length} backup${checkpoints.length === 1 ? "" : "s"}`;
     clearButton.disabled = busy || checkpoints.length === 0;
   };
 
@@ -640,7 +640,7 @@ export async function showRecoveryDialog(opts: {
   clearButton.addEventListener("click", () => {
     if (busy || checkpoints.length === 0) return;
 
-    const proceed = window.confirm(`Delete all ${checkpoints.length} checkpoints for this workbook?`);
+    const proceed = window.confirm(`Delete all ${checkpoints.length} backups for this workbook?`);
     if (!proceed) return;
 
     void (async () => {
@@ -648,7 +648,7 @@ export async function showRecoveryDialog(opts: {
       statusText.textContent = "Clearing…";
       try {
         const removed = await opts.onClear();
-        showToast(`Cleared ${removed} checkpoint${removed === 1 ? "" : "s"}`);
+        showToast(`Cleared ${removed} backup${removed === 1 ? "" : "s"}`);
         await reload();
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Unknown error";
@@ -692,7 +692,7 @@ export async function showRecoveryDialog(opts: {
     await reload();
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    showToast(`Failed to load checkpoints: ${message}`);
+    showToast(`Failed to load backups: ${message}`);
     statusText.textContent = "Load failed";
   } finally {
     setBusy(false);

@@ -586,7 +586,7 @@ export async function initTaskpane(opts: {
       : "range";
 
     showActionToast({
-      message: `Checkpoint saved for ${detail.address} (${changedLabel})`,
+      message: `Backup saved for ${detail.address} (${changedLabel})`,
       actionLabel: "Revert",
       duration: 10_000,
       onAction: () => {
@@ -902,7 +902,7 @@ export async function initTaskpane(opts: {
     const checkpoint = latest[0];
 
     if (!checkpoint) {
-      showToast("No recovery checkpoints for this workbook yet");
+      showToast("No backups for this workbook yet");
       return;
     }
 

@@ -716,7 +716,7 @@ function humanizeWorkbookHistory(p: Record<string, unknown>): ParamItem[] {
   items.push({ label: "Action", value: action });
 
   if (p.snapshot_id) {
-    items.push({ label: "Checkpoint", value: str(p.snapshot_id) });
+    items.push({ label: "Backup", value: str(p.snapshot_id) });
   }
 
   const limit = num(p.limit);

@@ -230,14 +230,14 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Optional explanation UX:** mutation tool cards expose an on-demand **Explain these changes** drawer that synthesizes a concise explanation + clickable citations from structured audit metadata, with bounded payload/text limits.
 - **Rationale:** improve user trust with concrete, navigable deltas while keeping implementation incremental and low-risk.
 
-## Workbook recovery checkpoints (`workbook_history`)
+## Workbook backups (`workbook_history`)
 - **Goal:** prefer low-friction workflows over pre-execution approval selectors by making rollback easy and reliable.
-- **Automatic checkpoints:** successful `write_cells`, `fill_formula`, `python_transform_range`, `format_cells`, `conditional_format`, mutating `comments` actions, and supported `modify_structure` actions (`rename_sheet`, `hide_sheet`, `unhide_sheet`) store pre-mutation snapshots in local `workbook.recovery-snapshots.v1`.
-- **Safety limits:** checkpoint capture is skipped for very large writes (> `MAX_RECOVERY_CELLS`) to avoid oversized local state.
-- **Workbook identity guardrails:** append/list/delete/clear/restore paths are scoped to the active workbook identity; restore rejects identity-less or cross-workbook checkpoints.
-- **Restore UX:** `workbook_history` can list/restore/delete/clear checkpoints; restores also create an inverse checkpoint (`restore_snapshot`) so users can undo a mistaken restore.
-- **Coverage signaling:** unsupported `modify_structure` actions and mutating `view_settings` actions explicitly report when no recovery checkpoint was created.
-- **Current `modify_structure` checkpoint limits:** captures/restores only `rename_sheet`, `hide_sheet`, and `unhide_sheet` actions.
-- **Current `format_cells` checkpoint limits:** captures/restores core range-format properties (font/fill/number format/alignment/wrap/borders) plus row/column dimensions (`column_width`, `row_height`, `auto_fit`). Mutations involving `merge` currently skip checkpoint capture with an explicit note.
-- **Quick affordance:** after a checkpointed write, UI shows an action toast with **Revert**.
+- **Automatic backups:** successful `write_cells`, `fill_formula`, `python_transform_range`, `format_cells`, `conditional_format`, mutating `comments` actions, and supported `modify_structure` actions (`rename_sheet`, `hide_sheet`, `unhide_sheet`) store pre-mutation snapshots in local `workbook.recovery-snapshots.v1`.
+- **Safety limits:** backup capture is skipped for very large writes (> `MAX_RECOVERY_CELLS`) to avoid oversized local state.
+- **Workbook identity guardrails:** append/list/delete/clear/restore paths are scoped to the active workbook identity; restore rejects identity-less or cross-workbook backups.
+- **Restore UX:** `workbook_history` can list/restore/delete/clear backups; restores also create an inverse backup (`restore_snapshot`) so users can undo a mistaken restore.
+- **Coverage signaling:** unsupported `modify_structure` actions and mutating `view_settings` actions explicitly report when no backup was created.
+- **Current `modify_structure` backup limits:** captures/restores only `rename_sheet`, `hide_sheet`, and `unhide_sheet` actions.
+- **Current `format_cells` backup limits:** captures/restores core range-format properties (font/fill/number format/alignment/wrap/borders) plus row/column dimensions (`column_width`, `row_height`, `auto_fit`). Mutations involving `merge` currently skip backup capture with an explicit note.
+- **Quick affordance:** after a backed-up write, UI shows an action toast with **Revert**.
 - **Rationale:** addresses #27 by shifting from cumbersome up-front approvals to versioned recovery with explicit user-controlled rollback.

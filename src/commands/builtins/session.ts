@@ -71,7 +71,7 @@ export function createSessionLifecycleCommands(actions: SessionCommandActions): 
     },
     {
       name: "history",
-      description: "Browse workbook recovery checkpoints",
+      description: "Browse workbook backups",
       source: "builtin",
       execute: async () => {
         await actions.openRecoveryDialog();
@@ -87,7 +87,7 @@ export function createSessionLifecycleCommands(actions: SessionCommandActions): 
     },
     {
       name: "revert",
-      description: "Revert the latest workbook checkpoint",
+      description: "Revert the latest workbook backup",
       source: "builtin",
       execute: async () => {
         await actions.revertLatestCheckpoint();

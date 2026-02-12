@@ -1,8 +1,8 @@
 /**
  * Workbook recovery snapshots.
  *
- * Stores lightweight, local-only checkpoints for workbook cell edits so users
- * can revert mistakes without pre-execution approval prompts.
+ * Stores lightweight, local-only backups for workbook cell edits so users
+ * can revert Pi's changes without pre-execution approval prompts.
  */
 
 import { excelRun, getRange } from "../excel/helpers.js";
@@ -1070,7 +1070,7 @@ export class WorkbookRecoveryLog {
     if (snapshotKind === "format_cells_state") {
       const targetState = snapshot.formatRangeState;
       if (!targetState) {
-        throw new Error("Format checkpoint data is missing.");
+        throw new Error("Format backup data is missing.");
       }
 
       const currentState = await this.dependencies.applyFormatCellsSnapshot(snapshot.address, targetState);
@@ -1097,7 +1097,7 @@ export class WorkbookRecoveryLog {
     if (snapshotKind === "modify_structure_state") {
       const targetState = snapshot.modifyStructureState;
       if (!targetState) {
-        throw new Error("Structure checkpoint data is missing.");
+        throw new Error("Structure backup data is missing.");
       }
 
       const currentState = await this.dependencies.applyModifyStructureSnapshot(snapshot.address, targetState);
@@ -1126,7 +1126,7 @@ export class WorkbookRecoveryLog {
       const currentState = await this.dependencies.applyConditionalFormatSnapshot(snapshot.address, rules);
 
       if (!currentState.supported) {
-        throw new Error(currentState.reason ?? "Conditional format checkpoint cannot be restored safely.");
+        throw new Error(currentState.reason ?? "Conditional format backup cannot be restored safely.");
       }
 
       const inverseSnapshot = await this.appendConditionalFormatWithContext(
@@ -1153,7 +1153,7 @@ export class WorkbookRecoveryLog {
     if (snapshotKind === "comment_thread") {
       const targetState = snapshot.commentThreadState;
       if (!targetState) {
-        throw new Error("Comment checkpoint data is missing.");
+        throw new Error("Comment backup data is missing.");
       }
 
       const currentState = await this.dependencies.applyCommentThreadSnapshot(snapshot.address, targetState);
@@ -1212,7 +1212,7 @@ export class WorkbookRecoveryLog {
     const snapshots = await this.listForCurrentWorkbook(1);
     const latest = snapshots[0];
     if (!latest) {
-      throw new Error("No recovery checkpoints found for this workbook.");
+      throw new Error("No backups found for this workbook.");
     }
 
     return this.restore(latest.id);

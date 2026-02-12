@@ -50,7 +50,7 @@ void test("system prompt lists the conventions tool", () => {
 void test("system prompt includes workbook history recovery tool", () => {
   const prompt = buildSystemPrompt();
   assert.match(prompt, /\*\*workbook_history\*\*/);
-  assert.match(prompt, /recovery checkpoints/i);
+  assert.match(prompt, /automatic backups/i);
   assert.match(prompt, /write_cells/);
   assert.match(prompt, /fill_formula/);
   assert.match(prompt, /python_transform_range/);

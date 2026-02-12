@@ -253,7 +253,7 @@ void test("workbook change audit log accepts comments/view_settings/workbook_his
     blocked: true,
     changedCount: 0,
     changes: [],
-    summary: "error: no recovery checkpoints available to restore",
+    summary: "error: no backups available to restore",
   });
 
   const entries = await log.list();
@@ -361,7 +361,7 @@ void test("view_settings tool appends audit entries for mutate success and failu
   });
 
   assert.match(firstText(successResult), /Activated sheet/u);
-  assert.match(firstText(successResult), /Recovery checkpoint not created/u);
+  assert.match(firstText(successResult), /Backup not created/u);
   assert.equal(successAuditCapture.entries.length, 1);
   assert.equal(successAuditCapture.entries[0]?.toolName, "view_settings");
   assert.equal(successAuditCapture.entries[0]?.blocked, false);
@@ -387,7 +387,7 @@ void test("view_settings tool appends audit entries for mutate success and failu
   });
 
   assert.match(firstText(errorResult), /sheet is required for activate/u);
-  assert.match(firstText(errorResult), /Recovery checkpoint not created/u);
+  assert.match(firstText(errorResult), /Backup not created/u);
   assert.equal(errorAuditCapture.entries.length, 1);
   assert.equal(errorAuditCapture.entries[0]?.toolName, "view_settings");
   assert.equal(errorAuditCapture.entries[0]?.blocked, true);
@@ -424,7 +424,7 @@ void test("workbook_history restore appends audit entries for success and missin
     action: "restore",
   });
 
-  assert.match(firstText(successResult), /Restored checkpoint/u);
+  assert.match(firstText(successResult), /Restored backup/u);
   assert.equal(successAuditCapture.entries.length, 1);
   assert.equal(successAuditCapture.entries[0]?.toolName, "workbook_history");
   assert.equal(successAuditCapture.entries[0]?.blocked, false);
@@ -451,7 +451,7 @@ void test("workbook_history restore appends audit entries for success and missin
     action: "restore",
   });
 
-  assert.match(firstText(missingResult), /No recovery checkpoints available to restore/u);
+  assert.match(firstText(missingResult), /No backups available to restore/u);
   assert.equal(missingAuditCapture.entries.length, 1);
   assert.equal(missingAuditCapture.entries[0]?.toolName, "workbook_history");
   assert.equal(missingAuditCapture.entries[0]?.blocked, true);

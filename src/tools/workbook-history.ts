@@ -1,5 +1,5 @@
 /**
- * workbook_history — list / restore workbook recovery checkpoints.
+ * workbook_history — list / restore workbook backups.
  */
 
 import { Type, type Static } from "@sinclair/typebox";
@@ -25,20 +25,20 @@ const schema = Type.Object({
       Type.Literal("clear"),
     ], {
       description:
-        "Operation to run. list (default): show recent checkpoints; " +
-        "restore: revert one checkpoint; delete: remove one checkpoint; clear: remove all checkpoints for current workbook.",
+        "Operation to run. list (default): show recent backups; " +
+        "restore: revert one backup; delete: remove one backup; clear: remove all backups for current workbook.",
     }),
   ),
   snapshot_id: Type.Optional(
     Type.String({
-      description: "Checkpoint id for restore/delete. If omitted, the latest checkpoint is used.",
+      description: "Backup id for restore/delete. If omitted, the latest backup is used.",
     }),
   ),
   limit: Type.Optional(
     Type.Integer({
       minimum: 1,
       maximum: 50,
-      description: "Max checkpoints to list (list action only). Default: 10.",
+      description: "Max backups to list (list action only). Default: 10.",
     }),
   ),
 });
@@ -83,7 +83,7 @@ function shortId(id: string): string {
 
 function buildListMarkdown(snapshots: WorkbookRecoverySnapshot[]): string {
   const lines: string[] = [];
-  lines.push("Recent recovery checkpoints (current workbook):");
+  lines.push("Recent backups (current workbook):");
   lines.push("");
   lines.push("| ID | Time | Tool | Range | Changed |");
   lines.push("| --- | --- | --- | --- | ---: |");
@@ -95,7 +95,7 @@ function buildListMarkdown(snapshots: WorkbookRecoverySnapshot[]): string {
   }
 
   lines.push("");
-  lines.push("Use `workbook_history` with `action: \"restore\"` and `snapshot_id` to revert a specific checkpoint.");
+  lines.push("Use `workbook_history` with `action: \"restore\"` and `snapshot_id` to revert a specific backup.");
   return lines.join("\n");
 }
 
@@ -122,7 +122,7 @@ export function createWorkbookHistoryTool(
     name: "workbook_history",
     label: "Workbook History",
     description:
-      "List, restore, and manage automatic workbook recovery checkpoints created before agent edits.",
+      "List, restore, and manage automatic workbook backups created before Pi edits.",
     parameters: schema,
     execute: async (toolCallId: string, params: Params): Promise<AgentToolResult<WorkbookHistoryDetails>> => {
       const action = params.action ?? "list";
@@ -135,7 +135,7 @@ export function createWorkbookHistoryTool(
 
           if (snapshots.length === 0) {
             return {
-              content: [{ type: "text", text: "No recovery checkpoints for this workbook yet." }],
+              content: [{ type: "text", text: "No backups for this workbook yet." }],
               details: {
                 kind: "workbook_history",
                 action: "list",
@@ -167,7 +167,7 @@ export function createWorkbookHistoryTool(
           const snapshotId = await resolveSnapshotId(log, params);
           if (!snapshotId) {
             const restoreUnavailableResult: AgentToolResult<WorkbookHistoryDetails> = {
-              content: [{ type: "text", text: "No recovery checkpoints available to restore." }],
+              content: [{ type: "text", text: "No backups available to restore." }],
               details: {
                 kind: "workbook_history",
                 action: "restore",
@@ -181,7 +181,7 @@ export function createWorkbookHistoryTool(
               blocked: true,
               changedCount: 0,
               changes: [],
-              summary: "error: no recovery checkpoints available to restore",
+              summary: "error: no backups available to restore",
             });
 
             return restoreUnavailableResult;
@@ -189,11 +189,11 @@ export function createWorkbookHistoryTool(
 
           const restored = await log.restore(snapshotId);
           const lines: string[] = [];
-          lines.push(`✅ Restored checkpoint \`${shortId(restored.restoredSnapshotId)}\` at **${restored.address}**.`);
+          lines.push(`✅ Restored backup \`${shortId(restored.restoredSnapshotId)}\` at **${restored.address}**.`);
           lines.push(`Changed item(s): ${restored.changedCount.toLocaleString()}.`);
 
           if (restored.inverseSnapshotId) {
-            lines.push(`Rollback checkpoint created: \`${shortId(restored.inverseSnapshotId)}\`.`);
+            lines.push(`Rollback backup created: \`${shortId(restored.inverseSnapshotId)}\`.`);
           }
 
           await resolvedDependencies.appendAuditEntry({
@@ -203,7 +203,7 @@ export function createWorkbookHistoryTool(
             outputAddress: restored.address,
             changedCount: restored.changedCount,
             changes: [],
-            summary: `restored checkpoint ${shortId(restored.restoredSnapshotId)} at ${restored.address}`,
+            summary: `restored backup ${shortId(restored.restoredSnapshotId)} at ${restored.address}`,
           });
 
           return {
@@ -224,7 +224,7 @@ export function createWorkbookHistoryTool(
           const snapshotId = await resolveSnapshotId(log, params);
           if (!snapshotId) {
             return {
-              content: [{ type: "text", text: "No recovery checkpoints available to delete." }],
+              content: [{ type: "text", text: "No backups available to delete." }],
               details: {
                 kind: "workbook_history",
                 action: "delete",
@@ -236,7 +236,7 @@ export function createWorkbookHistoryTool(
           const deleted = await log.delete(snapshotId);
           if (!deleted) {
             return {
-              content: [{ type: "text", text: "Checkpoint not found." }],
+              content: [{ type: "text", text: "Backup not found." }],
               details: {
                 kind: "workbook_history",
                 action: "delete",
@@ -247,7 +247,7 @@ export function createWorkbookHistoryTool(
           }
 
           return {
-            content: [{ type: "text", text: `Deleted checkpoint \`${shortId(snapshotId)}\`.` }],
+            content: [{ type: "text", text: `Deleted backup \`${shortId(snapshotId)}\`.` }],
             details: {
               kind: "workbook_history",
               action: "delete",
@@ -259,7 +259,7 @@ export function createWorkbookHistoryTool(
 
         const removed = await log.clearForCurrentWorkbook();
         return {
-          content: [{ type: "text", text: `Cleared ${removed} checkpoint${removed === 1 ? "" : "s"} for this workbook.` }],
+          content: [{ type: "text", text: `Cleared ${removed} backup${removed === 1 ? "" : "s"} for this workbook.` }],
           details: {
             kind: "workbook_history",
             action: "clear",

@@ -622,7 +622,7 @@ function withRecoveryBadge(base: string, recovery: RecoveryCheckpointDetails | u
     return base;
   }
 
-  return base.length > 0 ? `${base}, no checkpoint` : " — no checkpoint";
+  return base.length > 0 ? `${base}, no backup` : " — no backup";
 }
 
 function recoveryBadgeForDetails(details: unknown): string {
@@ -921,19 +921,19 @@ function describeToolCall(
       if (action === "restore") {
         return {
           action: "Restore",
-          detail: snapshotId ? `checkpoint ${snapshotId}` : "latest checkpoint",
+          detail: snapshotId ? `backup ${snapshotId}` : "latest backup",
         };
       }
       if (action === "delete") {
         return {
           action: "Delete",
-          detail: snapshotId ? `checkpoint ${snapshotId}` : "latest checkpoint",
+          detail: snapshotId ? `backup ${snapshotId}` : "latest backup",
         };
       }
       if (action === "clear") {
-        return { action: "Clear", detail: "checkpoints" };
+        return { action: "Clear", detail: "backups" };
       }
-      return { action: "List", detail: "checkpoints" };
+      return { action: "List", detail: "backups" };
     }
     case "skills": {
       const action = p.action as string | undefined;

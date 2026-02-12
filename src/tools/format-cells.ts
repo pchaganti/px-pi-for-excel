@@ -212,7 +212,7 @@ function buildFormatCheckpointPlan(
     return {
       selection,
       unsupportedReason:
-        "Format checkpoints for merge/unmerge are not yet supported in `format_cells`.",
+        "Format backups for merge/unmerge are not yet supported in `format_cells`.",
     };
   }
 
@@ -300,7 +300,7 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
           } catch (captureError: unknown) {
             checkpointCapture = {
               supported: false,
-              reason: `Format checkpoint capture failed: ${getErrorMessage(captureError)}`,
+              reason: `Format backup capture failed: ${getErrorMessage(captureError)}`,
             };
           }
         }
