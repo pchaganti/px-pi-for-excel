@@ -188,12 +188,13 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Execution policy:** treated as `read/none` for workbook coordination (mutates local extension registry/runtime only, not workbook cells/structure).
 - **Rationale:** supports non-engineer extension authoring by allowing users to ask Pi to generate + install an extension directly.
 
-## Extension sandbox UI bridge (`extension-sandbox`)
-- **Activation model:** default-on for untrusted sources with a temporary rollback kill switch via `/experimental off extension-sandbox`.
-- **Surface:** inline-code + remote-url extensions route to iframe runtime by default; built-in/local modules remain host-side.
+## Extension sandbox UI bridge (default-on for untrusted)
+- **Default routing:** inline-code + remote-url extensions run in iframe sandbox runtime by default; built-in/local modules remain host-side.
+- **Rollback switch:** maintainers can temporarily route untrusted extensions back to host runtime via `/experimental on extension-sandbox-rollback`.
+- **Surface:** sandbox runtime bridges command/tool/event/UI calls through explicit host contracts rather than exposing host internals directly.
 - **UI model:** sandbox may only send a structured UI tree (allowed tag set, sanitized class names/action ids), never raw HTML.
 - **Interactivity:** host supports explicit action callbacks via `data-pi-action` markers mapped to click dispatch inside the sandbox.
-- **Rationale:** incremental security hardening—default isolation for untrusted code without reopening HTML injection risk.
+- **Rationale:** graduate sandbox hardening into default behavior while preserving a guarded rollback path.
 
 ## Experimental extension widget API v2 (`extension-widget-v2`)
 - **Activation:** opt-in via `/experimental on extension-widget-v2`; default behavior stays on legacy `widget.show/dismiss` semantics.

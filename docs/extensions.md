@@ -2,7 +2,7 @@
 
 Pi for Excel supports runtime extensions that can register slash commands, register tools, and render small UI elements in the sidebar.
 
-> Status: MVP+ (in progress). Inline-code and remote-URL extensions now run in sandbox runtime by default; built-in/local-module extensions stay on host runtime. Additive Widget API v2 is behind `/experimental on extension-widget-v2`.
+> Status: MVP+ (in progress). Inline-code and remote-URL extensions run in sandbox runtime by default; built-in/local-module extensions stay on host runtime. Roll back untrusted sources to host runtime only via `/experimental on extension-sandbox-rollback`. Additive Widget API v2 is behind `/experimental on extension-widget-v2`.
 
 ## Quick start
 
@@ -176,23 +176,26 @@ High-risk capabilities include:
 - `agent.read`
 - `agent.events.read`
 
-## Sandbox runtime (default-on)
-
-Sandboxed runtime execution is now the default for untrusted extension sources.
+## Sandbox runtime default + rollback kill switch
 
 Default behavior:
 - inline-code and remote-URL extensions run in an iframe sandbox runtime
 - built-in/local-module extensions stay on host runtime
 - `/extensions` shows runtime mode per extension
 
-Rollback kill switch (temporary rollout safety valve):
+If maintainers need an emergency rollback path, enable host-runtime fallback for untrusted sources:
 
 ```txt
-/experimental off extension-sandbox   # rollback: untrusted extensions run in host runtime
-/experimental on extension-sandbox    # re-enable sandbox default behavior
+/experimental on extension-sandbox-rollback
 ```
 
-You can also toggle rollback mode directly in `/extensions` via the **Sandbox runtime (default for untrusted sources)** card.
+Disable rollback and return to default sandbox routing:
+
+```txt
+/experimental off extension-sandbox-rollback
+```
+
+You can also toggle this in `/extensions` via the **Sandbox runtime (default for untrusted sources)** card.
 
 Current sandbox bridge limitations (intentional for this slice):
 - `api.agent` is not available in sandbox runtime
@@ -230,6 +233,7 @@ If a local specifier is not bundled, loading fails with a clear error.
 
 - Extensions can read/write workbook data through registered tools and host APIs.
 - Remote URL loading is intentionally off by default.
-- Untrusted extension sources (`inline-code`, `remote-url`) default to sandbox runtime; trusted local/built-in modules stay host-side.
-- If you must roll back quickly, use `/experimental off extension-sandbox` (and re-enable with `/experimental on extension-sandbox` once stable).
+- Untrusted extension sources (inline/remote) run in sandbox runtime by default.
+- Built-in/local-module extensions remain on host runtime.
 - Experimental capability gates can be enabled with `/experimental on extension-permissions`.
+- Rollback kill switch for untrusted host-runtime fallback: `/experimental on extension-sandbox-rollback`.

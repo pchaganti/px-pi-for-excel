@@ -44,7 +44,7 @@ class MemoryLocalStorage {
   }
 }
 
-const EXTENSION_SANDBOX_RUNTIME_STORAGE_KEY = "pi.experimental.extensionSandboxRuntime";
+const EXTENSION_SANDBOX_RUNTIME_STORAGE_KEY = "pi.experimental.extensionSandboxHostFallback";
 
 function clearLocalStorageKey(key: string): void {
   const storage = Reflect.get(globalThis, "localStorage");
@@ -180,7 +180,7 @@ void test("rollback kill switch routes untrusted extensions back to host runtime
   const restoreLocalStorage = installLocalStorageStub();
 
   try {
-    setExperimentalFeatureEnabled("extension_sandbox_runtime", false);
+    setExperimentalFeatureEnabled("extension_sandbox_runtime", true);
 
     const settings = new MemorySettingsStore();
     settings.writeRaw(EXTENSIONS_REGISTRY_STORAGE_KEY, {
@@ -312,7 +312,7 @@ void test("sandbox activation failures are isolated per extension during initial
   const restoreLocalStorage = installLocalStorageStub();
 
   try {
-    setExperimentalFeatureEnabled("extension_sandbox_runtime", true);
+    setExperimentalFeatureEnabled("extension_sandbox_runtime", false);
     setExperimentalFeatureEnabled("extension_permission_gates", true);
 
     const settings = new MemorySettingsStore();
@@ -377,7 +377,7 @@ void test("sandbox capability denial surfaces deterministic permission error", a
   const restoreLocalStorage = installLocalStorageStub();
 
   try {
-    setExperimentalFeatureEnabled("extension_sandbox_runtime", true);
+    setExperimentalFeatureEnabled("extension_sandbox_runtime", false);
     setExperimentalFeatureEnabled("extension_permission_gates", true);
 
     const basePermissions = getDefaultPermissionsForTrust("inline-code");

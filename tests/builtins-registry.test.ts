@@ -84,7 +84,7 @@ void test("builtins registry wires /experimental, /extensions, and /integrations
   assert.match(extensionsOverlaySource, /Sandbox runtime \(default for untrusted sources\)/);
   assert.match(extensionsOverlaySource, /setExperimentalFeatureEnabled\("extension_sandbox_runtime", true\)/);
   assert.match(extensionsOverlaySource, /setExperimentalFeatureEnabled\("extension_sandbox_runtime", false\)/);
-  assert.match(extensionsOverlaySource, /Rollback mode is active: this untrusted extension runs in host runtime/);
+  assert.match(extensionsOverlaySource, /Host-runtime fallback is enabled: this untrusted extension runs in host runtime/);
   assert.match(extensionsOverlaySource, /higher-risk permissions/);
   assert.match(extensionsOverlaySource, /Updated permissions for/);
   assert.match(extensionsOverlaySource, /reload failed \(see Last error\)/);
@@ -99,8 +99,7 @@ void test("builtins registry wires /experimental, /extensions, and /integrations
   assert.match(experimentalFlagsSource, /extension_permission_gates/);
   assert.match(experimentalFlagsSource, /extension-permissions/);
   assert.match(experimentalFlagsSource, /extension_sandbox_runtime/);
-  assert.match(experimentalFlagsSource, /extension-sandbox/);
-  assert.match(experimentalFlagsSource, /defaultEnabled:\s*true/);
+  assert.match(experimentalFlagsSource, /extension-sandbox-rollback/);
   assert.match(experimentalFlagsSource, /extension_widget_v2/);
   assert.match(experimentalFlagsSource, /extension-widget-v2/);
 });
