@@ -35,9 +35,10 @@ The sidebar UI has two layers:
 
 Tailwind v4 puts all utilities inside `@layer utilities`. Unlayered CSS always beats layered CSS regardless of specificity. A bare `* { padding: 0 }` silently zeros out every `py-2`, `px-4`, `p-2.5` etc. in pi-web-ui. The `taskpane.html` inline `<style>` intentionally only sets `box-sizing: border-box` on `*`.
 
-### Theme guardrail
+### Theme guardrails
 
-Run `npm run check:css-theme` to verify every `var(--token)` used in local theme CSS resolves to a defined custom property (or has an explicit fallback).
+- `npm run check:css-theme` verifies every `var(--token)` used in local theme CSS resolves to a defined custom property (or has an explicit fallback).
+- `npm run check:builtins-inline-style` blocks inline `style.*` usage in `src/commands/builtins/**` so overlay styling stays class-based.
 
 ### theme.css structure
 
