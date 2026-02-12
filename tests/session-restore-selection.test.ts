@@ -190,7 +190,7 @@ void test("F2 focuses chat input only without modifiers", () => {
   );
 });
 
-void test("Left/Right arrow tab switching only triggers without modifiers", () => {
+void test("Arrow and fallback tab-switch shortcuts resolve expected direction", () => {
   assert.equal(
     getAdjacentTabDirectionFromShortcut({
       key: "ArrowLeft",
@@ -243,14 +243,50 @@ void test("Left/Right arrow tab switching only triggers without modifiers", () =
 
   assert.equal(
     getAdjacentTabDirectionFromShortcut({
-      key: "ArrowRight",
+      key: "[",
+      repeat: false,
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+    }),
+    -1,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "]",
+      repeat: false,
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+    }),
+    1,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "PageUp",
       repeat: false,
       metaKey: false,
       ctrlKey: true,
       shiftKey: false,
       altKey: false,
     }),
-    null,
+    -1,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "PageDown",
+      repeat: false,
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    }),
+    1,
   );
 
   assert.equal(

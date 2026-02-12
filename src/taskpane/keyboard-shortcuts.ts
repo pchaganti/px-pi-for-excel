@@ -170,11 +170,24 @@ export function getAdjacentTabDirectionFromShortcut(
   event: AdjacentTabShortcutEventLike,
 ): -1 | 1 | null {
   if (event.repeat) return null;
-  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return null;
 
   const key = event.key;
   const code = event.code;
   const keyCode = event.keyCode;
+
+  // Fallback chords for hosts that swallow plain arrow keys.
+  if (event.metaKey && event.shiftKey && !event.ctrlKey && !event.altKey) {
+    if (key === "[") return -1;
+    if (key === "]") return 1;
+    return null;
+  }
+
+  if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+    if (key === "PageUp") return -1;
+    if (key === "PageDown") return 1;
+  }
+
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return null;
 
   if (key === "ArrowLeft" || key === "Left" || code === "ArrowLeft" || keyCode === 37) {
     return -1;
