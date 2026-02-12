@@ -5,8 +5,7 @@
 import type { ProviderKeysStore } from "@mariozechner/pi-web-ui/dist/storage/stores/provider-keys-store.js";
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
-import { requestChatInputFocus } from "../ui/input-focus.js";
-import { installOverlayEscapeClose } from "../ui/overlay-escape.js";
+import { closeOverlayById, createOverlayDialog } from "../ui/overlay-dialog.js";
 import { showToast } from "../ui/toast.js";
 import { setActiveProviders } from "../compat/model-selector-patch.js";
 import {
@@ -55,60 +54,62 @@ export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise
     // ignore — welcome overlay should still show
   }
 
-  return new Promise<void>((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.className = "pi-welcome-overlay";
+  closeOverlayById("pi-welcome-login-overlay");
 
-    let closed = false;
-    const closeOverlay = () => {
-      if (closed) {
+  return new Promise<void>((resolve) => {
+    const dialog = createOverlayDialog({
+      overlayId: "pi-welcome-login-overlay",
+      cardClassName: "pi-welcome-card",
+    });
+
+    let settled = false;
+    dialog.addCleanup(() => {
+      if (settled) {
         return;
       }
 
-      closed = true;
-      cleanupEscape();
-      overlay.remove();
-      requestChatInputFocus();
+      settled = true;
       resolve();
-    };
-    const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
-    overlay.innerHTML = `
-      <div class="pi-welcome-card" style="text-align: left;">
-        <div class="pi-welcome-logo" style="text-align: center;">π</div>
-        <h2 class="pi-welcome-title" style="text-align: center;">Pi for Excel</h2>
-        <p class="pi-welcome-subtitle" style="text-align: center;">Connect a provider to get started</p>
+    });
 
-        <div class="pi-welcome-proxy">
-          <div class="pi-welcome-proxy__row">
-            <div class="pi-welcome-proxy__title">Local HTTPS proxy</div>
-            <label class="pi-welcome-proxy__toggle">
-              <input type="checkbox" class="pi-welcome-proxy__enabled" />
-              <span>Enabled</span>
-            </label>
-          </div>
-          <div class="pi-welcome-proxy__row" style="gap: 8px;">
-            <input class="pi-welcome-proxy__url" type="text" spellcheck="false" />
-            <button class="pi-welcome-proxy__save" type="button">Save</button>
-          </div>
-          <div class="pi-welcome-proxy__hint">
-            Needed only when OAuth login is blocked by CORS.
-            Keep this URL at <code>${DEFAULT_LOCAL_PROXY_URL}</code>, run a local HTTPS proxy helper, then enable this toggle.
-            <a href="${PROXY_HELPER_DOCS_URL}" target="_blank" rel="noopener noreferrer">Step-by-step guide</a>.
-          </div>
+    const closeOverlay = dialog.close;
+
+    dialog.card.style.textAlign = "left";
+    dialog.card.innerHTML = `
+      <div class="pi-welcome-logo" style="text-align: center;">π</div>
+      <h2 class="pi-welcome-title" style="text-align: center;">Pi for Excel</h2>
+      <p class="pi-welcome-subtitle" style="text-align: center;">Connect a provider to get started</p>
+
+      <div class="pi-welcome-proxy">
+        <div class="pi-welcome-proxy__row">
+          <div class="pi-welcome-proxy__title">Local HTTPS proxy</div>
+          <label class="pi-welcome-proxy__toggle">
+            <input type="checkbox" class="pi-welcome-proxy__enabled" />
+            <span>Enabled</span>
+          </label>
         </div>
-
-        <div class="pi-welcome-providers"></div>
+        <div class="pi-welcome-proxy__row" style="gap: 8px;">
+          <input class="pi-welcome-proxy__url" type="text" spellcheck="false" />
+          <button class="pi-welcome-proxy__save" type="button">Save</button>
+        </div>
+        <div class="pi-welcome-proxy__hint">
+          Needed only when OAuth login is blocked by CORS.
+          Keep this URL at <code>${DEFAULT_LOCAL_PROXY_URL}</code>, run a local HTTPS proxy helper, then enable this toggle.
+          <a href="${PROXY_HELPER_DOCS_URL}" target="_blank" rel="noopener noreferrer">Step-by-step guide</a>.
+        </div>
       </div>
+
+      <div class="pi-welcome-providers"></div>
     `;
 
-    const providerList = overlay.querySelector<HTMLDivElement>(".pi-welcome-providers");
+    const providerList = dialog.card.querySelector<HTMLDivElement>(".pi-welcome-providers");
     if (!providerList) {
       throw new Error("Welcome provider list not found");
     }
 
-    const proxyEnabledEl = overlay.querySelector<HTMLInputElement>(".pi-welcome-proxy__enabled");
-    const proxyUrlEl = overlay.querySelector<HTMLInputElement>(".pi-welcome-proxy__url");
-    const proxySaveEl = overlay.querySelector<HTMLButtonElement>(".pi-welcome-proxy__save");
+    const proxyEnabledEl = dialog.card.querySelector<HTMLInputElement>(".pi-welcome-proxy__enabled");
+    const proxyUrlEl = dialog.card.querySelector<HTMLInputElement>(".pi-welcome-proxy__url");
+    const proxySaveEl = dialog.card.querySelector<HTMLButtonElement>(".pi-welcome-proxy__save");
 
     const hydrateProxyUi = async () => {
       if (!proxyEnabledEl || !proxyUrlEl || !proxySaveEl) return;
@@ -168,12 +169,6 @@ export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise
       providerList.appendChild(row);
     }
 
-    overlay.addEventListener("click", (event) => {
-      if (event.target === overlay) {
-        closeOverlay();
-      }
-    });
-
-    document.body.appendChild(overlay);
+    dialog.mount();
   });
 }

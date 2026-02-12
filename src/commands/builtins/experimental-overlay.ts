@@ -8,12 +8,10 @@ import {
   setExperimentalFeatureEnabled,
   type ExperimentalFeatureSnapshot,
 } from "../../experiments/flags.js";
-import { requestChatInputFocus } from "../../ui/input-focus.js";
-import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
+import { closeOverlayById, createOverlayDialog } from "../../ui/overlay-dialog.js";
 import { showToast } from "../../ui/toast.js";
 
 const OVERLAY_ID = "pi-experimental-overlay";
-const overlayClosers = new WeakMap<HTMLElement, () => void>();
 
 function applyStatusVisual(statusEl: HTMLSpanElement, enabled: boolean): void {
   statusEl.textContent = enabled ? "Enabled" : "Disabled";
@@ -92,24 +90,14 @@ function buildFeatureRow(feature: ExperimentalFeatureSnapshot): HTMLElement {
 }
 
 export function showExperimentalDialog(): void {
-  const existing = document.getElementById(OVERLAY_ID);
-  if (existing) {
-    const closeExisting = overlayClosers.get(existing);
-    if (closeExisting) {
-      closeExisting();
-    } else {
-      existing.remove();
-    }
-
+  if (closeOverlayById(OVERLAY_ID)) {
     return;
   }
 
-  const overlay = document.createElement("div");
-  overlay.id = OVERLAY_ID;
-  overlay.className = "pi-welcome-overlay";
-
-  const card = document.createElement("div");
-  card.className = "pi-welcome-card pi-overlay-card pi-experimental-card";
+  const dialog = createOverlayDialog({
+    overlayId: OVERLAY_ID,
+    cardClassName: "pi-welcome-card pi-overlay-card pi-experimental-card",
+  });
 
   const title = document.createElement("h2");
   title.className = "pi-overlay-title";
@@ -132,37 +120,16 @@ export function showExperimentalDialog(): void {
   footer.textContent =
     "Tip: use /experimental on <feature>, /experimental off <feature>, /experimental toggle <feature>, /experimental tmux-bridge-url <url>, /experimental tmux-bridge-token <token>, /experimental tmux-status, /experimental python-bridge-url <url>, or /experimental python-bridge-token <token>.";
 
+  const body = document.createElement("div");
+  body.className = "pi-overlay-body";
+  body.append(title, subtitle, list, footer);
+
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
   closeBtn.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--full";
   closeBtn.textContent = "Close";
+  closeBtn.addEventListener("click", dialog.close);
 
-  let closed = false;
-  const closeOverlay = () => {
-    if (closed) {
-      return;
-    }
-
-    closed = true;
-    overlayClosers.delete(overlay);
-    cleanupEscape();
-    overlay.remove();
-    requestChatInputFocus();
-  };
-  const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
-  overlayClosers.set(overlay, closeOverlay);
-
-  closeBtn.addEventListener("click", () => {
-    closeOverlay();
-  });
-
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) {
-      closeOverlay();
-    }
-  });
-
-  card.append(title, subtitle, list, footer, closeBtn);
-  overlay.appendChild(card);
-  document.body.appendChild(overlay);
+  dialog.card.append(body, closeBtn);
+  dialog.mount();
 }
