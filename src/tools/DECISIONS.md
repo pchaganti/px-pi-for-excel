@@ -238,6 +238,6 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Restore UX:** `workbook_history` can list/restore/delete/clear backups; restores also create an inverse backup (`restore_snapshot`) so users can undo a mistaken restore.
 - **Coverage signaling:** unsupported `modify_structure` actions and mutating `view_settings` actions explicitly report when no backup was created.
 - **Current `modify_structure` backup limits:** captures/restores only `rename_sheet`, `hide_sheet`, and `unhide_sheet` actions.
-- **Current `format_cells` backup limits:** captures/restores core range-format properties (font/fill/number format/alignment/wrap/borders) plus row/column dimensions (`column_width`, `row_height`, `auto_fit`). Mutations involving `merge` currently skip backup capture with an explicit note.
+- **Current `format_cells` backup scope:** captures/restores core range-format properties (font/fill/number format/alignment/wrap/borders), row/column dimensions (`column_width`, `row_height`, `auto_fit`), and merge state (`merge`/`unmerge`).
 - **Quick affordance:** after a backed-up write, UI shows an action toast with **Revert**.
 - **Rationale:** addresses #27 by shifting from cumbersome up-front approvals to versioned recovery with explicit user-controlled rollback.
