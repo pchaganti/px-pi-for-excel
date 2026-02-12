@@ -522,10 +522,16 @@ function isRecoveryConditionalFormatRule(value: unknown): value is RecoveryCondi
   if (!isRecord(value)) return false;
 
   const type = value.type;
-  if (type !== "custom" && type !== "cell_value") return false;
+  const validType =
+    type === "custom" ||
+    type === "cell_value" ||
+    type === "text_comparison" ||
+    type === "top_bottom" ||
+    type === "preset_criteria";
+  if (!validType) return false;
 
   const operator = value.operator;
-  const validOperator = operator === undefined || (
+  const validCellValueOperator = operator === undefined || (
     operator === "Between" ||
     operator === "NotBetween" ||
     operator === "EqualTo" ||
@@ -535,21 +541,87 @@ function isRecoveryConditionalFormatRule(value: unknown): value is RecoveryCondi
     operator === "GreaterThanOrEqual" ||
     operator === "LessThanOrEqual"
   );
+  if (!validCellValueOperator) return false;
 
-  if (!validOperator) return false;
-
-  return (
-    (value.stopIfTrue === undefined || typeof value.stopIfTrue === "boolean") &&
-    (value.formula === undefined || typeof value.formula === "string") &&
-    (value.formula1 === undefined || typeof value.formula1 === "string") &&
-    (value.formula2 === undefined || typeof value.formula2 === "string") &&
-    (value.fillColor === undefined || typeof value.fillColor === "string") &&
-    (value.fontColor === undefined || typeof value.fontColor === "string") &&
-    (value.bold === undefined || typeof value.bold === "boolean") &&
-    (value.italic === undefined || typeof value.italic === "boolean") &&
-    (value.underline === undefined || typeof value.underline === "boolean") &&
-    (value.appliesToAddress === undefined || typeof value.appliesToAddress === "string")
+  const textOperator = value.textOperator;
+  const validTextOperator = textOperator === undefined || (
+    textOperator === "Contains" ||
+    textOperator === "NotContains" ||
+    textOperator === "BeginsWith" ||
+    textOperator === "EndsWith"
   );
+  if (!validTextOperator) return false;
+
+  const topBottomType = value.topBottomType;
+  const validTopBottomType = topBottomType === undefined || (
+    topBottomType === "TopItems" ||
+    topBottomType === "TopPercent" ||
+    topBottomType === "BottomItems" ||
+    topBottomType === "BottomPercent"
+  );
+  if (!validTopBottomType) return false;
+
+  const presetCriterion = value.presetCriterion;
+  const validPresetCriterion = presetCriterion === undefined || (
+    presetCriterion === "Blanks" ||
+    presetCriterion === "NonBlanks" ||
+    presetCriterion === "Errors" ||
+    presetCriterion === "NonErrors" ||
+    presetCriterion === "Yesterday" ||
+    presetCriterion === "Today" ||
+    presetCriterion === "Tomorrow" ||
+    presetCriterion === "LastSevenDays" ||
+    presetCriterion === "LastWeek" ||
+    presetCriterion === "ThisWeek" ||
+    presetCriterion === "NextWeek" ||
+    presetCriterion === "LastMonth" ||
+    presetCriterion === "ThisMonth" ||
+    presetCriterion === "NextMonth" ||
+    presetCriterion === "AboveAverage" ||
+    presetCriterion === "BelowAverage" ||
+    presetCriterion === "EqualOrAboveAverage" ||
+    presetCriterion === "EqualOrBelowAverage" ||
+    presetCriterion === "OneStdDevAboveAverage" ||
+    presetCriterion === "OneStdDevBelowAverage" ||
+    presetCriterion === "TwoStdDevAboveAverage" ||
+    presetCriterion === "TwoStdDevBelowAverage" ||
+    presetCriterion === "ThreeStdDevAboveAverage" ||
+    presetCriterion === "ThreeStdDevBelowAverage" ||
+    presetCriterion === "UniqueValues" ||
+    presetCriterion === "DuplicateValues"
+  );
+  if (!validPresetCriterion) return false;
+
+  if (value.stopIfTrue !== undefined && typeof value.stopIfTrue !== "boolean") return false;
+  if (value.formula !== undefined && typeof value.formula !== "string") return false;
+  if (value.formula1 !== undefined && typeof value.formula1 !== "string") return false;
+  if (value.formula2 !== undefined && typeof value.formula2 !== "string") return false;
+  if (value.text !== undefined && typeof value.text !== "string") return false;
+  if (value.rank !== undefined && (typeof value.rank !== "number" || !Number.isFinite(value.rank))) return false;
+  if (value.fillColor !== undefined && typeof value.fillColor !== "string") return false;
+  if (value.fontColor !== undefined && typeof value.fontColor !== "string") return false;
+  if (value.bold !== undefined && typeof value.bold !== "boolean") return false;
+  if (value.italic !== undefined && typeof value.italic !== "boolean") return false;
+  if (value.underline !== undefined && typeof value.underline !== "boolean") return false;
+  if (value.appliesToAddress !== undefined && typeof value.appliesToAddress !== "string") return false;
+
+  if (type === "custom") {
+    return typeof value.formula === "string";
+  }
+
+  if (type === "cell_value") {
+    return validCellValueOperator && typeof value.operator === "string" && typeof value.formula1 === "string";
+  }
+
+  if (type === "text_comparison") {
+    return validTextOperator && typeof value.textOperator === "string" && typeof value.text === "string";
+  }
+
+  if (type === "top_bottom") {
+    return validTopBottomType && typeof value.topBottomType === "string" && typeof value.rank === "number";
+  }
+
+  return validPresetCriterion && typeof value.presetCriterion === "string";
 }
 
 function isRecoveryCommentThreadState(value: unknown): value is RecoveryCommentThreadState {
