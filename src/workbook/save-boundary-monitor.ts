@@ -46,7 +46,10 @@ export class WorkbookSaveBoundaryMonitor {
     const previous = this.lastDirtyByWorkbookId.get(workbookId);
     this.lastDirtyByWorkbookId.set(workbookId, isDirty);
 
-    if (previous === true && isDirty === false) {
+    const savedTransitionObserved = previous === true && isDirty === false;
+    const firstObservationIsAlreadySaved = previous === undefined && isDirty === false;
+
+    if (savedTransitionObserved || firstObservationIsAlreadySaved) {
       await this.dependencies.clearBackupsForCurrentWorkbook();
     }
   }

@@ -4,9 +4,9 @@ import { test } from "node:test";
 import { WorkbookSaveBoundaryMonitor } from "../src/workbook/save-boundary-monitor.ts";
 import type { WorkbookContext } from "../src/workbook/context.ts";
 
-void test("clears backups when workbook dirty state transitions from dirty to saved", async () => {
-  let isDirty = false;
-  const cleared: number[] = [];
+void test("clears backups on first poll when workbook is already saved", async () => {
+  const isDirty = false;
+  let clears = 0;
 
   const monitor = new WorkbookSaveBoundaryMonitor({
     getWorkbookContext: (): Promise<WorkbookContext> => Promise.resolve({
@@ -16,24 +16,44 @@ void test("clears backups when workbook dirty state transitions from dirty to sa
     }),
     readWorkbookDirtyState: () => Promise.resolve(isDirty),
     clearBackupsForCurrentWorkbook: () => {
-      cleared.push(Date.now());
+      clears += 1;
       return Promise.resolve(1);
     },
   });
 
   await monitor.checkOnce();
-  assert.equal(cleared.length, 0);
+  assert.equal(clears, 1);
 
-  isDirty = true;
   await monitor.checkOnce();
-  assert.equal(cleared.length, 0);
+  assert.equal(clears, 1);
+});
+
+void test("clears backups when workbook dirty state transitions from dirty to saved", async () => {
+  let isDirty = true;
+  let clears = 0;
+
+  const monitor = new WorkbookSaveBoundaryMonitor({
+    getWorkbookContext: (): Promise<WorkbookContext> => Promise.resolve({
+      workbookId: "url_sha256:book-1",
+      workbookName: "Book1.xlsx",
+      source: "document.url",
+    }),
+    readWorkbookDirtyState: () => Promise.resolve(isDirty),
+    clearBackupsForCurrentWorkbook: () => {
+      clears += 1;
+      return Promise.resolve(1);
+    },
+  });
+
+  await monitor.checkOnce();
+  assert.equal(clears, 0);
 
   isDirty = false;
   await monitor.checkOnce();
-  assert.equal(cleared.length, 1);
+  assert.equal(clears, 1);
 
   await monitor.checkOnce();
-  assert.equal(cleared.length, 1);
+  assert.equal(clears, 1);
 });
 
 void test("does not clear backups when workbook identity is unavailable", async () => {
