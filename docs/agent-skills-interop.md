@@ -32,6 +32,8 @@ The add-in now exposes a `skills` tool for standards-based skill loading:
 - `skills` action=`list` → lists bundled Agent Skills
 - `skills` action=`read` + `name` → returns full `SKILL.md`
 
+Runtime note: `skills` reads are cached per session runtime so repeated reads for the same skill avoid repeated catalog lookup. The cache is cleared when the runtime session identity changes (new/resume/switch context).
+
 The system prompt also includes `<available_skills>` entries so the model can choose a matching skill, then load it on demand.
 
 ## Mapping table
