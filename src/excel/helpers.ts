@@ -144,6 +144,25 @@ export async function getDirectPrecedentsSafe(
   }
 }
 
+/**
+ * Safely call getDirectDependents() — returns null if it throws
+ * (fails on cells with no dependents, preview API gaps).
+ */
+export async function getDirectDependentsSafe(
+  context: Excel.RequestContext,
+  range: Excel.Range,
+): Promise<string[][] | null> {
+  try {
+    const dependents = range.getDirectDependents();
+    dependents.load("addresses");
+    await context.sync();
+    return dependents.addresses
+      .map((s) => s.split(",").map((x) => x.trim()).filter(Boolean));
+  } catch {
+    return null;
+  }
+}
+
 /** Pad a 2D array so all rows have the same length */
 export function padValues(values: unknown[][]): { padded: unknown[][]; rows: number; cols: number } {
   const rows = values.length;

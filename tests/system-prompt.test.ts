@@ -56,6 +56,13 @@ void test("system prompt includes workbook history recovery tool", () => {
   assert.match(prompt, /python_transform_range/);
 });
 
+void test("system prompt documents trace_dependencies precedents/dependents modes", () => {
+  const prompt = buildSystemPrompt();
+  assert.match(prompt, /\*\*trace_dependencies\*\*/);
+  assert.match(prompt, /mode:\s*`precedents`/i);
+  assert.match(prompt, /`dependents`/i);
+});
+
 void test("system prompt mentions optional files workspace capability", () => {
   const prompt = buildSystemPrompt();
   assert.match(prompt, /\*\*files\*\*/);

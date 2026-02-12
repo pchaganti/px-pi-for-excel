@@ -8,6 +8,20 @@ void test("classifies read_range as read with no workbook-context impact", () =>
   assert.equal(getToolContextImpact("read_range", {}), "none");
 });
 
+void test("classifies trace_dependencies (precedents/dependents) as read-only", () => {
+  assert.equal(getToolExecutionMode("trace_dependencies", { cell: "Sheet1!D10" }), "read");
+  assert.equal(getToolContextImpact("trace_dependencies", { cell: "Sheet1!D10" }), "none");
+
+  assert.equal(
+    getToolExecutionMode("trace_dependencies", { cell: "Sheet1!D10", mode: "dependents" }),
+    "read",
+  );
+  assert.equal(
+    getToolContextImpact("trace_dependencies", { cell: "Sheet1!D10", mode: "dependents" }),
+    "none",
+  );
+});
+
 void test("classifies modify_structure as structure-impact mutate", () => {
   assert.equal(getToolExecutionMode("modify_structure", { action: "add_sheet" }), "mutate");
   assert.equal(getToolContextImpact("modify_structure", { action: "add_sheet" }), "structure");

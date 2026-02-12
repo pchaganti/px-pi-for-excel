@@ -776,7 +776,12 @@ function describeToolCall(
     // ── Other tools ──
     case "trace_dependencies": {
       const cell = (p.cell ?? p.range) as string | undefined;
-      return { action: "Trace", detail: cell ?? "dependencies", address: cell };
+      const mode = p.mode === "dependents" ? "dependents" : "precedents";
+      return {
+        action: mode === "dependents" ? "Trace dependents" : "Trace precedents",
+        detail: cell ?? mode,
+        address: cell,
+      };
     }
     case "comments": {
       const op = p.action as string | undefined;
@@ -920,9 +925,17 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
         const csvTable = isReadRangeCsvDetails(result.details)
           ? renderCsvTable(result.details)
           : null;
-        const depTree = isTraceDependenciesDetails(result.details)
-          ? renderDepTree(result.details.root)
+        const traceDetails = isTraceDependenciesDetails(result.details)
+          ? result.details
           : null;
+        const depTree = traceDetails
+          ? renderDepTree(traceDetails.root, traceDetails.mode ?? "precedents")
+          : null;
+        const depSectionLabel = traceDetails
+          ? traceDetails.mode === "dependents"
+            ? "Dependents"
+            : "Precedents"
+          : "Dependencies";
 
         return {
           content: html`
@@ -944,7 +957,7 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
                     </div>
                   ` : ""}
                   <div class="pi-tool-card__section">
-                    <div class="pi-tool-card__section-label">${depTree !== null ? "Dependencies" : csvTable !== null ? "Data" : "Result"}</div>
+                    <div class="pi-tool-card__section-label">${depTree !== null ? depSectionLabel : csvTable !== null ? "Data" : "Result"}</div>
                     ${csvTable !== null
                       ? csvTable
                       : depTree !== null
