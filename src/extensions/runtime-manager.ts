@@ -174,7 +174,7 @@ export class ExtensionRuntimeManager {
 
   list(): ExtensionRuntimeStatus[] {
     const permissionsEnforced = isExperimentalFeatureEnabled("extension_permission_gates");
-    const sandboxRuntimeEnabled = isExperimentalFeatureEnabled("extension_sandbox_runtime");
+    const sandboxRuntimeActive = isExperimentalFeatureEnabled("extension_sandbox_runtime");
 
     return this.entries.map((entry) => {
       const state = this.activeStates.get(entry.id);
@@ -184,7 +184,7 @@ export class ExtensionRuntimeManager {
         : listAllExtensionCapabilities();
       const runtimeMode = state
         ? state.runtimeMode
-        : resolveExtensionRuntimeMode(entry.trust, sandboxRuntimeEnabled);
+        : resolveExtensionRuntimeMode(entry.trust, sandboxRuntimeActive);
 
       return {
         id: entry.id,

@@ -1,7 +1,7 @@
 /**
  * Sandboxed extension runtime host (iframe + postMessage RPC).
  *
- * Scope: untrusted extension execution behind an experimental feature flag.
+ * Scope: default runtime for untrusted extension execution (with rollback switch).
  * This bridge intentionally starts small and only forwards a constrained,
  * sanitized UI projection format (no raw HTML injection).
  */

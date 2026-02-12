@@ -81,10 +81,10 @@ void test("builtins registry wires /experimental, /extensions, and /skills comma
   assert.match(extensionsOverlaySource, /toggle\.type = "checkbox"/);
   assert.match(extensionsOverlaySource, /confirmExtensionInstall\(/);
   assert.match(extensionsOverlaySource, /confirmExtensionEnable\(/);
-  assert.match(extensionsOverlaySource, /Sandbox runtime \(experimental\)/);
+  assert.match(extensionsOverlaySource, /Sandbox runtime \(default for untrusted sources\)/);
   assert.match(extensionsOverlaySource, /setExperimentalFeatureEnabled\("extension_sandbox_runtime", true\)/);
   assert.match(extensionsOverlaySource, /setExperimentalFeatureEnabled\("extension_sandbox_runtime", false\)/);
-  assert.match(extensionsOverlaySource, /Sandbox runtime is off: this untrusted extension runs in host runtime/);
+  assert.match(extensionsOverlaySource, /Rollback mode is active: this untrusted extension runs in host runtime/);
   assert.match(extensionsOverlaySource, /higher-risk permissions/);
   assert.match(extensionsOverlaySource, /Updated permissions for/);
   assert.match(extensionsOverlaySource, /reload failed \(see Last error\)/);
@@ -99,6 +99,7 @@ void test("builtins registry wires /experimental, /extensions, and /skills comma
   assert.match(experimentalFlagsSource, /extension-permissions/);
   assert.match(experimentalFlagsSource, /extension_sandbox_runtime/);
   assert.match(experimentalFlagsSource, /extension-sandbox/);
+  assert.match(experimentalFlagsSource, /defaultEnabled:\s*true/);
 });
 
 void test("taskpane init keeps getSkillToolNames imported when used", async () => {

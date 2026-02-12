@@ -188,12 +188,12 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Execution policy:** treated as `read/none` for workbook coordination (mutates local extension registry/runtime only, not workbook cells/structure).
 - **Rationale:** supports non-engineer extension authoring by allowing users to ask Pi to generate + install an extension directly.
 
-## Experimental extension sandbox UI bridge (`extension-sandbox`)
-- **Activation:** opt-in only via `/experimental on extension-sandbox`; default remains host runtime.
-- **Surface:** inline-code + remote-url extensions route to iframe runtime when enabled; built-in/local modules remain host-side.
+## Extension sandbox UI bridge (`extension-sandbox`)
+- **Activation model:** default-on for untrusted sources with a temporary rollback kill switch via `/experimental off extension-sandbox`.
+- **Surface:** inline-code + remote-url extensions route to iframe runtime by default; built-in/local modules remain host-side.
 - **UI model:** sandbox may only send a structured UI tree (allowed tag set, sanitized class names/action ids), never raw HTML.
 - **Interactivity:** host supports explicit action callbacks via `data-pi-action` markers mapped to click dispatch inside the sandbox.
-- **Rationale:** incremental security hardening—adds practical UI capability without reopening HTML injection risk.
+- **Rationale:** incremental security hardening—default isolation for untrusted code without reopening HTML injection risk.
 
 ## Experimental files workspace tool (`files`)
 - **Availability:** non-core experimental tool, always registered; execution hard-gated by `files-workspace` flag.
