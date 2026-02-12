@@ -1186,10 +1186,7 @@ export async function initTaskpane(opts: {
         return;
       }
 
-      const nextIndex = activeIndex + direction;
-      if (nextIndex < 0 || nextIndex >= tabs.length) {
-        return;
-      }
+      const nextIndex = (activeIndex + direction + tabs.length) % tabs.length;
 
       suppressNextInputAutofocus = true;
       runtimeManager.switchRuntime(tabs[nextIndex].runtimeId);

@@ -217,6 +217,32 @@ void test("Left/Right arrow tab switching only triggers without modifiers", () =
 
   assert.equal(
     getAdjacentTabDirectionFromShortcut({
+      key: "Right",
+      code: "ArrowRight",
+      repeat: false,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    1,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
+      key: "Unidentified",
+      keyCode: 37,
+      repeat: false,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    -1,
+  );
+
+  assert.equal(
+    getAdjacentTabDirectionFromShortcut({
       key: "ArrowRight",
       repeat: false,
       metaKey: false,

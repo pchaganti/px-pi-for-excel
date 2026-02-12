@@ -49,6 +49,8 @@ interface FocusInputShortcutEventLike {
 
 interface AdjacentTabShortcutEventLike {
   key: string;
+  code?: string;
+  keyCode?: number;
   repeat: boolean;
   metaKey: boolean;
   ctrlKey: boolean;
@@ -170,8 +172,18 @@ export function getAdjacentTabDirectionFromShortcut(
   if (event.repeat) return null;
   if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return null;
 
-  if (event.key === "ArrowLeft") return -1;
-  if (event.key === "ArrowRight") return 1;
+  const key = event.key;
+  const code = event.code;
+  const keyCode = event.keyCode;
+
+  if (key === "ArrowLeft" || key === "Left" || code === "ArrowLeft" || keyCode === 37) {
+    return -1;
+  }
+
+  if (key === "ArrowRight" || key === "Right" || code === "ArrowRight" || keyCode === 39) {
+    return 1;
+  }
+
   return null;
 }
 

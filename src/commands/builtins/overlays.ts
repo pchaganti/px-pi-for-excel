@@ -696,7 +696,7 @@ export function showShortcutsDialog(): void {
     ["⌥Enter", "Queue follow-up message"],
     ["/", "Open command menu"],
     ["↑↓", "Navigate command menu"],
-    ["←/→", "Switch chats (after Esc exits input focus)"],
+    ["←/→", "Switch chats (after Esc exits input focus, wraps)"],
     ["⌘/Ctrl+⇧T", "Reopen last closed tab"],
     ["F2", "Focus chat input"],
     ["F6", "Focus: Sheet ↔ Sidebar"],
