@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  MAX_RECOVERY_CELLS,
   WorkbookRecoveryLog,
   type WorkbookRecoverySnapshot,
 } from "../src/workbook/recovery-log.ts";
@@ -113,6 +114,68 @@ void test("append is skipped when workbook identity is unavailable", async () =>
   assert.equal(appended, null);
   assert.equal((await log.list({ limit: 10 })).length, 0);
   assert.equal((await log.listForCurrentWorkbook(10)).length, 0);
+});
+
+void test("delete is scoped to the active workbook", async () => {
+  const settingsStore = createInMemorySettingsStore();
+
+  let currentWorkbookId: string | null = "url_sha256:workbook-a";
+  const getWorkbookContext = (): Promise<WorkbookContext> => Promise.resolve({
+    workbookId: currentWorkbookId,
+    workbookName: "Workbook",
+    source: currentWorkbookId ? "document.url" : "unknown",
+  });
+
+  let idCounter = 0;
+  const createId = (): string => {
+    idCounter += 1;
+    return `snap-${idCounter}`;
+  };
+
+  const log = new WorkbookRecoveryLog({
+    getSettingsStore: () => Promise.resolve(settingsStore),
+    getWorkbookContext,
+    createId,
+    applySnapshot: () => Promise.resolve({ values: [[1]], formulas: [[1]] }),
+  });
+
+  const snapshotA = await log.append({
+    toolName: "write_cells",
+    toolCallId: "call-a",
+    address: "Sheet1!A1",
+    beforeValues: [["a"]],
+    beforeFormulas: [["a"]],
+  });
+
+  currentWorkbookId = "url_sha256:workbook-b";
+
+  const snapshotB = await log.append({
+    toolName: "write_cells",
+    toolCallId: "call-b",
+    address: "Sheet1!A2",
+    beforeValues: [["b"]],
+    beforeFormulas: [["b"]],
+  });
+
+  assert.ok(snapshotA);
+  assert.ok(snapshotB);
+
+  currentWorkbookId = "url_sha256:workbook-a";
+
+  const deletedOtherWorkbook = await log.delete(snapshotB?.id ?? "");
+  assert.equal(deletedOtherWorkbook, false);
+
+  const deletedCurrentWorkbook = await log.delete(snapshotA?.id ?? "");
+  assert.equal(deletedCurrentWorkbook, true);
+
+  currentWorkbookId = null;
+  const deletedWithoutIdentity = await log.delete(snapshotB?.id ?? "");
+  assert.equal(deletedWithoutIdentity, false);
+
+  currentWorkbookId = "url_sha256:workbook-b";
+  const remainingCurrent = await log.listForCurrentWorkbook(10);
+  assert.equal(remainingCurrent.length, 1);
+  assert.equal(remainingCurrent[0]?.id, snapshotB?.id);
 });
 
 void test("restore rejects legacy snapshots without workbook identity", async () => {
@@ -338,4 +401,79 @@ void test("clearForCurrentWorkbook is a no-op when workbook identity is unavaila
   const removed = await log.clearForCurrentWorkbook();
   assert.equal(removed, 0);
   assert.equal((await log.list({ limit: 10 })).length, 1);
+});
+
+void test("restore rejects checkpoints from another workbook", async () => {
+  const settingsStore = createInMemorySettingsStore();
+
+  let currentWorkbookId: string | null = "url_sha256:workbook-src";
+  const getWorkbookContext = (): Promise<WorkbookContext> => Promise.resolve({
+    workbookId: currentWorkbookId,
+    workbookName: "Workbook",
+    source: currentWorkbookId ? "document.url" : "unknown",
+  });
+
+  let idCounter = 0;
+  const createId = (): string => {
+    idCounter += 1;
+    return `snap-${idCounter}`;
+  };
+
+  const log = new WorkbookRecoveryLog({
+    getSettingsStore: () => Promise.resolve(settingsStore),
+    getWorkbookContext,
+    createId,
+    applySnapshot: () => Promise.resolve({ values: [[1]], formulas: [[1]] }),
+  });
+
+  const snapshot = await log.append({
+    toolName: "write_cells",
+    toolCallId: "call-5",
+    address: "Sheet1!B2",
+    beforeValues: [["before"]],
+    beforeFormulas: [["before"]],
+  });
+
+  assert.ok(snapshot);
+
+  currentWorkbookId = "url_sha256:workbook-other";
+
+  await assert.rejects(
+    async () => log.restore(snapshot?.id ?? ""),
+    /different workbook/i,
+  );
+});
+
+void test("append skips oversized checkpoints", async () => {
+  const settingsStore = createInMemorySettingsStore();
+
+  const log = new WorkbookRecoveryLog({
+    getSettingsStore: () => Promise.resolve(settingsStore),
+    getWorkbookContext: () => Promise.resolve({
+      workbookId: "url_sha256:big-workbook",
+      workbookName: "Big.xlsx",
+      source: "document.url",
+    }),
+    applySnapshot: () => Promise.resolve({ values: [[1]], formulas: [[1]] }),
+  });
+
+  const rows = 201;
+  const cols = 101;
+  const bigValues = Array.from({ length: rows }, () => Array.from({ length: cols }, () => "v"));
+  const bigFormulas = Array.from({ length: rows }, () => Array.from({ length: cols }, () => ""));
+
+  assert.ok(rows * cols > MAX_RECOVERY_CELLS);
+
+  const snapshot = await log.append({
+    toolName: "write_cells",
+    toolCallId: "call-big",
+    address: "Sheet1!A1:CZ201",
+    beforeValues: bigValues,
+    beforeFormulas: bigFormulas,
+  });
+
+  assert.equal(snapshot, null);
+
+  const entries = await log.listForCurrentWorkbook(10);
+  assert.equal(entries.length, 0);
 });

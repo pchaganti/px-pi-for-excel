@@ -454,8 +454,14 @@ export class WorkbookRecoveryLog {
   async delete(snapshotId: string): Promise<boolean> {
     await this.ensureLoaded();
 
+    const workbookContext = await this.dependencies.getWorkbookContext();
+    const workbookId = workbookContext.workbookId;
+    if (!workbookId) return false;
+
     const previousLength = this.snapshots.length;
-    this.snapshots = this.snapshots.filter((snapshot) => snapshot.id !== snapshotId);
+    this.snapshots = this.snapshots.filter(
+      (snapshot) => !(snapshot.id === snapshotId && matchesWorkbook(snapshot, workbookId)),
+    );
 
     if (this.snapshots.length === previousLength) {
       return false;

@@ -38,6 +38,7 @@ Tailwind v4 puts all utilities inside `@layer utilities`. Unlayered CSS always b
 ### Theme guardrails
 
 - `npm run check:css-theme` verifies every `var(--token)` used in local theme CSS resolves to a defined custom property (or has an explicit fallback).
+- `npm run check:theme-utility-overrides` blocks Tailwind utility-class selectors in theme modules (except `theme/unstable-overrides.css`).
 - `npm run check:builtins-inline-style` blocks inline `style.*` usage in `src/commands/builtins/**` so overlay styling stays class-based.
 
 ### theme.css structure
@@ -57,7 +58,7 @@ Tailwind v4 puts all utilities inside `@layer utilities`. Unlayered CSS always b
 > - `theme/tokens.css` (1)
 > - `theme/base.css` (2)
 > - `theme/components.css` (3–10)
-> - `theme/overlays.css` (10b) → imports `theme/overlays/{primitives,extensions,skills,provider-resume-shortcuts,experimental}.css`
+> - `theme/overlays.css` (10b) → imports `theme/overlays/{primitives,extensions,skills,provider-resume-shortcuts,recovery,experimental}.css`
 > - `theme/content-overrides.css` (11) → imports `theme/content/{messages,tool-cards,csv-table,dependency-tree,tool-card-markdown,message-components}.css`
 > - `theme/dialogs.css` (12, stable selectors)
 > - `theme/unstable-overrides.css` (12b, utility-coupled upstream selectors)

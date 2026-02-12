@@ -10,7 +10,9 @@ export interface SessionCommandActions {
   renameActiveSession: (title: string) => Promise<void>;
   createRuntime: () => Promise<void>;
   openResumeDialog: (defaultTarget?: ResumeDialogTarget) => Promise<void>;
+  openRecoveryDialog: () => Promise<void>;
   reopenLastClosed: () => Promise<void>;
+  revertLatestCheckpoint: () => Promise<void>;
 }
 
 export function createSessionIdentityCommands(actions: SessionCommandActions): SlashCommand[] {
@@ -68,11 +70,27 @@ export function createSessionLifecycleCommands(actions: SessionCommandActions): 
       },
     },
     {
+      name: "history",
+      description: "Browse workbook recovery checkpoints",
+      source: "builtin",
+      execute: async () => {
+        await actions.openRecoveryDialog();
+      },
+    },
+    {
       name: "reopen",
       description: "Reopen the most recently closed session tab",
       source: "builtin",
       execute: async () => {
         await actions.reopenLastClosed();
+      },
+    },
+    {
+      name: "revert",
+      description: "Revert the latest workbook checkpoint",
+      source: "builtin",
+      execute: async () => {
+        await actions.revertLatestCheckpoint();
       },
     },
   ];

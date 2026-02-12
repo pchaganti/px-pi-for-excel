@@ -44,16 +44,15 @@ Replace cumbersome up-front approval selectors with a low-friction workflow:
   - `restore`
   - `delete`
   - `clear`
-- One-click UI affordance:
+- One-click UI affordances:
   - post-write action toast with **Revert**
+  - checkpoint browser overlay (menu + `/history`) for restore/delete/clear
 - Restore is itself reversible:
   - restoring creates an inverse `restore_snapshot` checkpoint
 - Local persistence:
   - `workbook.recovery-snapshots.v1`
 - Safety cap:
   - snapshots are skipped above `MAX_RECOVERY_CELLS` to avoid oversized local state
-- Identity guard:
-  - checkpoints are only persisted when workbook identity is available; restores reject legacy identity-less checkpoints
 
 ## Why this is better than approval selectors for now
 
@@ -64,6 +63,6 @@ Replace cumbersome up-front approval selectors with a low-friction workflow:
 ## Follow-ups
 
 1. Extend checkpointing beyond contiguous cell writes (format/structure/comment mutations).
-2. Add a dedicated checkpoint history panel (browse/restore/delete/export).
+2. Enrich checkpoint history UX (search/filter/export, retention controls).
 3. Evaluate host-specific full-file snapshot feasibility for coarse-grained restore points.
 4. Potentially expose “YOLO mode” toggle once we have both lightweight and strict workflows fully defined.
