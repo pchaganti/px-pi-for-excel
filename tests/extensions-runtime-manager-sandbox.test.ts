@@ -290,6 +290,10 @@ void test("sandbox runtime source enforces capability gates and rejects unknown 
   assert.match(source, /case "widget_show": \{[\s\S]*this\.assertCapability\("ui\.widget"\)/);
   assert.match(source, /case "widget_upsert": \{[\s\S]*Widget API v2 is disabled/);
   assert.match(source, /upsertSandboxWidgetNode\([\s\S]*element:\s*body/);
+  assert.match(source, /placement: payload\.placement === "above-input" \|\| payload\.placement === "below-input"/);
+  assert.match(source, /collapsible: typeof payload\.collapsible === "boolean" \? payload\.collapsible : undefined/);
+  assert.match(source, /asWidgetPlacementOrUndefined\(payload\.placement\)/);
+  assert.match(source, /asBooleanOrUndefined\(payload\.collapsible\)/);
   assert.match(source, /asFiniteNumberOrNullOrUndefined\(payload\.minHeightPx\)/);
   assert.match(source, /payload\.minHeightPx === null/);
   assert.match(source, /case "widget_clear": \{/);
