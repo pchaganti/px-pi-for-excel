@@ -640,7 +640,7 @@ export class PiSidebar extends LitElement {
       <div class="pi-empty">
         <div class="pi-empty__logo">π</div>
         <p class="pi-empty__tagline">
-          Reads your cells, writes formulas, formats ranges, and analyzes data.
+          Reads your workbook, writes formulas, formats cells, and builds models.
         </p>
         <div class="pi-empty__hints">
           ${this.emptyHints.map(hint => html`
