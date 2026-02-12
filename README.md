@@ -325,10 +325,11 @@ See full request/response contract: [`docs/python-bridge-contract.md`](./docs/py
 
 ### Extension loading safety
 
-`loadExtension()` now blocks remote `http(s)` module URLs by default.
+`loadExtension()` blocks remote `http(s)` module URLs by default.
 
-- Allowed by default: local module specifiers (`./`, `../`, `/`), `blob:` module URLs (paste-code extensions), and inline function activators
+- Allowed by default: local module specifiers (`./`, `../`, `/`), blob URLs (used by pasted-code installs), and inline function activators
 - Blocked by default: remote extension URLs
+- Local specifiers must resolve to bundled extension modules (currently `src/extensions/*.{ts,js}`)
 - Temporary unsafe opt-in for local experiments:
 
 ```bash
@@ -336,6 +337,8 @@ See full request/response contract: [`docs/python-bridge-contract.md`](./docs/py
 ```
 
   (Equivalent low-level toggle: `localStorage.setItem("pi.allowRemoteExtensionUrls", "1")`)
+
+See also: [`docs/extensions.md`](./docs/extensions.md).
 
 ## Roadmap
 
@@ -384,7 +387,7 @@ See full request/response contract: [`docs/python-bridge-contract.md`](./docs/py
 - [ ] Auto-compaction ([#20](https://github.com/tmustier/pi-for-excel/issues/20)) — context window budget management for long conversations
 - [ ] Change approval UI ([#6](https://github.com/tmustier/pi-for-excel/issues/6)) — structured approval flow for overwrites
 - [ ] Header bar UX ([#12](https://github.com/tmustier/pi-for-excel/issues/12)) — session switcher, workbook indicator
-- [ ] Extension API build-out ([#13](https://github.com/tmustier/pi-for-excel/issues/13)) — dynamic loading, tool registration, sandboxing
+- [ ] Extension platform follow-ups ([#13](https://github.com/tmustier/pi-for-excel/issues/13)) — sandbox/permissions, widget API evolution, docs polish
 
 ### Future
 - [ ] Production CORS solution ([#4](https://github.com/tmustier/pi-for-excel/issues/4)) — service worker or hosted relay
