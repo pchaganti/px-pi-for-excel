@@ -10,6 +10,7 @@ import { supportsXhigh } from "@mariozechner/pi-ai";
 import type { PiSidebar } from "../ui/pi-sidebar.js";
 import { showToast } from "../ui/toast.js";
 
+import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
 import { commandRegistry } from "../commands/types.js";
 import {
   handleCommandMenuKey,
@@ -139,6 +140,17 @@ export function isReopenLastClosedShortcut(event: ReopenShortcutEventLike): bool
   return event.key.toLowerCase() === "t";
 }
 
+export function shouldAbortFromEscape(opts: {
+  isStreaming: boolean;
+  hasAgent: boolean;
+  escapeClaimedByOverlay: boolean;
+}): boolean {
+  if (!opts.isStreaming) return false;
+  if (!opts.hasAgent) return false;
+  if (opts.escapeClaimedByOverlay) return false;
+  return true;
+}
+
 export function installKeyboardShortcuts(opts: {
   getActiveAgent: () => Agent | null;
   getActiveQueueDisplay: () => QueueDisplay | null;
@@ -177,8 +189,18 @@ export function installKeyboardShortcuts(opts: {
       return;
     }
 
-    // ESC — abort
-    if (e.key === "Escape" && isStreaming && agent) {
+    const escapeClaimedByOverlay = e.key === "Escape" && doesOverlayClaimEscape(targetNode);
+
+    // ESC — abort (only when no overlay/dialog is claiming Escape)
+    if (
+      e.key === "Escape"
+      && shouldAbortFromEscape({
+        isStreaming,
+        hasAgent: agent !== null,
+        escapeClaimedByOverlay,
+      })
+      && agent
+    ) {
       e.preventDefault();
       markUserAborted(agent);
       agent.abort();
