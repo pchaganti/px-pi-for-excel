@@ -23,6 +23,7 @@ export interface RecoveryConditionalFormatRule {
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
+  appliesToAddress?: string;
 }
 
 export interface RecoveryConditionalFormatCaptureResult {
@@ -100,9 +101,20 @@ function emptyCommentThreadState(): RecoveryCommentThreadState {
   };
 }
 
-function firstCellAddress(address: string): string {
-  const local = address.includes("!") ? (address.split("!")[1] ?? address) : address;
-  const first = local.split(":")[0] ?? local;
+function localAddressPart(address: string): string {
+  const trimmed = address.trim();
+  const separatorIndex = trimmed.lastIndexOf("!");
+  if (separatorIndex < 0) {
+    return trimmed;
+  }
+
+  return trimmed.slice(separatorIndex + 1);
+}
+
+export function firstCellAddress(address: string): string {
+  const local = localAddressPart(address);
+  const firstArea = local.split(",")[0] ?? local;
+  const first = firstArea.split(":")[0] ?? firstArea;
   return first.trim();
 }
 
@@ -119,6 +131,7 @@ function cloneRecoveryConditionalFormatRule(rule: RecoveryConditionalFormatRule)
     bold: rule.bold,
     italic: rule.italic,
     underline: rule.underline,
+    appliesToAddress: rule.appliesToAddress,
   };
 }
 
@@ -175,6 +188,20 @@ function applyRuleFormatting(format: Excel.ConditionalRangeFormat, rule: Recover
   }
 }
 
+interface LoadedConditionalFormatEntry {
+  conditionalFormat: Excel.ConditionalFormat;
+  appliesTo: Excel.RangeAreas;
+}
+
+function normalizeConditionalFormatAddress(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 async function captureConditionalFormatRulesInRange(
   context: Excel.RequestContext,
   range: Excel.Range,
@@ -182,6 +209,8 @@ async function captureConditionalFormatRulesInRange(
   const collection = range.conditionalFormats;
   collection.load("items/type,items/stopIfTrue");
   await context.sync();
+
+  const entries: LoadedConditionalFormatEntry[] = [];
 
   for (const conditionalFormat of collection.items) {
     const normalizedType = normalizeConditionalFormatType(conditionalFormat.type);
@@ -192,6 +221,10 @@ async function captureConditionalFormatRulesInRange(
         reason: `Unsupported conditional format type: ${String(conditionalFormat.type)}`,
       };
     }
+
+    const appliesTo = conditionalFormat.getRanges();
+    appliesTo.load("address");
+    entries.push({ conditionalFormat, appliesTo });
 
     if (normalizedType === "custom") {
       conditionalFormat.custom.load("rule");
@@ -209,7 +242,8 @@ async function captureConditionalFormatRulesInRange(
 
   const rules: RecoveryConditionalFormatRule[] = [];
 
-  for (const conditionalFormat of collection.items) {
+  for (const entry of entries) {
+    const conditionalFormat = entry.conditionalFormat;
     const normalizedType = normalizeConditionalFormatType(conditionalFormat.type);
     if (!normalizedType) {
       return {
@@ -219,12 +253,15 @@ async function captureConditionalFormatRulesInRange(
       };
     }
 
+    const appliesToAddress = normalizeConditionalFormatAddress(entry.appliesTo.address);
+
     if (normalizedType === "custom") {
       const custom = conditionalFormat.custom;
       rules.push({
         type: "custom",
         stopIfTrue: normalizeOptionalBoolean(conditionalFormat.stopIfTrue),
         formula: normalizeOptionalString(custom.rule.formula),
+        appliesToAddress,
         ...captureRuleFormatting(custom.format),
       });
       continue;
@@ -259,6 +296,7 @@ async function captureConditionalFormatRulesInRange(
       operator,
       formula1,
       formula2: typeof formula2 === "string" ? formula2 : undefined,
+      appliesToAddress,
       ...captureRuleFormatting(cellValue.format),
     });
   }
@@ -269,10 +307,20 @@ async function captureConditionalFormatRulesInRange(
   };
 }
 
+function resolveConditionalFormatTargetAddress(
+  fallbackAddress: string,
+  rule: RecoveryConditionalFormatRule,
+): string {
+  return normalizeConditionalFormatAddress(rule.appliesToAddress) ?? fallbackAddress;
+}
+
 function applyConditionalFormatRule(
   range: Excel.Range,
+  fallbackAddress: string,
   rule: RecoveryConditionalFormatRule,
 ): void {
+  const targetAddress = resolveConditionalFormatTargetAddress(fallbackAddress, rule);
+
   if (rule.type === "custom") {
     if (typeof rule.formula !== "string") {
       throw new Error("Conditional format checkpoint is invalid: custom rule formula is missing.");
@@ -286,6 +334,7 @@ function applyConditionalFormatRule(
       conditionalFormat.stopIfTrue = rule.stopIfTrue;
     }
 
+    conditionalFormat.setRanges(targetAddress);
     return;
   }
 
@@ -309,6 +358,8 @@ function applyConditionalFormatRule(
   if (rule.stopIfTrue !== undefined) {
     conditionalFormat.stopIfTrue = rule.stopIfTrue;
   }
+
+  conditionalFormat.setRanges(targetAddress);
 }
 
 export async function captureConditionalFormatState(address: string): Promise<RecoveryConditionalFormatCaptureResult> {
@@ -333,7 +384,7 @@ export async function applyConditionalFormatState(
     range.conditionalFormats.clearAll();
 
     for (const rule of targetRules) {
-      applyConditionalFormatRule(range, rule);
+      applyConditionalFormatRule(range, address, rule);
     }
 
     await context.sync();

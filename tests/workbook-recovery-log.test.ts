@@ -7,6 +7,7 @@ import {
   type WorkbookRecoverySnapshot,
 } from "../src/workbook/recovery-log.ts";
 import type { WorkbookContext } from "../src/workbook/context.ts";
+import { firstCellAddress } from "../src/workbook/recovery-states.ts";
 
 const RECOVERY_SETTING_KEY = "workbook.recovery-snapshots.v1";
 
@@ -39,6 +40,12 @@ function findSnapshotById(snapshots: WorkbookRecoverySnapshot[], id: string): Wo
 
   return null;
 }
+
+void test("firstCellAddress handles quoted sheet names that include !", () => {
+  assert.equal(firstCellAddress("'Q1!Ops'!A1"), "A1");
+  assert.equal(firstCellAddress("'Q1!Ops'!$B$2:$D$9"), "$B$2");
+  assert.equal(firstCellAddress("Sheet1!C5:D7"), "C5");
+});
 
 void test("recovery log appends and reloads workbook-scoped snapshots", async () => {
   const settingsStore = createInMemorySettingsStore();
@@ -343,7 +350,12 @@ void test("restore applies conditional-format checkpoints and creates inverse ch
       appliedRules.push(...rules);
       return Promise.resolve({
         supported: true,
-        rules: [{ type: "custom", formula: "=A1>0", fillColor: "#00FF00" }],
+        rules: [{
+          type: "custom",
+          formula: "=A1>0",
+          fillColor: "#00FF00",
+          appliesToAddress: "Sheet1!A1:A2",
+        }],
       });
     },
   });
@@ -354,7 +366,20 @@ void test("restore applies conditional-format checkpoints and creates inverse ch
     address: "Sheet1!A1:B2",
     changedCount: 4,
     cellCount: 4,
-    conditionalFormatRules: [{ type: "custom", formula: "=A1>10", fillColor: "#FF0000" }],
+    conditionalFormatRules: [
+      {
+        type: "custom",
+        formula: "=A1>10",
+        fillColor: "#FF0000",
+        appliesToAddress: "Sheet1!A1:A2",
+      },
+      {
+        type: "custom",
+        formula: "=B1>10",
+        fillColor: "#0000FF",
+        appliesToAddress: "Sheet1!B1:B2",
+      },
+    ],
   });
 
   assert.ok(appended);
@@ -364,7 +389,33 @@ void test("restore applies conditional-format checkpoints and creates inverse ch
   assert.equal(restored.address, "Sheet1!A1:B2");
   assert.equal(restored.restoredSnapshotId, appended?.id);
   assert.equal(appliedAddress, "Sheet1!A1:B2");
-  assert.equal(appliedRules.length, 1);
+  assert.equal(appliedRules.length, 2);
+  assert.deepEqual(
+    appliedRules.map((rule) =>
+      typeof rule === "object" && rule !== null
+        ? {
+            type: "type" in rule ? rule.type : undefined,
+            formula: "formula" in rule ? rule.formula : undefined,
+            fillColor: "fillColor" in rule ? rule.fillColor : undefined,
+            appliesToAddress: "appliesToAddress" in rule ? rule.appliesToAddress : undefined,
+          }
+        : null
+    ),
+    [
+      {
+        type: "custom",
+        formula: "=A1>10",
+        fillColor: "#FF0000",
+        appliesToAddress: "Sheet1!A1:A2",
+      },
+      {
+        type: "custom",
+        formula: "=B1>10",
+        fillColor: "#0000FF",
+        appliesToAddress: "Sheet1!B1:B2",
+      },
+    ],
+  );
 
   const snapshots = await log.listForCurrentWorkbook(10);
   const inverse = restored.inverseSnapshotId
@@ -375,6 +426,20 @@ void test("restore applies conditional-format checkpoints and creates inverse ch
   assert.equal(inverse?.toolName, "restore_snapshot");
   assert.equal(inverse?.snapshotKind, "conditional_format_rules");
   assert.equal(inverse?.restoredFromSnapshotId, appended?.id);
+  assert.deepEqual(
+    (inverse?.conditionalFormatRules ?? []).map((rule) => ({
+      type: rule.type,
+      formula: rule.formula,
+      fillColor: rule.fillColor,
+      appliesToAddress: rule.appliesToAddress,
+    })),
+    [{
+      type: "custom",
+      formula: "=A1>0",
+      fillColor: "#00FF00",
+      appliesToAddress: "Sheet1!A1:A2",
+    }],
+  );
 });
 
 void test("restore applies comment-thread checkpoints and creates inverse checkpoint", async () => {

@@ -359,7 +359,8 @@ function isRecoveryConditionalFormatRule(value: unknown): value is RecoveryCondi
     (value.fontColor === undefined || typeof value.fontColor === "string") &&
     (value.bold === undefined || typeof value.bold === "boolean") &&
     (value.italic === undefined || typeof value.italic === "boolean") &&
-    (value.underline === undefined || typeof value.underline === "boolean")
+    (value.underline === undefined || typeof value.underline === "boolean") &&
+    (value.appliesToAddress === undefined || typeof value.appliesToAddress === "string")
   );
 }
 
