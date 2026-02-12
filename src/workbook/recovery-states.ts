@@ -604,11 +604,24 @@ async function captureFormatRangeStateWithSelection(
   context: Excel.RequestContext,
   target: ResolvedFormatCaptureTarget,
   selection: RecoveryFormatSelection,
+  maxCellCount?: number,
 ): Promise<RecoveryFormatCaptureResult> {
   if (!hasSelectedFormatProperty(selection)) {
     return {
       supported: false,
       reason: "No restorable format properties were selected.",
+    };
+  }
+
+  const totalCellCount = target.areas.reduce(
+    (count, area) => count + (area.rowCount * area.columnCount),
+    0,
+  );
+
+  if (typeof maxCellCount === "number" && Number.isFinite(maxCellCount) && totalCellCount > maxCellCount) {
+    return {
+      supported: false,
+      reason: `Format checkpoint capture skipped: target exceeds ${maxCellCount.toLocaleString()} cells.`,
     };
   }
 
@@ -671,7 +684,6 @@ async function captureFormatRangeStateWithSelection(
   await context.sync();
 
   const areaStates: RecoveryFormatAreaState[] = [];
-  let cellCount = 0;
 
   for (const prepared of preparedAreas) {
     const areaState: RecoveryFormatAreaState = {
@@ -679,8 +691,6 @@ async function captureFormatRangeStateWithSelection(
       rowCount: prepared.rowCount,
       columnCount: prepared.columnCount,
     };
-
-    cellCount += prepared.rowCount * prepared.columnCount;
 
     if (selection.numberFormat === true) {
       const matrix = validateStringGrid(prepared.range.numberFormat, prepared.rowCount, prepared.columnCount);
@@ -844,7 +854,7 @@ async function captureFormatRangeStateWithSelection(
     state: {
       selection: cloneRecoveryFormatSelection(selection),
       areas: areaStates,
-      cellCount,
+      cellCount: totalCellCount,
     },
   };
 }
@@ -919,9 +929,14 @@ function captureFormatRangeStateUnsupported(reason: string): RecoveryFormatCaptu
   };
 }
 
+export interface CaptureFormatCellsStateOptions {
+  maxCellCount?: number;
+}
+
 export async function captureFormatCellsState(
   address: string,
   selection: RecoveryFormatSelection,
+  options: CaptureFormatCellsStateOptions = {},
 ): Promise<RecoveryFormatCaptureResult> {
   if (!hasSelectedFormatProperty(selection)) {
     return captureFormatRangeStateUnsupported("No restorable format properties were selected.");
@@ -929,7 +944,7 @@ export async function captureFormatCellsState(
 
   return excelRun<RecoveryFormatCaptureResult>(async (context) => {
     const target = await resolveFormatCaptureTarget(context, address);
-    return captureFormatRangeStateWithSelection(context, target, selection);
+    return captureFormatRangeStateWithSelection(context, target, selection, options.maxCellCount);
   });
 }
 

@@ -11,7 +11,7 @@ import type { FormatCellsDetails } from "./tool-details.js";
 import { excelRun, getRange, parseRangeRef, qualifiedAddress } from "../excel/helpers.js";
 import { getWorkbookChangeAuditLog } from "../audit/workbook-change-audit.js";
 import { dispatchWorkbookSnapshotCreated } from "../workbook/recovery-events.js";
-import { getWorkbookRecoveryLog } from "../workbook/recovery-log.js";
+import { getWorkbookRecoveryLog, MAX_RECOVERY_CELLS } from "../workbook/recovery-log.js";
 import { captureFormatCellsState, type RecoveryFormatSelection } from "../workbook/recovery-states.js";
 import { getErrorMessage } from "../utils/errors.js";
 import { resolveStyles } from "../conventions/index.js";
@@ -296,7 +296,11 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
           };
         } else {
           try {
-            checkpointCapture = await captureFormatCellsState(params.range, checkpointPlan.selection);
+            checkpointCapture = await captureFormatCellsState(
+              params.range,
+              checkpointPlan.selection,
+              { maxCellCount: MAX_RECOVERY_CELLS },
+            );
           } catch (captureError: unknown) {
             checkpointCapture = {
               supported: false,
