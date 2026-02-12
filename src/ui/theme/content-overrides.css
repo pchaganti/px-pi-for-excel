@@ -68,7 +68,7 @@ assistant-message { margin-right: var(--pill-inset); }
 .pi-tool-group .pi-tool-card[data-state="complete"]:hover {
   border-color: transparent;
 }
-.pi-tool-group .pi-tool-card[data-state="complete"] .pi-tool-card__header > button {
+.pi-tool-group .pi-tool-card[data-state="complete"] .pi-tool-card__toggle {
   padding: 2px 4px;
 }
 /* Grouped: inner pill needs top-margin since card chrome is stripped */
@@ -76,21 +76,48 @@ assistant-message { margin-right: var(--pill-inset); }
   margin-top: 4px;
 }
 
-/* Header — the clickable toggle row from pi-web-ui */
-.pi-tool-card__header > button {
-  padding: var(--pill-padding-y) var(--pill-padding-x);
+/* Header — local tool-card toggle markup */
+.pi-tool-card__toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 7px;
+  padding: var(--pill-padding-y) var(--pill-padding-x);
   font-size: var(--text-base);
-  min-width: 0;
-  overflow: hidden;
+  color: var(--muted-foreground);
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
 }
-.pi-tool-card__header > button > div {
+
+.pi-tool-card__toggle-main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   min-width: 0;
   overflow: hidden;
 }
 
-/* Hide static tool icon — applied in theme/unstable-overrides.css
-   (selector depends on upstream utility classes). */
+.pi-tool-card__toggle-chevron {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+
+.pi-tool-card__toggle--static {
+  cursor: default;
+}
+
+.pi-tool-card__spinner {
+  display: inline-flex;
+  align-items: center;
+  color: var(--foreground);
+  flex-shrink: 0;
+  animation: pi-think-spin 0.7s linear infinite;
+}
 
 /* Title — match thinking block: same font, muted → foreground on hover */
 .pi-tool-card__title {
@@ -104,7 +131,8 @@ assistant-message { margin-right: var(--pill-inset); }
   min-width: 0;
   transition: color var(--duration-fast);
 }
-.pi-tool-card__header > button:hover .pi-tool-card__title {
+
+.pi-tool-card__toggle:hover .pi-tool-card__title {
   color: var(--foreground);
 }
 .pi-tool-card__title strong {
@@ -122,14 +150,15 @@ assistant-message { margin-right: var(--pill-inset); }
 }
 
 /* Body — revealed on expand.
-   pi-web-ui toggles max-h-0 ↔ max-h-[2000px] + overflow-hidden.
-   We override to make long results scrollable instead of clipped. */
+   We keep max-h-0 collapsed and toggle .pi-tool-card__body--open in JS. */
 .pi-tool-card__body {
   overflow-y: auto;
   scrollbar-width: thin;
 }
-/* pi-web-ui adds mt-3 when expanded; keep our card tight.
-   Rule lives in theme/unstable-overrides.css (utility-coupled selector). */
+
+.pi-tool-card__body--open {
+  max-height: 2000px;
+}
 /* Inner pill — white content area nested inside green/white outer pill */
 .pi-tool-card__inner {
   padding: 10px 14px 14px;

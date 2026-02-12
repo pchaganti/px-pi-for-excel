@@ -6,15 +6,11 @@
  */
 
 import type { ImageContent, TextContent, ToolResultMessage } from "@mariozechner/pi-ai";
-import {
-  registerToolRenderer,
-  renderCollapsibleHeader,
-  renderHeader,
-} from "@mariozechner/pi-web-ui/dist/tools/renderer-registry.js";
+import { registerToolRenderer } from "@mariozechner/pi-web-ui/dist/tools/renderer-registry.js";
 import type { ToolRenderer, ToolRenderResult } from "@mariozechner/pi-web-ui/dist/tools/types.js";
 import { html, type TemplateResult } from "lit";
 import { createRef, ref } from "lit/directives/ref.js";
-import { Code } from "lucide";
+import { renderCollapsibleToolCardHeader, renderToolCardHeader } from "./tool-card-header.js";
 import { cellRef, cellRefs } from "./cell-link.js";
 import { humanizeToolInput } from "./humanize-params.js";
 import { humanizeColorsInText } from "./color-names.js";
@@ -614,7 +610,7 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
           content: html`
             <div class="pi-tool-card" data-state=${state} data-tool-name=${toolName}>
               <div class="pi-tool-card__header">
-                ${renderCollapsibleHeader(state, Code, title, contentRef, chevronRef, defaultExpanded)}
+                ${renderCollapsibleToolCardHeader(state, title, contentRef, chevronRef, defaultExpanded)}
               </div>
               <div ${ref(contentRef)}
                 class="pi-tool-card__body overflow-hidden transition-all duration-300 max-h-0"
@@ -673,7 +669,7 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
           content: html`
             <div class="pi-tool-card" data-state=${state} data-tool-name=${toolName}>
               <div class="pi-tool-card__header">
-                ${renderCollapsibleHeader(state, Code, title, contentRef, chevronRef, defaultExpanded)}
+                ${renderCollapsibleToolCardHeader(state, title, contentRef, chevronRef, defaultExpanded)}
               </div>
               <div ${ref(contentRef)}
                 class="pi-tool-card__body overflow-hidden transition-all duration-300 max-h-0"
@@ -699,7 +695,7 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
         content: html`
           <div class="pi-tool-card" data-state=${state} data-tool-name=${toolName}>
             <div class="pi-tool-card__header">
-              ${renderHeader(state, Code, title)}
+              ${renderToolCardHeader(state, title)}
             </div>
           </div>
         `,

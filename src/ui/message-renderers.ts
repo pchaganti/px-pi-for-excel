@@ -7,9 +7,8 @@
 
 import { html } from "lit";
 import { createRef, ref } from "lit/directives/ref.js";
-import { Archive } from "lucide";
 import { registerMessageRenderer } from "@mariozechner/pi-web-ui/dist/components/message-renderer-registry.js";
-import { renderCollapsibleHeader } from "@mariozechner/pi-web-ui/dist/tools/renderer-registry.js";
+import { renderCollapsibleToolCardHeader } from "./tool-card-header.js";
 
 import type { CompactionSummaryMessage } from "../messages/compaction.js";
 import type { ArchivedMessagesMessage } from "../messages/archived-history.js";
@@ -35,7 +34,7 @@ registerMessageRenderer("archivedMessages", {
       <div class="px-4">
         <div class="pi-tool-card" data-state="complete" data-tool-name="archive_history">
           <div class="pi-tool-card__header">
-            ${renderCollapsibleHeader("complete", Archive, title, contentRef, chevronRef, false)}
+            ${renderCollapsibleToolCardHeader("complete", title, contentRef, chevronRef, false)}
           </div>
 
           <div
@@ -83,7 +82,7 @@ registerMessageRenderer("compactionSummary", {
       <div class="px-4">
         <div class="pi-tool-card" data-state="complete" data-tool-name="compact">
           <div class="pi-tool-card__header">
-            ${renderCollapsibleHeader("complete", Archive, title, contentRef, chevronRef, false)}
+            ${renderCollapsibleToolCardHeader("complete", title, contentRef, chevronRef, false)}
           </div>
 
           <div
