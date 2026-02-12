@@ -7,7 +7,7 @@ import {
   type WorkbookRecoverySnapshot,
 } from "../src/workbook/recovery-log.ts";
 import type { WorkbookContext } from "../src/workbook/context.ts";
-import { firstCellAddress } from "../src/workbook/recovery-states.ts";
+import { firstCellAddress, type RecoveryFormatRangeState } from "../src/workbook/recovery-states.ts";
 
 const RECOVERY_SETTING_KEY = "workbook.recovery-snapshots.v1";
 
@@ -39,6 +39,10 @@ function findSnapshotById(snapshots: WorkbookRecoverySnapshot[], id: string): Wo
   }
 
   return null;
+}
+
+function withoutUndefined(value: unknown): unknown {
+  return JSON.parse(JSON.stringify(value));
 }
 
 void test("firstCellAddress handles quoted sheet names that include !", () => {
@@ -319,6 +323,114 @@ void test("restore applies checkpoint values and creates inverse checkpoint", as
   assert.ok(inverse);
   assert.equal(inverse?.toolName, "restore_snapshot");
   assert.equal(inverse?.restoredFromSnapshotId, appended?.id);
+});
+
+void test("restore applies format-cells checkpoints and creates inverse checkpoint", async () => {
+  const settingsStore = createInMemorySettingsStore();
+
+  const workbookContext: WorkbookContext = {
+    workbookId: "url_sha256:workbook-format",
+    workbookName: "Formatting.xlsx",
+    source: "document.url",
+  };
+
+  let idCounter = 0;
+  const createId = (): string => {
+    idCounter += 1;
+    return `snap-format-${idCounter}`;
+  };
+
+  let appliedAddress = "";
+  let appliedState: RecoveryFormatRangeState | null = null;
+
+  const restoredTargetState: RecoveryFormatRangeState = {
+    selection: {
+      numberFormat: true,
+      fillColor: true,
+      bold: true,
+      borderTop: true,
+    },
+    areas: [
+      {
+        address: "Sheet1!A1:B1",
+        rowCount: 1,
+        columnCount: 2,
+        numberFormat: [["0.00", "0.00"]],
+        fillColor: "#FFFF00",
+        bold: true,
+        borderTop: {
+          style: "Continuous",
+          weight: "Thin",
+          color: "#000000",
+        },
+      },
+    ],
+    cellCount: 2,
+  };
+
+  const currentFormatState: RecoveryFormatRangeState = {
+    selection: {
+      numberFormat: true,
+      fillColor: true,
+      bold: true,
+      borderTop: true,
+    },
+    areas: [
+      {
+        address: "Sheet1!A1:B1",
+        rowCount: 1,
+        columnCount: 2,
+        numberFormat: [["General", "General"]],
+        fillColor: "#FFFFFF",
+        bold: false,
+        borderTop: {
+          style: "None",
+        },
+      },
+    ],
+    cellCount: 2,
+  };
+
+  const log = new WorkbookRecoveryLog({
+    getSettingsStore: () => Promise.resolve(settingsStore),
+    getWorkbookContext: () => Promise.resolve(workbookContext),
+    now: () => 1700000001800,
+    createId,
+    applySnapshot: () => Promise.resolve({ values: [[1]], formulas: [[1]] }),
+    applyFormatCellsSnapshot: (address, state) => {
+      appliedAddress = address;
+      appliedState = state;
+      return Promise.resolve(currentFormatState);
+    },
+  });
+
+  const appended = await log.appendFormatCells({
+    toolName: "format_cells",
+    toolCallId: "call-format",
+    address: "Sheet1!A1:B1",
+    changedCount: 2,
+    formatRangeState: restoredTargetState,
+  });
+
+  assert.ok(appended);
+
+  const restored = await log.restore(appended?.id ?? "");
+
+  assert.equal(restored.address, "Sheet1!A1:B1");
+  assert.equal(restored.restoredSnapshotId, appended?.id);
+  assert.equal(appliedAddress, "Sheet1!A1:B1");
+  assert.deepEqual(withoutUndefined(appliedState), withoutUndefined(restoredTargetState));
+
+  const snapshots = await log.listForCurrentWorkbook(10);
+  const inverse = restored.inverseSnapshotId
+    ? findSnapshotById(snapshots, restored.inverseSnapshotId)
+    : null;
+
+  assert.ok(inverse);
+  assert.equal(inverse?.toolName, "restore_snapshot");
+  assert.equal(inverse?.snapshotKind, "format_cells_state");
+  assert.equal(inverse?.restoredFromSnapshotId, appended?.id);
+  assert.deepEqual(withoutUndefined(inverse?.formatRangeState), withoutUndefined(currentFormatState));
 });
 
 void test("restore applies conditional-format checkpoints and creates inverse checkpoint", async () => {

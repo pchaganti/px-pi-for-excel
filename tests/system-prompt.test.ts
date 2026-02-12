@@ -54,6 +54,7 @@ void test("system prompt includes workbook history recovery tool", () => {
   assert.match(prompt, /write_cells/);
   assert.match(prompt, /fill_formula/);
   assert.match(prompt, /python_transform_range/);
+  assert.match(prompt, /format_cells/);
   assert.match(prompt, /conditional_format/);
   assert.match(prompt, /comments/);
 });

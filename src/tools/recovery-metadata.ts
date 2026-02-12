@@ -1,6 +1,6 @@
 import type { RecoveryCheckpointDetails } from "./tool-details.js";
 
-export const CHECKPOINTED_TOOL_LABEL = "`write_cells`, `fill_formula`, `python_transform_range`, `conditional_format`, and `comments`";
+export const CHECKPOINTED_TOOL_LABEL = "`write_cells`, `fill_formula`, `python_transform_range`, `format_cells`, `conditional_format`, and `comments`";
 
 export const NON_CHECKPOINTED_MUTATION_REASON =
   "This mutation type is not yet covered by workbook checkpoints.";
