@@ -15,12 +15,10 @@ import { validateOfficeProxyUrl } from "../../auth/proxy-validation.js";
 import { dispatchExperimentalToolConfigChanged } from "../../experiments/events.js";
 import { isExperimentalFeatureEnabled, setExperimentalFeatureEnabled } from "../../experiments/flags.js";
 import { PYTHON_BRIDGE_URL_SETTING_KEY } from "../../tools/experimental-tool-gates.js";
-import { requestChatInputFocus } from "../../ui/input-focus.js";
-import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
+import { closeOverlayById, createOverlayDialog } from "../../ui/overlay-dialog.js";
 import { showToast } from "../../ui/toast.js";
 
 const OVERLAY_ID = "pi-extensions-overlay";
-const overlayClosers = new WeakMap<HTMLElement, () => void>();
 
 const EXTENSION_PROMPT_TEMPLATE = [
   "Write a single-file JavaScript ES module extension for Pi for Excel.",
@@ -195,24 +193,14 @@ async function deleteSettingValue(settingKey: string): Promise<void> {
 }
 
 export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
-  const existing = document.getElementById(OVERLAY_ID);
-  if (existing) {
-    const closeExisting = overlayClosers.get(existing);
-    if (closeExisting) {
-      closeExisting();
-    } else {
-      existing.remove();
-    }
-
+  if (closeOverlayById(OVERLAY_ID)) {
     return;
   }
 
-  const overlay = document.createElement("div");
-  overlay.id = OVERLAY_ID;
-  overlay.className = "pi-welcome-overlay";
-
-  const card = document.createElement("div");
-  card.className = "pi-welcome-card pi-overlay-card pi-ext-card";
+  const dialog = createOverlayDialog({
+    overlayId: OVERLAY_ID,
+    cardClassName: "pi-welcome-card pi-overlay-card pi-ext-card",
+  });
 
   const header = document.createElement("div");
   header.className = "pi-overlay-header";
@@ -230,9 +218,7 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
 
   titleWrap.append(title, subtitle);
 
-  let closeOverlay = () => {
-    overlay.remove();
-  };
+  const closeOverlay = dialog.close;
 
   const closeButton = createButton("Close");
   closeButton.addEventListener("click", () => {
@@ -383,8 +369,7 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     templateSection,
   );
 
-  card.append(header, body);
-  overlay.appendChild(card);
+  dialog.card.append(header, body);
 
   const setBusy = (busy: boolean) => {
     installUrlButton.disabled = busy;
@@ -827,35 +812,9 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     void renderLocalBridgeState();
   });
 
-  const cleanupEscape = installOverlayEscapeClose(overlay, () => {
-    closeOverlay();
-  });
+  dialog.addCleanup(unsubscribe);
 
-  let closed = false;
-  closeOverlay = () => {
-    if (closed) {
-      return;
-    }
-
-    closed = true;
-    overlayClosers.delete(overlay);
-    cleanupEscape();
-    unsubscribe();
-    overlay.remove();
-    requestChatInputFocus();
-  };
-
-  overlayClosers.set(overlay, closeOverlay);
-
-  overlay.addEventListener("click", (event) => {
-    if (event.target !== overlay) {
-      return;
-    }
-
-    closeOverlay();
-  });
-
-  document.body.appendChild(overlay);
+  dialog.mount();
   renderInstalledList();
   renderSandboxState();
   void renderLocalBridgeState();

@@ -10,9 +10,8 @@ import {
   getResumeTargetLabel,
   type ResumeDialogTarget,
 } from "./resume-target.js";
-import { requestChatInputFocus } from "../../ui/input-focus.js";
+import { closeOverlayById, createOverlayDialog } from "../../ui/overlay-dialog.js";
 import { showToast } from "../../ui/toast.js";
-import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../../workbook/context.js";
 import {
   getSessionWorkbookId,
@@ -20,8 +19,6 @@ import {
 } from "../../workbook/session-association.js";
 
 export { showInstructionsDialog } from "./instructions-overlay.js";
-
-const overlayClosers = new WeakMap<HTMLElement, () => void>();
 
 function formatRelativeDate(iso: string): string {
   const d = new Date(iso);
@@ -77,15 +74,7 @@ function formatRecoveryToolLabel(toolName: RecoveryCheckpointToolName): string {
 }
 
 export async function showProviderPicker(): Promise<void> {
-  const existing = document.getElementById("pi-login-overlay");
-  if (existing) {
-    const closeExisting = overlayClosers.get(existing);
-    if (closeExisting) {
-      closeExisting();
-    } else {
-      existing.remove();
-    }
-
+  if (closeOverlayById("pi-login-overlay")) {
     return;
   }
 
@@ -94,12 +83,10 @@ export async function showProviderPicker(): Promise<void> {
   const configuredKeys = await storage.providerKeys.list();
   const configuredSet = new Set(configuredKeys);
 
-  const overlay = document.createElement("div");
-  overlay.id = "pi-login-overlay";
-  overlay.className = "pi-welcome-overlay";
-
-  const card = document.createElement("div");
-  card.className = "pi-welcome-card pi-overlay-card pi-provider-picker-card";
+  const dialog = createOverlayDialog({
+    overlayId: "pi-login-overlay",
+    cardClassName: "pi-welcome-card pi-overlay-card pi-provider-picker-card",
+  });
 
   const title = document.createElement("h2");
   title.className = "pi-overlay-title";
@@ -112,8 +99,7 @@ export async function showProviderPicker(): Promise<void> {
   const list = document.createElement("div");
   list.className = "pi-welcome-providers pi-provider-picker-list";
 
-  card.append(title, subtitle, list);
-  overlay.appendChild(card);
+  dialog.card.append(title, subtitle, list);
 
   const expandedRef: { current: HTMLElement | null } = { current: null };
 
@@ -134,26 +120,7 @@ export async function showProviderPicker(): Promise<void> {
     list.appendChild(row);
   }
 
-  let closed = false;
-  const closeOverlay = () => {
-    if (closed) {
-      return;
-    }
-
-    closed = true;
-    overlayClosers.delete(overlay);
-    cleanupEscape();
-    overlay.remove();
-    requestChatInputFocus();
-  };
-  const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
-  overlayClosers.set(overlay, closeOverlay);
-
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) closeOverlay();
-  });
-
-  document.body.appendChild(overlay);
+  dialog.mount();
 }
 
 function buildResumeListItem(session: SessionMetadata): HTMLButtonElement {
@@ -213,15 +180,7 @@ export async function showResumeDialog(opts: {
     return;
   }
 
-  const existing = document.getElementById("pi-resume-overlay");
-  if (existing) {
-    const closeExisting = overlayClosers.get(existing);
-    if (closeExisting) {
-      closeExisting();
-    } else {
-      existing.remove();
-    }
-
+  if (closeOverlayById("pi-resume-overlay")) {
     return;
   }
 
@@ -243,18 +202,16 @@ export async function showResumeDialog(opts: {
   let showAllWorkbooks = workbookId === null;
   let selectedTarget: ResumeDialogTarget = opts.defaultTarget ?? "new_tab";
 
-  const overlay = document.createElement("div");
-  overlay.id = "pi-resume-overlay";
-  overlay.className = "pi-welcome-overlay";
-
-  const card = document.createElement("div");
-  card.className = "pi-welcome-card pi-overlay-card pi-resume-dialog";
+  const dialog = createOverlayDialog({
+    overlayId: "pi-resume-overlay",
+    cardClassName: "pi-welcome-card pi-overlay-card pi-resume-dialog",
+  });
 
   const title = document.createElement("h2");
   title.className = "pi-overlay-title pi-resume-dialog__title";
   title.textContent = "Resume Session";
 
-  card.appendChild(title);
+  dialog.card.appendChild(title);
 
   const targetControls = document.createElement("div");
   targetControls.className = "pi-resume-target-controls";
@@ -294,14 +251,14 @@ export async function showResumeDialog(opts: {
   });
 
   targetControls.append(openInNewTabButton, replaceCurrentButton);
-  card.append(targetControls, targetHint);
+  dialog.card.append(targetControls, targetHint);
   syncTargetButtons();
 
   const list = document.createElement("div");
   list.className = "pi-resume-list";
 
   if (workbookId) {
-    card.appendChild(
+    dialog.card.appendChild(
       buildWorkbookFilterRow({
         workbookLabel,
         checked: showAllWorkbooks,
@@ -313,8 +270,7 @@ export async function showResumeDialog(opts: {
     );
   }
 
-  card.appendChild(list);
-  overlay.appendChild(card);
+  dialog.card.appendChild(list);
 
   function getVisibleSessions(): SessionMetadata[] {
     if (showAllWorkbooks || workbookId === null) {
@@ -349,27 +305,9 @@ export async function showResumeDialog(opts: {
 
   renderList();
 
-  let closed = false;
-  const closeOverlay = () => {
-    if (closed) {
-      return;
-    }
+  const closeOverlay = dialog.close;
 
-    closed = true;
-    overlayClosers.delete(overlay);
-    cleanupEscape();
-    overlay.remove();
-    requestChatInputFocus();
-  };
-  const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
-  overlayClosers.set(overlay, closeOverlay);
-
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) {
-      closeOverlay();
-      return;
-    }
-
+  dialog.overlay.addEventListener("click", (e) => {
     const target = e.target;
     if (!(target instanceof HTMLElement)) return;
 
@@ -409,7 +347,7 @@ export async function showResumeDialog(opts: {
     })();
   });
 
-  document.body.appendChild(overlay);
+  dialog.mount();
 }
 
 export async function showRecoveryDialog(opts: {
@@ -419,24 +357,14 @@ export async function showRecoveryDialog(opts: {
   onDelete: (snapshotId: string) => Promise<boolean>;
   onClear: () => Promise<number>;
 }): Promise<void> {
-  const existing = document.getElementById("pi-recovery-overlay");
-  if (existing) {
-    const closeExisting = overlayClosers.get(existing);
-    if (closeExisting) {
-      closeExisting();
-    } else {
-      existing.remove();
-    }
-
+  if (closeOverlayById("pi-recovery-overlay")) {
     return;
   }
 
-  const overlay = document.createElement("div");
-  overlay.id = "pi-recovery-overlay";
-  overlay.className = "pi-welcome-overlay";
-
-  const card = document.createElement("div");
-  card.className = "pi-welcome-card pi-overlay-card pi-recovery-dialog";
+  const dialog = createOverlayDialog({
+    overlayId: "pi-recovery-overlay",
+    cardClassName: "pi-welcome-card pi-overlay-card pi-recovery-dialog",
+  });
 
   const title = document.createElement("h2");
   title.className = "pi-overlay-title";
@@ -484,8 +412,7 @@ export async function showRecoveryDialog(opts: {
   closeButton.textContent = "Close";
 
   footer.append(closeButton);
-  card.append(title, subtitle, workbookTag, saveBoundaryHint, toolbar, list, footer);
-  overlay.appendChild(card);
+  dialog.card.append(title, subtitle, workbookTag, saveBoundaryHint, toolbar, list, footer);
 
   let checkpoints: RecoveryCheckpointSummary[] = [];
   let busy = false;
@@ -664,31 +591,11 @@ export async function showRecoveryDialog(opts: {
     })();
   });
 
-  let closed = false;
-  const closeOverlay = () => {
-    if (closed) {
-      return;
-    }
-
-    closed = true;
-    overlayClosers.delete(overlay);
-    cleanupEscape();
-    overlay.remove();
-    requestChatInputFocus();
-  };
-
-  const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
-  overlayClosers.set(overlay, closeOverlay);
+  const closeOverlay = dialog.close;
 
   closeButton.addEventListener("click", closeOverlay);
 
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) {
-      closeOverlay();
-    }
-  });
-
-  document.body.appendChild(overlay);
+  dialog.mount();
 
   setBusy(true);
   statusText.textContent = "Loading…";
@@ -721,24 +628,14 @@ export function showShortcutsDialog(): void {
     ["⇧F6", "Focus: reverse direction"],
   ];
 
-  const existing = document.getElementById("pi-shortcuts-overlay");
-  if (existing) {
-    const closeExisting = overlayClosers.get(existing);
-    if (closeExisting) {
-      closeExisting();
-    } else {
-      existing.remove();
-    }
-
+  if (closeOverlayById("pi-shortcuts-overlay")) {
     return;
   }
 
-  const overlay = document.createElement("div");
-  overlay.id = "pi-shortcuts-overlay";
-  overlay.className = "pi-welcome-overlay";
-
-  const card = document.createElement("div");
-  card.className = "pi-welcome-card pi-overlay-card pi-shortcuts-dialog";
+  const dialog = createOverlayDialog({
+    overlayId: "pi-shortcuts-overlay",
+    cardClassName: "pi-welcome-card pi-overlay-card pi-shortcuts-dialog",
+  });
 
   const title = document.createElement("h2");
   title.className = "pi-overlay-title";
@@ -768,33 +665,13 @@ export function showShortcutsDialog(): void {
   closeButton.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--full";
   closeButton.textContent = "Close";
 
-  card.append(title, list, closeButton);
-  overlay.appendChild(card);
+  dialog.card.append(title, list, closeButton);
 
-  let closed = false;
-  const closeOverlay = () => {
-    if (closed) {
-      return;
-    }
-
-    closed = true;
-    overlayClosers.delete(overlay);
-    cleanupEscape();
-    overlay.remove();
-    requestChatInputFocus();
-  };
-  const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
-  overlayClosers.set(overlay, closeOverlay);
+  const closeOverlay = dialog.close;
 
   closeButton?.addEventListener("click", () => {
     closeOverlay();
   });
 
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) {
-      closeOverlay();
-    }
-  });
-
-  document.body.appendChild(overlay);
+  dialog.mount();
 }

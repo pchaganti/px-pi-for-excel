@@ -13,12 +13,10 @@ import { type FilesWorkspaceAuditContext, getFilesWorkspace } from "../files/wor
 import { isExperimentalFeatureEnabled, setExperimentalFeatureEnabled } from "../experiments/flags.js";
 import { getErrorMessage } from "../utils/errors.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../workbook/context.js";
-import { requestChatInputFocus } from "./input-focus.js";
-import { installOverlayEscapeClose } from "./overlay-escape.js";
+import { closeOverlayById, createOverlayDialog } from "./overlay-dialog.js";
 import { showToast } from "./toast.js";
 
 const OVERLAY_ID = "pi-files-workspace-overlay";
-const overlayClosers = new WeakMap<HTMLElement, () => void>();
 
 const DIALOG_AUDIT_CONTEXT: FilesWorkspaceAuditContext = {
   actor: "user",
@@ -163,26 +161,16 @@ function fileMatchesFilter(args: {
 }
 
 export async function showFilesWorkspaceDialog(): Promise<void> {
-  const existing = document.getElementById(OVERLAY_ID);
-  if (existing) {
-    const closeExisting = overlayClosers.get(existing);
-    if (closeExisting) {
-      closeExisting();
-    } else {
-      existing.remove();
-    }
-
+  if (closeOverlayById(OVERLAY_ID)) {
     return;
   }
 
   const workspace = getFilesWorkspace();
 
-  const overlay = document.createElement("div");
-  overlay.id = OVERLAY_ID;
-  overlay.className = "pi-welcome-overlay";
-
-  const card = document.createElement("div");
-  card.className = "pi-welcome-card pi-files-dialog";
+  const dialog = createOverlayDialog({
+    overlayId: OVERLAY_ID,
+    cardClassName: "pi-welcome-card pi-files-dialog",
+  });
 
   const title = document.createElement("h2");
   title.className = "pi-files-dialog__title";
@@ -287,7 +275,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     disconnectNativeButton,
   );
 
-  card.append(
+  dialog.card.append(
     title,
     subtitle,
     controls,
@@ -299,8 +287,6 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     audit,
     footer,
   );
-
-  overlay.appendChild(card);
 
   let activeViewerPath: string | null = null;
   let viewerTruncated = false;
@@ -315,21 +301,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     activeObjectUrl = null;
   };
 
-  let closed = false;
-  let cleanupEscape = () => {};
-  const closeOverlay = () => {
-    if (closed) {
-      return;
-    }
-
-    closed = true;
-    overlayClosers.delete(overlay);
-    cleanupEscape();
-    cleanup();
-    revokeObjectUrl();
-    overlay.remove();
-    requestChatInputFocus();
-  };
+  const closeOverlay = dialog.close;
 
   const setStatus = (message: string) => {
     statusLine.textContent = message;
@@ -706,7 +678,10 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
   const cleanup = () => {
     document.removeEventListener(FILES_WORKSPACE_CHANGED_EVENT, onWorkspaceChanged);
+    revokeObjectUrl();
   };
+
+  dialog.addCleanup(cleanup);
 
   enableButton.addEventListener("click", () => {
     setExperimentalFeatureEnabled("files_workspace", true);
@@ -815,19 +790,10 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       });
   });
 
-  cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
-  overlayClosers.set(overlay, closeOverlay);
-
   closeButton.addEventListener("click", closeOverlay);
-
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) {
-      closeOverlay();
-    }
-  });
 
   document.addEventListener(FILES_WORKSPACE_CHANGED_EVENT, onWorkspaceChanged);
 
-  document.body.appendChild(overlay);
+  dialog.mount();
   await renderList();
 }

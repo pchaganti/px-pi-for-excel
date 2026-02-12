@@ -20,14 +20,11 @@ import {
 } from "../../conventions/store.js";
 import { DEFAULT_CURRENCY_SYMBOL, PRESET_DEFAULT_DP } from "../../conventions/defaults.js";
 import type { StoredConventions, NumberPreset } from "../../conventions/types.js";
-import { requestChatInputFocus } from "../../ui/input-focus.js";
-import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
+import { closeOverlayById, createOverlayDialog } from "../../ui/overlay-dialog.js";
 import { showToast } from "../../ui/toast.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../../workbook/context.js";
 
 type RulesTab = "user" | "workbook" | "conventions";
-
-const overlayClosers = new WeakMap<HTMLElement, () => void>();
 
 function setActiveTab(
   tabButtons: Record<RulesTab, HTMLButtonElement>,
@@ -291,15 +288,7 @@ function buildConventionsForm(
 export async function showInstructionsDialog(opts?: {
   onSaved?: () => void | Promise<void>;
 }): Promise<void> {
-  const existing = document.getElementById("pi-instructions-overlay");
-  if (existing) {
-    const closeExisting = overlayClosers.get(existing);
-    if (closeExisting) {
-      closeExisting();
-    } else {
-      existing.remove();
-    }
-
+  if (closeOverlayById("pi-instructions-overlay")) {
     return;
   }
 
@@ -314,12 +303,10 @@ export async function showInstructionsDialog(opts?: {
   const conventionsFormState = resolvedToFormState(storedConventions);
   let activeTab: RulesTab = "user";
 
-  const overlay = document.createElement("div");
-  overlay.id = "pi-instructions-overlay";
-  overlay.className = "pi-welcome-overlay";
-
-  const card = document.createElement("div");
-  card.className = "pi-welcome-card pi-overlay-card";
+  const dialog = createOverlayDialog({
+    overlayId: "pi-instructions-overlay",
+    cardClassName: "pi-welcome-card pi-overlay-card",
+  });
 
   const title = document.createElement("h2");
   title.className = "pi-overlay-title";
@@ -353,20 +340,24 @@ export async function showInstructionsDialog(opts?: {
   workbookTag.className = "pi-overlay-workbook-tag";
   workbookTag.textContent = `Workbook: ${workbookLabel}`;
 
+  const hint = document.createElement("div");
+  hint.className = "pi-overlay-hint";
+
   const textarea = document.createElement("textarea");
   textarea.className = "pi-overlay-textarea";
 
   const conventionsContainer = document.createElement("div");
   conventionsContainer.className = "pi-conventions-container";
 
+  const body = document.createElement("div");
+  body.className = "pi-overlay-body";
+  body.append(title, tabs, workbookTag, hint, textarea, conventionsContainer);
+
   const footer = document.createElement("div");
   footer.className = "pi-overlay-footer";
 
   const counter = document.createElement("div");
   counter.className = "pi-overlay-counter";
-
-  const hint = document.createElement("div");
-  hint.className = "pi-overlay-hint";
 
   const actions = document.createElement("div");
   actions.className = "pi-overlay-actions";
@@ -383,23 +374,9 @@ export async function showInstructionsDialog(opts?: {
 
   actions.append(cancelBtn, saveBtn);
   footer.append(counter, actions);
-  card.append(title, tabs, workbookTag, hint, textarea, conventionsContainer, footer);
-  overlay.appendChild(card);
+  dialog.card.append(body, footer);
 
-  let closed = false;
-  const closeOverlay = () => {
-    if (closed) {
-      return;
-    }
-
-    closed = true;
-    overlayClosers.delete(overlay);
-    cleanupEscape();
-    overlay.remove();
-    requestChatInputFocus();
-  };
-  const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
-  overlayClosers.set(overlay, closeOverlay);
+  const closeOverlay = dialog.close;
 
   const tabButtons: Record<RulesTab, HTMLButtonElement> = {
     user: userTab,
@@ -538,13 +515,7 @@ export async function showInstructionsDialog(opts?: {
     })();
   });
 
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) {
-      closeOverlay();
-    }
-  });
-
   refreshTabUi();
-  document.body.appendChild(overlay);
+  dialog.mount();
   textarea.focus();
 }

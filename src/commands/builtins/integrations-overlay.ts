@@ -38,14 +38,12 @@ import {
   type McpConfigStore,
   type McpServerConfig,
 } from "../../tools/mcp-config.js";
-import { requestChatInputFocus } from "../../ui/input-focus.js";
-import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
+import { closeOverlayById, createOverlayDialog } from "../../ui/overlay-dialog.js";
 import { showToast } from "../../ui/toast.js";
 import { isRecord } from "../../utils/type-guards.js";
 
 const OVERLAY_ID = "pi-integrations-overlay";
 const MCP_PROBE_TIMEOUT_MS = 8_000;
-const overlayClosers = new WeakMap<HTMLElement, () => void>();
 
 interface WorkbookContextSnapshot {
   workbookId: string | null;
@@ -374,24 +372,14 @@ function createIntegrationCard(args: {
 }
 
 export function showIntegrationsDialog(dependencies: IntegrationsDialogDependencies): void {
-  const existing = document.getElementById(OVERLAY_ID);
-  if (existing) {
-    const closeExisting = overlayClosers.get(existing);
-    if (closeExisting) {
-      closeExisting();
-    } else {
-      existing.remove();
-    }
-
+  if (closeOverlayById(OVERLAY_ID)) {
     return;
   }
 
-  const overlay = document.createElement("div");
-  overlay.id = OVERLAY_ID;
-  overlay.className = "pi-welcome-overlay";
-
-  const card = document.createElement("div");
-  card.className = "pi-welcome-card pi-overlay-card pi-integrations-dialog";
+  const dialog = createOverlayDialog({
+    overlayId: OVERLAY_ID,
+    cardClassName: "pi-welcome-card pi-overlay-card pi-integrations-dialog",
+  });
 
   const header = document.createElement("div");
   header.className = "pi-overlay-header";
@@ -515,23 +503,9 @@ export function showIntegrationsDialog(dependencies: IntegrationsDialogDependenc
   mcpSection.append(mcpList, mcpAddCard);
 
   body.append(externalSection, integrationsSection, webSearchSection, mcpSection);
-  card.append(header, body);
-  overlay.appendChild(card);
+  dialog.card.append(header, body);
 
-  let closed = false;
-  const closeOverlay = () => {
-    if (closed) {
-      return;
-    }
-
-    closed = true;
-    overlayClosers.delete(overlay);
-    cleanupEscape();
-    overlay.remove();
-    requestChatInputFocus();
-  };
-  const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
-  overlayClosers.set(overlay, closeOverlay);
+  const closeOverlay = dialog.close;
 
   closeButton.addEventListener("click", closeOverlay);
 
@@ -763,13 +737,7 @@ export function showIntegrationsDialog(dependencies: IntegrationsDialogDependenc
     }, "config", "Added MCP server.");
   });
 
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) {
-      closeOverlay();
-    }
-  });
-
-  document.body.appendChild(overlay);
+  dialog.mount();
   setBusy(true);
   void refresh()
     .catch((error: unknown) => {
