@@ -1,85 +1,79 @@
 # AGENTS.md
 
-Notes for agents working in this repo:
+**Last reviewed:** 2026-02-12
 
-- **Tool behavior decisions live in `src/tools/DECISIONS.md`.** Read it before changing tool behavior (column widths, borders, overwrite protection, etc.).
-- **UI architecture lives in `src/ui/README.md`.** Read it before touching CSS or components — especially the Tailwind v4 `@layer` gotcha (unlayered resets clobber all utilities).
-- **Docs index:** `docs/README.md` (mirrors Pi's docs layout).
-- **Model registry freshness:** check `docs/model-updates.md` → if **Last verified** is > 1 week ago, update Pi deps + re-verify pinned model IDs before changing model selection UX.
+Notes for agents working in this repo.
 
-## High-leverage repo conventions (keep consistent)
+## Read before changing behavior
+- Tool behavior rules: `src/tools/DECISIONS.md`
+- UI/CSS architecture: `src/ui/README.md` (Tailwind v4 `@layer` gotcha)
+- Docs index: `docs/README.md`
+- Model registry freshness: `docs/model-updates.md` (if **Last verified** > 1 week, refresh Pi deps + re-verify model IDs before model UX changes)
 
-### Tool registry is the single source of truth
-- Core tool names + construction live in `src/tools/registry.ts` (`CORE_TOOL_NAMES`, `CoreToolName`, `createCoreTools()`).
-- **Do not** create new tool-name lists in UI/prompt/docs — import `CORE_TOOL_NAMES`.
+## High-leverage conventions
+
+### Core tools: one source of truth
+- Define core tool names in `src/tools/registry.ts` (`CORE_TOOL_NAMES`, `CoreToolName`, `createCoreTools()`).
+- Do not duplicate tool-name lists; import `CORE_TOOL_NAMES`.
 - When adding/removing a core tool, update in the same PR:
   - `src/tools/registry.ts`
-  - `src/ui/tool-renderers.ts` (renderer registration)
-  - `src/ui/humanize-params.ts` (input humanizers)
-  - `src/prompt/system-prompt.ts` (documented tool list), if applicable
+  - `src/ui/tool-renderers.ts`
+  - `src/ui/humanize-params.ts`
+  - `src/context/tool-disclosure.ts`
+  - `src/prompt/system-prompt.ts` (if documented tool list changes)
 
-### Structured tool results (`ToolResultMessage.details`) — additive metadata
-- Tools should keep human-readable markdown in `result.content`.
-- Put stable, machine-readable metadata in `result.details` (range addresses, blocked state, error counts, etc.).
-- **Compatibility rule:** prefer `details` in the UI, but keep a fallback for older persisted sessions that have no `details`.
-- Centralize types/guards in `src/tools/tool-details.ts` and reuse them in tools + renderers.
+### Tool results (`ToolResultMessage.details`)
+- Keep human-readable output in `result.content`.
+- Put stable machine metadata in `result.details`.
+- UI should prefer `details`, with fallback for older persisted sessions.
+- Reuse guards/types from `src/tools/tool-details.ts`.
 
-### Workbook identity + per-workbook session restore
-- Workbook identity is **local-only** and must never persist raw `Office.context.document.url`.
-  - Use `getWorkbookContext()` from `src/workbook/context.ts` (returns hashed IDs like `url_sha256:<hex>`).
-- Session↔workbook mapping is stored in `SettingsStore` (not session metadata).
-  - Use helpers in `src/workbook/session-association.ts` (versioned keys `*.v1.*`).
+### Workbook identity + session restore
+- Never persist raw `Office.context.document.url`.
+- Use `getWorkbookContext()` from `src/workbook/context.ts`.
+- Use `src/workbook/session-association.ts` helpers for SettingsStore mapping keys.
 
-### Security / HTML sinks
-- Avoid `innerHTML` for any user/tool/session data.
-  - Prefer DOM APIs, or escape with `src/utils/html.ts` (`escapeHtml`, `escapeAttr`).
-- Markdown safety is enforced by `installMarkedSafetyPatch()` (`src/compat/marked-safety.ts`).
-  - Don’t re-enable unsafe link protocols or inline images without a security review.
-- The local CORS proxy (`scripts/cors-proxy-server.mjs`) has an **origin allowlist**. Don’t loosen it to `*`.
+### Security / HTML / local servers
+- Avoid `innerHTML` for user/tool/session content; use DOM APIs or `src/utils/html.ts`.
+- Keep markdown protections from `installMarkedSafetyPatch()` (`src/compat/marked-safety.ts`).
+- Keep strict origin allowlists in:
+  - `scripts/cors-proxy-server.mjs`
+  - `scripts/tmux-bridge-server.mjs`
+  - `scripts/python-bridge-server.mjs`
+- Keep proxy target filtering strict in `scripts/proxy-target-policy.mjs`.
+  - Do not commit permissive defaults (e.g. `ALLOW_ALL_TARGET_HOSTS=1`).
 
 ### Bundle hygiene (Office WebView)
-- Avoid Node-only imports and side-effect barrel imports that defeat tree-shaking.
-- When changing imports/deps, run `npm run build` and sanity-check:
-  - output chunk sizes (and any newly emitted large assets)
-  - Vite “externalized for browser compatibility” warnings
+- Avoid Node-only imports and side-effect barrel imports.
+- After import/dependency changes, run `npm run build` and check chunk sizes + Vite browser-compat warnings.
 
-## TypeScript typing policy (python-typing spirit)
+## TypeScript policy
+- No `// @ts-ignore`.
+- If unavoidable: `// @ts-expect-error -- <reason>` with a real reason.
+- Avoid explicit `any` / `as any`; prefer specific types, unions, generics, or `unknown` + narrowing.
+- Avoid non-null assertions where practical; use guards/early throws.
 
-- Prefer fixing types over silencing the checker.
-- **No `// @ts-ignore`**. If absolutely necessary, use **`// @ts-expect-error -- <reason>`** and leave a real explanation.
-- Avoid **explicit `any`** / `as any` (lint warns). Prefer:
-  - specific types when known
-  - unions for multiple shapes
-  - `unknown` when you must accept anything (then narrow)
-  - generics / `Record<string, …>` / discriminated unions
-- Avoid non-null assertions (`thing!`) when practical (lint warns). Prefer runtime checks + early throws.
-
-Verification helpers:
-- `npm run check` (lint + typecheck)
+## Verification
+- `npm run check`
 - `npm run build`
 - `npm run test:models`
-- Manual Excel smoke test when changes touch session persistence, tools, auth, or UI wiring
+- `npm run test:context` when touching prompt/context/tool disclosure/session wiring
+- `npm run test:security` when touching proxy/bridge/auth/HTML safety paths
+- Manual Excel smoke test when touching session persistence, tools, auth, or UI wiring
 
-Pre-commit hook:
-- Runs both checks automatically (see `.githooks/pre-commit`, installed via `npm install`).
-- Bypass when needed: `git commit --no-verify`
+## Pre-commit
+- `.githooks/pre-commit` runs `npm run lint` + `npm run typecheck`.
+- Bypass only when needed: `git commit --no-verify`.
 
-## Excel Add-in dev: sideloaded manifest gotcha
+## Excel sideloaded manifest gotcha (macOS)
+Excel loads a sideloaded manifest from:
+`~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/{add-in-id}.manifest.xml`
 
-Excel Mac loads the add-in from a **sideloaded manifest** stored at:
-```
-~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/{add-in-id}.manifest.xml
-```
-
-This file is **separate from** the repo's `manifest.xml`. If local CSS/JS changes aren't appearing in the sidebar despite the Vite dev server running correctly:
-
-1. **Check the sideloaded manifest first.** It may point to a production URL (e.g. `https://pi-for-excel.vercel.app/…`) instead of `https://localhost:3000/…`.
-2. Fix it by copying the repo manifest over: `cp manifest.xml ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/a1b2c3d4-e5f6-7890-abcd-ef1234567890.manifest.xml`
+If local changes do not show up:
+1. Verify sideloaded manifest points to `https://localhost:3000/...` (not production URL).
+2. Recopy manifest:
+   `cp manifest.xml ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/a1b2c3d4-e5f6-7890-abcd-ef1234567890.manifest.xml`
 3. Quit Excel fully and reopen.
-
-If the manifest URL is correct and changes still don't appear, clear the WKWebView cache:
-```
-rm -rf ~/Library/Containers/com.microsoft.Excel/Data/Library/WebKit/
-rm -rf ~/Library/Containers/com.microsoft.Excel/Data/Library/Caches/WebKit/
-```
-Then quit + reopen Excel.
+4. If still stale, clear WKWebView cache and relaunch Excel:
+   - `rm -rf ~/Library/Containers/com.microsoft.Excel/Data/Library/WebKit/`
+   - `rm -rf ~/Library/Containers/com.microsoft.Excel/Data/Library/Caches/WebKit/`
