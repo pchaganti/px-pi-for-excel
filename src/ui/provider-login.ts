@@ -11,6 +11,10 @@ import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.
 import { isCorsError } from "@mariozechner/pi-web-ui/dist/utils/proxy-utils.js";
 import { getOAuthProvider } from "../auth/oauth-provider-registry.js";
 import { clearOAuthCredentials, saveOAuthCredentials } from "../auth/oauth-storage.js";
+import {
+  DEFAULT_LOCAL_PROXY_URL,
+  PROXY_HELPER_DOCS_URL,
+} from "../auth/proxy-validation.js";
 import { getErrorMessage } from "../utils/errors.js";
 
 export interface ProviderDef {
@@ -352,7 +356,10 @@ export function buildProviderRow(
             (typeof msg === "string" && /load failed|failed to fetch|cors|cross-origin|networkerror/i.test(msg));
 
           if (isLikelyCors) {
-            errorEl.textContent = "Login was blocked by browser CORS. Start the local HTTPS proxy (npm run proxy:https) and enable it (Proxy toggle above, or /settings → Proxy).";
+            errorEl.textContent =
+              "Login was blocked by browser CORS. Enable /settings → Proxy with " +
+              `${DEFAULT_LOCAL_PROXY_URL} (local HTTPS proxy helper running), then retry. ` +
+              `Guide: ${PROXY_HELPER_DOCS_URL}`;
           } else {
             errorEl.textContent = msg || "Login failed";
           }

@@ -1,30 +1,40 @@
-# Install (recommended)
+# Install Pi for Excel (recommended)
 
-Pi for Excel is an **Excel taskpane add-in**. Excel loads it as a small website from an HTTPS URL.
+Pi for Excel is an Excel taskpane add-in. Excel loads it from a manifest file that points to a hosted HTTPS app.
 
-This guide is the **non-technical install** path:
+This is the **non-technical install path**:
 - no git
 - no Node
 - no mkcert
-- no terminal
+- no local dev server
 
-## 1) Download the manifest
+---
 
-Download **`manifest.prod.xml`** (production manifest):
+## 1) Download the production manifest
 
-- https://pi-for-excel.vercel.app/manifest.prod.xml
+Download:
+- **https://pi-for-excel.vercel.app/manifest.prod.xml**
 
-> If the link 404s, the hosted build hasn’t been published yet.
+Fallbacks (if the hosted link is temporarily unavailable):
+- Latest release assets: https://github.com/tmustier/pi-for-excel/releases/latest
+- Repo copy: https://github.com/tmustier/pi-for-excel/blob/main/manifest.prod.xml
+
+Keep the filename as `manifest.prod.xml`.
+
+---
 
 ## 2) Install in Excel
+
+> Excel labels differ slightly by version (`Add-ins`, `Office Add-ins`, `My Add-ins`, `Upload My Add-in`, `Add from file`).
 
 ### macOS (Excel desktop)
 
 1. Open Excel
 2. Go to **Insert → Add-ins → My Add-ins**
-3. Choose **Add from file…** (or **Upload My Add-in…** depending on Excel version)
+3. Choose **Add from file…** / **Upload My Add-in…**
 4. Select `manifest.prod.xml`
-5. You should see **Pi for Excel** appear. Click **Open Pi**.
+5. You should see **Pi for Excel**
+6. Click **Open Pi**
 
 ### Windows (Excel desktop)
 
@@ -32,33 +42,108 @@ Download **`manifest.prod.xml`** (production manifest):
 2. Go to **Insert → Add-ins → My Add-ins**
 3. Choose **Upload My Add-in…**
 4. Select `manifest.prod.xml`
+5. Open **Pi for Excel**
 
-## 3) First run
+---
 
-When Pi for Excel opens, connect a provider:
-- Use `/login` to add an API key or sign in.
-- Use `/model` (or click the model name in the bottom status bar) to switch models.
+## 3) First-run check
+
+1. Open the taskpane (`Open Pi` button)
+2. Connect a provider (see below)
+3. Send a test prompt, e.g.:
+   - `What sheet am I currently on?`
+   - `Summarize my current selection`
+
+If you get a response, install is complete.
+
+---
+
+## 4) Connect a provider
+
+### Recommended (easiest): API key
+
+For most users, API keys are the smoothest setup and usually do **not** need the proxy helper.
+
+1. In Pi, run `/login` (or use the welcome screen)
+2. Expand a provider row (OpenAI, Google Gemini, Anthropic, etc.)
+3. Paste your API key
+4. Click **Save**
+
+### OAuth / account login (Anthropic, GitHub Copilot)
+
+1. In `/login`, click **Login with …**
+2. Complete login in the browser window that opens
+3. Return to Excel and complete any prompt shown
+
+If login fails with a CORS/network error, follow the next section.
+
+---
+
+## OAuth logins and CORS helper
+
+Some OAuth/token endpoints are blocked by CORS inside Office webviews (especially on macOS WKWebView).
+
+Typical symptoms:
+- `Login was blocked by browser CORS`
+- `Load failed`
+- `Failed to fetch`
+
+### What to do
+
+1. Run a local HTTPS proxy helper on the same machine as Excel (defaults to `https://localhost:3003`):
+
+```bash
+npm run proxy:https
+```
+
+If the user is non-technical, a teammate/admin can run this step for them on their machine.
+
+2. In Pi, open `/settings` → **Proxy**:
+   - enable **Use CORS Proxy**
+   - set URL to `https://localhost:3003`
+
+3. Retry OAuth login
+
+Notes:
+- Keep the proxy URL on **HTTPS** (`https://...`), not HTTP.
+- API-key providers generally work without proxy.
+- If port `3003` is busy, run with another port and use that same URL in settings:
+
+```bash
+PORT=3005 npm run proxy:https
+```
+
+---
 
 ## Updates
 
-### Automatic updates (hosted build)
+If you installed with `manifest.prod.xml`, Pi for Excel loads from a hosted URL and most updates are automatic.
 
-If you installed using `manifest.prod.xml`, then Pi for Excel’s UI is loaded from a hosted HTTPS URL.
+- Normal case: close/reopen Excel taskpane to pick up latest version.
+- Rare case (manifest changes): download the new `manifest.prod.xml` and upload it again in Excel.
 
-- New versions are deployed to that same URL.
-- Typically, you get updates automatically the next time you open the taskpane.
-- If you seem “stuck” on an old version, close and reopen Excel.
-
-### When you need to reinstall the manifest
-
-Rarely, a new version may require a manifest change (permissions, commands, etc.).
-In that case you’ll download a new `manifest.prod.xml` and re-upload it.
+---
 
 ## Troubleshooting
 
-- **Blank taskpane / doesn’t load**
-  - You may be on a network that blocks the host, or the hosted build URL changed.
+### Pi does not appear in My Add-ins
+- Re-open Excel and try again
+- Ensure you uploaded `manifest.prod.xml` (not the localhost dev manifest)
 
-- **Login fails with “CORS / Load failed” (macOS especially)**
-  - Some providers (OAuth/subscription flows) require the local HTTPS proxy helper.
-  - See README → “CORS / proxy”.
+### Taskpane opens but is blank
+- Your network may block `https://pi-for-excel.vercel.app`
+- Try a different network / VPN setting
+
+### I installed, but changes are not visible
+- Close and reopen Excel to clear cached taskpane state
+
+### OAuth login still fails
+- Confirm proxy is running and reachable at the exact URL in `/settings`
+- Confirm proxy URL is `https://localhost:<port>` (not `http://`)
+- Try API key auth as a fallback
+
+---
+
+## Developer setup (separate)
+
+If you want to run from source (`localhost`, Vite, mkcert), use the root README: [Developer Quick Start](../README.md#developer-quick-start).

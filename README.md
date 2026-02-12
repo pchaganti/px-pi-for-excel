@@ -48,7 +48,12 @@ Existing AI add-ins for Excel are closed-source, locked to a single model, and c
 
 ## Install (recommended)
 
-See **[`docs/install.md`](./docs/install.md)**.
+Use the non-technical install guide: **[`docs/install.md`](./docs/install.md)**.
+
+It includes:
+- manifest download + Excel install steps (macOS + Windows)
+- first-run provider setup
+- OAuth/CORS troubleshooting for login-based providers
 
 ## Developer Quick Start
 
@@ -215,13 +220,15 @@ npx office-addin-manifest validate manifest.xml
 
 **Dev:** the Vite dev server proxies API + OAuth calls to providers (`/api-proxy/*`, `/oauth-proxy/*`).
 
-**Production:** some OAuth/token endpoints are blocked by browser CORS in Office webviews. Pi for Excel supports a **user-configurable CORS proxy**:
+**Production:** some OAuth/token endpoints are blocked by browser CORS in Office webviews. Pi for Excel supports a **user-configurable CORS proxy**.
+
+For non-technical install + login troubleshooting, see: **[`docs/install.md`](./docs/install.md#oauth-logins-and-cors-helper)**.
 
 1. Start the local proxy (**recommended: HTTPS**):
    ```bash
    npm run proxy:https
    ```
-   (defaults to `https://localhost:3001`)
+   (defaults to `https://localhost:3003`)
 
    **Security:** the proxy only accepts browser requests from Pi for Excel origins by default:
    - `https://localhost:3000` (dev)
@@ -257,9 +264,9 @@ npx office-addin-manifest validate manifest.xml
    STRICT_TARGET_RESOLUTION=1 npm run proxy:https
    ```
 
-   If port 3001 is taken, pick another port:
+   If port 3003 is taken, pick another port:
    ```bash
-   PORT=3003 npm run proxy:https
+   PORT=3005 npm run proxy:https
    ```
 2. In Excel, run `/settings` → **Proxy** tab → enable **Use CORS Proxy** → set Proxy URL (e.g. `https://localhost:3003`).
 
