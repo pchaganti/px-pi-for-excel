@@ -44,6 +44,22 @@ class MemoryLocalStorage {
   }
 }
 
+const EXTENSION_SANDBOX_RUNTIME_STORAGE_KEY = "pi.experimental.extensionSandboxRuntime";
+
+function clearLocalStorageKey(key: string): void {
+  const storage = Reflect.get(globalThis, "localStorage");
+  if (typeof storage !== "object" || storage === null) {
+    return;
+  }
+
+  const removeItem = Reflect.get(storage, "removeItem");
+  if (typeof removeItem !== "function") {
+    return;
+  }
+
+  Reflect.apply(removeItem, storage, [key]);
+}
+
 function installLocalStorageStub(): () => void {
   const previous = Reflect.get(globalThis, "localStorage");
   Reflect.set(globalThis, "localStorage", new MemoryLocalStorage());
@@ -88,7 +104,7 @@ function createStoredEntry(input: {
   };
 }
 
-void test("runtime manager source wires sandbox runtime selection behind experimental flag", async () => {
+void test("runtime manager source wires sandbox runtime selection through rollback kill switch", async () => {
   const source = await readFile(new URL("../src/extensions/runtime-manager.ts", import.meta.url), "utf8");
 
   assert.match(source, /resolveExtensionRuntimeMode\(/);
@@ -105,6 +121,162 @@ void test("extensions overlay source renders runtime label in installed rows", a
   assert.match(source, /Runtime: \$\{status\.runtimeLabel\}/);
 });
 
+void test("untrusted extensions default to sandbox runtime when rollback kill switch is unset", async () => {
+  const restoreLocalStorage = installLocalStorageStub();
+
+  try {
+    clearLocalStorageKey(EXTENSION_SANDBOX_RUNTIME_STORAGE_KEY);
+
+    const settings = new MemorySettingsStore();
+    settings.writeRaw(EXTENSIONS_REGISTRY_STORAGE_KEY, {
+      version: 2,
+      items: [
+        createStoredEntry({
+          id: "ext.inline.default",
+          name: "Inline Default",
+          trust: "inline-code",
+        }),
+      ],
+    });
+
+    let hostLoadCalls = 0;
+    let sandboxLoadCalls = 0;
+
+    const manager = new ExtensionRuntimeManager({
+      settings,
+      getActiveAgent: () => null,
+      refreshRuntimeTools: async () => {},
+      reservedToolNames: new Set<string>(),
+      loadExtensionFromSource: () => {
+        hostLoadCalls += 1;
+        return Promise.resolve({
+          deactivate: () => Promise.resolve(),
+        });
+      },
+      activateInSandbox: () => {
+        sandboxLoadCalls += 1;
+        return Promise.resolve({
+          deactivate: () => Promise.resolve(),
+        });
+      },
+    });
+
+    await manager.initialize();
+
+    const status = manager.list()[0];
+    assert.equal(status.runtimeMode, "sandbox-iframe");
+    assert.equal(status.loaded, true);
+    assert.equal(hostLoadCalls, 0);
+    assert.equal(sandboxLoadCalls, 1);
+  } finally {
+    restoreLocalStorage();
+  }
+});
+
+void test("rollback kill switch routes untrusted extensions back to host runtime", async () => {
+  const restoreLocalStorage = installLocalStorageStub();
+
+  try {
+    setExperimentalFeatureEnabled("extension_sandbox_runtime", false);
+
+    const settings = new MemorySettingsStore();
+    settings.writeRaw(EXTENSIONS_REGISTRY_STORAGE_KEY, {
+      version: 2,
+      items: [
+        createStoredEntry({
+          id: "ext.inline.rollback",
+          name: "Inline Rollback",
+          trust: "inline-code",
+        }),
+      ],
+    });
+
+    let hostLoadCalls = 0;
+    let sandboxLoadCalls = 0;
+
+    const manager = new ExtensionRuntimeManager({
+      settings,
+      getActiveAgent: () => null,
+      refreshRuntimeTools: async () => {},
+      reservedToolNames: new Set<string>(),
+      loadExtensionFromSource: () => {
+        hostLoadCalls += 1;
+        return Promise.resolve({
+          deactivate: () => Promise.resolve(),
+        });
+      },
+      activateInSandbox: () => {
+        sandboxLoadCalls += 1;
+        return Promise.resolve({
+          deactivate: () => Promise.resolve(),
+        });
+      },
+    });
+
+    await manager.initialize();
+
+    const status = manager.list()[0];
+    assert.equal(status.runtimeMode, "host");
+    assert.equal(status.loaded, true);
+    assert.equal(hostLoadCalls, 1);
+    assert.equal(sandboxLoadCalls, 0);
+  } finally {
+    restoreLocalStorage();
+  }
+});
+
+void test("trusted local-module extensions stay on host runtime even when sandbox default is active", async () => {
+  const restoreLocalStorage = installLocalStorageStub();
+
+  try {
+    clearLocalStorageKey(EXTENSION_SANDBOX_RUNTIME_STORAGE_KEY);
+
+    const settings = new MemorySettingsStore();
+    settings.writeRaw(EXTENSIONS_REGISTRY_STORAGE_KEY, {
+      version: 2,
+      items: [
+        createStoredEntry({
+          id: "ext.local",
+          name: "Local Module",
+          trust: "local-module",
+        }),
+      ],
+    });
+
+    let hostLoadCalls = 0;
+    let sandboxLoadCalls = 0;
+
+    const manager = new ExtensionRuntimeManager({
+      settings,
+      getActiveAgent: () => null,
+      refreshRuntimeTools: async () => {},
+      reservedToolNames: new Set<string>(),
+      loadExtensionFromSource: () => {
+        hostLoadCalls += 1;
+        return Promise.resolve({
+          deactivate: () => Promise.resolve(),
+        });
+      },
+      activateInSandbox: () => {
+        sandboxLoadCalls += 1;
+        return Promise.resolve({
+          deactivate: () => Promise.resolve(),
+        });
+      },
+    });
+
+    await manager.initialize();
+
+    const status = manager.list()[0];
+    assert.equal(status.runtimeMode, "host");
+    assert.equal(status.loaded, true);
+    assert.equal(hostLoadCalls, 1);
+    assert.equal(sandboxLoadCalls, 0);
+  } finally {
+    restoreLocalStorage();
+  }
+});
+
 void test("sandbox runtime source enforces capability gates and rejects unknown ui actions", async () => {
   const source = await readFile(new URL("../src/extensions/sandbox-runtime.ts", import.meta.url), "utf8");
 
@@ -116,6 +288,12 @@ void test("sandbox runtime source enforces capability gates and rejects unknown 
   assert.match(source, /if \(method === "ui_action"\)/);
   assert.match(source, /Unknown sandbox UI action id:/);
   assert.match(source, /allowWhenDisposed:\s*true/);
+
+  // Isolation boundary checks: strict iframe sandboxing + host-side message source/direction checks.
+  assert.match(source, /setAttribute\("sandbox", "allow-scripts"\)/);
+  assert.match(source, /if \(event\.source !== this\.iframe\.contentWindow\)/);
+  assert.match(source, /if \(envelope\.direction !== "sandbox_to_host"\)/);
+  assert.match(source, /api\.agent is not available in sandbox runtime/);
 });
 
 void test("sandbox activation failures are isolated per extension during initialize", async () => {

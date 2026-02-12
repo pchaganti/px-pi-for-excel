@@ -1,8 +1,8 @@
 /**
  * Experimental feature flags.
  *
- * These flags are opt-in, local-only toggles intended for power users and
- * in-progress capabilities. Features can read these synchronously at runtime.
+ * These flags are local-only toggles for in-progress capabilities and rollout
+ * controls. Most are opt-in; some can be default-on with a persisted override.
  */
 
 import { ALLOW_REMOTE_EXTENSION_URLS_STORAGE_KEY } from "../commands/extension-source-policy.js";
@@ -30,6 +30,8 @@ export interface ExperimentalFeatureDefinition {
   warning?: string;
   wiring: ExperimentalFeatureWiring;
   storageKey: string;
+  /** Used when no explicit value has been persisted yet. */
+  defaultEnabled?: boolean;
 }
 
 const EXPERIMENTAL_FEATURES = [
@@ -92,11 +94,13 @@ const EXPERIMENTAL_FEATURES = [
     id: "extension_sandbox_runtime",
     slug: "extension-sandbox",
     aliases: ["extensions-sandbox", "sandboxed-extensions"],
-    title: "Extension sandbox runtime",
-    description: "Run inline/remote extensions in a sandboxed iframe runtime.",
-    warning: "Experimental: sandbox UI bridge is currently text-only for widget/overlay rendering.",
+    title: "Extension sandbox runtime rollback",
+    description:
+      "Sandbox runtime is default-on for inline/remote extensions; disable only as a temporary rollback.",
+    warning: "Rollback mode runs untrusted extensions in host runtime and reduces isolation.",
     wiring: "wired",
     storageKey: "pi.experimental.extensionSandboxRuntime",
+    defaultEnabled: true,
   },
 ] as const satisfies readonly ExperimentalFeatureDefinition[];
 
@@ -108,7 +112,11 @@ function normalizeFeatureToken(input: string): string {
   return input.trim().toLowerCase().replace(/[\s_]+/g, "-");
 }
 
-function parseStoredBoolean(raw: string | null): boolean {
+function parseStoredBoolean(raw: string | null): boolean | null {
+  if (raw === null) {
+    return null;
+  }
+
   return raw === "1" || raw === "true";
 }
 
@@ -171,7 +179,13 @@ export function resolveExperimentalFeature(input: string): ExperimentalFeatureDe
 
 export function isExperimentalFeatureEnabled(featureId: ExperimentalFeatureId): boolean {
   const feature = getFeatureDefinition(featureId);
-  return parseStoredBoolean(safeGetItem(feature.storageKey));
+  const stored = parseStoredBoolean(safeGetItem(feature.storageKey));
+
+  if (stored !== null) {
+    return stored;
+  }
+
+  return feature.defaultEnabled ?? false;
 }
 
 export function setExperimentalFeatureEnabled(
