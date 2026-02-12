@@ -94,10 +94,11 @@ const EXPERIMENTAL_FEATURES = [
     id: "extension_sandbox_runtime",
     slug: "extension-sandbox",
     aliases: ["extensions-sandbox", "sandboxed-extensions"],
-    title: "Extension sandbox runtime rollback",
+    title: "Extension sandbox runtime",
     description:
-      "Sandbox runtime is default-on for inline/remote extensions; disable only as a temporary rollback.",
-    warning: "Rollback mode runs untrusted extensions in host runtime and reduces isolation.",
+      "Default-on for inline/remote extensions. Disable only to enable temporary rollback mode.",
+    warning:
+      "Security-sensitive: disabling this runs untrusted extensions in host runtime and reduces isolation.",
     wiring: "wired",
     storageKey: "pi.experimental.extensionSandboxRuntime",
     defaultEnabled: true,
