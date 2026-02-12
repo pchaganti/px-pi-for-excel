@@ -117,6 +117,24 @@ void test("classifies python_transform_range as workbook content mutation", () =
   );
 });
 
+void test("classifies execute_office_js as structure-impact mutation", () => {
+  assert.equal(
+    getToolExecutionMode("execute_office_js", {
+      explanation: "Update workbook settings",
+      code: "return { ok: true };",
+    }),
+    "mutate",
+  );
+
+  assert.equal(
+    getToolContextImpact("execute_office_js", {
+      explanation: "Update workbook settings",
+      code: "return { ok: true };",
+    }),
+    "structure",
+  );
+});
+
 void test("unknown tools default to mutate with content impact", () => {
   assert.equal(getToolExecutionMode("extension_tool", { any: true }), "mutate");
   assert.equal(getToolContextImpact("extension_tool", { any: true }), "content");

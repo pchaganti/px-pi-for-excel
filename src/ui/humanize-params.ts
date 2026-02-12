@@ -876,6 +876,27 @@ function humanizePythonTransformRange(p: Record<string, unknown>): ParamItem[] {
   return items;
 }
 
+function humanizeExecuteOfficeJs(p: Record<string, unknown>): ParamItem[] {
+  const items: ParamItem[] = [];
+
+  if (p.explanation) {
+    items.push({ label: "Action", value: str(p.explanation) });
+  }
+
+  if (p.code) {
+    const source = str(p.code);
+    const lines = source.split(/\r?\n/u).length;
+    const oneLine = source.replace(/\s+/gu, " ").trim();
+    const compact = oneLine.length > 140 ? `${oneLine.slice(0, 137)}…` : oneLine;
+    items.push({ label: "Office.js", value: compact.length > 0 ? compact : "(empty)" });
+    if (lines > 1) {
+      items.push({ label: "Code lines", value: String(lines) });
+    }
+  }
+
+  return items;
+}
+
 /* ── Shared helpers ─────────────────────────────────────────── */
 
 /** Join an array of mixed text/TemplateResult with comma separators. */
@@ -928,6 +949,7 @@ const EXTRA_HUMANIZERS: Record<string, HumanizerFn> = {
   mcp: humanizeMcp,
   files: humanizeFiles,
   python_transform_range: humanizePythonTransformRange,
+  execute_office_js: humanizeExecuteOfficeJs,
 };
 
 const HUMANIZERS: Record<string, HumanizerFn> = {

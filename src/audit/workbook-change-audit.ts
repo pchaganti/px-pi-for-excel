@@ -18,7 +18,8 @@ export type WorkbookAuditToolName =
   | "modify_structure"
   | "comments"
   | "view_settings"
-  | "workbook_history";
+  | "workbook_history"
+  | "execute_office_js";
 
 export interface WorkbookChangeAuditEntry {
   id: string;
@@ -112,7 +113,8 @@ function isWorkbookAuditToolName(value: unknown): value is WorkbookAuditToolName
     value === "modify_structure" ||
     value === "comments" ||
     value === "view_settings" ||
-    value === "workbook_history"
+    value === "workbook_history" ||
+    value === "execute_office_js"
   );
 }
 

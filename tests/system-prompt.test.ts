@@ -85,6 +85,14 @@ void test("system prompt mentions extension manager tool for chat-driven authori
   assert.match(prompt, /extension authoring from chat/i);
 });
 
+void test("system prompt documents execute_office_js safety guidance", () => {
+  const prompt = buildSystemPrompt();
+  assert.match(prompt, /\*\*execute_office_js\*\*/);
+  assert.match(prompt, /Office\.js/i);
+  assert.match(prompt, /explanation \+ user approval required/i);
+  assert.match(prompt, /context\.sync\(\)/i);
+});
+
 void test("system prompt lists the skills tool", () => {
   const prompt = buildSystemPrompt();
   assert.match(prompt, /\*\*skills\*\*/);

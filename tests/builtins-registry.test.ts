@@ -104,6 +104,8 @@ void test("builtins registry wires /experimental, /extensions, and /integrations
   assert.match(experimentalFlagsSource, /extension-widget-v2/);
   assert.match(experimentalFlagsSource, /external_skills_discovery/);
   assert.match(experimentalFlagsSource, /external-skills-discovery/);
+  assert.match(experimentalFlagsSource, /office_js_execute/);
+  assert.match(experimentalFlagsSource, /office-js-execute/);
 });
 
 void test("taskpane init keeps getIntegrationToolNames imported when used", async () => {
