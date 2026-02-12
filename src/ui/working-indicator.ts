@@ -14,10 +14,10 @@ import { pickWhimsicalMessage } from "./whimsical-messages.js";
 
 const HINTS: string[] = [
   "press Esc to stop",
-  "Shift+Tab to change thinking depth",
+  "⇧Tab to adjust reasoning depth",
   "type / to see commands",
-  "Ctrl+O to hide details",
-  "press Enter to guide the response",
+  "⌃O to collapse tool details",
+  "press Enter to redirect Pi",
 ];
 
 @customElement("pi-working-indicator")

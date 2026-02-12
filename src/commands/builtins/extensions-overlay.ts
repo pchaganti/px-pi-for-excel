@@ -280,7 +280,7 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
 
   const sandboxHint = document.createElement("p");
   sandboxHint.textContent =
-    "Inline-code and remote-URL extensions run in sandbox by default. Use rollback mode only as a temporary safety valve if sandbox rollout causes issues.";
+    "Untrusted extensions (inline code, remote URLs) run in isolation by default. Use rollback mode as a temporary safety valve if sandbox causes issues.";
   sandboxHint.className = "pi-overlay-hint";
 
   sandboxCard.append(sandboxStatusRow, sandboxActions, sandboxHint);
@@ -321,7 +321,7 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
 
   const localBridgeHint = document.createElement("p");
   localBridgeHint.textContent =
-    "One-step setup from this menu: enable python-bridge + save URL (same as two /experimental commands).";
+    "Enable the Python bridge and save the URL in one step (equivalent to two /experimental commands).";
   localBridgeHint.className = "pi-overlay-hint";
 
   localBridgeCard.append(localBridgeStatusRow, localBridgeUrlRow, localBridgeHint);

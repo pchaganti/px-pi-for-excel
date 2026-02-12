@@ -31,7 +31,7 @@ export function createSettingsCommands(actions: SettingsCommandActions): SlashCo
     },
     {
       name: "instructions",
-      description: "Edit persistent user/workbook instructions",
+      description: "Edit custom rules for Pi (personal + workbook-specific)",
       source: "builtin",
       execute: async () => {
         await actions.openInstructionsEditor();

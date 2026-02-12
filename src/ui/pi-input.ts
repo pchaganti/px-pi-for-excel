@@ -15,10 +15,10 @@ import { customElement, property, state, query } from "lit/decorators.js";
 import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
 
 const PLACEHOLDER_HINTS = [
-  "Tell Pi what to build…",
+  "Ask Pi anything about your workbook…",
   "Type / for commands…",
-  "Tell Pi what to build…",
-  "Tell Pi what to build…",
+  "Ask Pi anything about your workbook…",
+  "Tell Pi what to change…",
 ];
 
 @customElement("pi-input")
@@ -155,7 +155,7 @@ export class PiInput extends LitElement {
         <textarea
           class="pi-input-textarea"
           .value=${this._value}
-          placeholder=${this.isStreaming ? "Steer (↵) · Follow-up (⌥↵)" : PLACEHOLDER_HINTS[this._placeholderIndex]}
+          placeholder=${this.isStreaming ? "Guide response (↵) · New question (⌥↵)" : PLACEHOLDER_HINTS[this._placeholderIndex]}
           rows="1"
           @input=${this._onInput}
           @keydown=${this._onKeydown}
