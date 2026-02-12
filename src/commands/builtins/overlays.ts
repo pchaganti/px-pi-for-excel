@@ -693,6 +693,7 @@ export function showShortcutsDialog(): void {
     ["/", "Open command menu"],
     ["↑↓", "Navigate command menu"],
     ["⌘/Ctrl+⇧T", "Reopen last closed tab"],
+    ["F2", "Focus chat input"],
     ["F6", "Focus: Sheet ↔ Sidebar"],
     ["⇧F6", "Focus: reverse direction"],
   ];

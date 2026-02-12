@@ -13,9 +13,11 @@ import { type FilesWorkspaceAuditContext, getFilesWorkspace } from "../files/wor
 import { isExperimentalFeatureEnabled, setExperimentalFeatureEnabled } from "../experiments/flags.js";
 import { getErrorMessage } from "../utils/errors.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../workbook/context.js";
+import { installOverlayEscapeClose } from "./overlay-escape.js";
 import { showToast } from "./toast.js";
 
 const OVERLAY_ID = "pi-files-workspace-overlay";
+const overlayClosers = new WeakMap<HTMLElement, () => void>();
 
 const DIALOG_AUDIT_CONTEXT: FilesWorkspaceAuditContext = {
   actor: "user",
@@ -162,7 +164,13 @@ function fileMatchesFilter(args: {
 export async function showFilesWorkspaceDialog(): Promise<void> {
   const existing = document.getElementById(OVERLAY_ID);
   if (existing) {
-    existing.remove();
+    const closeExisting = overlayClosers.get(existing);
+    if (closeExisting) {
+      closeExisting();
+    } else {
+      existing.remove();
+    }
+
     return;
   }
 
@@ -306,7 +314,16 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     activeObjectUrl = null;
   };
 
+  let closed = false;
+  let cleanupEscape = () => {};
   const closeOverlay = () => {
+    if (closed) {
+      return;
+    }
+
+    closed = true;
+    overlayClosers.delete(overlay);
+    cleanupEscape();
     cleanup();
     revokeObjectUrl();
     overlay.remove();
@@ -685,19 +702,8 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     void renderList();
   };
 
-  const onEscape = (event: KeyboardEvent) => {
-    if (event.key !== "Escape") return;
-    if (event.target instanceof HTMLElement && (event.target.tagName === "TEXTAREA" || event.target.tagName === "INPUT")) {
-      return;
-    }
-
-    event.preventDefault();
-    closeOverlay();
-  };
-
   const cleanup = () => {
     document.removeEventListener(FILES_WORKSPACE_CHANGED_EVENT, onWorkspaceChanged);
-    document.removeEventListener("keydown", onEscape, true);
   };
 
   enableButton.addEventListener("click", () => {
@@ -807,6 +813,9 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       });
   });
 
+  cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
+  overlayClosers.set(overlay, closeOverlay);
+
   closeButton.addEventListener("click", closeOverlay);
 
   overlay.addEventListener("click", (event) => {
@@ -816,7 +825,6 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
   });
 
   document.addEventListener(FILES_WORKSPACE_CHANGED_EVENT, onWorkspaceChanged);
-  document.addEventListener("keydown", onEscape, true);
 
   document.body.appendChild(overlay);
   await renderList();

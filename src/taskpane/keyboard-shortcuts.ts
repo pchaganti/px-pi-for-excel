@@ -37,6 +37,14 @@ interface ReopenShortcutEventLike {
   altKey: boolean;
 }
 
+interface FocusInputShortcutEventLike {
+  key: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+}
+
 const THINKING_COLORS: Record<ThinkingLevel, string> = {
   off: "#a0a0a0",
   minimal: "#767676",
@@ -140,6 +148,11 @@ export function isReopenLastClosedShortcut(event: ReopenShortcutEventLike): bool
   return event.key.toLowerCase() === "t";
 }
 
+export function isFocusInputShortcut(event: FocusInputShortcutEventLike): boolean {
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false;
+  return event.key === "F2";
+}
+
 export function shouldAbortFromEscape(opts: {
   isStreaming: boolean;
   hasAgent: boolean;
@@ -181,6 +194,24 @@ export function installKeyboardShortcuts(opts: {
       textarea && targetNode && (targetNode === textarea || textarea.contains(targetNode)),
     );
     const isStreaming = agent?.state.isStreaming ?? false;
+
+    // F2 — focus chat input
+    if (isFocusInputShortcut(e)) {
+      const input = sidebar.getInput();
+      if (!input) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      input.focus();
+
+      const activeTextarea = sidebar.getTextarea();
+      if (activeTextarea) {
+        const cursor = activeTextarea.value.length;
+        activeTextarea.setSelectionRange(cursor, cursor);
+      }
+
+      return;
+    }
 
     // ESC — dismiss command menu
     if (e.key === "Escape" && isCommandMenuVisible()) {

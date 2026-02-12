@@ -34,11 +34,13 @@ import {
   type McpConfigStore,
   type McpServerConfig,
 } from "../../tools/mcp-config.js";
+import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
 import { showToast } from "../../ui/toast.js";
 import { isRecord } from "../../utils/type-guards.js";
 
 const OVERLAY_ID = "pi-skills-overlay";
 const MCP_PROBE_TIMEOUT_MS = 8_000;
+const overlayClosers = new WeakMap<HTMLElement, () => void>();
 
 interface WorkbookContextSnapshot {
   workbookId: string | null;
@@ -369,7 +371,13 @@ function createSkillCard(args: {
 export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   const existing = document.getElementById(OVERLAY_ID);
   if (existing) {
-    existing.remove();
+    const closeExisting = overlayClosers.get(existing);
+    if (closeExisting) {
+      closeExisting();
+    } else {
+      existing.remove();
+    }
+
     return;
   }
 
@@ -397,9 +405,6 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   titleWrap.append(title, subtitle);
 
   const closeButton = createButton("Close");
-  closeButton.addEventListener("click", () => {
-    overlay.remove();
-  });
 
   header.append(titleWrap, closeButton);
 
@@ -507,6 +512,22 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   body.append(externalSection, skillsSection, webSearchSection, mcpSection);
   card.append(header, body);
   overlay.appendChild(card);
+
+  let closed = false;
+  const closeOverlay = () => {
+    if (closed) {
+      return;
+    }
+
+    closed = true;
+    overlayClosers.delete(overlay);
+    cleanupEscape();
+    overlay.remove();
+  };
+  const cleanupEscape = installOverlayEscapeClose(overlay, closeOverlay);
+  overlayClosers.set(overlay, closeOverlay);
+
+  closeButton.addEventListener("click", closeOverlay);
 
   let busy = false;
   let snapshot: SkillsSnapshot | null = null;
@@ -738,7 +759,7 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
 
   overlay.addEventListener("click", (event) => {
     if (event.target === overlay) {
-      overlay.remove();
+      closeOverlay();
     }
   });
 
@@ -747,7 +768,7 @@ export function showSkillsDialog(dependencies: SkillsDialogDependencies): void {
   void refresh()
     .catch((error: unknown) => {
       showToast(`Skills: ${getErrorMessage(error)}`);
-      overlay.remove();
+      closeOverlay();
     })
     .finally(() => {
       setBusy(false);

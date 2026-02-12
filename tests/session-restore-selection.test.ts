@@ -6,6 +6,7 @@ import {
   getResumeTargetLabel,
 } from "../src/commands/builtins/resume-target.ts";
 import {
+  isFocusInputShortcut,
   isReopenLastClosedShortcut,
   shouldAbortFromEscape,
 } from "../src/taskpane/keyboard-shortcuts.ts";
@@ -147,6 +148,41 @@ void test("Cmd/Ctrl+Shift+T detection ignores Alt-modified chords", () => {
       ctrlKey: false,
       shiftKey: true,
       altKey: true,
+    }),
+    false,
+  );
+});
+
+void test("F2 focuses chat input only without modifiers", () => {
+  assert.equal(
+    isFocusInputShortcut({
+      key: "F2",
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    isFocusInputShortcut({
+      key: "F2",
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+    }),
+    false,
+  );
+
+  assert.equal(
+    isFocusInputShortcut({
+      key: "f2",
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
     }),
     false,
   );
