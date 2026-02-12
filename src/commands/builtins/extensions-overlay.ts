@@ -15,6 +15,7 @@ import { validateOfficeProxyUrl } from "../../auth/proxy-validation.js";
 import { dispatchExperimentalToolConfigChanged } from "../../experiments/events.js";
 import { isExperimentalFeatureEnabled, setExperimentalFeatureEnabled } from "../../experiments/flags.js";
 import { PYTHON_BRIDGE_URL_SETTING_KEY } from "../../tools/experimental-tool-gates.js";
+import { requestChatInputFocus } from "../../ui/input-focus.js";
 import { installOverlayEscapeClose } from "../../ui/overlay-escape.js";
 import { showToast } from "../../ui/toast.js";
 
@@ -728,6 +729,7 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     cleanupEscape();
     unsubscribe();
     overlay.remove();
+    requestChatInputFocus();
   };
 
   overlayClosers.set(overlay, closeOverlay);

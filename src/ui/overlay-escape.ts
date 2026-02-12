@@ -2,6 +2,16 @@
  * Helper to make overlay dialogs Esc-dismissible and mark them as
  * Escape owners so streaming Esc abort is suppressed while open.
  */
+
+import { blurTextEntryTarget } from "../utils/text-entry.js";
+
+function getTargetElement(target: EventTarget | null): Element | null {
+  if (!target) return null;
+  if (typeof Element !== "undefined" && target instanceof Element) return target;
+  if (typeof Node !== "undefined" && target instanceof Node) return target.parentElement;
+  return null;
+}
+
 export function installOverlayEscapeClose(
   overlay: HTMLElement,
   closeOverlay: () => void,
@@ -20,6 +30,14 @@ export function installOverlayEscapeClose(
     }
 
     if (!overlay.isConnected) {
+      return;
+    }
+
+    const targetElement = getTargetElement(event.target);
+    if (targetElement && overlay.contains(targetElement) && blurTextEntryTarget(targetElement)) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
       return;
     }
 
