@@ -29,17 +29,29 @@ Keep the filename as `manifest.prod.xml`.
 
 ### macOS (Excel desktop)
 
-1. Open Excel
-2. Go to **Insert → Add-ins → My Add-ins**
-3. Choose **Add from file…** / **Upload My Add-in…**
-4. Select `manifest.prod.xml`
-5. You should see **Pi for Excel**
-6. Click **Open Pi**
+Sideload by copying the manifest into Excel's add-in folder ([Microsoft docs](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/sideload-an-office-add-in-on-mac)):
+
+```bash
+cp manifest.prod.xml ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/
+```
+
+Then:
+1. Quit Excel completely and reopen it
+2. Go to **Insert → My Add-ins**
+3. You should see **Pi for Excel**
+4. Click **Open Pi**
+
+> **Tip:** If the add-in doesn't appear, make sure the `wef/` folder exists. Create it if needed:
+> ```bash
+> mkdir -p ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef
+> ```
 
 ### Windows (Excel desktop)
 
+You can try to install and run this on Windows — it might work! Follow the [Microsoft sideloading docs](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/sideload-office-add-ins-for-testing):
+
 1. Open Excel
-2. Go to **Insert → Add-ins → My Add-ins**
+2. Go to **Insert → My Add-ins**
 3. Choose **Upload My Add-in…**
 4. Select `manifest.prod.xml`
 5. Open **Pi for Excel**
