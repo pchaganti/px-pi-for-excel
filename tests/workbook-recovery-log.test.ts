@@ -198,6 +198,82 @@ void test("persisted format checkpoints retain dimension state", async () => {
   assert.deepEqual(withoutUndefined(entries[0]?.formatRangeState), withoutUndefined(formatState));
 });
 
+void test("persisted conditional-format checkpoints retain extended rule types", async () => {
+  const settingsStore = createInMemorySettingsStore();
+
+  const getWorkbookContext = (): Promise<WorkbookContext> => Promise.resolve({
+    workbookId: "url_sha256:workbook-conditional-format-persist",
+    workbookName: "Ops.xlsx",
+    source: "document.url",
+  });
+
+  const rules = [
+    {
+      type: "custom",
+      formula: "=A1>10",
+      fillColor: "#FF0000",
+      appliesToAddress: "Sheet1!A1:A2",
+    },
+    {
+      type: "cell_value",
+      operator: "GreaterThan",
+      formula1: "10",
+      fillColor: "#0000FF",
+      appliesToAddress: "Sheet1!B1:B2",
+    },
+    {
+      type: "text_comparison",
+      textOperator: "Contains",
+      text: "urgent",
+      fillColor: "#FFE599",
+      appliesToAddress: "Sheet1!C1:C2",
+    },
+    {
+      type: "top_bottom",
+      topBottomType: "TopItems",
+      rank: 3,
+      fillColor: "#E2EFDA",
+      appliesToAddress: "Sheet1!D1:D10",
+    },
+    {
+      type: "preset_criteria",
+      presetCriterion: "DuplicateValues",
+      fillColor: "#FCE4D6",
+      appliesToAddress: "Sheet1!E1:E10",
+    },
+  ] as const;
+
+  const logA = new WorkbookRecoveryLog({
+    getSettingsStore: () => Promise.resolve(settingsStore),
+    getWorkbookContext,
+    now: () => 1700000000150,
+    createId: () => "snap-conditional-format-persist-1",
+    applySnapshot: () => Promise.resolve({ values: [["old"]], formulas: [["old"]] }),
+  });
+
+  const appended = await logA.appendConditionalFormat({
+    toolName: "conditional_format",
+    toolCallId: "call-conditional-format-persist",
+    address: "Sheet1!A1:E10",
+    changedCount: 50,
+    cellCount: 50,
+    conditionalFormatRules: [...rules],
+  });
+
+  assert.ok(appended);
+
+  const logB = new WorkbookRecoveryLog({
+    getSettingsStore: () => Promise.resolve(settingsStore),
+    getWorkbookContext,
+    applySnapshot: () => Promise.resolve({ values: [["old"]], formulas: [["old"]] }),
+  });
+
+  const entries = await logB.listForCurrentWorkbook(10);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0]?.snapshotKind, "conditional_format_rules");
+  assert.deepEqual(withoutUndefined(entries[0]?.conditionalFormatRules), withoutUndefined(rules));
+});
+
 void test("append is skipped when workbook identity is unavailable", async () => {
   const settingsStore = createInMemorySettingsStore();
 
@@ -667,10 +743,31 @@ void test("restore applies conditional-format checkpoints and creates inverse ch
         appliesToAddress: "Sheet1!A1:A2",
       },
       {
-        type: "custom",
-        formula: "=B1>10",
+        type: "cell_value",
+        operator: "GreaterThan",
+        formula1: "10",
         fillColor: "#0000FF",
         appliesToAddress: "Sheet1!B1:B2",
+      },
+      {
+        type: "text_comparison",
+        textOperator: "Contains",
+        text: "urgent",
+        fillColor: "#FFE599",
+        appliesToAddress: "Sheet1!C1:C2",
+      },
+      {
+        type: "top_bottom",
+        topBottomType: "TopItems",
+        rank: 3,
+        fillColor: "#E2EFDA",
+        appliesToAddress: "Sheet1!D1:D10",
+      },
+      {
+        type: "preset_criteria",
+        presetCriterion: "DuplicateValues",
+        fillColor: "#FCE4D6",
+        appliesToAddress: "Sheet1!E1:E10",
       },
     ],
   });
@@ -682,13 +779,20 @@ void test("restore applies conditional-format checkpoints and creates inverse ch
   assert.equal(restored.address, "Sheet1!A1:B2");
   assert.equal(restored.restoredSnapshotId, appended?.id);
   assert.equal(appliedAddress, "Sheet1!A1:B2");
-  assert.equal(appliedRules.length, 2);
+  assert.equal(appliedRules.length, 5);
   assert.deepEqual(
     appliedRules.map((rule) =>
       typeof rule === "object" && rule !== null
         ? {
             type: "type" in rule ? rule.type : undefined,
             formula: "formula" in rule ? rule.formula : undefined,
+            operator: "operator" in rule ? rule.operator : undefined,
+            formula1: "formula1" in rule ? rule.formula1 : undefined,
+            textOperator: "textOperator" in rule ? rule.textOperator : undefined,
+            text: "text" in rule ? rule.text : undefined,
+            topBottomType: "topBottomType" in rule ? rule.topBottomType : undefined,
+            rank: "rank" in rule ? rule.rank : undefined,
+            presetCriterion: "presetCriterion" in rule ? rule.presetCriterion : undefined,
             fillColor: "fillColor" in rule ? rule.fillColor : undefined,
             appliesToAddress: "appliesToAddress" in rule ? rule.appliesToAddress : undefined,
           }
@@ -698,14 +802,67 @@ void test("restore applies conditional-format checkpoints and creates inverse ch
       {
         type: "custom",
         formula: "=A1>10",
+        operator: undefined,
+        formula1: undefined,
+        textOperator: undefined,
+        text: undefined,
+        topBottomType: undefined,
+        rank: undefined,
+        presetCriterion: undefined,
         fillColor: "#FF0000",
         appliesToAddress: "Sheet1!A1:A2",
       },
       {
-        type: "custom",
-        formula: "=B1>10",
+        type: "cell_value",
+        formula: undefined,
+        operator: "GreaterThan",
+        formula1: "10",
+        textOperator: undefined,
+        text: undefined,
+        topBottomType: undefined,
+        rank: undefined,
+        presetCriterion: undefined,
         fillColor: "#0000FF",
         appliesToAddress: "Sheet1!B1:B2",
+      },
+      {
+        type: "text_comparison",
+        formula: undefined,
+        operator: undefined,
+        formula1: undefined,
+        textOperator: "Contains",
+        text: "urgent",
+        topBottomType: undefined,
+        rank: undefined,
+        presetCriterion: undefined,
+        fillColor: "#FFE599",
+        appliesToAddress: "Sheet1!C1:C2",
+      },
+      {
+        type: "top_bottom",
+        formula: undefined,
+        operator: undefined,
+        formula1: undefined,
+        textOperator: undefined,
+        text: undefined,
+        topBottomType: "TopItems",
+        rank: 3,
+        presetCriterion: undefined,
+        fillColor: "#E2EFDA",
+        appliesToAddress: "Sheet1!D1:D10",
+      },
+      {
+        type: "preset_criteria",
+        formula: undefined,
+        operator: undefined,
+        formula1: undefined,
+        textOperator: undefined,
+        text: undefined,
+        topBottomType: undefined,
+        rank: undefined,
+        presetCriterion: "DuplicateValues",
+        fillColor: "#FCE4D6",
+        appliesToAddress: "Sheet1!E1:E10",
       },
     ],
   );

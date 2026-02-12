@@ -7,9 +7,10 @@ import { resolveConventions } from "../src/conventions/store.ts";
 void test("system prompt includes default placeholders when instructions are absent", () => {
   const prompt = buildSystemPrompt();
 
-  assert.match(prompt, /## Persistent Instructions/);
-  assert.match(prompt, /\(No user instructions set\.\)/);
-  assert.match(prompt, /\(No workbook instructions set\.\)/);
+  assert.match(prompt, /## Rules/);
+  assert.match(prompt, /\(No rules set\.\)/);
+  assert.match(prompt, /### All my files/);
+  assert.match(prompt, /### This file/);
 });
 
 void test("system prompt embeds provided user and workbook instructions", () => {

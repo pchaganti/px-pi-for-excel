@@ -11,13 +11,65 @@ export type RecoveryConditionalCellValueOperator =
   | "GreaterThanOrEqual"
   | "LessThanOrEqual";
 
+export type RecoveryConditionalTextOperator =
+  | "Contains"
+  | "NotContains"
+  | "BeginsWith"
+  | "EndsWith";
+
+export type RecoveryConditionalTopBottomCriterionType =
+  | "TopItems"
+  | "TopPercent"
+  | "BottomItems"
+  | "BottomPercent";
+
+export type RecoveryConditionalPresetCriterion =
+  | "Blanks"
+  | "NonBlanks"
+  | "Errors"
+  | "NonErrors"
+  | "Yesterday"
+  | "Today"
+  | "Tomorrow"
+  | "LastSevenDays"
+  | "LastWeek"
+  | "ThisWeek"
+  | "NextWeek"
+  | "LastMonth"
+  | "ThisMonth"
+  | "NextMonth"
+  | "AboveAverage"
+  | "BelowAverage"
+  | "EqualOrAboveAverage"
+  | "EqualOrBelowAverage"
+  | "OneStdDevAboveAverage"
+  | "OneStdDevBelowAverage"
+  | "TwoStdDevAboveAverage"
+  | "TwoStdDevBelowAverage"
+  | "ThreeStdDevAboveAverage"
+  | "ThreeStdDevBelowAverage"
+  | "UniqueValues"
+  | "DuplicateValues";
+
+export type RecoveryConditionalFormatRuleType =
+  | "custom"
+  | "cell_value"
+  | "text_comparison"
+  | "top_bottom"
+  | "preset_criteria";
+
 export interface RecoveryConditionalFormatRule {
-  type: "custom" | "cell_value";
+  type: RecoveryConditionalFormatRuleType;
   stopIfTrue?: boolean;
   formula?: string;
   operator?: RecoveryConditionalCellValueOperator;
   formula1?: string;
   formula2?: string;
+  textOperator?: RecoveryConditionalTextOperator;
+  text?: string;
+  topBottomType?: RecoveryConditionalTopBottomCriterionType;
+  rank?: number;
+  presetCriterion?: RecoveryConditionalPresetCriterion;
   fillColor?: string;
   fontColor?: string;
   bold?: boolean;
@@ -133,6 +185,49 @@ const SUPPORTED_CELL_VALUE_OPERATORS: readonly RecoveryConditionalCellValueOpera
   "LessThanOrEqual",
 ];
 
+const SUPPORTED_TEXT_OPERATORS: readonly RecoveryConditionalTextOperator[] = [
+  "Contains",
+  "NotContains",
+  "BeginsWith",
+  "EndsWith",
+];
+
+const SUPPORTED_TOP_BOTTOM_TYPES: readonly RecoveryConditionalTopBottomCriterionType[] = [
+  "TopItems",
+  "TopPercent",
+  "BottomItems",
+  "BottomPercent",
+];
+
+const SUPPORTED_PRESET_CRITERIA: readonly RecoveryConditionalPresetCriterion[] = [
+  "Blanks",
+  "NonBlanks",
+  "Errors",
+  "NonErrors",
+  "Yesterday",
+  "Today",
+  "Tomorrow",
+  "LastSevenDays",
+  "LastWeek",
+  "ThisWeek",
+  "NextWeek",
+  "LastMonth",
+  "ThisMonth",
+  "NextMonth",
+  "AboveAverage",
+  "BelowAverage",
+  "EqualOrAboveAverage",
+  "EqualOrBelowAverage",
+  "OneStdDevAboveAverage",
+  "OneStdDevBelowAverage",
+  "TwoStdDevAboveAverage",
+  "TwoStdDevBelowAverage",
+  "ThreeStdDevAboveAverage",
+  "ThreeStdDevBelowAverage",
+  "UniqueValues",
+  "DuplicateValues",
+];
+
 const RECOVERY_BORDER_KEYS = [
   "borderTop",
   "borderBottom",
@@ -166,6 +261,42 @@ function isRecoveryConditionalCellValueOperator(value: unknown): value is Recove
 
   for (const operator of SUPPORTED_CELL_VALUE_OPERATORS) {
     if (operator === value) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isRecoveryConditionalTextOperator(value: unknown): value is RecoveryConditionalTextOperator {
+  if (typeof value !== "string") return false;
+
+  for (const operator of SUPPORTED_TEXT_OPERATORS) {
+    if (operator === value) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isRecoveryConditionalTopBottomCriterionType(value: unknown): value is RecoveryConditionalTopBottomCriterionType {
+  if (typeof value !== "string") return false;
+
+  for (const type of SUPPORTED_TOP_BOTTOM_TYPES) {
+    if (type === value) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isRecoveryConditionalPresetCriterion(value: unknown): value is RecoveryConditionalPresetCriterion {
+  if (typeof value !== "string") return false;
+
+  for (const criterion of SUPPORTED_PRESET_CRITERIA) {
+    if (criterion === value) {
       return true;
     }
   }
@@ -298,13 +429,25 @@ function isRecoverySheetVisibility(value: unknown): value is RecoverySheetVisibi
   return value === "Visible" || value === "Hidden" || value === "VeryHidden";
 }
 
-function normalizeConditionalFormatType(type: unknown): "custom" | "cell_value" | null {
+function normalizeConditionalFormatType(type: unknown): RecoveryConditionalFormatRuleType | null {
   if (type === "Custom" || type === "custom") {
     return "custom";
   }
 
   if (type === "CellValue" || type === "cellValue") {
     return "cell_value";
+  }
+
+  if (type === "ContainsText" || type === "containsText") {
+    return "text_comparison";
+  }
+
+  if (type === "TopBottom" || type === "topBottom") {
+    return "top_bottom";
+  }
+
+  if (type === "PresetCriteria" || type === "presetCriteria") {
+    return "preset_criteria";
   }
 
   return null;
@@ -377,6 +520,11 @@ function cloneRecoveryConditionalFormatRule(rule: RecoveryConditionalFormatRule)
     operator: rule.operator,
     formula1: rule.formula1,
     formula2: rule.formula2,
+    textOperator: rule.textOperator,
+    text: rule.text,
+    topBottomType: rule.topBottomType,
+    rank: rule.rank,
+    presetCriterion: rule.presetCriterion,
     fillColor: rule.fillColor,
     fontColor: rule.fontColor,
     bold: rule.bold,
@@ -1458,9 +1606,30 @@ async function captureConditionalFormatRulesInRange(
       continue;
     }
 
-    conditionalFormat.cellValue.load("rule");
-    conditionalFormat.cellValue.format.fill.load("color");
-    conditionalFormat.cellValue.format.font.load("bold,italic,underline,color");
+    if (normalizedType === "cell_value") {
+      conditionalFormat.cellValue.load("rule");
+      conditionalFormat.cellValue.format.fill.load("color");
+      conditionalFormat.cellValue.format.font.load("bold,italic,underline,color");
+      continue;
+    }
+
+    if (normalizedType === "text_comparison") {
+      conditionalFormat.textComparison.load("rule");
+      conditionalFormat.textComparison.format.fill.load("color");
+      conditionalFormat.textComparison.format.font.load("bold,italic,underline,color");
+      continue;
+    }
+
+    if (normalizedType === "top_bottom") {
+      conditionalFormat.topBottom.load("rule");
+      conditionalFormat.topBottom.format.fill.load("color");
+      conditionalFormat.topBottom.format.font.load("bold,italic,underline,color");
+      continue;
+    }
+
+    conditionalFormat.preset.load("rule");
+    conditionalFormat.preset.format.fill.load("color");
+    conditionalFormat.preset.format.font.load("bold,italic,underline,color");
   }
 
   await context.sync();
@@ -1492,37 +1661,126 @@ async function captureConditionalFormatRulesInRange(
       continue;
     }
 
-    const cellValue = conditionalFormat.cellValue;
-    const ruleData = cellValue.rule;
-    const operator = isRecord(ruleData) ? ruleData.operator : undefined;
+    if (normalizedType === "cell_value") {
+      const cellValue = conditionalFormat.cellValue;
+      const ruleData = cellValue.rule;
+      const operator = isRecord(ruleData) ? ruleData.operator : undefined;
 
-    if (!isRecoveryConditionalCellValueOperator(operator)) {
-      return {
-        supported: false,
-        rules: [],
-        reason: "Unsupported conditional format rule operator.",
-      };
+      if (!isRecoveryConditionalCellValueOperator(operator)) {
+        return {
+          supported: false,
+          rules: [],
+          reason: "Unsupported conditional format rule operator.",
+        };
+      }
+
+      const formula1 = isRecord(ruleData) ? ruleData.formula1 : undefined;
+      const formula2 = isRecord(ruleData) ? ruleData.formula2 : undefined;
+
+      if (typeof formula1 !== "string") {
+        return {
+          supported: false,
+          rules: [],
+          reason: "Conditional format rule is missing formula1.",
+        };
+      }
+
+      rules.push({
+        type: "cell_value",
+        stopIfTrue: normalizeOptionalBoolean(conditionalFormat.stopIfTrue),
+        operator,
+        formula1,
+        formula2: typeof formula2 === "string" ? formula2 : undefined,
+        appliesToAddress,
+        ...captureRuleFormatting(cellValue.format),
+      });
+      continue;
     }
 
-    const formula1 = isRecord(ruleData) ? ruleData.formula1 : undefined;
-    const formula2 = isRecord(ruleData) ? ruleData.formula2 : undefined;
+    if (normalizedType === "text_comparison") {
+      const textComparison = conditionalFormat.textComparison;
+      const ruleData = textComparison.rule;
+      const operator = isRecord(ruleData) ? ruleData.operator : undefined;
 
-    if (typeof formula1 !== "string") {
+      if (!isRecoveryConditionalTextOperator(operator)) {
+        return {
+          supported: false,
+          rules: [],
+          reason: "Unsupported conditional format text operator.",
+        };
+      }
+
+      const text = isRecord(ruleData) ? ruleData.text : undefined;
+      if (typeof text !== "string") {
+        return {
+          supported: false,
+          rules: [],
+          reason: "Conditional format text-comparison rule is missing text.",
+        };
+      }
+
+      rules.push({
+        type: "text_comparison",
+        stopIfTrue: normalizeOptionalBoolean(conditionalFormat.stopIfTrue),
+        textOperator: operator,
+        text,
+        appliesToAddress,
+        ...captureRuleFormatting(textComparison.format),
+      });
+      continue;
+    }
+
+    if (normalizedType === "top_bottom") {
+      const topBottom = conditionalFormat.topBottom;
+      const ruleData = topBottom.rule;
+      const topBottomType = isRecord(ruleData) ? ruleData.type : undefined;
+      const rank = isRecord(ruleData) ? ruleData.rank : undefined;
+
+      if (!isRecoveryConditionalTopBottomCriterionType(topBottomType)) {
+        return {
+          supported: false,
+          rules: [],
+          reason: "Unsupported conditional format top/bottom criterion type.",
+        };
+      }
+
+      if (typeof rank !== "number" || !Number.isFinite(rank)) {
+        return {
+          supported: false,
+          rules: [],
+          reason: "Conditional format top/bottom rule is missing rank.",
+        };
+      }
+
+      rules.push({
+        type: "top_bottom",
+        stopIfTrue: normalizeOptionalBoolean(conditionalFormat.stopIfTrue),
+        topBottomType,
+        rank,
+        appliesToAddress,
+        ...captureRuleFormatting(topBottom.format),
+      });
+      continue;
+    }
+
+    const preset = conditionalFormat.preset;
+    const ruleData = preset.rule;
+    const criterion = isRecord(ruleData) ? ruleData.criterion : undefined;
+
+    if (!isRecoveryConditionalPresetCriterion(criterion)) {
       return {
         supported: false,
         rules: [],
-        reason: "Conditional format rule is missing formula1.",
+        reason: "Unsupported conditional format preset criterion.",
       };
     }
 
     rules.push({
-      type: "cell_value",
+      type: "preset_criteria",
       stopIfTrue: normalizeOptionalBoolean(conditionalFormat.stopIfTrue),
-      operator,
-      formula1,
-      formula2: typeof formula2 === "string" ? formula2 : undefined,
+      presetCriterion: criterion,
       appliesToAddress,
-      ...captureRuleFormatting(cellValue.format),
+      ...captureRuleFormatting(preset.format),
     });
   }
 
@@ -1563,22 +1821,87 @@ function applyConditionalFormatRule(
     return;
   }
 
-  if (!rule.operator || typeof rule.formula1 !== "string") {
-    throw new Error("Conditional format checkpoint is invalid: cell value rule is incomplete.");
+  if (rule.type === "cell_value") {
+    if (!rule.operator || typeof rule.formula1 !== "string") {
+      throw new Error("Conditional format checkpoint is invalid: cell value rule is incomplete.");
+    }
+
+    const conditionalFormat = range.conditionalFormats.add(Excel.ConditionalFormatType.cellValue);
+    const cellValueRule: Excel.ConditionalCellValueRule = {
+      operator: rule.operator,
+      formula1: rule.formula1,
+    };
+
+    if (typeof rule.formula2 === "string") {
+      cellValueRule.formula2 = rule.formula2;
+    }
+
+    conditionalFormat.cellValue.rule = cellValueRule;
+    applyRuleFormatting(conditionalFormat.cellValue.format, rule);
+
+    if (rule.stopIfTrue !== undefined) {
+      conditionalFormat.stopIfTrue = rule.stopIfTrue;
+    }
+
+    conditionalFormat.setRanges(targetAddress);
+    return;
   }
 
-  const conditionalFormat = range.conditionalFormats.add(Excel.ConditionalFormatType.cellValue);
-  const cellValueRule: Excel.ConditionalCellValueRule = {
-    operator: rule.operator,
-    formula1: rule.formula1,
+  if (rule.type === "text_comparison") {
+    if (!rule.textOperator || typeof rule.text !== "string") {
+      throw new Error("Conditional format checkpoint is invalid: text-comparison rule is incomplete.");
+    }
+
+    const conditionalFormat = range.conditionalFormats.add(Excel.ConditionalFormatType.containsText);
+    const textRule: Excel.ConditionalTextComparisonRule = {
+      operator: rule.textOperator,
+      text: rule.text,
+    };
+
+    conditionalFormat.textComparison.rule = textRule;
+    applyRuleFormatting(conditionalFormat.textComparison.format, rule);
+
+    if (rule.stopIfTrue !== undefined) {
+      conditionalFormat.stopIfTrue = rule.stopIfTrue;
+    }
+
+    conditionalFormat.setRanges(targetAddress);
+    return;
+  }
+
+  if (rule.type === "top_bottom") {
+    if (!rule.topBottomType || typeof rule.rank !== "number" || !Number.isFinite(rule.rank)) {
+      throw new Error("Conditional format checkpoint is invalid: top/bottom rule is incomplete.");
+    }
+
+    const conditionalFormat = range.conditionalFormats.add(Excel.ConditionalFormatType.topBottom);
+    const topBottomRule: Excel.ConditionalTopBottomRule = {
+      type: rule.topBottomType,
+      rank: rule.rank,
+    };
+
+    conditionalFormat.topBottom.rule = topBottomRule;
+    applyRuleFormatting(conditionalFormat.topBottom.format, rule);
+
+    if (rule.stopIfTrue !== undefined) {
+      conditionalFormat.stopIfTrue = rule.stopIfTrue;
+    }
+
+    conditionalFormat.setRanges(targetAddress);
+    return;
+  }
+
+  if (!rule.presetCriterion) {
+    throw new Error("Conditional format checkpoint is invalid: preset-criteria rule is incomplete.");
+  }
+
+  const conditionalFormat = range.conditionalFormats.add(Excel.ConditionalFormatType.presetCriteria);
+  const presetRule: Excel.ConditionalPresetCriteriaRule = {
+    criterion: rule.presetCriterion,
   };
 
-  if (typeof rule.formula2 === "string") {
-    cellValueRule.formula2 = rule.formula2;
-  }
-
-  conditionalFormat.cellValue.rule = cellValueRule;
-  applyRuleFormatting(conditionalFormat.cellValue.format, rule);
+  conditionalFormat.preset.rule = presetRule;
+  applyRuleFormatting(conditionalFormat.preset.format, rule);
 
   if (rule.stopIfTrue !== undefined) {
     conditionalFormat.stopIfTrue = rule.stopIfTrue;

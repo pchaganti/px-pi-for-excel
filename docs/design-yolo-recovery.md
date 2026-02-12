@@ -60,6 +60,7 @@ Replace cumbersome up-front approval selectors with a low-friction workflow:
 - Coverage signaling:
   - unsupported mutation tools/actions explicitly state when no checkpoint is created
   - `format_cells` checkpoint coverage now includes merge/unmerge state
+  - `conditional_format` checkpoint coverage includes `custom`, `cell_value`, `contains_text`, `top_bottom`, and `preset_criteria` rules
   - `modify_structure` currently checkpoints only `rename_sheet`, `hide_sheet`, and `unhide_sheet`
 
 ## Why this is better than approval selectors for now
@@ -70,7 +71,7 @@ Replace cumbersome up-front approval selectors with a low-friction workflow:
 
 ## Follow-ups
 
-1. Extend checkpointing to remaining unsupported `modify_structure` actions (`insert_rows`, `delete_rows`, `insert_columns`, `delete_columns`, `add_sheet`, `delete_sheet`, `duplicate_sheet`) and broaden conditional-format coverage to additional rule types.
+1. Extend checkpointing to remaining unsupported `modify_structure` actions (`insert_rows`, `delete_rows`, `insert_columns`, `delete_columns`, `add_sheet`, `delete_sheet`, `duplicate_sheet`) and the remaining conditional-format visual rule types (`data_bar`, `color_scale`, `icon_set`).
 2. Enrich checkpoint history UX (search/filter/export, retention controls).
 3. Evaluate host-specific full-file snapshot feasibility for coarse-grained restore points.
 4. Potentially expose “YOLO mode” toggle once we have both lightweight and strict workflows fully defined.
