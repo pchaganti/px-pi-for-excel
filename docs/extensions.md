@@ -88,11 +88,8 @@ Subscribe to runtime events (returns unsubscribe function).
 ### `overlay.show(el)` / `overlay.dismiss()`
 Show or dismiss a full-screen overlay.
 
-### `widget.show(el)` / `widget.dismiss()`
-Show or dismiss the legacy inline widget slot above the input area.
-
 ### `widget.upsert(spec)` / `widget.remove(id)` / `widget.clear()` (Widget API v2)
-Additive widget lifecycle API (experimental):
+Primary widget lifecycle API (experimental):
 - `upsert` creates/updates by stable `spec.id`
 - `remove` unmounts one widget by id
 - `clear` unmounts all widgets owned by the extension
@@ -111,25 +108,7 @@ Widget API v2 host behavior:
 - `minHeightPx` / `maxHeightPx` are clamped to safe host bounds (`72..640` px).
 - If both bounds are set and `maxHeightPx < minHeightPx`, host coerces `maxHeightPx` up to `minHeightPx`.
 - Pass `null` for `minHeightPx` / `maxHeightPx` to clear a previously set bound while keeping other widget metadata unchanged.
-
-#### Widget API v2 migration (from legacy `widget.show/dismiss`)
-
-If you previously used one legacy widget:
-
-```ts
-// before
-api.widget.show(el);
-api.widget.dismiss();
-
-// after (v2)
-api.widget.upsert({ id: "main", el });
-api.widget.remove("main");
-```
-
-Notes:
-- Use a stable, extension-local `id` per widget surface (`"main"`, `"summary"`, `"warnings"`, etc.).
-- On extension disable/reload/uninstall, host still auto-clears extension-owned widgets.
-- Use `api.widget.clear()` for explicit in-session teardown (for example when switching extension modes).
+- Use stable, extension-local ids (`"main"`, `"summary"`, `"warnings"`, etc.) and call `api.widget.clear()` for explicit in-session teardown when needed.
 
 #### Widget API v2 best practices
 
@@ -224,7 +203,7 @@ export function activate(api) {
 
   return () => {
     onTurnEnd();
-    api.widget.dismiss();
+    api.widget.clear();
     api.overlay.dismiss();
   };
 }
