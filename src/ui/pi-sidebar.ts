@@ -555,7 +555,7 @@ export class PiSidebar extends LitElement {
           Settings…
         </button>
         <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenFiles?.(); }}>
-          Files workspace…
+          Files…
         </button>
         <div class="pi-utilities-menu__divider"></div>
         <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenResumePicker?.(); }}>
@@ -565,7 +565,7 @@ export class PiSidebar extends LitElement {
           Recovery checkpoints…
         </button>
         <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenShortcuts?.(); }}>
-          Keyboard shortcuts
+          Keyboard shortcuts…
         </button>
       </div>
     `;

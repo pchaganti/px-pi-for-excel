@@ -39,12 +39,12 @@ const THINKING_LEVEL_LABELS: Record<ThinkingLevel, string> = {
 };
 
 const THINKING_LEVEL_HINTS: Record<ThinkingLevel, string> = {
-  off: "Fastest",
-  minimal: "Very light reasoning",
-  low: "Balanced speed",
-  medium: "Stronger reasoning",
-  high: "Deep reasoning",
-  xhigh: "Deepest reasoning (slow)",
+  off: "Fastest — no reasoning step",
+  minimal: "Quick — light reasoning",
+  low: "Fast — moderate reasoning",
+  medium: "Balanced — solid reasoning",
+  high: "Slow — thorough reasoning",
+  xhigh: "Slowest — deepest reasoning",
 };
 
 let activePopover: ActivePopoverState | null = null;
