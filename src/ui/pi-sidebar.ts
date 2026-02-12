@@ -89,7 +89,6 @@ export class PiSidebar extends LitElement {
   @property({ attribute: false }) onOpenResumePicker?: () => void;
   @property({ attribute: false }) onOpenShortcuts?: () => void;
   @property({ attribute: false }) lockNotice: string | null = null;
-  @property({ type: String }) workbookLabel: string | null = null;
 
   @state() private _hasMessages = false;
   @state() private _isStreaming = false;
