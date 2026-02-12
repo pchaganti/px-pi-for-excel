@@ -197,10 +197,10 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 
 ## Workbook recovery checkpoints (`workbook_history`)
 - **Goal:** prefer low-friction workflows over pre-execution approval selectors by making rollback easy and reliable.
-- **Automatic checkpoints:** successful `write_cells`, `fill_formula`, and `python_transform_range` writes store pre-write range snapshots in local `workbook.recovery-snapshots.v1`.
+- **Automatic checkpoints:** successful `write_cells`, `fill_formula`, `python_transform_range`, `conditional_format`, and mutating `comments` actions store pre-mutation snapshots in local `workbook.recovery-snapshots.v1`.
 - **Safety limits:** checkpoint capture is skipped for very large writes (> `MAX_RECOVERY_CELLS`) to avoid oversized local state.
 - **Workbook identity guardrails:** append/list/delete/clear/restore paths are scoped to the active workbook identity; restore rejects identity-less or cross-workbook checkpoints.
 - **Restore UX:** `workbook_history` can list/restore/delete/clear checkpoints; restores also create an inverse checkpoint (`restore_snapshot`) so users can undo a mistaken restore.
-- **Coverage signaling:** non-checkpointed mutation tools (`format_cells`, `conditional_format`, `modify_structure`, mutating `comments` actions) explicitly report that no recovery checkpoint was created.
+- **Coverage signaling:** non-checkpointed mutation tools (`format_cells`, `modify_structure`) explicitly report when no recovery checkpoint was created.
 - **Quick affordance:** after a checkpointed write, UI shows an action toast with **Revert**.
 - **Rationale:** addresses #27 by shifting from cumbersome up-front approvals to versioned recovery with explicit user-controlled rollback.
