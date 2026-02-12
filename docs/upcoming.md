@@ -77,14 +77,18 @@ Resolved outcome:
 ### #28 — Auditability: diff view + audit log for agent changes
 https://github.com/tmustier/pi-for-excel/issues/28
 
-**What it’s asking:** record before/after for mutating operations, render diffs in tool cards, export audit log.
+**Status:** closed (2026-02-12).
 
-**Status note:** first slice is now in place for `write_cells`, `fill_formula`, and `python_transform_range`:
-- tools compute structured cell-level before/after summaries (`details.changes`)
-- tool cards render a compact **Changes** diff table with clickable cell links
-- local audit entries are persisted to `workbook.change-audit.v1`
+Delivered for this phase:
+- structured mutation diffs for core cell-write paths (`write_cells`, `fill_formula`, `python_transform_range`)
+- compact in-card **Changes** rendering with clickable cell links
+- persisted workbook mutation audit log (`workbook.change-audit.v1`)
+- expanded operation-level audit coverage for formatting/structure/comment/view/history-restore mutation paths
+- JSON export via `/export audit` (download) and `/export audit clipboard`
 
-**Remaining follow-up:** broaden coverage to other mutating tools + add export/history UX on top of the persisted audit log.
+**Follow-up tracking:**
+- #100 — complete remaining workbook-mutating audit coverage alignment
+- #101 — optional “Explain these changes” UX
 
 ---
 

@@ -190,7 +190,7 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Context efficiency:**
   - diff samples are intentionally bounded (default sample limit = 12 changed cells)
   - `write_cells` verification output shows a bounded preview for large writes instead of dumping full tables
-- **Audit coverage extension:** `format_cells`, `conditional_format`, and `modify_structure` now also append structured entries to `workbook.change-audit.v1` (operation-focused summaries, not per-cell value diffs).
+- **Audit coverage extension:** `format_cells`, `conditional_format`, `modify_structure`, mutating `comments` actions, mutating `view_settings` actions, and `workbook_history` restore now append structured entries to `workbook.change-audit.v1` (operation-focused summaries, not per-cell value diffs).
 - **Export option:** `/export audit` writes the persisted workbook mutation audit log as JSON (download by default, `clipboard` optional).
 - **Rationale:** improve user trust with concrete, navigable deltas while keeping implementation incremental and low-risk.
 

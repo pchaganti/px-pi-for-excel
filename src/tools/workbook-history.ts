@@ -9,6 +9,10 @@ import {
   getWorkbookRecoveryLog,
   type WorkbookRecoverySnapshot,
 } from "../workbook/recovery-log.js";
+import {
+  getWorkbookChangeAuditLog,
+  type AppendWorkbookChangeAuditEntryArgs,
+} from "../audit/workbook-change-audit.js";
 import { getErrorMessage } from "../utils/errors.js";
 import type { WorkbookHistoryDetails } from "./tool-details.js";
 
@@ -41,6 +45,30 @@ const schema = Type.Object({
 
 type Params = Static<typeof schema>;
 
+type RestoreResult = {
+  restoredSnapshotId: string;
+  inverseSnapshotId: string | null;
+  address: string;
+  changedCount: number;
+};
+
+interface WorkbookHistoryRecoveryLogLike {
+  listForCurrentWorkbook(limit?: number): Promise<WorkbookRecoverySnapshot[]>;
+  restore(snapshotId: string): Promise<RestoreResult>;
+  delete(snapshotId: string): Promise<boolean>;
+  clearForCurrentWorkbook(): Promise<number>;
+}
+
+interface WorkbookHistoryToolDependencies {
+  getRecoveryLog: () => WorkbookHistoryRecoveryLogLike;
+  appendAuditEntry: (entry: AppendWorkbookChangeAuditEntryArgs) => Promise<void>;
+}
+
+const defaultDependencies: WorkbookHistoryToolDependencies = {
+  getRecoveryLog: () => getWorkbookRecoveryLog(),
+  appendAuditEntry: (entry) => getWorkbookChangeAuditLog().append(entry),
+};
+
 function formatTimestamp(ts: number): string {
   try {
     return new Date(ts).toLocaleString();
@@ -71,24 +99,34 @@ function buildListMarkdown(snapshots: WorkbookRecoverySnapshot[]): string {
   return lines.join("\n");
 }
 
-async function resolveSnapshotId(params: Params): Promise<string | null> {
+async function resolveSnapshotId(
+  log: WorkbookHistoryRecoveryLogLike,
+  params: Params,
+): Promise<string | null> {
   const explicit = params.snapshot_id?.trim();
   if (explicit) return explicit;
 
-  const latest = await getWorkbookRecoveryLog().listForCurrentWorkbook(1);
+  const latest = await log.listForCurrentWorkbook(1);
   return latest[0]?.id ?? null;
 }
 
-export function createWorkbookHistoryTool(): AgentTool<typeof schema, WorkbookHistoryDetails> {
+export function createWorkbookHistoryTool(
+  dependencies: Partial<WorkbookHistoryToolDependencies> = {},
+): AgentTool<typeof schema, WorkbookHistoryDetails> {
+  const resolvedDependencies: WorkbookHistoryToolDependencies = {
+    getRecoveryLog: dependencies.getRecoveryLog ?? defaultDependencies.getRecoveryLog,
+    appendAuditEntry: dependencies.appendAuditEntry ?? defaultDependencies.appendAuditEntry,
+  };
+
   return {
     name: "workbook_history",
     label: "Workbook History",
     description:
       "List, restore, and manage automatic workbook recovery checkpoints created before agent edits.",
     parameters: schema,
-    execute: async (_toolCallId: string, params: Params): Promise<AgentToolResult<WorkbookHistoryDetails>> => {
+    execute: async (toolCallId: string, params: Params): Promise<AgentToolResult<WorkbookHistoryDetails>> => {
       const action = params.action ?? "list";
-      const log = getWorkbookRecoveryLog();
+      const log = resolvedDependencies.getRecoveryLog();
 
       try {
         if (action === "list") {
@@ -126,9 +164,9 @@ export function createWorkbookHistoryTool(): AgentTool<typeof schema, WorkbookHi
         }
 
         if (action === "restore") {
-          const snapshotId = await resolveSnapshotId(params);
+          const snapshotId = await resolveSnapshotId(log, params);
           if (!snapshotId) {
-            return {
+            const restoreUnavailableResult: AgentToolResult<WorkbookHistoryDetails> = {
               content: [{ type: "text", text: "No recovery checkpoints available to restore." }],
               details: {
                 kind: "workbook_history",
@@ -136,6 +174,17 @@ export function createWorkbookHistoryTool(): AgentTool<typeof schema, WorkbookHi
                 error: "missing_snapshot",
               },
             };
+
+            await resolvedDependencies.appendAuditEntry({
+              toolName: "workbook_history",
+              toolCallId,
+              blocked: true,
+              changedCount: 0,
+              changes: [],
+              summary: "error: no recovery checkpoints available to restore",
+            });
+
+            return restoreUnavailableResult;
           }
 
           const restored = await log.restore(snapshotId);
@@ -146,6 +195,16 @@ export function createWorkbookHistoryTool(): AgentTool<typeof schema, WorkbookHi
           if (restored.inverseSnapshotId) {
             lines.push(`Rollback checkpoint created: \`${shortId(restored.inverseSnapshotId)}\`.`);
           }
+
+          await resolvedDependencies.appendAuditEntry({
+            toolName: "workbook_history",
+            toolCallId,
+            blocked: false,
+            outputAddress: restored.address,
+            changedCount: restored.changedCount,
+            changes: [],
+            summary: `restored checkpoint ${shortId(restored.restoredSnapshotId)} at ${restored.address}`,
+          });
 
           return {
             content: [{ type: "text", text: lines.join("\n\n") }],
@@ -162,7 +221,7 @@ export function createWorkbookHistoryTool(): AgentTool<typeof schema, WorkbookHi
         }
 
         if (action === "delete") {
-          const snapshotId = await resolveSnapshotId(params);
+          const snapshotId = await resolveSnapshotId(log, params);
           if (!snapshotId) {
             return {
               content: [{ type: "text", text: "No recovery checkpoints available to delete." }],
@@ -209,6 +268,18 @@ export function createWorkbookHistoryTool(): AgentTool<typeof schema, WorkbookHi
         };
       } catch (error: unknown) {
         const message = getErrorMessage(error);
+
+        if (action === "restore") {
+          await resolvedDependencies.appendAuditEntry({
+            toolName: "workbook_history",
+            toolCallId,
+            blocked: true,
+            changedCount: 0,
+            changes: [],
+            summary: `error: ${message}`,
+          });
+        }
+
         return {
           content: [{ type: "text", text: `Error: ${message}` }],
           details: {
