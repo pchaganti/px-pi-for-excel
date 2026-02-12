@@ -11,7 +11,7 @@ import type { ToolRenderer, ToolRenderResult } from "@mariozechner/pi-web-ui/dis
 import { html, type TemplateResult } from "lit";
 import { createRef, ref } from "lit/directives/ref.js";
 import { renderCollapsibleToolCardHeader, renderToolCardHeader } from "./tool-card-header.js";
-import { cellRef, cellRefs } from "./cell-link.js";
+import { cellRef, cellRefDisplay, cellRefs } from "./cell-link.js";
 import { humanizeToolInput } from "./humanize-params.js";
 import { humanizeColorsInText } from "./color-names.js";
 import { CORE_TOOL_NAMES, type CoreToolName } from "../tools/registry.js";
@@ -706,7 +706,9 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
       const resultText = result ? splitToolResultContent(result).text : undefined;
       const desc = describeToolCall(toolName, params, resultText, result?.details);
       const detailContent = desc.address
-        ? cellRefs(desc.address)
+        ? (desc.detail && desc.detail !== desc.address
+          ? cellRefDisplay(desc.detail, desc.address)
+          : cellRefs(desc.address))
         : desc.detail;
       const title = html`<span class="pi-tool-card__title"><strong>${desc.action}</strong>${desc.detail ? html` <span class="pi-tool-card__detail-text">${detailContent}</span>` : ""}</span>`;
 
