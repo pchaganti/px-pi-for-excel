@@ -191,12 +191,10 @@ export function shouldBlurEditorFromEscape(opts: {
   key: string;
   isInEditor: boolean;
   isStreaming: boolean;
-  escapeClaimedByOverlay: boolean;
 }): boolean {
-  if (opts.key !== "Escape") return false;
+  if (opts.key !== "Escape" && opts.key !== "Esc") return false;
   if (!opts.isInEditor) return false;
   if (opts.isStreaming) return false;
-  if (opts.escapeClaimedByOverlay) return false;
   return true;
 }
 
@@ -238,9 +236,10 @@ export function installKeyboardShortcuts(opts: {
 
     const agent = getActiveAgent();
     const textarea = sidebar.getTextarea();
-    const targetNode = e.target instanceof Node ? e.target : null;
+    const eventTarget = e.target instanceof Node ? e.target : null;
+    const keyTarget = eventTarget ?? (document.activeElement instanceof Node ? document.activeElement : null);
     const isInEditor = Boolean(
-      textarea && targetNode && (targetNode === textarea || textarea.contains(targetNode)),
+      textarea && keyTarget && (keyTarget === textarea || textarea.contains(keyTarget)),
     );
     const isStreaming = agent?.state.isStreaming ?? false;
 
@@ -268,7 +267,8 @@ export function installKeyboardShortcuts(opts: {
       return;
     }
 
-    const escapeClaimedByOverlay = e.key === "Escape" && doesOverlayClaimEscape(targetNode);
+    const isEscapeKey = e.key === "Escape" || e.key === "Esc";
+    const escapeClaimedByOverlay = isEscapeKey && doesOverlayClaimEscape(keyTarget);
 
     // ESC — leave editor focus (when not streaming)
     if (
@@ -276,21 +276,23 @@ export function installKeyboardShortcuts(opts: {
         key: e.key,
         isInEditor,
         isStreaming,
-        escapeClaimedByOverlay,
       })
     ) {
       e.preventDefault();
       e.stopPropagation();
-      const blurred = blurTextEntryTarget(targetNode);
+      e.stopImmediatePropagation();
+      const blurred = blurTextEntryTarget(keyTarget);
       if (blurred) {
-        sidebar.focusTabNavigationAnchor();
+        requestAnimationFrame(() => {
+          sidebar.focusTabNavigationAnchor();
+        });
       }
       return;
     }
 
     // ESC — abort (only when no overlay/dialog is claiming Escape)
     if (
-      e.key === "Escape"
+      isEscapeKey
       && shouldAbortFromEscape({
         isStreaming,
         hasAgent: agent !== null,
@@ -317,8 +319,7 @@ export function installKeyboardShortcuts(opts: {
     if (
       adjacentTabDirection
       && onSwitchAdjacentTab
-      && !doesOverlayClaimEscape(targetNode)
-      && !isTextEntryTarget(targetNode)
+      && !isTextEntryTarget(keyTarget)
     ) {
       e.preventDefault();
       onSwitchAdjacentTab(adjacentTabDirection);

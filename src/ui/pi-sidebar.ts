@@ -45,6 +45,26 @@ export interface SessionTabView {
   lockState: SessionTabLockState;
 }
 
+function getHorizontalArrowDirection(event: KeyboardEvent): -1 | 1 | null {
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+    return null;
+  }
+
+  const key = event.key;
+  const code = event.code;
+  const keyCode = event.keyCode;
+
+  if (key === "ArrowLeft" || key === "Left" || code === "ArrowLeft" || keyCode === 37) {
+    return -1;
+  }
+
+  if (key === "ArrowRight" || key === "Right" || code === "ArrowRight" || keyCode === 39) {
+    return 1;
+  }
+
+  return null;
+}
+
 function formatPayloadShape(shape: PayloadShapeSummary | undefined): string {
   if (!shape) return "—";
 
@@ -325,6 +345,38 @@ export class PiSidebar extends LitElement {
 
   private _onAbort = () => { this.onAbort?.(); };
 
+  private _onSessionTabKeyDown = (runtimeId: string, event: KeyboardEvent) => {
+    const direction = getHorizontalArrowDirection(event);
+    if (!direction) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const tabs = this.sessionTabs;
+    if (tabs.length <= 1) {
+      return;
+    }
+
+    const currentIndex = tabs.findIndex((tab) => tab.runtimeId === runtimeId);
+    if (currentIndex < 0) {
+      return;
+    }
+
+    const nextIndex = (currentIndex + direction + tabs.length) % tabs.length;
+    const nextTab = tabs[nextIndex];
+    if (!nextTab) {
+      return;
+    }
+
+    this.onSelectTab?.(nextTab.runtimeId);
+
+    requestAnimationFrame(() => {
+      this.focusTabNavigationAnchor();
+    });
+  };
+
   private _onFilesDrop = (event: CustomEvent<{ files: File[] }>) => {
     this.onFilesDrop?.(event.detail.files);
   };
@@ -405,6 +457,7 @@ export class PiSidebar extends LitElement {
               <button
                 class="pi-session-tab__main"
                 @click=${() => this.onSelectTab?.(tab.runtimeId)}
+                @keydown=${(event: KeyboardEvent) => this._onSessionTabKeyDown(tab.runtimeId, event)}
                 title=${tab.title}
               >
                 <span class="pi-session-tab__title">${tab.title}</span>

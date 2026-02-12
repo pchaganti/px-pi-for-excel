@@ -266,13 +266,21 @@ void test("Left/Right arrow tab switching only triggers without modifiers", () =
   );
 });
 
-void test("Escape exits editor focus only when not streaming and no overlay claims it", () => {
+void test("Escape exits editor focus only when not streaming", () => {
   assert.equal(
     shouldBlurEditorFromEscape({
       key: "Escape",
       isInEditor: true,
       isStreaming: false,
-      escapeClaimedByOverlay: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldBlurEditorFromEscape({
+      key: "Esc",
+      isInEditor: true,
+      isStreaming: false,
     }),
     true,
   );
@@ -282,17 +290,6 @@ void test("Escape exits editor focus only when not streaming and no overlay clai
       key: "Escape",
       isInEditor: true,
       isStreaming: true,
-      escapeClaimedByOverlay: false,
-    }),
-    false,
-  );
-
-  assert.equal(
-    shouldBlurEditorFromEscape({
-      key: "Escape",
-      isInEditor: true,
-      isStreaming: false,
-      escapeClaimedByOverlay: true,
     }),
     false,
   );
@@ -302,7 +299,6 @@ void test("Escape exits editor focus only when not streaming and no overlay clai
       key: "Enter",
       isInEditor: true,
       isStreaming: false,
-      escapeClaimedByOverlay: false,
     }),
     false,
   );
