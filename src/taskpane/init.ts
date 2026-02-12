@@ -38,6 +38,7 @@ import {
   getWorkbookInstructions,
   hasAnyInstructions,
 } from "../instructions/store.js";
+import { getResolvedConventions } from "../conventions/store.js";
 import { buildSystemPrompt } from "../prompt/system-prompt.js";
 import { initAppStorage } from "../storage/init-app-storage.js";
 import { renderError } from "../ui/loading.js";
@@ -237,7 +238,8 @@ export async function initTaskpane(opts: {
       const userInstructions = await getUserInstructions(settings);
       const workbookInstructions = await getWorkbookInstructions(settings, workbookId);
       setInstructionsActive(hasAnyInstructions({ userInstructions, workbookInstructions }));
-      return buildSystemPrompt({ userInstructions, workbookInstructions });
+      const conventions = await getResolvedConventions(settings);
+      return buildSystemPrompt({ userInstructions, workbookInstructions, conventions });
     } catch {
       setInstructionsActive(false);
       return buildSystemPrompt();
