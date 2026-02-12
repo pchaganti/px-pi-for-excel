@@ -6,7 +6,11 @@
 
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
-import { excelRun } from "../excel/helpers.js";
+import { excelRun, qualifiedAddress } from "../excel/helpers.js";
+import {
+  getWorkbookChangeAuditLog,
+  type AppendWorkbookChangeAuditEntryArgs,
+} from "../audit/workbook-change-audit.js";
 import { getErrorMessage } from "../utils/errors.js";
 
 function StringEnum<T extends string[]>(values: [...T], opts?: { description?: string }) {
@@ -71,6 +75,19 @@ const schema = Type.Object({
 });
 
 type Params = Static<typeof schema>;
+type ViewSettingsAction = Params["action"];
+
+interface ViewSettingsActionResult {
+  text: string;
+  outputAddress?: string;
+  changedCount?: number;
+  summary?: string;
+}
+
+interface ViewSettingsToolDependencies {
+  executeAction: (params: Params) => Promise<ViewSettingsActionResult>;
+  appendAuditEntry: (entry: AppendWorkbookChangeAuditEntryArgs) => Promise<void>;
+}
 
 function requireSheetName(action: string, sheet: string | undefined): string {
   if (!sheet) {
@@ -79,7 +96,23 @@ function requireSheetName(action: string, sheet: string | undefined): string {
   return sheet;
 }
 
-export function createViewSettingsTool(): AgentTool<typeof schema> {
+function isMutatingViewSettingsAction(action: ViewSettingsAction): boolean {
+  return action !== "get";
+}
+
+const defaultDependencies: ViewSettingsToolDependencies = {
+  executeAction: executeViewSettingsAction,
+  appendAuditEntry: (entry) => getWorkbookChangeAuditLog().append(entry),
+};
+
+export function createViewSettingsTool(
+  dependencies: Partial<ViewSettingsToolDependencies> = {},
+): AgentTool<typeof schema> {
+  const resolvedDependencies: ViewSettingsToolDependencies = {
+    executeAction: dependencies.executeAction ?? defaultDependencies.executeAction,
+    appendAuditEntry: dependencies.appendAuditEntry ?? defaultDependencies.appendAuditEntry,
+  };
+
   return {
     name: "view_settings",
     label: "View Settings",
@@ -89,174 +122,280 @@ export function createViewSettingsTool(): AgentTool<typeof schema> {
       "Use \"get\" to inspect the current state first.",
     parameters: schema,
     execute: async (
-      _toolCallId: string,
+      toolCallId: string,
       params: Params,
     ): Promise<AgentToolResult<undefined>> => {
+      const isMutation = isMutatingViewSettingsAction(params.action);
+
       try {
-        const result = await excelRun(async (context) => {
-          const sheet = params.sheet
-            ? context.workbook.worksheets.getItem(params.sheet)
-            : context.workbook.worksheets.getActiveWorksheet();
+        const result = await resolvedDependencies.executeAction(params);
 
-          switch (params.action) {
-            case "get": {
-              sheet.load("name, showGridlines, showHeadings, tabColor, visibility, standardWidth");
-              const frozen = sheet.freezePanes.getLocationOrNullObject();
-              frozen.load("address");
-              await context.sync();
-
-              const lines: string[] = [
-                `Sheet: "${sheet.name}"`,
-                `Visibility: ${sheet.visibility}`,
-                `Gridlines: ${sheet.showGridlines ? "visible" : "hidden"}`,
-                `Headings: ${sheet.showHeadings ? "visible" : "hidden"}`,
-                `Tab color: ${sheet.tabColor || "(none)"}`,
-                `Standard width: ${sheet.standardWidth}`,
-                `Frozen panes: ${frozen.isNullObject ? "none" : frozen.address}`,
-              ];
-              return lines.join("\n");
-            }
-
-            case "show_gridlines": {
-              sheet.showGridlines = true;
-              await context.sync();
-              sheet.load("name");
-              await context.sync();
-              return `Gridlines visible on "${sheet.name}".`;
-            }
-
-            case "hide_gridlines": {
-              sheet.showGridlines = false;
-              await context.sync();
-              sheet.load("name");
-              await context.sync();
-              return `Gridlines hidden on "${sheet.name}".`;
-            }
-
-            case "show_headings": {
-              sheet.showHeadings = true;
-              await context.sync();
-              sheet.load("name");
-              await context.sync();
-              return `Headings visible on "${sheet.name}".`;
-            }
-
-            case "hide_headings": {
-              sheet.showHeadings = false;
-              await context.sync();
-              sheet.load("name");
-              await context.sync();
-              return `Headings hidden on "${sheet.name}".`;
-            }
-
-            case "freeze_rows": {
-              if (params.count === undefined) throw new Error("count is required for freeze_rows");
-              sheet.freezePanes.freezeRows(params.count);
-              await context.sync();
-              sheet.load("name");
-              await context.sync();
-              return `Froze top ${params.count} row(s) on "${sheet.name}".`;
-            }
-
-            case "freeze_columns": {
-              if (params.count === undefined) throw new Error("count is required for freeze_columns");
-              sheet.freezePanes.freezeColumns(params.count);
-              await context.sync();
-              sheet.load("name");
-              await context.sync();
-              return `Froze first ${params.count} column(s) on "${sheet.name}".`;
-            }
-
-            case "freeze_at": {
-              if (!params.range) throw new Error("range is required for freeze_at");
-              const ref = params.sheet ? `${params.sheet}!${params.range}` : params.range;
-              const freezeRange = params.sheet
-                ? sheet.getRange(params.range)
-                : context.workbook.worksheets.getActiveWorksheet().getRange(params.range);
-              sheet.freezePanes.freezeAt(freezeRange);
-              await context.sync();
-              sheet.load("name");
-              await context.sync();
-              return `Froze panes at ${ref} on "${sheet.name}".`;
-            }
-
-            case "unfreeze": {
-              sheet.freezePanes.unfreeze();
-              await context.sync();
-              sheet.load("name");
-              await context.sync();
-              return `Unfroze all panes on "${sheet.name}".`;
-            }
-
-            case "set_tab_color": {
-              if (params.color === undefined) throw new Error("color is required for set_tab_color");
-              sheet.tabColor = params.color;
-              await context.sync();
-              sheet.load("name");
-              await context.sync();
-              return params.color
-                ? `Set tab color to ${params.color} on "${sheet.name}".`
-                : `Cleared tab color on "${sheet.name}".`;
-            }
-
-            case "hide_sheet": {
-              const targetName = requireSheetName("hide_sheet", params.sheet);
-              const target = context.workbook.worksheets.getItem(targetName);
-              target.visibility = "Hidden";
-              await context.sync();
-              return `Set sheet "${targetName}" visibility to Hidden.`;
-            }
-
-            case "show_sheet": {
-              const targetName = requireSheetName("show_sheet", params.sheet);
-              const target = context.workbook.worksheets.getItem(targetName);
-              target.visibility = "Visible";
-              await context.sync();
-              return `Set sheet "${targetName}" visibility to Visible.`;
-            }
-
-            case "very_hide_sheet": {
-              const targetName = requireSheetName("very_hide_sheet", params.sheet);
-              const target = context.workbook.worksheets.getItem(targetName);
-              target.visibility = "VeryHidden";
-              await context.sync();
-              return `Set sheet "${targetName}" visibility to VeryHidden.`;
-            }
-
-            case "set_standard_width": {
-              if (params.width === undefined) {
-                throw new Error("width is required for set_standard_width");
-              }
-              sheet.standardWidth = params.width;
-              await context.sync();
-              sheet.load("name,standardWidth");
-              await context.sync();
-              return `Set standard width to ${sheet.standardWidth} on "${sheet.name}".`;
-            }
-
-            case "activate": {
-              const targetName = requireSheetName("activate", params.sheet);
-              const target = context.workbook.worksheets.getItem(targetName);
-              target.activate();
-              await context.sync();
-              return `Activated sheet "${targetName}".`;
-            }
-
-            default:
-              throw new Error(`Unknown action: ${String(params.action)}`);
-          }
-        });
+        if (isMutation) {
+          await resolvedDependencies.appendAuditEntry({
+            toolName: "view_settings",
+            toolCallId,
+            blocked: false,
+            outputAddress: result.outputAddress ?? params.range ?? params.sheet,
+            changedCount: result.changedCount ?? 1,
+            changes: [],
+            summary: result.summary ?? `${params.action} view setting`,
+          });
+        }
 
         return {
-          content: [{ type: "text", text: result }],
+          content: [{ type: "text", text: result.text }],
           details: undefined,
         };
       } catch (e: unknown) {
+        const message = getErrorMessage(e);
+
+        if (isMutation) {
+          await resolvedDependencies.appendAuditEntry({
+            toolName: "view_settings",
+            toolCallId,
+            blocked: true,
+            outputAddress: params.range ?? params.sheet,
+            changedCount: 0,
+            changes: [],
+            summary: `error: ${message}`,
+          });
+        }
+
         return {
-          content: [{ type: "text", text: `Error: ${getErrorMessage(e)}` }],
+          content: [{ type: "text", text: `Error: ${message}` }],
           details: undefined,
         };
       }
     },
   };
+}
+
+async function executeViewSettingsAction(params: Params): Promise<ViewSettingsActionResult> {
+  return excelRun(async (context) => {
+    const sheet = params.sheet
+      ? context.workbook.worksheets.getItem(params.sheet)
+      : context.workbook.worksheets.getActiveWorksheet();
+
+    switch (params.action) {
+      case "get": {
+        sheet.load("name, showGridlines, showHeadings, tabColor, visibility, standardWidth");
+        const frozen = sheet.freezePanes.getLocationOrNullObject();
+        frozen.load("address");
+        await context.sync();
+
+        const lines: string[] = [
+          `Sheet: "${sheet.name}"`,
+          `Visibility: ${sheet.visibility}`,
+          `Gridlines: ${sheet.showGridlines ? "visible" : "hidden"}`,
+          `Headings: ${sheet.showHeadings ? "visible" : "hidden"}`,
+          `Tab color: ${sheet.tabColor || "(none)"}`,
+          `Standard width: ${sheet.standardWidth}`,
+          `Frozen panes: ${frozen.isNullObject ? "none" : frozen.address}`,
+        ];
+        return { text: lines.join("\n") };
+      }
+
+      case "show_gridlines": {
+        sheet.showGridlines = true;
+        await context.sync();
+        sheet.load("name");
+        await context.sync();
+        return {
+          text: `Gridlines visible on "${sheet.name}".`,
+          outputAddress: sheet.name,
+          changedCount: 1,
+          summary: `showed gridlines on ${sheet.name}`,
+        };
+      }
+
+      case "hide_gridlines": {
+        sheet.showGridlines = false;
+        await context.sync();
+        sheet.load("name");
+        await context.sync();
+        return {
+          text: `Gridlines hidden on "${sheet.name}".`,
+          outputAddress: sheet.name,
+          changedCount: 1,
+          summary: `hid gridlines on ${sheet.name}`,
+        };
+      }
+
+      case "show_headings": {
+        sheet.showHeadings = true;
+        await context.sync();
+        sheet.load("name");
+        await context.sync();
+        return {
+          text: `Headings visible on "${sheet.name}".`,
+          outputAddress: sheet.name,
+          changedCount: 1,
+          summary: `showed headings on ${sheet.name}`,
+        };
+      }
+
+      case "hide_headings": {
+        sheet.showHeadings = false;
+        await context.sync();
+        sheet.load("name");
+        await context.sync();
+        return {
+          text: `Headings hidden on "${sheet.name}".`,
+          outputAddress: sheet.name,
+          changedCount: 1,
+          summary: `hid headings on ${sheet.name}`,
+        };
+      }
+
+      case "freeze_rows": {
+        if (params.count === undefined) throw new Error("count is required for freeze_rows");
+        sheet.freezePanes.freezeRows(params.count);
+        await context.sync();
+        sheet.load("name");
+        await context.sync();
+        return {
+          text: `Froze top ${params.count} row(s) on "${sheet.name}".`,
+          outputAddress: sheet.name,
+          changedCount: 1,
+          summary: `froze ${params.count} row(s) on ${sheet.name}`,
+        };
+      }
+
+      case "freeze_columns": {
+        if (params.count === undefined) throw new Error("count is required for freeze_columns");
+        sheet.freezePanes.freezeColumns(params.count);
+        await context.sync();
+        sheet.load("name");
+        await context.sync();
+        return {
+          text: `Froze first ${params.count} column(s) on "${sheet.name}".`,
+          outputAddress: sheet.name,
+          changedCount: 1,
+          summary: `froze ${params.count} column(s) on ${sheet.name}`,
+        };
+      }
+
+      case "freeze_at": {
+        if (!params.range) throw new Error("range is required for freeze_at");
+        const ref = params.sheet ? `${params.sheet}!${params.range}` : params.range;
+        const freezeRange = params.sheet
+          ? sheet.getRange(params.range)
+          : context.workbook.worksheets.getActiveWorksheet().getRange(params.range);
+        sheet.freezePanes.freezeAt(freezeRange);
+        await context.sync();
+        sheet.load("name");
+        await context.sync();
+
+        const fullAddr = qualifiedAddress(sheet.name, params.range);
+        return {
+          text: `Froze panes at ${ref} on "${sheet.name}".`,
+          outputAddress: fullAddr,
+          changedCount: 1,
+          summary: `froze panes at ${fullAddr}`,
+        };
+      }
+
+      case "unfreeze": {
+        sheet.freezePanes.unfreeze();
+        await context.sync();
+        sheet.load("name");
+        await context.sync();
+        return {
+          text: `Unfroze all panes on "${sheet.name}".`,
+          outputAddress: sheet.name,
+          changedCount: 1,
+          summary: `unfroze panes on ${sheet.name}`,
+        };
+      }
+
+      case "set_tab_color": {
+        if (params.color === undefined) throw new Error("color is required for set_tab_color");
+        sheet.tabColor = params.color;
+        await context.sync();
+        sheet.load("name");
+        await context.sync();
+        return {
+          text: params.color
+            ? `Set tab color to ${params.color} on "${sheet.name}".`
+            : `Cleared tab color on "${sheet.name}".`,
+          outputAddress: sheet.name,
+          changedCount: 1,
+          summary: params.color
+            ? `set tab color ${params.color} on ${sheet.name}`
+            : `cleared tab color on ${sheet.name}`,
+        };
+      }
+
+      case "hide_sheet": {
+        const targetName = requireSheetName("hide_sheet", params.sheet);
+        const target = context.workbook.worksheets.getItem(targetName);
+        target.visibility = "Hidden";
+        await context.sync();
+        return {
+          text: `Set sheet "${targetName}" visibility to Hidden.`,
+          outputAddress: targetName,
+          changedCount: 1,
+          summary: `hid sheet ${targetName}`,
+        };
+      }
+
+      case "show_sheet": {
+        const targetName = requireSheetName("show_sheet", params.sheet);
+        const target = context.workbook.worksheets.getItem(targetName);
+        target.visibility = "Visible";
+        await context.sync();
+        return {
+          text: `Set sheet "${targetName}" visibility to Visible.`,
+          outputAddress: targetName,
+          changedCount: 1,
+          summary: `showed sheet ${targetName}`,
+        };
+      }
+
+      case "very_hide_sheet": {
+        const targetName = requireSheetName("very_hide_sheet", params.sheet);
+        const target = context.workbook.worksheets.getItem(targetName);
+        target.visibility = "VeryHidden";
+        await context.sync();
+        return {
+          text: `Set sheet "${targetName}" visibility to VeryHidden.`,
+          outputAddress: targetName,
+          changedCount: 1,
+          summary: `set sheet ${targetName} to VeryHidden`,
+        };
+      }
+
+      case "set_standard_width": {
+        if (params.width === undefined) {
+          throw new Error("width is required for set_standard_width");
+        }
+        sheet.standardWidth = params.width;
+        await context.sync();
+        sheet.load("name,standardWidth");
+        await context.sync();
+        return {
+          text: `Set standard width to ${sheet.standardWidth} on "${sheet.name}".`,
+          outputAddress: sheet.name,
+          changedCount: 1,
+          summary: `set standard width ${sheet.standardWidth} on ${sheet.name}`,
+        };
+      }
+
+      case "activate": {
+        const targetName = requireSheetName("activate", params.sheet);
+        const target = context.workbook.worksheets.getItem(targetName);
+        target.activate();
+        await context.sync();
+        return {
+          text: `Activated sheet "${targetName}".`,
+          outputAddress: targetName,
+          changedCount: 1,
+          summary: `activated sheet ${targetName}`,
+        };
+      }
+
+      default:
+        throw new Error(`Unknown action: ${String(params.action)}`);
+    }
+  });
 }

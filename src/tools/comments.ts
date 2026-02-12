@@ -8,6 +8,10 @@
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun, getRange, qualifiedAddress, parseCell } from "../excel/helpers.js";
+import {
+  getWorkbookChangeAuditLog,
+  type AppendWorkbookChangeAuditEntryArgs,
+} from "../audit/workbook-change-audit.js";
 import { getErrorMessage } from "../utils/errors.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -71,6 +75,7 @@ const schema = Type.Object({
 });
 
 type Params = Static<typeof schema>;
+type CommentAction = Params["action"];
 
 // ── Interfaces for extracted comment data ────────────────────────────
 
@@ -87,9 +92,37 @@ interface CommentData {
   replies: ReplyData[];
 }
 
+interface CommentsDispatchResult {
+  text: string;
+  outputAddress?: string;
+  changedCount?: number;
+  summary?: string;
+}
+
+interface CommentsToolDependencies {
+  dispatchAction: (params: Params) => Promise<CommentsDispatchResult>;
+  appendAuditEntry: (entry: AppendWorkbookChangeAuditEntryArgs) => Promise<void>;
+}
+
+function isMutatingCommentsAction(action: CommentAction): boolean {
+  return action !== "read";
+}
+
+const defaultDependencies: CommentsToolDependencies = {
+  dispatchAction,
+  appendAuditEntry: (entry) => getWorkbookChangeAuditLog().append(entry),
+};
+
 // ── Tool ─────────────────────────────────────────────────────────────
 
-export function createCommentsTool(): AgentTool<typeof schema> {
+export function createCommentsTool(
+  dependencies: Partial<CommentsToolDependencies> = {},
+): AgentTool<typeof schema> {
+  const resolvedDependencies: CommentsToolDependencies = {
+    dispatchAction: dependencies.dispatchAction ?? defaultDependencies.dispatchAction,
+    appendAuditEntry: dependencies.appendAuditEntry ?? defaultDependencies.appendAuditEntry,
+  };
+
   return {
     name: "comments",
     label: "Comments",
@@ -99,15 +132,44 @@ export function createCommentsTool(): AgentTool<typeof schema> {
       "Use read_range in detailed mode to see comments alongside cell data.",
     parameters: schema,
     execute: async (
-      _toolCallId: string,
+      toolCallId: string,
       params: Params,
     ): Promise<AgentToolResult<undefined>> => {
+      const isMutation = isMutatingCommentsAction(params.action);
+
       try {
-        const text = await dispatch(params);
-        return { content: [{ type: "text", text }], details: undefined };
+        const result = await resolvedDependencies.dispatchAction(params);
+
+        if (isMutation) {
+          await resolvedDependencies.appendAuditEntry({
+            toolName: "comments",
+            toolCallId,
+            blocked: false,
+            outputAddress: result.outputAddress ?? params.range,
+            changedCount: result.changedCount ?? 1,
+            changes: [],
+            summary: result.summary ?? `${params.action} comment action`,
+          });
+        }
+
+        return { content: [{ type: "text", text: result.text }], details: undefined };
       } catch (e: unknown) {
+        const message = getErrorMessage(e);
+
+        if (isMutation) {
+          await resolvedDependencies.appendAuditEntry({
+            toolName: "comments",
+            toolCallId,
+            blocked: true,
+            outputAddress: params.range,
+            changedCount: 0,
+            changes: [],
+            summary: `error: ${message}`,
+          });
+        }
+
         return {
-          content: [{ type: "text", text: `Error (${params.action} on "${params.range}"): ${getErrorMessage(e)}` }],
+          content: [{ type: "text", text: `Error (${params.action} on "${params.range}"): ${message}` }],
           details: undefined,
         };
       }
@@ -115,7 +177,7 @@ export function createCommentsTool(): AgentTool<typeof schema> {
   };
 }
 
-async function dispatch(params: Params): Promise<string> {
+async function dispatchAction(params: Params): Promise<CommentsDispatchResult> {
   switch (params.action) {
     case "read":
       return executeRead(params.range);
@@ -136,7 +198,7 @@ async function dispatch(params: Params): Promise<string> {
 
 // ── Action implementations ───────────────────────────────────────────
 
-async function executeRead(ref: string): Promise<string> {
+async function executeRead(ref: string): Promise<CommentsDispatchResult> {
   const result = await excelRun(async (context) => {
     const { sheet, range } = getRange(context, ref);
     range.load("address");
@@ -201,7 +263,12 @@ async function executeRead(ref: string): Promise<string> {
 
   const fullAddr = qualifiedAddress(result.sheetName, result.address);
   if (result.comments.length === 0) {
-    return `No comments in **${fullAddr}**.`;
+    return {
+      text: `No comments in **${fullAddr}**.`,
+      outputAddress: fullAddr,
+      changedCount: 0,
+      summary: `read 0 comments in ${fullAddr}`,
+    };
   }
 
   const lines: string[] = [
@@ -217,10 +284,15 @@ async function executeRead(ref: string): Promise<string> {
     }
   }
 
-  return lines.join("\n");
+  return {
+    text: lines.join("\n"),
+    outputAddress: fullAddr,
+    changedCount: result.comments.length,
+    summary: `read ${result.comments.length} comment(s) in ${fullAddr}`,
+  };
 }
 
-async function executeAdd(ref: string, content: string): Promise<string> {
+async function executeAdd(ref: string, content: string): Promise<CommentsDispatchResult> {
   const result = await excelRun(async (context) => {
     const { sheet, range } = getRange(context, ref);
     sheet.load("name");
@@ -230,10 +302,15 @@ async function executeAdd(ref: string, content: string): Promise<string> {
     return { sheetName: sheet.name, address: range.address };
   });
   const fullAddr = qualifiedAddress(result.sheetName, result.address);
-  return `Added comment to **${fullAddr}**: "${content}"`;
+  return {
+    text: `Added comment to **${fullAddr}**: "${content}"`,
+    outputAddress: fullAddr,
+    changedCount: 1,
+    summary: `added comment at ${fullAddr}`,
+  };
 }
 
-async function executeUpdate(ref: string, content: string): Promise<string> {
+async function executeUpdate(ref: string, content: string): Promise<CommentsDispatchResult> {
   const result = await excelRun(async (context) => {
     const { sheet, range } = getRange(context, ref);
     sheet.load("name");
@@ -244,10 +321,15 @@ async function executeUpdate(ref: string, content: string): Promise<string> {
     return { sheetName: sheet.name, address: range.address };
   });
   const fullAddr = qualifiedAddress(result.sheetName, result.address);
-  return `Updated comment on **${fullAddr}**: "${content}"`;
+  return {
+    text: `Updated comment on **${fullAddr}**: "${content}"`,
+    outputAddress: fullAddr,
+    changedCount: 1,
+    summary: `updated comment at ${fullAddr}`,
+  };
 }
 
-async function executeReply(ref: string, content: string): Promise<string> {
+async function executeReply(ref: string, content: string): Promise<CommentsDispatchResult> {
   const result = await excelRun(async (context) => {
     const { sheet, range } = getRange(context, ref);
     sheet.load("name");
@@ -258,10 +340,15 @@ async function executeReply(ref: string, content: string): Promise<string> {
     return { sheetName: sheet.name, address: range.address };
   });
   const fullAddr = qualifiedAddress(result.sheetName, result.address);
-  return `Added reply to comment on **${fullAddr}**: "${content}"`;
+  return {
+    text: `Added reply to comment on **${fullAddr}**: "${content}"`,
+    outputAddress: fullAddr,
+    changedCount: 1,
+    summary: `added comment reply at ${fullAddr}`,
+  };
 }
 
-async function executeDelete(ref: string): Promise<string> {
+async function executeDelete(ref: string): Promise<CommentsDispatchResult> {
   const result = await excelRun(async (context) => {
     const { sheet, range } = getRange(context, ref);
     sheet.load("name");
@@ -276,10 +363,15 @@ async function executeDelete(ref: string): Promise<string> {
   });
   const fullAddr = qualifiedAddress(result.sheetName, result.address);
   const replySuffix = result.replies > 0 ? ` (and ${result.replies} ${result.replies === 1 ? "reply" : "replies"})` : "";
-  return `Deleted comment from **${fullAddr}**${replySuffix}.`;
+  return {
+    text: `Deleted comment from **${fullAddr}**${replySuffix}.`,
+    outputAddress: fullAddr,
+    changedCount: 1,
+    summary: `deleted comment at ${fullAddr}`,
+  };
 }
 
-async function executeSetResolved(ref: string, resolved: boolean): Promise<string> {
+async function executeSetResolved(ref: string, resolved: boolean): Promise<CommentsDispatchResult> {
   const result = await excelRun(async (context) => {
     const { sheet, range } = getRange(context, ref);
     sheet.load("name");
@@ -291,5 +383,10 @@ async function executeSetResolved(ref: string, resolved: boolean): Promise<strin
   });
   const fullAddr = qualifiedAddress(result.sheetName, result.address);
   const verb = resolved ? "Resolved" : "Reopened";
-  return `${verb} comment thread on **${fullAddr}**.`;
+  return {
+    text: `${verb} comment thread on **${fullAddr}**.`,
+    outputAddress: fullAddr,
+    changedCount: 1,
+    summary: `${verb.toLowerCase()} comment thread at ${fullAddr}`,
+  };
 }

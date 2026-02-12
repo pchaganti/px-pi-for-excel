@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { WorkbookChangeAuditLog } from "../src/audit/workbook-change-audit.ts";
+import {
+  WorkbookChangeAuditLog,
+  type AppendWorkbookChangeAuditEntryArgs,
+} from "../src/audit/workbook-change-audit.ts";
+import { createCommentsTool } from "../src/tools/comments.ts";
+import { createViewSettingsTool } from "../src/tools/view-settings.ts";
+import { createWorkbookHistoryTool } from "../src/tools/workbook-history.ts";
 import type { WorkbookContext } from "../src/workbook/context.ts";
+import type { WorkbookRecoverySnapshot } from "../src/workbook/recovery-log.ts";
 
 interface InMemorySettingsStore {
   get<T>(key: string): Promise<T | null>;
@@ -16,7 +23,11 @@ function createInMemorySettingsStore(): InMemorySettingsStore {
   return {
     get: <T>(key: string): Promise<T | null> => {
       const value = values.get(key);
-      return Promise.resolve(value === undefined ? null : value as T);
+      if (value === undefined) {
+        return Promise.resolve(null);
+      }
+
+      return Promise.resolve(value as T);
     },
     set: (key: string, value: unknown): Promise<void> => {
       values.set(key, value);
@@ -26,6 +37,61 @@ function createInMemorySettingsStore(): InMemorySettingsStore {
       values.delete(key);
       return Promise.resolve();
     },
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+function firstText(result: unknown): string {
+  if (!isRecord(result)) {
+    throw new Error("Expected tool result object");
+  }
+
+  const content = result.content;
+  if (!isUnknownArray(content)) {
+    throw new Error("Expected tool result content array");
+  }
+
+  const first = content[0];
+  if (!isRecord(first) || first.type !== "text" || typeof first.text !== "string") {
+    throw new Error("Expected first content block to be text");
+  }
+
+  return first.text;
+}
+
+function createAuditCapture(): {
+  entries: AppendWorkbookChangeAuditEntryArgs[];
+  appendAuditEntry: (entry: AppendWorkbookChangeAuditEntryArgs) => Promise<void>;
+} {
+  const entries: AppendWorkbookChangeAuditEntryArgs[] = [];
+
+  return {
+    entries,
+    appendAuditEntry: (entry: AppendWorkbookChangeAuditEntryArgs): Promise<void> => {
+      entries.push(entry);
+      return Promise.resolve();
+    },
+  };
+}
+
+function createRecoverySnapshot(id: string): WorkbookRecoverySnapshot {
+  return {
+    id,
+    at: 1700000000300,
+    toolName: "write_cells",
+    toolCallId: "call-snapshot",
+    address: "Sheet1!A1:A2",
+    changedCount: 2,
+    cellCount: 2,
+    beforeValues: [[1], [2]],
+    beforeFormulas: [[""], [""]],
   };
 }
 
@@ -129,4 +195,192 @@ void test("workbook change audit log accepts non-cell mutation tool entries", as
   assert.equal(entries[0]?.toolName, "modify_structure");
   assert.equal(entries[0]?.summary, "inserted 2 row(s)");
   assert.equal(entries[0]?.changedCount, 2);
+});
+
+void test("workbook change audit log accepts comments/view_settings/workbook_history entries", async () => {
+  const settingsStore = createInMemorySettingsStore();
+
+  const log = new WorkbookChangeAuditLog({
+    getSettingsStore: () => Promise.resolve(settingsStore),
+    getWorkbookContext: (): Promise<WorkbookContext> => Promise.resolve({
+      workbookId: "url_sha256:test900",
+      workbookName: "Controls.xlsx",
+      source: "document.url",
+    }),
+  });
+
+  await log.append({
+    toolName: "comments",
+    toolCallId: "call-comments",
+    blocked: false,
+    outputAddress: "Sheet1!A1",
+    changedCount: 1,
+    changes: [],
+    summary: "updated comment at Sheet1!A1",
+  });
+
+  await log.append({
+    toolName: "view_settings",
+    toolCallId: "call-view",
+    blocked: false,
+    outputAddress: "Sheet1",
+    changedCount: 1,
+    changes: [],
+    summary: "hid gridlines on Sheet1",
+  });
+
+  await log.append({
+    toolName: "workbook_history",
+    toolCallId: "call-history",
+    blocked: true,
+    changedCount: 0,
+    changes: [],
+    summary: "error: no recovery checkpoints available to restore",
+  });
+
+  const entries = await log.list();
+  assert.equal(entries.length, 3);
+  assert.deepEqual(entries.map((entry) => entry.toolName), ["workbook_history", "view_settings", "comments"]);
+});
+
+void test("comments tool appends audit entries for mutating actions", async () => {
+  const auditCapture = createAuditCapture();
+
+  const tool = createCommentsTool({
+    dispatchAction: () => Promise.resolve({
+      text: "Updated comment on **Sheet1!A1**: \"Approved\"",
+      outputAddress: "Sheet1!A1",
+      changedCount: 1,
+      summary: "updated comment at Sheet1!A1",
+    }),
+    appendAuditEntry: auditCapture.appendAuditEntry,
+  });
+
+  const result = await tool.execute("tool-call-comments-success", {
+    action: "update",
+    range: "Sheet1!A1",
+    content: "Approved",
+  });
+
+  assert.match(firstText(result), /Updated comment/u);
+  assert.equal(auditCapture.entries.length, 1);
+  assert.equal(auditCapture.entries[0]?.toolName, "comments");
+  assert.equal(auditCapture.entries[0]?.blocked, false);
+  assert.equal(auditCapture.entries[0]?.outputAddress, "Sheet1!A1");
+  assert.equal(auditCapture.entries[0]?.changedCount, 1);
+});
+
+void test("comments tool appends blocked audit entry on mutate validation error", async () => {
+  const auditCapture = createAuditCapture();
+
+  const tool = createCommentsTool({
+    appendAuditEntry: auditCapture.appendAuditEntry,
+  });
+
+  const result = await tool.execute("tool-call-comments-error", {
+    action: "add",
+    range: "Sheet1!A1",
+  });
+
+  assert.match(firstText(result), /content is required for add/u);
+  assert.equal(auditCapture.entries.length, 1);
+  assert.equal(auditCapture.entries[0]?.toolName, "comments");
+  assert.equal(auditCapture.entries[0]?.blocked, true);
+  assert.equal(auditCapture.entries[0]?.changedCount, 0);
+  assert.equal(auditCapture.entries[0]?.outputAddress, "Sheet1!A1");
+});
+
+void test("view_settings tool appends audit entries for mutate success and failure", async () => {
+  const successAuditCapture = createAuditCapture();
+  const successTool = createViewSettingsTool({
+    executeAction: () => Promise.resolve({
+      text: "Activated sheet \"Sheet2\".",
+      outputAddress: "Sheet2",
+      changedCount: 1,
+      summary: "activated sheet Sheet2",
+    }),
+    appendAuditEntry: successAuditCapture.appendAuditEntry,
+  });
+
+  const successResult = await successTool.execute("tool-call-view-success", {
+    action: "activate",
+    sheet: "Sheet2",
+  });
+
+  assert.match(firstText(successResult), /Activated sheet/u);
+  assert.equal(successAuditCapture.entries.length, 1);
+  assert.equal(successAuditCapture.entries[0]?.toolName, "view_settings");
+  assert.equal(successAuditCapture.entries[0]?.blocked, false);
+  assert.equal(successAuditCapture.entries[0]?.outputAddress, "Sheet2");
+
+  const errorAuditCapture = createAuditCapture();
+  const errorTool = createViewSettingsTool({
+    executeAction: () => Promise.reject(new Error("sheet is required for activate")),
+    appendAuditEntry: errorAuditCapture.appendAuditEntry,
+  });
+
+  const errorResult = await errorTool.execute("tool-call-view-error", {
+    action: "activate",
+  });
+
+  assert.match(firstText(errorResult), /sheet is required for activate/u);
+  assert.equal(errorAuditCapture.entries.length, 1);
+  assert.equal(errorAuditCapture.entries[0]?.toolName, "view_settings");
+  assert.equal(errorAuditCapture.entries[0]?.blocked, true);
+  assert.equal(errorAuditCapture.entries[0]?.changedCount, 0);
+});
+
+void test("workbook_history restore appends audit entries for success and missing snapshot", async () => {
+  const successAuditCapture = createAuditCapture();
+  const successTool = createWorkbookHistoryTool({
+    getRecoveryLog: () => ({
+      listForCurrentWorkbook: () => Promise.resolve([createRecoverySnapshot("snapshot-1")]),
+      restore: (snapshotId: string) => Promise.resolve({
+        restoredSnapshotId: snapshotId,
+        inverseSnapshotId: "inverse-1",
+        address: "Sheet1!A1:A2",
+        changedCount: 2,
+      }),
+      delete: () => Promise.resolve(false),
+      clearForCurrentWorkbook: () => Promise.resolve(0),
+    }),
+    appendAuditEntry: successAuditCapture.appendAuditEntry,
+  });
+
+  const successResult = await successTool.execute("tool-call-history-success", {
+    action: "restore",
+  });
+
+  assert.match(firstText(successResult), /Restored checkpoint/u);
+  assert.equal(successAuditCapture.entries.length, 1);
+  assert.equal(successAuditCapture.entries[0]?.toolName, "workbook_history");
+  assert.equal(successAuditCapture.entries[0]?.blocked, false);
+  assert.equal(successAuditCapture.entries[0]?.outputAddress, "Sheet1!A1:A2");
+  assert.equal(successAuditCapture.entries[0]?.changedCount, 2);
+
+  const missingAuditCapture = createAuditCapture();
+  const missingTool = createWorkbookHistoryTool({
+    getRecoveryLog: () => ({
+      listForCurrentWorkbook: () => Promise.resolve([]),
+      restore: () => Promise.resolve({
+        restoredSnapshotId: "",
+        inverseSnapshotId: null,
+        address: "",
+        changedCount: 0,
+      }),
+      delete: () => Promise.resolve(false),
+      clearForCurrentWorkbook: () => Promise.resolve(0),
+    }),
+    appendAuditEntry: missingAuditCapture.appendAuditEntry,
+  });
+
+  const missingResult = await missingTool.execute("tool-call-history-missing", {
+    action: "restore",
+  });
+
+  assert.match(firstText(missingResult), /No recovery checkpoints available to restore/u);
+  assert.equal(missingAuditCapture.entries.length, 1);
+  assert.equal(missingAuditCapture.entries[0]?.toolName, "workbook_history");
+  assert.equal(missingAuditCapture.entries[0]?.blocked, true);
+  assert.equal(missingAuditCapture.entries[0]?.changedCount, 0);
 });

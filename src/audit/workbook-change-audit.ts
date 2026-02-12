@@ -15,7 +15,10 @@ export type WorkbookAuditToolName =
   | "python_transform_range"
   | "format_cells"
   | "conditional_format"
-  | "modify_structure";
+  | "modify_structure"
+  | "comments"
+  | "view_settings"
+  | "workbook_history";
 
 export interface WorkbookChangeAuditEntry {
   id: string;
@@ -106,7 +109,10 @@ function isWorkbookAuditToolName(value: unknown): value is WorkbookAuditToolName
     value === "python_transform_range" ||
     value === "format_cells" ||
     value === "conditional_format" ||
-    value === "modify_structure"
+    value === "modify_structure" ||
+    value === "comments" ||
+    value === "view_settings" ||
+    value === "workbook_history"
   );
 }
 
