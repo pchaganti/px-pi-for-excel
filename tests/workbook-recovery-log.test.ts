@@ -8,6 +8,7 @@ import {
 } from "../src/workbook/recovery-log.ts";
 import type { WorkbookContext } from "../src/workbook/context.ts";
 import {
+  estimateFormatCaptureCellCount,
   firstCellAddress,
   type RecoveryFormatRangeState,
   type RecoveryModifyStructureState,
@@ -53,6 +54,30 @@ void test("firstCellAddress handles quoted sheet names that include !", () => {
   assert.equal(firstCellAddress("'Q1!Ops'!A1"), "A1");
   assert.equal(firstCellAddress("'Q1!Ops'!$B$2:$D$9"), "$B$2");
   assert.equal(firstCellAddress("Sheet1!C5:D7"), "C5");
+});
+
+void test("estimateFormatCaptureCellCount scales by dimensions for dimension-only selection", () => {
+  const largeArea = [{ rowCount: 1_048_576, columnCount: 3 }];
+
+  assert.equal(
+    estimateFormatCaptureCellCount(largeArea, { columnWidth: true }),
+    3,
+  );
+
+  assert.equal(
+    estimateFormatCaptureCellCount(largeArea, { rowHeight: true }),
+    1_048_576,
+  );
+
+  assert.equal(
+    estimateFormatCaptureCellCount(largeArea, { columnWidth: true, rowHeight: true }),
+    1_048_579,
+  );
+
+  assert.equal(
+    estimateFormatCaptureCellCount(largeArea, { columnWidth: true, fillColor: true }),
+    3_145_728,
+  );
 });
 
 void test("recovery log appends and reloads workbook-scoped snapshots", async () => {

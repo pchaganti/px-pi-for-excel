@@ -514,6 +514,53 @@ function hasSelectedFormatProperty(selection: RecoveryFormatSelection): boolean 
   );
 }
 
+function isDimensionOnlySelection(selection: RecoveryFormatSelection): boolean {
+  const hasDimensionSelection = selection.columnWidth === true || selection.rowHeight === true;
+  if (!hasDimensionSelection) {
+    return false;
+  }
+
+  return (
+    selection.numberFormat !== true &&
+    selection.fillColor !== true &&
+    selection.fontColor !== true &&
+    selection.bold !== true &&
+    selection.italic !== true &&
+    selection.underlineStyle !== true &&
+    selection.fontName !== true &&
+    selection.fontSize !== true &&
+    selection.horizontalAlignment !== true &&
+    selection.verticalAlignment !== true &&
+    selection.wrapText !== true &&
+    selection.borderTop !== true &&
+    selection.borderBottom !== true &&
+    selection.borderLeft !== true &&
+    selection.borderRight !== true &&
+    selection.borderInsideHorizontal !== true &&
+    selection.borderInsideVertical !== true
+  );
+}
+
+export interface RecoveryFormatAreaShape {
+  rowCount: number;
+  columnCount: number;
+}
+
+export function estimateFormatCaptureCellCount(
+  areas: readonly RecoveryFormatAreaShape[],
+  selection: RecoveryFormatSelection,
+): number {
+  if (!isDimensionOnlySelection(selection)) {
+    return areas.reduce((count, area) => count + (area.rowCount * area.columnCount), 0);
+  }
+
+  return areas.reduce((count, area) => {
+    const columnUnits = selection.columnWidth === true ? area.columnCount : 0;
+    const rowUnits = selection.rowHeight === true ? area.rowCount : 0;
+    return count + columnUnits + rowUnits;
+  }, 0);
+}
+
 function splitRangeList(range: string): string[] {
   return range
     .split(/[;,]/)
@@ -661,15 +708,12 @@ async function captureFormatRangeStateWithSelection(
     };
   }
 
-  const totalCellCount = target.areas.reduce(
-    (count, area) => count + (area.rowCount * area.columnCount),
-    0,
-  );
+  const captureCellCount = estimateFormatCaptureCellCount(target.areas, selection);
 
-  if (typeof maxCellCount === "number" && Number.isFinite(maxCellCount) && totalCellCount > maxCellCount) {
+  if (typeof maxCellCount === "number" && Number.isFinite(maxCellCount) && captureCellCount > maxCellCount) {
     return {
       supported: false,
-      reason: `Format checkpoint capture skipped: target exceeds ${maxCellCount.toLocaleString()} cells.`,
+      reason: `Format checkpoint capture skipped: snapshot size exceeds ${maxCellCount.toLocaleString()} units.`,
     };
   }
 
@@ -968,7 +1012,7 @@ async function captureFormatRangeStateWithSelection(
     state: {
       selection: cloneRecoveryFormatSelection(selection),
       areas: areaStates,
-      cellCount: totalCellCount,
+      cellCount: captureCellCount,
     },
   };
 }
