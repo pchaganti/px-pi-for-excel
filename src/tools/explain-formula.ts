@@ -4,7 +4,7 @@
 
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
-import { cellAddress, excelRun, getRange, qualifiedAddress } from "../excel/helpers.js";
+import { cellAddress, excelRun, getRange, parseCell, parseRangeRef, qualifiedAddress } from "../excel/helpers.js";
 import { getErrorMessage } from "../utils/errors.js";
 import type { ExplainFormulaDetails, ExplainFormulaReferenceDetail } from "./tool-details.js";
 import {
@@ -48,6 +48,22 @@ function clampMaxReferences(value: number | undefined): number {
   return rounded;
 }
 
+export function isSingleCellReference(reference: string): boolean {
+  try {
+    const parsed = parseRangeRef(reference);
+    const localAddress = parsed.address.trim();
+
+    if (localAddress.includes(":") || localAddress.includes(",")) {
+      return false;
+    }
+
+    parseCell(localAddress);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function createExplainFormulaTool(): AgentTool<typeof schema, ExplainFormulaDetails> {
   return {
     name: "explain_formula",
@@ -60,7 +76,7 @@ export function createExplainFormulaTool(): AgentTool<typeof schema, ExplainForm
       params: Params,
     ): Promise<AgentToolResult<ExplainFormulaDetails>> => {
       try {
-        if (params.cell.includes(":") || params.cell.includes(",")) {
+        if (!isSingleCellReference(params.cell)) {
           return {
             content: [{ type: "text", text: "Error: explain_formula expects a single cell, not a range." }],
             details: {
