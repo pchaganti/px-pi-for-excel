@@ -17,6 +17,7 @@ import { getErrorMessage } from "../../utils/errors.js";
 import { extractTextBlocks, summarizeContentForTranscript } from "../../utils/content.js";
 import { isRecord } from "../../utils/type-guards.js";
 import type { PiSidebar } from "../../ui/pi-sidebar.js";
+import { getWorkbookChangeAuditLog } from "../../audit/workbook-change-audit.js";
 import { effectiveKeepRecentTokens, effectiveReserveTokens } from "../../compaction/defaults.js";
 
 type TranscriptEntry = {
@@ -60,6 +61,49 @@ function countChatMessages(messages: AgentMessage[]): number {
     }
   }
   return count;
+}
+
+type ExportDestination = "clipboard" | "download";
+
+function parseExportDestination(raw: string, fallback: ExportDestination): ExportDestination {
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "clipboard") return "clipboard";
+  if (normalized === "file" || normalized === "download") return "download";
+  return fallback;
+}
+
+function triggerJsonDownload(fileName: string, content: string): void {
+  const blob = new Blob([content], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+async function exportWorkbookAuditLog(rawArgs: string): Promise<void> {
+  const destination = parseExportDestination(rawArgs, "download");
+
+  const entries = await getWorkbookChangeAuditLog().list(500);
+  const payload = {
+    exported: new Date().toISOString(),
+    count: entries.length,
+    entries,
+  };
+
+  const json = JSON.stringify(payload, null, 2);
+
+  if (destination === "clipboard") {
+    await navigator.clipboard.writeText(json);
+    showToast(
+      `Audit log copied (${entries.length} entries, ${(json.length / 1024).toFixed(0)}KB)`,
+    );
+    return;
+  }
+
+  triggerJsonDownload(`pi-audit-log-${new Date().toISOString().slice(0, 10)}.json`, json);
+  showToast(`Downloaded audit log (${entries.length} entries)`);
 }
 
 // =============================================================================
@@ -346,9 +390,21 @@ export function createExportCommands(getActiveAgent: ActiveAgentProvider): Slash
   return [
     {
       name: "export",
-      description: "Export session transcript (JSON to clipboard or download)",
+      description: "Export JSON (session transcript or audit log)",
       source: "builtin",
-      execute: (args: string) => {
+      execute: async (args: string) => {
+        const parts = args.trim().split(/\s+/u).filter((part) => part.length > 0);
+        const mode = parts[0]?.toLowerCase();
+
+        if (mode === "audit" || mode === "audit-log") {
+          try {
+            await exportWorkbookAuditLog(parts.slice(1).join(" "));
+          } catch (error: unknown) {
+            showToast(`Audit export failed: ${getErrorMessage(error)}`);
+          }
+          return;
+        }
+
         const agent = getActiveAgent();
         if (!agent) {
           showToast("No active session");
@@ -391,24 +447,22 @@ export function createExportCommands(getActiveAgent: ActiveAgentProvider): Slash
         };
 
         const json = JSON.stringify(exportData, null, 2);
+        const destination = parseExportDestination(args, "clipboard");
 
-        if (args.trim() === "clipboard" || !args.trim()) {
-          void navigator.clipboard.writeText(json).then(() => {
+        if (destination === "clipboard") {
+          try {
+            await navigator.clipboard.writeText(json);
             showToast(
               `Transcript copied (${msgs.length} messages, ${(json.length / 1024).toFixed(0)}KB)`,
             );
-          });
-        } else {
-          // Download as file
-          const blob = new Blob([json], { type: "application/json" });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `pi-session-${new Date().toISOString().slice(0, 10)}.json`;
-          a.click();
-          URL.revokeObjectURL(url);
-          showToast(`Downloaded transcript (${msgs.length} messages)`);
+          } catch (error: unknown) {
+            showToast(`Copy failed: ${getErrorMessage(error)}`);
+          }
+          return;
         }
+
+        triggerJsonDownload(`pi-session-${new Date().toISOString().slice(0, 10)}.json`, json);
+        showToast(`Downloaded transcript (${msgs.length} messages)`);
       },
     },
   ];

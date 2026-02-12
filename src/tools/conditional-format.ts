@@ -9,6 +9,7 @@
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun, getRange, qualifiedAddress } from "../excel/helpers.js";
+import { getWorkbookChangeAuditLog } from "../audit/workbook-change-audit.js";
 import { getErrorMessage } from "../utils/errors.js";
 
 type CellValueOperator =
@@ -92,30 +93,54 @@ export function createConditionalFormatTool(): AgentTool<typeof schema> {
       "Add or clear conditional formatting rules. Supports custom formula and cell value rules.",
     parameters: schema,
     execute: async (
-      _toolCallId: string,
+      toolCallId: string,
       params: Params,
     ): Promise<AgentToolResult<undefined>> => {
       try {
         if (params.action === "clear") {
-          return await clearFormats(params);
+          return await clearFormats(toolCallId, params);
         }
 
         if (!params.type) {
+          const message = "type is required when action is \"add\".";
+
+          await getWorkbookChangeAuditLog().append({
+            toolName: "conditional_format",
+            toolCallId,
+            blocked: true,
+            outputAddress: params.range,
+            changedCount: 0,
+            changes: [],
+            summary: `error: ${message}`,
+          });
+
           return {
             content: [
               {
                 type: "text",
-                text: "Error: type is required when action is \"add\".",
+                text: `Error: ${message}`,
               },
             ],
             details: undefined,
           };
         }
 
-        return await addFormat(params);
+        return await addFormat(toolCallId, params);
       } catch (e: unknown) {
+        const message = getErrorMessage(e);
+
+        await getWorkbookChangeAuditLog().append({
+          toolName: "conditional_format",
+          toolCallId,
+          blocked: true,
+          outputAddress: params.range,
+          changedCount: 0,
+          changes: [],
+          summary: `error: ${message}`,
+        });
+
         return {
-          content: [{ type: "text", text: `Error: ${getErrorMessage(e)}` }],
+          content: [{ type: "text", text: `Error: ${message}` }],
           details: undefined,
         };
       }
@@ -123,23 +148,35 @@ export function createConditionalFormatTool(): AgentTool<typeof schema> {
   };
 }
 
-async function clearFormats(params: Params): Promise<AgentToolResult<undefined>> {
+async function clearFormats(toolCallId: string, params: Params): Promise<AgentToolResult<undefined>> {
   const result = await excelRun(async (context) => {
     const { sheet, range } = getRange(context, params.range);
     sheet.load("name");
-    range.load("address");
+    range.load("address,rowCount,columnCount");
     const formats = range.conditionalFormats;
     const countResult = formats.getCount();
     await context.sync();
 
     const existing = countResult.value;
+    const cellCount = range.rowCount * range.columnCount;
     formats.clearAll();
     await context.sync();
 
-    return { sheetName: sheet.name, address: range.address, existing };
+    return { sheetName: sheet.name, address: range.address, existing, cellCount };
   });
 
   const fullAddr = qualifiedAddress(result.sheetName, result.address);
+
+  await getWorkbookChangeAuditLog().append({
+    toolName: "conditional_format",
+    toolCallId,
+    blocked: false,
+    outputAddress: fullAddr,
+    changedCount: result.cellCount,
+    changes: [],
+    summary: `cleared ${result.existing} rule(s) across ${result.cellCount} cell(s)`,
+  });
+
   return {
     content: [
       {
@@ -151,13 +188,13 @@ async function clearFormats(params: Params): Promise<AgentToolResult<undefined>>
   };
 }
 
-async function addFormat(params: Params): Promise<AgentToolResult<undefined>> {
+async function addFormat(toolCallId: string, params: Params): Promise<AgentToolResult<undefined>> {
   validateAddParams(params);
 
   const result = await excelRun(async (context) => {
     const { sheet, range } = getRange(context, params.range);
     sheet.load("name");
-    range.load("address");
+    range.load("address,rowCount,columnCount");
     await context.sync();
 
     const cfType =
@@ -187,7 +224,11 @@ async function addFormat(params: Params): Promise<AgentToolResult<undefined>> {
 
     await context.sync();
 
-    return { sheetName: sheet.name, address: range.address };
+    return {
+      sheetName: sheet.name,
+      address: range.address,
+      cellCount: range.rowCount * range.columnCount,
+    };
   });
 
   const fullAddr = qualifiedAddress(result.sheetName, result.address);
@@ -197,6 +238,16 @@ async function addFormat(params: Params): Promise<AgentToolResult<undefined>> {
       : `cell value rule (${params.operator ?? ""} ${params.value ?? ""}${
           params.value2 !== undefined ? ` and ${String(params.value2)}` : ""
         })`;
+
+  await getWorkbookChangeAuditLog().append({
+    toolName: "conditional_format",
+    toolCallId,
+    blocked: false,
+    outputAddress: fullAddr,
+    changedCount: result.cellCount,
+    changes: [],
+    summary: `added ${params.type ?? "rule"} across ${result.cellCount} cell(s)`,
+  });
 
   return {
     content: [

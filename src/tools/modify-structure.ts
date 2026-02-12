@@ -8,6 +8,7 @@
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun } from "../excel/helpers.js";
+import { getWorkbookChangeAuditLog } from "../audit/workbook-change-audit.js";
 import { getErrorMessage } from "../utils/errors.js";
 
 // Helper for string enum (TypeBox doesn't have a built-in StringEnum)
@@ -63,6 +64,25 @@ const schema = Type.Object({
 
 type Params = Static<typeof schema>;
 
+interface StructureMutationResult {
+  message: string;
+  changedCount: number;
+  outputAddress?: string;
+  summary: string;
+}
+
+function columnNumberToLetter(position: number): string {
+  let col = position - 1; // 0-indexed
+  let letter = "";
+
+  while (col >= 0) {
+    letter = String.fromCharCode((col % 26) + 65) + letter;
+    col = Math.floor(col / 26) - 1;
+  }
+
+  return letter;
+}
+
 export function createModifyStructureTool(): AgentTool<typeof schema> {
   return {
     name: "modify_structure",
@@ -73,11 +93,11 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
       "Be careful with deletions — there is no undo.",
     parameters: schema,
     execute: async (
-      _toolCallId: string,
+      toolCallId: string,
       params: Params,
     ): Promise<AgentToolResult<undefined>> => {
       try {
-        const result = await excelRun(async (context) => {
+        const result = await excelRun<StructureMutationResult>(async (context) => {
           const action = params.action;
           const count = params.count || 1;
 
@@ -91,68 +111,76 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
           switch (action) {
             case "insert_rows": {
               if (!params.position) throw new Error("position is required for insert_rows");
+              const startRow = params.position;
+              const endRow = params.position + count - 1;
               const sheet = getSheet();
-              const range = sheet.getRange(`${params.position}:${params.position + count - 1}`);
+              const range = sheet.getRange(`${startRow}:${endRow}`);
               range.insert("Down");
               await context.sync();
               sheet.load("name");
               await context.sync();
-              return `Inserted ${count} row(s) at row ${params.position} in "${sheet.name}".`;
+              return {
+                message: `Inserted ${count} row(s) at row ${startRow} in "${sheet.name}".`,
+                changedCount: count,
+                outputAddress: `${sheet.name}!${startRow}:${endRow}`,
+                summary: `inserted ${count} row(s)`,
+              };
             }
 
             case "delete_rows": {
               if (!params.position) throw new Error("position is required for delete_rows");
+              const startRow = params.position;
+              const endRow = params.position + count - 1;
               const sheet = getSheet();
-              const range = sheet.getRange(`${params.position}:${params.position + count - 1}`);
+              const range = sheet.getRange(`${startRow}:${endRow}`);
               range.delete("Up");
               await context.sync();
               sheet.load("name");
               await context.sync();
-              return `Deleted ${count} row(s) starting at row ${params.position} in "${sheet.name}".`;
+              return {
+                message: `Deleted ${count} row(s) starting at row ${startRow} in "${sheet.name}".`,
+                changedCount: count,
+                outputAddress: `${sheet.name}!${startRow}:${endRow}`,
+                summary: `deleted ${count} row(s)`,
+              };
             }
 
             case "insert_columns": {
               if (!params.position) throw new Error("position is required for insert_columns");
+              const startLetter = columnNumberToLetter(params.position);
+              const endLetter = columnNumberToLetter(params.position + count - 1);
               const sheet = getSheet();
-              // Convert column number to letter
-              let col = params.position - 1; // 0-indexed
-              let letter = "";
-              while (col >= 0) {
-                letter = String.fromCharCode((col % 26) + 65) + letter;
-                col = Math.floor(col / 26) - 1;
-              }
-              const range = sheet.getRange(`${letter}:${letter}`);
+              const range = sheet.getRange(`${startLetter}:${startLetter}`);
               for (let i = 0; i < count; i++) {
                 range.insert("Right");
               }
               await context.sync();
               sheet.load("name");
               await context.sync();
-              return `Inserted ${count} column(s) at column ${params.position} (${letter}) in "${sheet.name}".`;
+              return {
+                message: `Inserted ${count} column(s) at column ${params.position} (${startLetter}) in "${sheet.name}".`,
+                changedCount: count,
+                outputAddress: `${sheet.name}!${startLetter}:${endLetter}`,
+                summary: `inserted ${count} column(s)`,
+              };
             }
 
             case "delete_columns": {
               if (!params.position) throw new Error("position is required for delete_columns");
+              const startLetter = columnNumberToLetter(params.position);
+              const endLetter = columnNumberToLetter(params.position + count - 1);
               const sheet = getSheet();
-              const col = params.position - 1;
-              let startLetter = "";
-              let temp = col;
-              while (temp >= 0) {
-                startLetter = String.fromCharCode((temp % 26) + 65) + startLetter;
-                temp = Math.floor(temp / 26) - 1;
-              }
-              let endLetter = "";
-              temp = col + count - 1;
-              while (temp >= 0) {
-                endLetter = String.fromCharCode((temp % 26) + 65) + endLetter;
-                temp = Math.floor(temp / 26) - 1;
-              }
               const range = sheet.getRange(`${startLetter}:${endLetter}`);
               range.delete("Left");
               await context.sync();
               sheet.load("name");
               await context.sync();
-              return `Deleted ${count} column(s) starting at column ${params.position} (${startLetter}) in "${sheet.name}".`;
+              return {
+                message: `Deleted ${count} column(s) starting at column ${params.position} (${startLetter}) in "${sheet.name}".`,
+                changedCount: count,
+                outputAddress: `${sheet.name}!${startLetter}:${endLetter}`,
+                summary: `deleted ${count} column(s)`,
+              };
             }
 
             case "add_sheet": {
@@ -162,24 +190,39 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
                 newSheet.position = params.position;
               }
               await context.sync();
-              return `Added sheet "${name}".`;
+              return {
+                message: `Added sheet "${name}".`,
+                changedCount: 1,
+                summary: `added sheet ${name}`,
+              };
             }
 
             case "delete_sheet": {
               if (!params.sheet) throw new Error("sheet name is required for delete_sheet");
-              const sheet = context.workbook.worksheets.getItem(params.sheet);
+              const sheetName = params.sheet;
+              const sheet = context.workbook.worksheets.getItem(sheetName);
               sheet.delete();
               await context.sync();
-              return `Deleted sheet "${params.sheet}".`;
+              return {
+                message: `Deleted sheet "${sheetName}".`,
+                changedCount: 1,
+                summary: `deleted sheet ${sheetName}`,
+              };
             }
 
             case "rename_sheet": {
               if (!params.sheet) throw new Error("sheet name is required for rename_sheet");
               if (!params.new_name) throw new Error("new_name is required for rename_sheet");
-              const sheet = context.workbook.worksheets.getItem(params.sheet);
-              sheet.name = params.new_name;
+              const previousName = params.sheet;
+              const newName = params.new_name;
+              const sheet = context.workbook.worksheets.getItem(previousName);
+              sheet.name = newName;
               await context.sync();
-              return `Renamed sheet "${params.sheet}" to "${params.new_name}".`;
+              return {
+                message: `Renamed sheet "${previousName}" to "${newName}".`,
+                changedCount: 1,
+                summary: `renamed sheet ${previousName} to ${newName}`,
+              };
             }
 
             case "duplicate_sheet": {
@@ -192,11 +235,19 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
                 await context.sync();
                 copy.name = params.new_name;
                 await context.sync();
-                return `Duplicated "${params.sheet}" as "${params.new_name}".`;
+                return {
+                  message: `Duplicated "${params.sheet}" as "${params.new_name}".`,
+                  changedCount: 1,
+                  summary: `duplicated sheet ${params.sheet} as ${params.new_name}`,
+                };
               }
               copy.load("name");
               await context.sync();
-              return `Duplicated "${params.sheet}" as "${copy.name}".`;
+              return {
+                message: `Duplicated "${params.sheet}" as "${copy.name}".`,
+                changedCount: 1,
+                summary: `duplicated sheet ${params.sheet}`,
+              };
             }
 
             case "hide_sheet": {
@@ -204,7 +255,11 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
               const sheet = context.workbook.worksheets.getItem(params.sheet);
               sheet.visibility = "Hidden";
               await context.sync();
-              return `Hidden sheet "${params.sheet}".`;
+              return {
+                message: `Hidden sheet "${params.sheet}".`,
+                changedCount: 1,
+                summary: `hidden sheet ${params.sheet}`,
+              };
             }
 
             case "unhide_sheet": {
@@ -212,7 +267,11 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
               const sheet = context.workbook.worksheets.getItem(params.sheet);
               sheet.visibility = "Visible";
               await context.sync();
-              return `Unhidden sheet "${params.sheet}".`;
+              return {
+                message: `Unhidden sheet "${params.sheet}".`,
+                changedCount: 1,
+                summary: `unhidden sheet ${params.sheet}`,
+              };
             }
 
             default:
@@ -220,13 +279,35 @@ export function createModifyStructureTool(): AgentTool<typeof schema> {
           }
         });
 
+        await getWorkbookChangeAuditLog().append({
+          toolName: "modify_structure",
+          toolCallId,
+          blocked: false,
+          outputAddress: result.outputAddress,
+          changedCount: result.changedCount,
+          changes: [],
+          summary: result.summary,
+        });
+
         return {
-          content: [{ type: "text", text: result }],
+          content: [{ type: "text", text: result.message }],
           details: undefined,
         };
       } catch (e: unknown) {
+        const message = getErrorMessage(e);
+
+        await getWorkbookChangeAuditLog().append({
+          toolName: "modify_structure",
+          toolCallId,
+          blocked: true,
+          outputAddress: params.sheet,
+          changedCount: 0,
+          changes: [],
+          summary: `error: ${message}`,
+        });
+
         return {
-          content: [{ type: "text", text: `Error: ${getErrorMessage(e)}` }],
+          content: [{ type: "text", text: `Error: ${message}` }],
           details: undefined,
         };
       }
