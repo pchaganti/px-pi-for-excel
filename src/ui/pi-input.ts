@@ -12,6 +12,8 @@
 import { html, LitElement } from "lit";
 import { customElement, property, state, query } from "lit/decorators.js";
 
+import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
+
 const PLACEHOLDER_HINTS = [
   "Tell Pi what to build…",
   "Type / for commands…",
@@ -68,6 +70,7 @@ export class PiInput extends LitElement {
       return;
     }
     if (e.key === "Escape" && this.isStreaming) {
+      if (doesOverlayClaimEscape(e.target)) return;
       e.preventDefault();
       this.dispatchEvent(new CustomEvent("pi-abort", { bubbles: true }));
     }

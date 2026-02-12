@@ -344,7 +344,7 @@ export function showShortcutsDialog(): void {
   const shortcuts = [
     ["Enter", "Send message"],
     ["Shift+Tab", "Cycle thinking level"],
-    ["Esc", "Abort agent / dismiss menu"],
+    ["Esc", "Dismiss menu/dialog (or abort if none open)"],
     ["Enter (streaming)", "Steer — redirect agent"],
     ["⌥Enter", "Queue follow-up message"],
     ["/", "Open command menu"],

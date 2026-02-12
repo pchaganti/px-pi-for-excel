@@ -5,7 +5,10 @@ import {
   getCrossWorkbookResumeConfirmMessage,
   getResumeTargetLabel,
 } from "../src/commands/builtins/resume-target.ts";
-import { isReopenLastClosedShortcut } from "../src/taskpane/keyboard-shortcuts.ts";
+import {
+  isReopenLastClosedShortcut,
+  shouldAbortFromEscape,
+} from "../src/taskpane/keyboard-shortcuts.ts";
 import { RecentlyClosedStack } from "../src/taskpane/recently-closed.ts";
 import {
   getRestoreCandidateSessionIds,
@@ -144,6 +147,35 @@ void test("Cmd/Ctrl+Shift+T detection ignores Alt-modified chords", () => {
       ctrlKey: false,
       shiftKey: true,
       altKey: true,
+    }),
+    false,
+  );
+});
+
+void test("Escape abort is suppressed when overlay UI claims Escape", () => {
+  assert.equal(
+    shouldAbortFromEscape({
+      isStreaming: true,
+      hasAgent: true,
+      escapeClaimedByOverlay: true,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldAbortFromEscape({
+      isStreaming: true,
+      hasAgent: true,
+      escapeClaimedByOverlay: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldAbortFromEscape({
+      isStreaming: false,
+      hasAgent: true,
+      escapeClaimedByOverlay: false,
     }),
     false,
   );
