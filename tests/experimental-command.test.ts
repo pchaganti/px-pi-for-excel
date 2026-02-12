@@ -56,6 +56,7 @@ void test("/experimental help shows usage and feature list", async () => {
   assert.match(toasts[0], /remote-extension-urls/u);
   assert.match(toasts[0], /tmux-bridge-url/u);
   assert.match(toasts[0], /tmux-bridge-token/u);
+  assert.match(toasts[0], /tmux-status/u);
   assert.match(toasts[0], /python-bridge-url/u);
   assert.match(toasts[0], /python-bridge-token/u);
 });
@@ -345,6 +346,105 @@ void test("/experimental tmux-bridge-token invalid token surfaces validation err
 
   assert.equal(toasts.length, 1);
   assert.equal(toasts[0], "Tmux bridge token must not contain whitespace.");
+});
+
+void test("/experimental tmux-status reports blocked state with hint", async () => {
+  const toasts: string[] = [];
+
+  const command = getExperimentalCommand({
+    showExperimentalDialog: () => {},
+    showToast: (message) => {
+      toasts.push(message);
+    },
+    isTmuxBridgeEnabled: () => false,
+    getTmuxBridgeUrl: () => Promise.resolve(undefined),
+    getTmuxBridgeToken: () => Promise.resolve(undefined),
+  });
+
+  await command.execute("tmux-status");
+
+  assert.equal(toasts.length, 1);
+  assert.match(toasts[0], /feature flag \(tmux-bridge\): disabled/u);
+  assert.match(toasts[0], /gate: blocked \(tmux_experiment_disabled\)/u);
+  assert.match(toasts[0], /Enable it with \/experimental on tmux-bridge/u);
+  assert.match(toasts[0], /health: not checked/u);
+});
+
+void test("/experimental tmux-status reports healthy bridge details", async () => {
+  const toasts: string[] = [];
+
+  const command = getExperimentalCommand({
+    showExperimentalDialog: () => {},
+    showToast: (message) => {
+      toasts.push(message);
+    },
+    isTmuxBridgeEnabled: () => true,
+    getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3337"),
+    getTmuxBridgeToken: () => Promise.resolve("supersecrettoken"),
+    probeTmuxBridgeHealth: () => Promise.resolve({
+      reachable: true,
+      status: 200,
+      mode: "tmux",
+      backend: "tmux",
+      sessions: 2,
+    }),
+  });
+
+  await command.execute("tmux-status");
+
+  assert.equal(toasts.length, 1);
+  assert.match(toasts[0], /feature flag \(tmux-bridge\): enabled/u);
+  assert.match(toasts[0], /bridge URL: https:\/\/localhost:3337/u);
+  assert.match(toasts[0], /auth token: set \(supe\*{10}en, length 16\)/u);
+  assert.match(toasts[0], /gate: pass/u);
+  assert.match(toasts[0], /health: reachable \(HTTP 200, mode=tmux, backend=tmux, sessions=2\)/u);
+  assert.ok(!toasts[0].includes("supersecrettoken"));
+});
+
+void test("/experimental tmux-status uses a single health probe for gate + diagnostics", async () => {
+  const toasts: string[] = [];
+  let probeCount = 0;
+
+  const command = getExperimentalCommand({
+    showExperimentalDialog: () => {},
+    showToast: (message) => {
+      toasts.push(message);
+    },
+    isTmuxBridgeEnabled: () => true,
+    getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3337"),
+    getTmuxBridgeToken: () => Promise.resolve(undefined),
+    probeTmuxBridgeHealth: () => {
+      probeCount += 1;
+      return Promise.resolve({
+        reachable: false,
+        status: 503,
+        error: "bridge unavailable",
+      });
+    },
+  });
+
+  await command.execute("tmux-status");
+
+  assert.equal(probeCount, 1);
+  assert.equal(toasts.length, 1);
+  assert.match(toasts[0], /gate: blocked \(bridge_unreachable\)/u);
+  assert.match(toasts[0], /health: unreachable \(HTTP 503; bridge unavailable\)/u);
+});
+
+void test("/experimental tmux-status with extra args shows usage", async () => {
+  const toasts: string[] = [];
+
+  const command = getExperimentalCommand({
+    showExperimentalDialog: () => {},
+    showToast: (message) => {
+      toasts.push(message);
+    },
+  });
+
+  await command.execute("tmux-status extra");
+
+  assert.equal(toasts.length, 1);
+  assert.equal(toasts[0], "Usage: /experimental tmux-status");
 });
 
 void test("/experimental python-bridge-url shows configured value", async () => {

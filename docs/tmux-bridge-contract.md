@@ -33,6 +33,7 @@ Then in the add-in:
 ```bash
 /experimental on tmux-bridge
 /experimental tmux-bridge-url https://localhost:3337
+/experimental tmux-status
 ```
 
 Optional auth token:

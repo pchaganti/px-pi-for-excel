@@ -125,6 +125,7 @@ Experimental examples:
 - `/experimental on tmux-bridge`
 - `/experimental tmux-bridge-url https://localhost:3337`
 - `/experimental tmux-bridge-token <token>`
+- `/experimental tmux-status`
 - `/experimental tmux-bridge-url clear`
 - `/experimental tmux-bridge-token clear`
 - `/experimental on python-bridge`
@@ -275,6 +276,8 @@ Then enable and configure in the add-in:
 /experimental tmux-bridge-url https://localhost:3337
 # optional, if bridge requires bearer auth
 /experimental tmux-bridge-token <token>
+# diagnostics
+/experimental tmux-status
 ```
 
 Bridge endpoints:

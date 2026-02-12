@@ -34,6 +34,10 @@ void test("builtins registry wires /experimental and /extensions command registr
 
   assert.match(source, /createExtensionsCommands/);
   assert.match(source, /\.\.\.createExtensionsCommands\(context\)/);
+
+  const extensionApiSource = await readFile(new URL("../src/commands/extension-api.ts", import.meta.url), "utf8");
+  assert.match(extensionApiSource, /import\.meta\.glob\("\.\.\/extensions\/\*\.\{ts,js\}"\)/);
+  assert.match(extensionApiSource, /Local extension module/);
 });
 
 void test("extension registry seeds default snake extension when storage is empty", async () => {

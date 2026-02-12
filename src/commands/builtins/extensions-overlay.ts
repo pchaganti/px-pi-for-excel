@@ -10,6 +10,7 @@ import { PYTHON_BRIDGE_URL_SETTING_KEY } from "../../tools/experimental-tool-gat
 import { showToast } from "../../ui/toast.js";
 
 const OVERLAY_ID = "pi-extensions-overlay";
+const overlayClosers = new WeakMap<HTMLElement, () => void>();
 
 const EXTENSION_PROMPT_TEMPLATE = [
   "Write a single-file JavaScript ES module extension for Pi for Excel.",
@@ -112,7 +113,13 @@ async function deleteSettingValue(settingKey: string): Promise<void> {
 export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
   const existing = document.getElementById(OVERLAY_ID);
   if (existing) {
-    existing.remove();
+    const closeExisting = overlayClosers.get(existing);
+    if (closeExisting) {
+      closeExisting();
+    } else {
+      existing.remove();
+    }
+
     return;
   }
 
@@ -519,9 +526,14 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     }
 
     closed = true;
+    overlayClosers.delete(overlay);
     unsubscribe();
     overlay.remove();
   };
+
+  overlayClosers.set(overlay, () => {
+    closeOverlay();
+  });
 
   overlay.addEventListener("click", (event) => {
     if (event.target !== overlay) {
