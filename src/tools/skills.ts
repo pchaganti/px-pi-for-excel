@@ -1,11 +1,11 @@
 /**
- * skills — list/read bundled Agent Skills (SKILL.md).
+ * skills — list/read bundled Agent Skills (SKILL.md), with optional external discovery.
  */
 
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 
-import type { AgentSkillDefinition } from "../skills/catalog.js";
+import type { AgentSkillDefinition } from "../skills/types.js";
 import type { SkillReadCache } from "../skills/read-cache.js";
 import type {
   SkillsErrorDetails,
@@ -32,8 +32,7 @@ const schema = Type.Object({
 type Params = Static<typeof schema>;
 
 export interface SkillsToolCatalog {
-  list: () => AgentSkillDefinition[];
-  getByName: (name: string) => AgentSkillDefinition | null;
+  list: () => AgentSkillDefinition[] | Promise<AgentSkillDefinition[]>;
 }
 
 let defaultCatalog: SkillsToolCatalog | null = null;
@@ -46,29 +45,51 @@ async function getDefaultCatalog(): Promise<SkillsToolCatalog> {
   const catalogModule = await import("../skills/catalog.js");
   defaultCatalog = {
     list: catalogModule.listAgentSkills,
-    getByName: catalogModule.getAgentSkillByName,
   };
   return defaultCatalog;
+}
+
+async function defaultIsExternalDiscoveryEnabled(): Promise<boolean> {
+  const flagsModule = await import("../experiments/flags.js");
+  return flagsModule.isExperimentalFeatureEnabled("external_skills_discovery");
+}
+
+async function defaultLoadExternalSkills(): Promise<AgentSkillDefinition[]> {
+  const [{ getAppStorage }, { loadExternalAgentSkillsFromSettings }] = await Promise.all([
+    import("@mariozechner/pi-web-ui/dist/storage/app-storage.js"),
+    import("../skills/external-store.js"),
+  ]);
+
+  return loadExternalAgentSkillsFromSettings(getAppStorage().settings);
 }
 
 export interface SkillsToolDependencies {
   getSessionId?: () => string | null;
   readCache?: SkillReadCache;
   catalog?: SkillsToolCatalog;
+  isExternalDiscoveryEnabled?: () => boolean | Promise<boolean>;
+  loadExternalSkills?: () => Promise<AgentSkillDefinition[]>;
 }
 
-function renderSkillListMarkdown(skills: AgentSkillDefinition[]): string {
-  if (skills.length === 0) {
-    return "No Agent Skills are bundled in this build.";
+function renderSkillListMarkdown(args: {
+  skills: readonly AgentSkillDefinition[];
+  externalDiscoveryEnabled: boolean;
+}): string {
+  if (args.skills.length === 0) {
+    return args.externalDiscoveryEnabled
+      ? "No Agent Skills found. External discovery is enabled, but no valid skills are configured."
+      : "No Agent Skills are bundled in this build.";
   }
 
   const lines: string[] = [
-    `Available Agent Skills (${skills.length}):`,
+    `Available Agent Skills (${args.skills.length}):`,
     "",
   ];
 
-  for (const skill of skills) {
-    lines.push(`- \`${skill.name}\` — ${skill.description}`);
+  for (const skill of args.skills) {
+    lines.push(
+      `- \`${skill.name}\` — ${skill.description} _(source: ${skill.sourceKind}, location: ${skill.location})_`,
+    );
   }
 
   lines.push("");
@@ -76,7 +97,7 @@ function renderSkillListMarkdown(skills: AgentSkillDefinition[]): string {
   return lines.join("\n");
 }
 
-function renderReadError(name: string, skills: AgentSkillDefinition[]): string {
+function renderReadError(name: string, skills: readonly AgentSkillDefinition[]): string {
   const available = skills.map((skill) => `\`${skill.name}\``).join(", ");
   return [
     `Skill not found: \`${name}\`.`,
@@ -93,16 +114,46 @@ function normalizeSessionId(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function buildSkillsListDetails(skills: AgentSkillDefinition[]): SkillsListDetails {
+function mergeSkillsByName(args: {
+  preferred: readonly AgentSkillDefinition[];
+  fallback: readonly AgentSkillDefinition[];
+}): AgentSkillDefinition[] {
+  const byName = new Map<string, AgentSkillDefinition>();
+
+  for (const skill of args.preferred) {
+    byName.set(skill.name.toLowerCase(), skill);
+  }
+
+  for (const skill of args.fallback) {
+    const key = skill.name.toLowerCase();
+    if (!byName.has(key)) {
+      byName.set(key, skill);
+    }
+  }
+
+  return Array.from(byName.values()).sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function buildSkillsListDetails(args: {
+  skills: readonly AgentSkillDefinition[];
+  externalDiscoveryEnabled: boolean;
+}): SkillsListDetails {
   return {
     kind: "skills_list",
-    count: skills.length,
-    names: skills.map((skill) => skill.name),
+    count: args.skills.length,
+    names: args.skills.map((skill) => skill.name),
+    entries: args.skills.map((skill) => ({
+      name: skill.name,
+      sourceKind: skill.sourceKind,
+      location: skill.location,
+    })),
+    externalDiscoveryEnabled: args.externalDiscoveryEnabled,
   };
 }
 
 function buildSkillsErrorDetails(args: {
   message: string;
+  externalDiscoveryEnabled: boolean;
   requestedName?: string;
   availableNames?: string[];
 }): SkillsErrorDetails {
@@ -112,11 +163,12 @@ function buildSkillsErrorDetails(args: {
     message: args.message,
     requestedName: args.requestedName,
     availableNames: args.availableNames,
+    externalDiscoveryEnabled: args.externalDiscoveryEnabled,
   };
 }
 
 function buildSkillsReadDetails(args: {
-  skillName: string;
+  skill: AgentSkillDefinition;
   cacheHit: boolean;
   refreshed: boolean;
   sessionScoped: boolean;
@@ -124,12 +176,37 @@ function buildSkillsReadDetails(args: {
 }): SkillsReadDetails {
   return {
     kind: "skills_read",
-    skillName: args.skillName,
+    skillName: args.skill.name,
+    sourceKind: args.skill.sourceKind,
+    location: args.skill.location,
     cacheHit: args.cacheHit,
     refreshed: args.refreshed,
     sessionScoped: args.sessionScoped,
     readCount: args.readCount,
   };
+}
+
+async function resolveCatalogSkills(catalog: SkillsToolCatalog): Promise<AgentSkillDefinition[]> {
+  const loaded = await catalog.list();
+  return [...loaded].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+async function resolveAllSkills(args: {
+  catalog: SkillsToolCatalog;
+  externalDiscoveryEnabled: boolean;
+  loadExternalSkills: () => Promise<AgentSkillDefinition[]>;
+}): Promise<AgentSkillDefinition[]> {
+  const bundled = await resolveCatalogSkills(args.catalog);
+
+  if (!args.externalDiscoveryEnabled) {
+    return bundled;
+  }
+
+  const external = await args.loadExternalSkills();
+  return mergeSkillsByName({
+    preferred: bundled,
+    fallback: external,
+  });
 }
 
 export function createSkillsTool(
@@ -147,12 +224,23 @@ export function createSkillsTool(
     parameters: schema,
     execute: async (_toolCallId: string, params: Params): Promise<AgentToolResult<SkillsToolDetails>> => {
       const catalog = dependencies.catalog ?? await getDefaultCatalog();
-      const skills = catalog.list();
+      const isExternalDiscoveryEnabled = dependencies.isExternalDiscoveryEnabled ?? defaultIsExternalDiscoveryEnabled;
+      const loadExternalSkills = dependencies.loadExternalSkills ?? defaultLoadExternalSkills;
+
+      const externalDiscoveryEnabled = await isExternalDiscoveryEnabled();
+      const skills = await resolveAllSkills({
+        catalog,
+        externalDiscoveryEnabled,
+        loadExternalSkills,
+      });
 
       if (params.action === "list") {
         return {
-          content: [{ type: "text", text: renderSkillListMarkdown(skills) }],
-          details: buildSkillsListDetails(skills),
+          content: [{
+            type: "text",
+            text: renderSkillListMarkdown({ skills, externalDiscoveryEnabled }),
+          }],
+          details: buildSkillsListDetails({ skills, externalDiscoveryEnabled }),
         };
       }
 
@@ -163,6 +251,7 @@ export function createSkillsTool(
           content: [{ type: "text", text: message }],
           details: buildSkillsErrorDetails({
             message,
+            externalDiscoveryEnabled,
             availableNames: skills.map((skill) => skill.name),
           }),
         };
@@ -175,10 +264,19 @@ export function createSkillsTool(
       if (!refresh && sessionId && readCache) {
         const cached = readCache.get(sessionId, requestedName);
         if (cached) {
+          const cachedSkill: AgentSkillDefinition = {
+            name: cached.skillName,
+            description: "",
+            location: cached.location,
+            sourceKind: cached.sourceKind,
+            markdown: cached.markdown,
+            body: cached.markdown,
+          };
+
           return {
             content: [{ type: "text", text: cached.markdown }],
             details: buildSkillsReadDetails({
-              skillName: cached.skillName,
+              skill: cachedSkill,
               cacheHit: true,
               refreshed: false,
               sessionScoped,
@@ -188,13 +286,14 @@ export function createSkillsTool(
         }
       }
 
-      const skill = catalog.getByName(requestedName);
+      const skill = skills.find((entry) => entry.name.toLowerCase() === requestedName.toLowerCase()) ?? null;
       if (!skill) {
         const message = renderReadError(requestedName, skills);
         return {
           content: [{ type: "text", text: message }],
           details: buildSkillsErrorDetails({
             message,
+            externalDiscoveryEnabled,
             requestedName,
             availableNames: skills.map((entry) => entry.name),
           }),
@@ -202,13 +301,18 @@ export function createSkillsTool(
       }
 
       const cachedEntry = sessionId && readCache
-        ? readCache.set(sessionId, skill.name, skill.markdown)
+        ? readCache.set(sessionId, {
+          skillName: skill.name,
+          sourceKind: skill.sourceKind,
+          location: skill.location,
+          markdown: skill.markdown,
+        })
         : null;
 
       return {
         content: [{ type: "text", text: skill.markdown }],
         details: buildSkillsReadDetails({
-          skillName: skill.name,
+          skill,
           cacheHit: false,
           refreshed: refresh,
           sessionScoped,

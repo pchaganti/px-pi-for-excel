@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { AgentSkillDefinition } from "../src/skills/catalog.ts";
+import type { AgentSkillDefinition } from "../src/skills/types.ts";
 import { createSkillReadCache } from "../src/skills/read-cache.ts";
 import {
   isSkillsErrorDetails,
@@ -15,31 +15,50 @@ const WEB_SEARCH_SKILL: AgentSkillDefinition = {
   description: "Search the web for fresh facts.",
   compatibility: "Requires web_search integration.",
   location: "skills/web-search/SKILL.md",
+  sourceKind: "bundled",
   markdown: "# Web Search\n\nUse web search when workbook context is insufficient.",
   body: "# Web Search\n\nUse web search when workbook context is insufficient.",
 };
 
-void test("skills list renders bundled skills from catalog", async () => {
+const CUSTOM_EXTERNAL_SKILL: AgentSkillDefinition = {
+  name: "custom-skill",
+  description: "Custom external skill.",
+  compatibility: "External discovery test",
+  location: "/Users/test/.pi/skills/custom-skill/SKILL.md",
+  sourceKind: "external",
+  markdown: "# Custom Skill\n\nExternal skill body.",
+  body: "# Custom Skill\n\nExternal skill body.",
+};
+
+void test("skills list renders provenance and structured list details", async () => {
   const tool = createSkillsTool({
     catalog: {
       list: () => [WEB_SEARCH_SKILL],
-      getByName: () => null,
     },
+    isExternalDiscoveryEnabled: () => false,
+    loadExternalSkills: () => Promise.resolve([]),
   });
 
-  const result = await tool.execute("call-1", { action: "list" });
+  const result = await tool.execute("call-list", { action: "list" });
   const text = result.content[0]?.type === "text" ? result.content[0].text : "";
 
   assert.match(text, /Available Agent Skills \(1\)/);
-  assert.match(text, /`web-search`/);
+  assert.match(text, /source: bundled/i);
+
   assert.ok(isSkillsListDetails(result.details));
   if (!isSkillsListDetails(result.details)) return;
+
   assert.equal(result.details.count, 1);
+  assert.equal(result.details.externalDiscoveryEnabled, false);
   assert.deepEqual(result.details.names, ["web-search"]);
+  assert.deepEqual(result.details.entries[0], {
+    name: "web-search",
+    sourceKind: "bundled",
+    location: "skills/web-search/SKILL.md",
+  });
 });
 
-void test("skills read uses session cache and avoids repeated catalog lookups", async () => {
-  let lookupCount = 0;
+void test("skills read uses session cache and reports cacheHit details", async () => {
   const cache = createSkillReadCache();
 
   const tool = createSkillsTool({
@@ -47,22 +66,13 @@ void test("skills read uses session cache and avoids repeated catalog lookups", 
     readCache: cache,
     catalog: {
       list: () => [WEB_SEARCH_SKILL],
-      getByName: (name: string) => {
-        lookupCount += 1;
-        return name === "web-search" ? WEB_SEARCH_SKILL : null;
-      },
     },
+    isExternalDiscoveryEnabled: () => false,
+    loadExternalSkills: () => Promise.resolve([]),
   });
 
-  const first = await tool.execute("call-1", { action: "read", name: "web-search" });
-  const second = await tool.execute("call-2", { action: "read", name: "web-search" });
-
-  const firstText = first.content[0]?.type === "text" ? first.content[0].text : "";
-  const secondText = second.content[0]?.type === "text" ? second.content[0].text : "";
-
-  assert.equal(lookupCount, 1);
-  assert.equal(firstText, WEB_SEARCH_SKILL.markdown);
-  assert.equal(secondText, WEB_SEARCH_SKILL.markdown);
+  const first = await tool.execute("call-read-1", { action: "read", name: "web-search" });
+  const second = await tool.execute("call-read-2", { action: "read", name: "web-search" });
 
   assert.ok(isSkillsReadDetails(first.details));
   assert.ok(isSkillsReadDetails(second.details));
@@ -70,14 +80,13 @@ void test("skills read uses session cache and avoids repeated catalog lookups", 
 
   assert.equal(first.details.cacheHit, false);
   assert.equal(second.details.cacheHit, true);
-  assert.equal(first.details.refreshed, false);
-  assert.equal(second.details.refreshed, false);
-  assert.equal(first.details.sessionScoped, true);
-  assert.equal(second.details.sessionScoped, true);
+  assert.equal(first.details.sourceKind, "bundled");
+  assert.equal(second.details.sourceKind, "bundled");
+  assert.equal(second.details.location, "skills/web-search/SKILL.md");
+  assert.equal(second.details.readCount, 1);
 });
 
-void test("skills read with refresh=true bypasses cache and refreshes catalog", async () => {
-  let lookupCount = 0;
+void test("skills read with refresh=true bypasses cache and reports refreshed details", async () => {
   const cache = createSkillReadCache();
 
   const tool = createSkillsTool({
@@ -85,54 +94,57 @@ void test("skills read with refresh=true bypasses cache and refreshes catalog", 
     readCache: cache,
     catalog: {
       list: () => [WEB_SEARCH_SKILL],
-      getByName: (name: string) => {
-        lookupCount += 1;
-        return name === "web-search" ? WEB_SEARCH_SKILL : null;
-      },
     },
+    isExternalDiscoveryEnabled: () => false,
+    loadExternalSkills: () => Promise.resolve([]),
   });
 
-  await tool.execute("call-1", { action: "read", name: "web-search" });
-  const refreshed = await tool.execute("call-2", { action: "read", name: "web-search", refresh: true });
+  await tool.execute("call-read-1", { action: "read", name: "web-search" });
+  const refreshed = await tool.execute("call-read-2", {
+    action: "read",
+    name: "web-search",
+    refresh: true,
+  });
 
-  assert.equal(lookupCount, 2);
   assert.ok(isSkillsReadDetails(refreshed.details));
   if (!isSkillsReadDetails(refreshed.details)) return;
 
   assert.equal(refreshed.details.cacheHit, false);
   assert.equal(refreshed.details.refreshed, true);
-  assert.equal(refreshed.details.sessionScoped, true);
+  assert.equal(refreshed.details.readCount, 2);
 });
 
 void test("skills read cache is session-scoped", async () => {
   let currentSession = "session-a";
-  let lookupCount = 0;
 
   const tool = createSkillsTool({
     getSessionId: () => currentSession,
     readCache: createSkillReadCache(),
     catalog: {
       list: () => [WEB_SEARCH_SKILL],
-      getByName: (name: string) => {
-        lookupCount += 1;
-        return name === "web-search" ? WEB_SEARCH_SKILL : null;
-      },
     },
+    isExternalDiscoveryEnabled: () => false,
+    loadExternalSkills: () => Promise.resolve([]),
   });
 
-  await tool.execute("call-1", { action: "read", name: "web-search" });
+  await tool.execute("call-read-a", { action: "read", name: "web-search" });
   currentSession = "session-b";
-  await tool.execute("call-2", { action: "read", name: "web-search" });
+  const second = await tool.execute("call-read-b", { action: "read", name: "web-search" });
 
-  assert.equal(lookupCount, 2);
+  assert.ok(isSkillsReadDetails(second.details));
+  if (!isSkillsReadDetails(second.details)) return;
+
+  assert.equal(second.details.cacheHit, false);
+  assert.equal(second.details.readCount, 1);
 });
 
 void test("skills read without name returns structured error details", async () => {
   const tool = createSkillsTool({
     catalog: {
       list: () => [WEB_SEARCH_SKILL],
-      getByName: () => null,
     },
+    isExternalDiscoveryEnabled: () => false,
+    loadExternalSkills: () => Promise.resolve([]),
   });
 
   const result = await tool.execute("call-err", { action: "read" });
@@ -142,6 +154,46 @@ void test("skills read without name returns structured error details", async () 
   assert.ok(isSkillsErrorDetails(result.details));
   if (!isSkillsErrorDetails(result.details)) return;
 
-  assert.equal(result.details.action, "read");
+  assert.equal(result.details.externalDiscoveryEnabled, false);
   assert.deepEqual(result.details.availableNames, ["web-search"]);
+});
+
+void test("skills list includes external entries when discovery is enabled", async () => {
+  const tool = createSkillsTool({
+    catalog: {
+      list: () => [WEB_SEARCH_SKILL],
+    },
+    isExternalDiscoveryEnabled: () => true,
+    loadExternalSkills: () => Promise.resolve([CUSTOM_EXTERNAL_SKILL]),
+  });
+
+  const result = await tool.execute("call-list-ext", { action: "list" });
+
+  assert.ok(isSkillsListDetails(result.details));
+  if (!isSkillsListDetails(result.details)) return;
+
+  assert.equal(result.details.externalDiscoveryEnabled, true);
+  assert.deepEqual(result.details.names, ["custom-skill", "web-search"]);
+  assert.equal(result.details.entries.find((entry) => entry.name === "custom-skill")?.sourceKind, "external");
+});
+
+void test("skills read resolves external skill when discovery is enabled", async () => {
+  const tool = createSkillsTool({
+    catalog: {
+      list: () => [WEB_SEARCH_SKILL],
+    },
+    isExternalDiscoveryEnabled: () => true,
+    loadExternalSkills: () => Promise.resolve([CUSTOM_EXTERNAL_SKILL]),
+  });
+
+  const result = await tool.execute("call-read-ext", { action: "read", name: "custom-skill" });
+
+  const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+  assert.match(text, /Custom Skill/);
+
+  assert.ok(isSkillsReadDetails(result.details));
+  if (!isSkillsReadDetails(result.details)) return;
+
+  assert.equal(result.details.sourceKind, "external");
+  assert.equal(result.details.location, CUSTOM_EXTERNAL_SKILL.location);
 });

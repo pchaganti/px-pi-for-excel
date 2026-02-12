@@ -2,16 +2,27 @@
  * Session-scoped cache for loaded Agent Skill markdown.
  */
 
+import type { SkillsSourceKind } from "../tools/tool-details.js";
+
 export interface SkillReadCacheEntry {
   skillName: string;
+  sourceKind: SkillsSourceKind;
+  location: string;
   markdown: string;
   cachedAt: number;
   readCount: number;
 }
 
+export interface SkillReadCacheSetInput {
+  skillName: string;
+  sourceKind: SkillsSourceKind;
+  location: string;
+  markdown: string;
+}
+
 export interface SkillReadCache {
   get: (sessionId: string, skillName: string) => SkillReadCacheEntry | null;
-  set: (sessionId: string, skillName: string, markdown: string) => SkillReadCacheEntry;
+  set: (sessionId: string, skill: SkillReadCacheSetInput) => SkillReadCacheEntry;
   clearSession: (sessionId: string) => void;
   clearAll: () => void;
 }
@@ -44,14 +55,16 @@ export function createSkillReadCache(): SkillReadCache {
       const cached = sessionCache.get(normalizeSkillName(skillName));
       return cached ?? null;
     },
-    set(sessionId: string, skillName: string, markdown: string): SkillReadCacheEntry {
+    set(sessionId: string, skill: SkillReadCacheSetInput): SkillReadCacheEntry {
       const sessionCache = ensureSessionCache(sessionId);
-      const normalizedName = normalizeSkillName(skillName);
+      const normalizedName = normalizeSkillName(skill.skillName);
       const previous = sessionCache.get(normalizedName);
 
       const next: SkillReadCacheEntry = {
-        skillName,
-        markdown,
+        skillName: skill.skillName,
+        sourceKind: skill.sourceKind,
+        location: skill.location,
+        markdown: skill.markdown,
         cachedAt: Date.now(),
         readCount: previous ? previous.readCount + 1 : 1,
       };

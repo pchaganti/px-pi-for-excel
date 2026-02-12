@@ -944,16 +944,19 @@ function describeToolCall(
         const detailName = isSkillsReadDetails(details)
           ? details.skillName
           : name ?? "name";
+        const sourceSuffix = isSkillsReadDetails(details)
+          ? (details.sourceKind === "external" ? " (external)" : " (bundled)")
+          : "";
 
         if (isSkillsReadDetails(details) && details.cacheHit) {
-          return { action: "Read skill", detail: `${detailName} (cached)` };
+          return { action: "Read skill", detail: `${detailName}${sourceSuffix} (cached)` };
         }
 
         if (refresh) {
-          return { action: "Refresh skill", detail: detailName };
+          return { action: "Refresh skill", detail: `${detailName}${sourceSuffix}` };
         }
 
-        return { action: "Read skill", detail: detailName };
+        return { action: "Read skill", detail: `${detailName}${sourceSuffix}` };
       }
 
       return { action: "List skills", detail: "" };

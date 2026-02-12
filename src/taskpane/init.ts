@@ -62,7 +62,12 @@ import { PI_INTEGRATIONS_CHANGED_EVENT } from "../integrations/events.js";
 import { INTEGRATIONS_COMMAND_NAME } from "../integrations/naming.js";
 import { getExternalToolsEnabled, resolveConfiguredIntegrationIds } from "../integrations/store.js";
 import { buildSystemPrompt } from "../prompt/system-prompt.js";
-import { getAgentSkillPromptEntries } from "../skills/catalog.js";
+import {
+  buildAgentSkillPromptEntries,
+  listAgentSkills,
+  mergeAgentSkillDefinitions,
+} from "../skills/catalog.js";
+import { loadExternalAgentSkillsFromSettings } from "../skills/external-store.js";
 import { createSkillReadCache } from "../skills/read-cache.js";
 import { initAppStorage } from "../storage/init-app-storage.js";
 import { renderError } from "../ui/loading.js";
@@ -338,12 +343,29 @@ export async function initTaskpane(opts: {
     return externalToolsEnabled ? configuredIntegrationIds : [];
   };
 
-  const availableSkills = getAgentSkillPromptEntries();
+  const resolveAvailableSkills = async () => {
+    const bundledSkills = listAgentSkills();
+
+    if (!isExperimentalFeatureEnabled("external_skills_discovery")) {
+      return buildAgentSkillPromptEntries(bundledSkills);
+    }
+
+    try {
+      const externalSkills = await loadExternalAgentSkillsFromSettings(settings);
+      const mergedSkills = mergeAgentSkillDefinitions(bundledSkills, externalSkills);
+      return buildAgentSkillPromptEntries(mergedSkills);
+    } catch (error: unknown) {
+      console.warn("[skills] Failed to load external skills:", error);
+      return buildAgentSkillPromptEntries(bundledSkills);
+    }
+  };
 
   const buildRuntimeSystemPrompt = async (args: {
     workbookId: string | null;
     activeIntegrationIds: readonly string[];
   }): Promise<string> => {
+    const availableSkills = await resolveAvailableSkills();
+
     try {
       const userInstructions = await getUserInstructions(settings);
       const workbookInstructions = await getWorkbookInstructions(settings, args.workbookId);
