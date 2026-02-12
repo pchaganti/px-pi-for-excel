@@ -91,7 +91,7 @@
   content: "▸";
   color: var(--muted-foreground);
   margin-right: 6px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   vertical-align: middle;
 }
 

@@ -133,7 +133,7 @@
   border: 1px solid var(--alpha-12);
   background: var(--white-alpha-55);
   color: var(--muted-foreground);
-  font-size: 13px;
+  font-size: var(--text-base);
   line-height: 1;
   width: 20px;
   height: 20px;
@@ -742,7 +742,7 @@ pi-working-indicator {
   align-items: center;
   gap: 6px;
   padding: 4px;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--text-sm);
   letter-spacing: 0.01em;
   color: var(--muted-foreground);
@@ -765,7 +765,7 @@ pi-working-indicator {
   margin: -2px 0;
   margin-left: auto;
   border-radius: var(--radius-xs);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--text-sm);
   color: var(--foreground);
   opacity: 0.7;
@@ -802,8 +802,9 @@ pi-working-indicator {
   pointer-events: none;
 }
 
-/* Context usage — left side */
+/* Context usage — left side (mono for aligned numbers) */
 .pi-status-ctx {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex-shrink: 0;
@@ -841,7 +842,7 @@ pi-working-indicator {
 
 .pi-status-lock {
   font-size: var(--text-xs);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   border-radius: var(--radius-xs);
   padding: 1px 5px;
   white-space: nowrap;
@@ -858,35 +859,49 @@ pi-working-indicator {
   background: var(--green-alpha-12);
 }
 
-.pi-status-instructions {
+.pi-status-rules {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   border: 1px solid var(--green-alpha-25);
   background: var(--pi-green-light);
   color: var(--primary);
   border-radius: var(--radius-xs);
   padding: 1px 6px;
   font-size: var(--text-xs);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   line-height: 1.4;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-.pi-status-instructions:hover {
+.pi-status-rules svg {
+  flex-shrink: 0;
+}
+
+.pi-status-rules:hover {
   background: var(--green-alpha-14);
 }
 
 .pi-status-integrations {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   border: 1px solid oklch(0.67 0.17 35 / 0.32);
   background: oklch(0.67 0.17 35 / 0.09);
   color: oklch(0.5 0.12 35);
   border-radius: var(--radius-xs);
   padding: 1px 6px;
   font-size: var(--text-xs);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   line-height: 1.4;
   cursor: pointer;
   white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pi-status-integrations svg {
   flex-shrink: 0;
 }
 

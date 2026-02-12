@@ -40,24 +40,24 @@ function renderInstructionValue(value: string | null | undefined, fallback: stri
 }
 
 function buildInstructionsSection(opts: SystemPromptOptions): string {
-  const userValue = renderInstructionValue(opts.userInstructions, "(No user instructions set.)");
+  const userValue = renderInstructionValue(opts.userInstructions, "(No rules set.)");
   const workbookValue = renderInstructionValue(
     opts.workbookInstructions,
-    "(No workbook instructions set.)",
+    "(No rules set.)",
   );
 
-  return `## Persistent Instructions
+  return `## Rules
 
-You can maintain persistent guidance with the **instructions** tool:
-- **User instructions** are private (local to this machine). Update freely when the user expresses long-term preferences.
-- **Workbook instructions** apply to the active workbook. Always show the exact text and ask for explicit confirmation before updating.
+You can maintain persistent rules with the **instructions** tool:
+- **User rules** ("All my files") are private (local to this machine). Update freely when the user expresses long-term preferences.
+- **Workbook rules** ("This file") apply to the active workbook. Always show the exact text and ask for explicit confirmation before updating.
 
-If user-level and workbook-level instructions conflict, ask the user to clarify instead of guessing precedence.
+If user-level and workbook-level rules conflict, ask the user to clarify instead of guessing precedence.
 
-### User
+### All my files
 ${userValue}
 
-### Workbook
+### This file
 ${workbookValue}`;
 }
 
@@ -176,7 +176,7 @@ Core workbook tools:
 - **trace_dependencies** — trace formula lineage for a cell (mode: \`precedents\` upstream or \`dependents\` downstream)
 - **explain_formula** — explain a single formula cell in plain language with cited direct references
 - **view_settings** — control gridlines, headings, freeze panes, tab color, sheet visibility, sheet activation, and standard width
-- **instructions** — update persistent user/workbook instructions (append or replace)
+- **instructions** — update persistent rules for all files or this file (append or replace)
 - **conventions** — read/update formatting defaults (currency, negatives, zeros, decimal places)
 - **workbook_history** — list/restore/delete automatic backups created before Pi edits for supported workbook mutations (\`write_cells\`, \`fill_formula\`, \`python_transform_range\`, \`format_cells\`, \`conditional_format\`, \`comments\`, and supported \`modify_structure\` actions)
 - **skills** — list/read bundled Agent Skills (SKILL.md) for task-specific workflows

@@ -900,7 +900,7 @@ function describeToolCall(
     case "instructions": {
       const level = p.level as string | undefined;
       const action = p.action as string | undefined;
-      const scope = level ? `${level} instructions` : "instructions";
+      const scope = level ? `${level} rules` : "rules";
       if (action === "replace") {
         return { action: "Set", detail: scope };
       }

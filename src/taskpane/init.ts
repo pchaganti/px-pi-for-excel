@@ -117,7 +117,7 @@ import { isRecord } from "../utils/type-guards.js";
 const BUSY_ALLOWED_COMMANDS = new Set([
   "compact",
   "new",
-  "instructions",
+  "rules",
   "resume",
   "history",
   "reopen",
@@ -1351,8 +1351,8 @@ export async function initTaskpane(opts: {
       return;
     }
 
-    // Instructions editor
-    if (el.closest(".pi-status-instructions")) {
+    // Rules editor
+    if (el.closest(".pi-status-rules")) {
       closeStatusPopover();
       void showInstructionsDialog({
         onSaved: async () => {

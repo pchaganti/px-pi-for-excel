@@ -23,7 +23,7 @@ const schema = Type.Object({
     Type.Literal("append"),
     Type.Literal("replace"),
   ], {
-    description: "append = add to existing instructions, replace = rewrite the full instructions text",
+    description: "append = add to existing rules, replace = rewrite the full rules text",
   }),
   level: Type.Union([
     Type.Literal("user"),
@@ -53,10 +53,10 @@ function emitInstructionsUpdatedEvent(): void {
 export function createInstructionsTool(): AgentTool<typeof schema, undefined> {
   return {
     name: "instructions",
-    label: "Instructions",
+    label: "Rules",
     description:
-      "Update persistent instructions for the agent. " +
-      "Use level=user for personal preferences and level=workbook for workbook-specific notes.",
+      "Update persistent rules for the agent. " +
+      "Use level=user for personal preferences (all files) and level=workbook for workbook-specific notes (this file).",
     parameters: schema,
     execute: async (
       _toolCallId: string,
@@ -84,17 +84,17 @@ export function createInstructionsTool(): AgentTool<typeof schema, undefined> {
           const saved = await setUserInstructions(settings, updated);
           emitInstructionsUpdatedEvent();
 
-          const body = saved ?? "(No user instructions set.)";
+          const body = saved ?? "(No user rules set.)";
           const warning =
             saved && saved.length > USER_INSTRUCTIONS_SOFT_LIMIT
-              ? `\n\n⚠️ User instructions are above the ${USER_INSTRUCTIONS_SOFT_LIMIT}-char soft limit.`
+              ? `\n\n⚠️ User rules are above the ${USER_INSTRUCTIONS_SOFT_LIMIT}-char soft limit.`
               : "";
 
           return {
             content: [
               {
                 type: "text",
-                text: `Updated user instructions (${saved?.length ?? 0}/${USER_INSTRUCTIONS_SOFT_LIMIT} chars):\n\n${body}${warning}`,
+                text: `Updated user rules (${saved?.length ?? 0}/${USER_INSTRUCTIONS_SOFT_LIMIT} chars):\n\n${body}${warning}`,
               },
             ],
             details: undefined,
@@ -108,7 +108,7 @@ export function createInstructionsTool(): AgentTool<typeof schema, undefined> {
           return {
             content: [{
               type: "text",
-              text: "Error: workbook identity unavailable. Can't update workbook instructions right now.",
+              text: "Error: workbook identity unavailable. Can't update workbook rules right now.",
             }],
             details: undefined,
           };
@@ -125,24 +125,24 @@ export function createInstructionsTool(): AgentTool<typeof schema, undefined> {
         emitInstructionsUpdatedEvent();
 
         const limit = getSoftLimit(params.level);
-        const body = saved ?? "(No workbook instructions set.)";
+        const body = saved ?? "(No workbook rules set.)";
         const warning =
           saved && saved.length > limit
-            ? `\n\n⚠️ Workbook instructions are above the ${limit}-char soft limit.`
+            ? `\n\n⚠️ Workbook rules are above the ${limit}-char soft limit.`
             : "";
 
         return {
           content: [
             {
               type: "text",
-              text: `Updated workbook instructions (${saved?.length ?? 0}/${limit} chars):\n\n${body}${warning}`,
+              text: `Updated workbook rules (${saved?.length ?? 0}/${limit} chars):\n\n${body}${warning}`,
             },
           ],
           details: undefined,
         };
       } catch (error: unknown) {
         return {
-          content: [{ type: "text", text: `Error updating instructions: ${getErrorMessage(error)}` }],
+          content: [{ type: "text", text: `Error updating rules: ${getErrorMessage(error)}` }],
           details: undefined,
         };
       }

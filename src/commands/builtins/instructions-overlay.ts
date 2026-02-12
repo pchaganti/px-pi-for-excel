@@ -75,7 +75,7 @@ export async function showInstructionsDialog(opts?: {
 
   const title = document.createElement("h2");
   title.className = "pi-overlay-title";
-  title.textContent = "Instructions";
+  title.textContent = "Rules";
 
   const tabs = document.createElement("div");
   tabs.className = "pi-overlay-tabs";
@@ -83,13 +83,13 @@ export async function showInstructionsDialog(opts?: {
 
   const userTab = document.createElement("button");
   userTab.type = "button";
-  userTab.textContent = "Personal";
+  userTab.textContent = "All my files";
   userTab.className = "pi-overlay-tab";
   userTab.setAttribute("role", "tab");
 
   const workbookTab = document.createElement("button");
   workbookTab.type = "button";
-  workbookTab.textContent = "This Workbook";
+  workbookTab.textContent = "This file";
   workbookTab.className = "pi-overlay-tab";
   workbookTab.setAttribute("role", "tab");
 
@@ -163,7 +163,7 @@ export async function showInstructionsDialog(opts?: {
       counter.classList.toggle("is-warning", count > USER_INSTRUCTIONS_SOFT_LIMIT);
 
       hint.textContent =
-        "Rules Pi follows in every conversation. Pi can also update these when you tell it your preferences — e.g. \"always use EUR\".";
+        "Guidance given to Pi in all your conversations. Pi can also update these when you tell it your preferences — e.g. \"always use EUR\".";
       workbookTag.hidden = true;
       return;
     }
@@ -181,7 +181,7 @@ export async function showInstructionsDialog(opts?: {
         "Can't identify this workbook right now — try saving the file first.";
     } else {
       hint.textContent =
-        "Rules that only apply when this workbook is open. Pi will confirm before adding anything here.";
+        "Guidance given to Pi only when it reads this file.";
     }
 
     workbookTag.hidden = false;
@@ -233,7 +233,7 @@ export async function showInstructionsDialog(opts?: {
         await opts.onSaved();
       }
 
-      showToast("Instructions saved");
+      showToast("Rules saved");
       closeOverlay();
     })();
   });

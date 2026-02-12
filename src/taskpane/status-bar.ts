@@ -86,6 +86,10 @@ function renderStatusBar(
 
   const chevronSvg = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
   const brainSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg>`;
+  // Lucide "file-text" — rules/instructions icon
+  const rulesSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>`;
+  // Lucide "plug" — integrations icon
+  const integrationsSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a6 6 0 0 1-6 6a6 6 0 0 1-6-6V8Z"/></svg>`;
 
   const debugOn = isDebugEnabled();
 
@@ -101,11 +105,11 @@ function renderStatusBar(
   }
 
   const instructionsBadge = instructionsActive
-    ? `<button class="pi-status-instructions" data-tooltip="Custom rules are being applied. Click to edit.">📋 rules</button>`
+    ? `<button class="pi-status-rules" data-tooltip="Custom rules are being applied. Click to edit.">${rulesSvg} rules</button>`
     : "";
 
   const integrationsBadge = activeIntegrations.length > 0
-    ? `<button class="pi-status-integrations" data-tooltip="${ACTIVE_INTEGRATIONS_TOOLTIP_PREFIX}: ${escapeAttr(activeIntegrations.join(", "))}. Click to manage.">🧩 ${formatIntegrationCountLabel(activeIntegrations.length)}</button>`
+    ? `<button class="pi-status-integrations" data-tooltip="${ACTIVE_INTEGRATIONS_TOOLTIP_PREFIX}: ${escapeAttr(activeIntegrations.join(", "))}. Click to manage.">${integrationsSvg} ${formatIntegrationCountLabel(activeIntegrations.length)}</button>`
     : "";
 
   const thinkingTooltip = escapeAttr(
