@@ -178,6 +178,8 @@ function buildFormatCheckpointPlan(
     horizontalAlignment: props.horizontalAlignment !== undefined || undefined,
     verticalAlignment: props.verticalAlignment !== undefined || undefined,
     wrapText: props.wrapText !== undefined || undefined,
+    columnWidth: params.column_width !== undefined || params.auto_fit === true || undefined,
+    rowHeight: params.row_height !== undefined || params.auto_fit === true || undefined,
   };
 
   const hasShorthand = params.borders !== undefined;
@@ -206,17 +208,11 @@ function buildFormatCheckpointPlan(
     selection.borderRight = params.border_right !== undefined || props.borderRight !== undefined || undefined;
   }
 
-  const unsupported: string[] = [];
-  if (params.column_width !== undefined) unsupported.push("column width");
-  if (params.row_height !== undefined) unsupported.push("row height");
-  if (params.auto_fit === true) unsupported.push("auto-fit");
-  if (params.merge !== undefined) unsupported.push("merge/unmerge");
-
-  if (unsupported.length > 0) {
+  if (params.merge !== undefined) {
     return {
       selection,
       unsupportedReason:
-        `Format checkpoints for ${unsupported.join(", ")} are not yet supported in \`format_cells\`.`,
+        "Format checkpoints for merge/unmerge are not yet supported in `format_cells`.",
     };
   }
 

@@ -8,6 +8,7 @@ import {
 } from "../src/workbook/recovery-log.ts";
 import type { WorkbookContext } from "../src/workbook/context.ts";
 import {
+  estimateFormatCaptureCellCount,
   firstCellAddress,
   type RecoveryFormatRangeState,
   type RecoveryModifyStructureState,
@@ -53,6 +54,30 @@ void test("firstCellAddress handles quoted sheet names that include !", () => {
   assert.equal(firstCellAddress("'Q1!Ops'!A1"), "A1");
   assert.equal(firstCellAddress("'Q1!Ops'!$B$2:$D$9"), "$B$2");
   assert.equal(firstCellAddress("Sheet1!C5:D7"), "C5");
+});
+
+void test("estimateFormatCaptureCellCount scales by dimensions for dimension-only selection", () => {
+  const largeArea = [{ rowCount: 1_048_576, columnCount: 3 }];
+
+  assert.equal(
+    estimateFormatCaptureCellCount(largeArea, { columnWidth: true }),
+    3,
+  );
+
+  assert.equal(
+    estimateFormatCaptureCellCount(largeArea, { rowHeight: true }),
+    1_048_576,
+  );
+
+  assert.equal(
+    estimateFormatCaptureCellCount(largeArea, { columnWidth: true, rowHeight: true }),
+    1_048_579,
+  );
+
+  assert.equal(
+    estimateFormatCaptureCellCount(largeArea, { columnWidth: true, fillColor: true }),
+    3_145_728,
+  );
 });
 
 void test("recovery log appends and reloads workbook-scoped snapshots", async () => {
@@ -103,6 +128,62 @@ void test("recovery log appends and reloads workbook-scoped snapshots", async ()
   const entriesB = await logB.listForCurrentWorkbook();
   assert.equal(entriesB.length, 1);
   assert.equal(entriesB[0]?.toolCallId, "call-1");
+});
+
+void test("persisted format checkpoints retain dimension state", async () => {
+  const settingsStore = createInMemorySettingsStore();
+
+  const getWorkbookContext = (): Promise<WorkbookContext> => Promise.resolve({
+    workbookId: "url_sha256:workbook-format-persist",
+    workbookName: "Ops.xlsx",
+    source: "document.url",
+  });
+
+  const formatState: RecoveryFormatRangeState = {
+    selection: {
+      columnWidth: true,
+      rowHeight: true,
+    },
+    areas: [
+      {
+        address: "Sheet1!A1:B2",
+        rowCount: 2,
+        columnCount: 2,
+        columnWidths: [64, 80],
+        rowHeights: [18, 22],
+      },
+    ],
+    cellCount: 4,
+  };
+
+  const logA = new WorkbookRecoveryLog({
+    getSettingsStore: () => Promise.resolve(settingsStore),
+    getWorkbookContext,
+    now: () => 1700000000100,
+    createId: () => "snap-format-persist-1",
+    applySnapshot: () => Promise.resolve({ values: [["old"]], formulas: [["old"]] }),
+  });
+
+  const appended = await logA.appendFormatCells({
+    toolName: "format_cells",
+    toolCallId: "call-format-persist",
+    address: "Sheet1!A1:B2",
+    changedCount: 4,
+    formatRangeState: formatState,
+  });
+
+  assert.ok(appended);
+
+  const logB = new WorkbookRecoveryLog({
+    getSettingsStore: () => Promise.resolve(settingsStore),
+    getWorkbookContext,
+    applySnapshot: () => Promise.resolve({ values: [["old"]], formulas: [["old"]] }),
+  });
+
+  const entries = await logB.listForCurrentWorkbook(10);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0]?.snapshotKind, "format_cells_state");
+  assert.deepEqual(withoutUndefined(entries[0]?.formatRangeState), withoutUndefined(formatState));
 });
 
 void test("append is skipped when workbook identity is unavailable", async () => {
@@ -352,6 +433,8 @@ void test("restore applies format-cells checkpoints and creates inverse checkpoi
       numberFormat: true,
       fillColor: true,
       bold: true,
+      columnWidth: true,
+      rowHeight: true,
       borderTop: true,
     },
     areas: [
@@ -362,6 +445,8 @@ void test("restore applies format-cells checkpoints and creates inverse checkpoi
         numberFormat: [["0.00", "0.00"]],
         fillColor: "#FFFF00",
         bold: true,
+        columnWidths: [64, 80],
+        rowHeights: [24],
         borderTop: {
           style: "Continuous",
           weight: "Thin",
@@ -377,6 +462,8 @@ void test("restore applies format-cells checkpoints and creates inverse checkpoi
       numberFormat: true,
       fillColor: true,
       bold: true,
+      columnWidth: true,
+      rowHeight: true,
       borderTop: true,
     },
     areas: [
@@ -387,6 +474,8 @@ void test("restore applies format-cells checkpoints and creates inverse checkpoi
         numberFormat: [["General", "General"]],
         fillColor: "#FFFFFF",
         bold: false,
+        columnWidths: [72, 72],
+        rowHeights: [20],
         borderTop: {
           style: "None",
         },

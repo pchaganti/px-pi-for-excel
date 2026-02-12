@@ -404,6 +404,8 @@ function isRecoveryFormatSelection(value: unknown): value is RecoveryFormatRange
     "horizontalAlignment",
     "verticalAlignment",
     "wrapText",
+    "columnWidth",
+    "rowHeight",
     "borderTop",
     "borderBottom",
     "borderLeft",
@@ -425,6 +427,10 @@ function isRecoveryFormatSelection(value: unknown): value is RecoveryFormatRange
 function isStringGrid(value: unknown): value is string[][] {
   return Array.isArray(value) &&
     value.every((row) => Array.isArray(row) && row.every((cell) => typeof cell === "string"));
+}
+
+function isNumberList(value: unknown): value is number[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "number" && Number.isFinite(item));
 }
 
 function isRecoveryFormatBorderState(value: unknown): value is RecoveryFormatBorderState {
@@ -454,6 +460,8 @@ function isRecoveryFormatAreaState(value: unknown): value is RecoveryFormatRange
   if (value.horizontalAlignment !== undefined && typeof value.horizontalAlignment !== "string") return false;
   if (value.verticalAlignment !== undefined && typeof value.verticalAlignment !== "string") return false;
   if (value.wrapText !== undefined && typeof value.wrapText !== "boolean") return false;
+  if (value.columnWidths !== undefined && !isNumberList(value.columnWidths)) return false;
+  if (value.rowHeights !== undefined && !isNumberList(value.rowHeights)) return false;
 
   if (value.borderTop !== undefined && !isRecoveryFormatBorderState(value.borderTop)) return false;
   if (value.borderBottom !== undefined && !isRecoveryFormatBorderState(value.borderBottom)) return false;
@@ -463,6 +471,14 @@ function isRecoveryFormatAreaState(value: unknown): value is RecoveryFormatRange
     return false;
   }
   if (value.borderInsideVertical !== undefined && !isRecoveryFormatBorderState(value.borderInsideVertical)) {
+    return false;
+  }
+
+  if (Array.isArray(value.columnWidths) && value.columnWidths.length !== value.columnCount) {
+    return false;
+  }
+
+  if (Array.isArray(value.rowHeights) && value.rowHeights.length !== value.rowCount) {
     return false;
   }
 

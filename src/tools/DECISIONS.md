@@ -238,6 +238,6 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Restore UX:** `workbook_history` can list/restore/delete/clear checkpoints; restores also create an inverse checkpoint (`restore_snapshot`) so users can undo a mistaken restore.
 - **Coverage signaling:** unsupported `modify_structure` actions and mutating `view_settings` actions explicitly report when no recovery checkpoint was created.
 - **Current `modify_structure` checkpoint limits:** captures/restores only `rename_sheet`, `hide_sheet`, and `unhide_sheet` actions.
-- **Current `format_cells` checkpoint limits:** captures/restores core range-format properties (font/fill/number format/alignment/wrap/borders). Mutations involving `column_width`, `row_height`, `auto_fit`, or `merge` currently skip checkpoint capture with an explicit note.
+- **Current `format_cells` checkpoint limits:** captures/restores core range-format properties (font/fill/number format/alignment/wrap/borders) plus row/column dimensions (`column_width`, `row_height`, `auto_fit`). Mutations involving `merge` currently skip checkpoint capture with an explicit note.
 - **Quick affordance:** after a checkpointed write, UI shows an action toast with **Revert**.
 - **Rationale:** addresses #27 by shifting from cumbersome up-front approvals to versioned recovery with explicit user-controlled rollback.
