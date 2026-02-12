@@ -11,6 +11,7 @@ void test("skill read cache stores and retrieves per session", () => {
 
   const cached = cache.get("session-1", "web-search");
   assert.ok(cached);
+  assert.equal(cached?.skillName, "web-search");
   assert.equal(cached?.markdown, "# Web Search");
   assert.equal(cached?.readCount, 1);
 });

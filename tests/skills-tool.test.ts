@@ -3,6 +3,11 @@ import { test } from "node:test";
 
 import type { AgentSkillDefinition } from "../src/skills/catalog.ts";
 import { createSkillReadCache } from "../src/skills/read-cache.ts";
+import {
+  isSkillsErrorDetails,
+  isSkillsListDetails,
+  isSkillsReadDetails,
+} from "../src/tools/tool-details.ts";
 import { createSkillsTool } from "../src/tools/skills.ts";
 
 const WEB_SEARCH_SKILL: AgentSkillDefinition = {
@@ -27,6 +32,10 @@ void test("skills list renders bundled skills from catalog", async () => {
 
   assert.match(text, /Available Agent Skills \(1\)/);
   assert.match(text, /`web-search`/);
+  assert.ok(isSkillsListDetails(result.details));
+  if (!isSkillsListDetails(result.details)) return;
+  assert.equal(result.details.count, 1);
+  assert.deepEqual(result.details.names, ["web-search"]);
 });
 
 void test("skills read uses session cache and avoids repeated catalog lookups", async () => {
@@ -54,6 +63,45 @@ void test("skills read uses session cache and avoids repeated catalog lookups", 
   assert.equal(lookupCount, 1);
   assert.equal(firstText, WEB_SEARCH_SKILL.markdown);
   assert.equal(secondText, WEB_SEARCH_SKILL.markdown);
+
+  assert.ok(isSkillsReadDetails(first.details));
+  assert.ok(isSkillsReadDetails(second.details));
+  if (!isSkillsReadDetails(first.details) || !isSkillsReadDetails(second.details)) return;
+
+  assert.equal(first.details.cacheHit, false);
+  assert.equal(second.details.cacheHit, true);
+  assert.equal(first.details.refreshed, false);
+  assert.equal(second.details.refreshed, false);
+  assert.equal(first.details.sessionScoped, true);
+  assert.equal(second.details.sessionScoped, true);
+});
+
+void test("skills read with refresh=true bypasses cache and refreshes catalog", async () => {
+  let lookupCount = 0;
+  const cache = createSkillReadCache();
+
+  const tool = createSkillsTool({
+    getSessionId: () => "session-refresh",
+    readCache: cache,
+    catalog: {
+      list: () => [WEB_SEARCH_SKILL],
+      getByName: (name: string) => {
+        lookupCount += 1;
+        return name === "web-search" ? WEB_SEARCH_SKILL : null;
+      },
+    },
+  });
+
+  await tool.execute("call-1", { action: "read", name: "web-search" });
+  const refreshed = await tool.execute("call-2", { action: "read", name: "web-search", refresh: true });
+
+  assert.equal(lookupCount, 2);
+  assert.ok(isSkillsReadDetails(refreshed.details));
+  if (!isSkillsReadDetails(refreshed.details)) return;
+
+  assert.equal(refreshed.details.cacheHit, false);
+  assert.equal(refreshed.details.refreshed, true);
+  assert.equal(refreshed.details.sessionScoped, true);
 });
 
 void test("skills read cache is session-scoped", async () => {
@@ -77,4 +125,23 @@ void test("skills read cache is session-scoped", async () => {
   await tool.execute("call-2", { action: "read", name: "web-search" });
 
   assert.equal(lookupCount, 2);
+});
+
+void test("skills read without name returns structured error details", async () => {
+  const tool = createSkillsTool({
+    catalog: {
+      list: () => [WEB_SEARCH_SKILL],
+      getByName: () => null,
+    },
+  });
+
+  const result = await tool.execute("call-err", { action: "read" });
+  const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+
+  assert.match(text, /name is required/i);
+  assert.ok(isSkillsErrorDetails(result.details));
+  if (!isSkillsErrorDetails(result.details)) return;
+
+  assert.equal(result.details.action, "read");
+  assert.deepEqual(result.details.availableNames, ["web-search"]);
 });

@@ -3,6 +3,7 @@
  */
 
 export interface SkillReadCacheEntry {
+  skillName: string;
   markdown: string;
   cachedAt: number;
   readCount: number;
@@ -49,6 +50,7 @@ export function createSkillReadCache(): SkillReadCache {
       const previous = sessionCache.get(normalizedName);
 
       const next: SkillReadCacheEntry = {
+        skillName,
         markdown,
         cachedAt: Date.now(),
         readCount: previous ? previous.readCount + 1 : 1,

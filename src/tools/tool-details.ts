@@ -199,6 +199,31 @@ export interface WorkbookHistoryDetails {
   error?: string;
 }
 
+export interface SkillsListDetails {
+  kind: "skills_list";
+  count: number;
+  names: string[];
+}
+
+export interface SkillsReadDetails {
+  kind: "skills_read";
+  skillName: string;
+  cacheHit: boolean;
+  refreshed: boolean;
+  sessionScoped: boolean;
+  readCount?: number;
+}
+
+export interface SkillsErrorDetails {
+  kind: "skills_error";
+  action: "read";
+  message: string;
+  requestedName?: string;
+  availableNames?: string[];
+}
+
+export type SkillsToolDetails = SkillsListDetails | SkillsReadDetails | SkillsErrorDetails;
+
 export interface WebSearchDetails {
   kind: "web_search";
   ok: boolean;
@@ -300,6 +325,7 @@ export type ExcelToolDetails =
   | LibreOfficeBridgeDetails
   | PythonTransformRangeDetails
   | WorkbookHistoryDetails
+  | SkillsToolDetails
   | WebSearchDetails
   | McpGatewayDetails
   | FilesToolDetails;
@@ -326,6 +352,10 @@ function isOptionalTraceDependencySource(value: unknown): value is TraceDependen
 
 function isOptionalStringArray(value: unknown): value is string[] | undefined {
   return value === undefined || (Array.isArray(value) && value.every((item) => typeof item === "string"));
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
 function isRecoveryCheckpointDetails(value: unknown): value is RecoveryCheckpointDetails {
@@ -655,6 +685,41 @@ export function isWorkbookHistoryDetails(value: unknown): value is WorkbookHisto
     isOptionalNumber(value.changedCount) &&
     isOptionalNumber(value.deletedCount) &&
     isOptionalString(value.error)
+  );
+}
+
+export function isSkillsListDetails(value: unknown): value is SkillsListDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "skills_list") return false;
+
+  return (
+    typeof value.count === "number" &&
+    isStringArray(value.names)
+  );
+}
+
+export function isSkillsReadDetails(value: unknown): value is SkillsReadDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "skills_read") return false;
+
+  return (
+    typeof value.skillName === "string" &&
+    typeof value.cacheHit === "boolean" &&
+    typeof value.refreshed === "boolean" &&
+    typeof value.sessionScoped === "boolean" &&
+    isOptionalNumber(value.readCount)
+  );
+}
+
+export function isSkillsErrorDetails(value: unknown): value is SkillsErrorDetails {
+  if (!isRecord(value)) return false;
+  if (value.kind !== "skills_error") return false;
+  if (value.action !== "read") return false;
+
+  return (
+    typeof value.message === "string" &&
+    isOptionalString(value.requestedName) &&
+    isOptionalStringArray(value.availableNames)
   );
 }
 

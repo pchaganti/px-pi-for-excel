@@ -24,6 +24,7 @@ import {
   isModifyStructureDetails,
   isPythonTransformRangeDetails,
   isReadRangeCsvDetails,
+  isSkillsReadDetails,
   isTraceDependenciesDetails,
   isViewSettingsDetails,
   isWorkbookHistoryDetails,
@@ -937,9 +938,24 @@ function describeToolCall(
     case "skills": {
       const action = p.action as string | undefined;
       const name = p.name as string | undefined;
+      const refresh = p.refresh === true;
+
       if (action === "read") {
-        return { action: "Read skill", detail: name ?? "name" };
+        const detailName = isSkillsReadDetails(details)
+          ? details.skillName
+          : name ?? "name";
+
+        if (isSkillsReadDetails(details) && details.cacheHit) {
+          return { action: "Read skill", detail: `${detailName} (cached)` };
+        }
+
+        if (refresh) {
+          return { action: "Refresh skill", detail: detailName };
+        }
+
+        return { action: "Read skill", detail: detailName };
       }
+
       return { action: "List skills", detail: "" };
     }
     case "web_search": {

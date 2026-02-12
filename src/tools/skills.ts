@@ -7,6 +7,12 @@ import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 
 import type { AgentSkillDefinition } from "../skills/catalog.js";
 import type { SkillReadCache } from "../skills/read-cache.js";
+import type {
+  SkillsErrorDetails,
+  SkillsListDetails,
+  SkillsReadDetails,
+  SkillsToolDetails,
+} from "./tool-details.js";
 
 const schema = Type.Object({
   action: Type.Union([
@@ -17,6 +23,9 @@ const schema = Type.Object({
   }),
   name: Type.Optional(Type.String({
     description: "Skill name (required when action=read).",
+  })),
+  refresh: Type.Optional(Type.Boolean({
+    description: "When true (read only), bypass the session cache and reload from catalog.",
   })),
 });
 
@@ -84,9 +93,48 @@ function normalizeSessionId(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function buildSkillsListDetails(skills: AgentSkillDefinition[]): SkillsListDetails {
+  return {
+    kind: "skills_list",
+    count: skills.length,
+    names: skills.map((skill) => skill.name),
+  };
+}
+
+function buildSkillsErrorDetails(args: {
+  message: string;
+  requestedName?: string;
+  availableNames?: string[];
+}): SkillsErrorDetails {
+  return {
+    kind: "skills_error",
+    action: "read",
+    message: args.message,
+    requestedName: args.requestedName,
+    availableNames: args.availableNames,
+  };
+}
+
+function buildSkillsReadDetails(args: {
+  skillName: string;
+  cacheHit: boolean;
+  refreshed: boolean;
+  sessionScoped: boolean;
+  readCount?: number;
+}): SkillsReadDetails {
+  return {
+    kind: "skills_read",
+    skillName: args.skillName,
+    cacheHit: args.cacheHit,
+    refreshed: args.refreshed,
+    sessionScoped: args.sessionScoped,
+    readCount: args.readCount,
+  };
+}
+
 export function createSkillsTool(
   dependencies: SkillsToolDependencies = {},
-): AgentTool<typeof schema, undefined> {
+): AgentTool<typeof schema, SkillsToolDetails> {
   const getSessionId = dependencies.getSessionId;
   const readCache = dependencies.readCache;
 
@@ -97,51 +145,75 @@ export function createSkillsTool(
       "List and read bundled Agent Skills (SKILL.md). "
       + "Use this to load detailed, task-specific workflows on demand.",
     parameters: schema,
-    execute: async (_toolCallId: string, params: Params): Promise<AgentToolResult<undefined>> => {
+    execute: async (_toolCallId: string, params: Params): Promise<AgentToolResult<SkillsToolDetails>> => {
       const catalog = dependencies.catalog ?? await getDefaultCatalog();
       const skills = catalog.list();
 
       if (params.action === "list") {
         return {
           content: [{ type: "text", text: renderSkillListMarkdown(skills) }],
-          details: undefined,
+          details: buildSkillsListDetails(skills),
         };
       }
 
       const requestedName = params.name?.trim() ?? "";
       if (requestedName.length === 0) {
+        const message = "Error: name is required when action=read.";
         return {
-          content: [{ type: "text", text: "Error: name is required when action=read." }],
-          details: undefined,
+          content: [{ type: "text", text: message }],
+          details: buildSkillsErrorDetails({
+            message,
+            availableNames: skills.map((skill) => skill.name),
+          }),
         };
       }
 
+      const refresh = params.refresh === true;
       const sessionId = normalizeSessionId(getSessionId?.());
-      if (sessionId && readCache) {
+      const sessionScoped = sessionId !== null && readCache !== undefined;
+
+      if (!refresh && sessionId && readCache) {
         const cached = readCache.get(sessionId, requestedName);
         if (cached) {
           return {
             content: [{ type: "text", text: cached.markdown }],
-            details: undefined,
+            details: buildSkillsReadDetails({
+              skillName: cached.skillName,
+              cacheHit: true,
+              refreshed: false,
+              sessionScoped,
+              readCount: cached.readCount,
+            }),
           };
         }
       }
 
       const skill = catalog.getByName(requestedName);
       if (!skill) {
+        const message = renderReadError(requestedName, skills);
         return {
-          content: [{ type: "text", text: renderReadError(requestedName, skills) }],
-          details: undefined,
+          content: [{ type: "text", text: message }],
+          details: buildSkillsErrorDetails({
+            message,
+            requestedName,
+            availableNames: skills.map((entry) => entry.name),
+          }),
         };
       }
 
-      if (sessionId && readCache) {
-        readCache.set(sessionId, skill.name, skill.markdown);
-      }
+      const cachedEntry = sessionId && readCache
+        ? readCache.set(sessionId, skill.name, skill.markdown)
+        : null;
 
       return {
         content: [{ type: "text", text: skill.markdown }],
-        details: undefined,
+        details: buildSkillsReadDetails({
+          skillName: skill.name,
+          cacheHit: false,
+          refreshed: refresh,
+          sessionScoped,
+          readCount: cachedEntry?.readCount,
+        }),
       };
     },
   };
