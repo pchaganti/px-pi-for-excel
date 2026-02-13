@@ -18,9 +18,10 @@ import type { ConditionalFormatDetails } from "./tool-details.js";
 import {
   CHECKPOINT_SKIPPED_NOTE,
   CHECKPOINT_SKIPPED_REASON,
-  recoveryCheckpointCreated,
-  recoveryCheckpointUnavailable,
 } from "./recovery-metadata.js";
+import { finalizeMutationOperation } from "./mutation/finalize.js";
+import { appendMutationResultNote } from "./mutation/result-note.js";
+import type { MutationFinalizeDependencies } from "./mutation/types.js";
 
 const schema = Type.Object({
   action: Type.Union([Type.Literal("add"), Type.Literal("clear")], {
@@ -85,6 +86,10 @@ const schema = Type.Object({
 
 type Params = Static<typeof schema>;
 
+const mutationFinalizeDependencies: MutationFinalizeDependencies = {
+  appendAuditEntry: (entry) => getWorkbookChangeAuditLog().append(entry),
+};
+
 export function createConditionalFormatTool(): AgentTool<typeof schema, ConditionalFormatDetails> {
   return {
     name: "conditional_format",
@@ -104,14 +109,16 @@ export function createConditionalFormatTool(): AgentTool<typeof schema, Conditio
         if (!params.type) {
           const message = "type is required when action is \"add\".";
 
-          await getWorkbookChangeAuditLog().append({
-            toolName: "conditional_format",
-            toolCallId,
-            blocked: true,
-            outputAddress: params.range,
-            changedCount: 0,
-            changes: [],
-            summary: `error: ${message}`,
+          await finalizeMutationOperation(mutationFinalizeDependencies, {
+            auditEntry: {
+              toolName: "conditional_format",
+              toolCallId,
+              blocked: true,
+              outputAddress: params.range,
+              changedCount: 0,
+              changes: [],
+              summary: `error: ${message}`,
+            },
           });
 
           return {
@@ -132,14 +139,16 @@ export function createConditionalFormatTool(): AgentTool<typeof schema, Conditio
       } catch (e: unknown) {
         const message = getErrorMessage(e);
 
-        await getWorkbookChangeAuditLog().append({
-          toolName: "conditional_format",
-          toolCallId,
-          blocked: true,
-          outputAddress: params.range,
-          changedCount: 0,
-          changes: [],
-          summary: `error: ${message}`,
+        await finalizeMutationOperation(mutationFinalizeDependencies, {
+          auditEntry: {
+            toolName: "conditional_format",
+            toolCallId,
+            blocked: true,
+            outputAddress: params.range,
+            changedCount: 0,
+            changes: [],
+            summary: `error: ${message}`,
+          },
         });
 
         return {
@@ -178,16 +187,6 @@ async function clearFormats(
 
   const fullAddr = qualifiedAddress(result.sheetName, result.address);
 
-  await getWorkbookChangeAuditLog().append({
-    toolName: "conditional_format",
-    toolCallId,
-    blocked: false,
-    outputAddress: fullAddr,
-    changedCount: result.cellCount,
-    changes: [],
-    summary: `cleared ${result.existing} rule(s) across ${result.cellCount} cell(s)`,
-  });
-
   const output: AgentToolResult<ConditionalFormatDetails> = {
     content: [
       {
@@ -202,33 +201,48 @@ async function clearFormats(
     },
   };
 
-  if (!checkpointState.supported) {
-    output.details.recovery = recoveryCheckpointUnavailable(checkpointState.reason ?? CHECKPOINT_SKIPPED_REASON);
-    appendResultNote(output, CHECKPOINT_SKIPPED_NOTE);
-    return output;
-  }
+  const recoveryUnavailableReason = checkpointState.supported
+    ? CHECKPOINT_SKIPPED_REASON
+    : (checkpointState.reason ?? CHECKPOINT_SKIPPED_REASON);
 
-  const checkpoint = await getWorkbookRecoveryLog().appendConditionalFormat({
-    toolName: "conditional_format",
-    toolCallId,
-    address: fullAddr,
-    changedCount: result.cellCount,
-    cellCount: result.cellCount,
-    conditionalFormatRules: checkpointState.rules,
-  });
+  await finalizeMutationOperation(mutationFinalizeDependencies, {
+    auditEntry: {
+      toolName: "conditional_format",
+      toolCallId,
+      blocked: false,
+      outputAddress: fullAddr,
+      changedCount: result.cellCount,
+      changes: [],
+      summary: `cleared ${result.existing} rule(s) across ${result.cellCount} cell(s)`,
+    },
+    recovery: {
+      result: output,
+      appendRecoverySnapshot: () => {
+        if (!checkpointState.supported) {
+          return Promise.resolve(null);
+        }
 
-  if (!checkpoint) {
-    output.details.recovery = recoveryCheckpointUnavailable(CHECKPOINT_SKIPPED_REASON);
-    appendResultNote(output, CHECKPOINT_SKIPPED_NOTE);
-    return output;
-  }
-
-  output.details.recovery = recoveryCheckpointCreated(checkpoint.id);
-  dispatchWorkbookSnapshotCreated({
-    snapshotId: checkpoint.id,
-    toolName: checkpoint.toolName,
-    address: checkpoint.address,
-    changedCount: checkpoint.changedCount,
+        return getWorkbookRecoveryLog().appendConditionalFormat({
+          toolName: "conditional_format",
+          toolCallId,
+          address: fullAddr,
+          changedCount: result.cellCount,
+          cellCount: result.cellCount,
+          conditionalFormatRules: checkpointState.rules,
+        });
+      },
+      appendResultNote: appendMutationResultNote,
+      unavailableReason: recoveryUnavailableReason,
+      unavailableNote: CHECKPOINT_SKIPPED_NOTE,
+      dispatchSnapshotCreated: (checkpoint) => {
+        dispatchWorkbookSnapshotCreated({
+          snapshotId: checkpoint.id,
+          toolName: checkpoint.toolName,
+          address: checkpoint.address,
+          changedCount: checkpoint.changedCount,
+        });
+      },
+    },
   });
 
   return output;
@@ -302,16 +316,6 @@ async function addFormat(
           params.value2 !== undefined ? ` and ${String(params.value2)}` : ""
         })`;
 
-  await getWorkbookChangeAuditLog().append({
-    toolName: "conditional_format",
-    toolCallId,
-    blocked: false,
-    outputAddress: fullAddr,
-    changedCount: result.cellCount,
-    changes: [],
-    summary: `added ${params.type ?? "rule"} across ${result.cellCount} cell(s)`,
-  });
-
   const output: AgentToolResult<ConditionalFormatDetails> = {
     content: [
       {
@@ -326,33 +330,48 @@ async function addFormat(
     },
   };
 
-  if (!checkpointState.supported) {
-    output.details.recovery = recoveryCheckpointUnavailable(checkpointState.reason ?? CHECKPOINT_SKIPPED_REASON);
-    appendResultNote(output, CHECKPOINT_SKIPPED_NOTE);
-    return output;
-  }
+  const recoveryUnavailableReason = checkpointState.supported
+    ? CHECKPOINT_SKIPPED_REASON
+    : (checkpointState.reason ?? CHECKPOINT_SKIPPED_REASON);
 
-  const checkpoint = await getWorkbookRecoveryLog().appendConditionalFormat({
-    toolName: "conditional_format",
-    toolCallId,
-    address: fullAddr,
-    changedCount: result.cellCount,
-    cellCount: result.cellCount,
-    conditionalFormatRules: checkpointState.rules,
-  });
+  await finalizeMutationOperation(mutationFinalizeDependencies, {
+    auditEntry: {
+      toolName: "conditional_format",
+      toolCallId,
+      blocked: false,
+      outputAddress: fullAddr,
+      changedCount: result.cellCount,
+      changes: [],
+      summary: `added ${params.type ?? "rule"} across ${result.cellCount} cell(s)`,
+    },
+    recovery: {
+      result: output,
+      appendRecoverySnapshot: () => {
+        if (!checkpointState.supported) {
+          return Promise.resolve(null);
+        }
 
-  if (!checkpoint) {
-    output.details.recovery = recoveryCheckpointUnavailable(CHECKPOINT_SKIPPED_REASON);
-    appendResultNote(output, CHECKPOINT_SKIPPED_NOTE);
-    return output;
-  }
-
-  output.details.recovery = recoveryCheckpointCreated(checkpoint.id);
-  dispatchWorkbookSnapshotCreated({
-    snapshotId: checkpoint.id,
-    toolName: checkpoint.toolName,
-    address: checkpoint.address,
-    changedCount: checkpoint.changedCount,
+        return getWorkbookRecoveryLog().appendConditionalFormat({
+          toolName: "conditional_format",
+          toolCallId,
+          address: fullAddr,
+          changedCount: result.cellCount,
+          cellCount: result.cellCount,
+          conditionalFormatRules: checkpointState.rules,
+        });
+      },
+      appendResultNote: appendMutationResultNote,
+      unavailableReason: recoveryUnavailableReason,
+      unavailableNote: CHECKPOINT_SKIPPED_NOTE,
+      dispatchSnapshotCreated: (checkpoint) => {
+        dispatchWorkbookSnapshotCreated({
+          snapshotId: checkpoint.id,
+          toolName: checkpoint.toolName,
+          address: checkpoint.address,
+          changedCount: checkpoint.changedCount,
+        });
+      },
+    },
   });
 
   return output;
@@ -405,9 +424,3 @@ function applyFormat(format: Excel.ConditionalRangeFormat, params: Params): void
   }
 }
 
-function appendResultNote(result: AgentToolResult<ConditionalFormatDetails>, note: string): void {
-  const first = result.content[0];
-  if (!first || first.type !== "text") return;
-
-  first.text = `${first.text}\n\n${note}`;
-}
