@@ -8,6 +8,9 @@ import {
   TOOL_DISCLOSURE_BUNDLES,
   TOOL_DISCLOSURE_FULL_ACCESS_PATTERNS,
   TOOL_DISCLOSURE_TRIGGER_PATTERNS,
+  TOOL_NAMES_WITH_HUMANIZER,
+  TOOL_NAMES_WITH_RENDERER,
+  TOOL_UI_METADATA,
   UI_TOOL_NAMES,
 } from "../src/tools/capabilities.ts";
 import { CORE_TOOL_NAMES } from "../src/tools/names.ts";
@@ -34,14 +37,31 @@ void test("system prompt core tool section is generated from capability metadata
   }
 });
 
-void test("UI tool registration derives from centralized UI tool names", async () => {
+void test("UI tool registration derives from centralized UI metadata", async () => {
   const rendererSource = await readFile(new URL("../src/ui/tool-renderers.ts", import.meta.url), "utf8");
-  assert.match(rendererSource, /import\s*\{\s*UI_TOOL_NAMES/);
-  assert.match(rendererSource, /CUSTOM_RENDERED_TOOL_NAMES:\s*readonly SupportedToolName\[\]\s*=\s*UI_TOOL_NAMES/);
+  assert.match(rendererSource, /import\s*\{\s*TOOL_NAMES_WITH_RENDERER/);
+  assert.match(rendererSource, /CUSTOM_RENDERED_TOOL_NAMES:\s*readonly SupportedToolName\[\]\s*=\s*TOOL_NAMES_WITH_RENDERER/);
+
+  const humanizerSource = await readFile(new URL("../src/ui/humanize-params.ts", import.meta.url), "utf8");
+  assert.match(humanizerSource, /TOOL_NAMES_WITH_HUMANIZER/);
+  assert.match(humanizerSource, /HUMANIZABLE_TOOL_NAME_SET/);
 
   const uniqueNames = new Set(UI_TOOL_NAMES);
   assert.equal(uniqueNames.size, UI_TOOL_NAMES.length);
   assert.ok(UI_TOOL_NAMES.includes("execute_office_js"));
+});
+
+void test("UI metadata drives renderer and humanizer tool subsets", () => {
+  assert.equal(TOOL_NAMES_WITH_RENDERER.length > 0, true);
+  assert.equal(TOOL_NAMES_WITH_HUMANIZER.length > 0, true);
+
+  for (const name of TOOL_NAMES_WITH_RENDERER) {
+    assert.equal(TOOL_UI_METADATA[name].renderer, true);
+  }
+
+  for (const name of TOOL_NAMES_WITH_HUMANIZER) {
+    assert.equal(TOOL_UI_METADATA[name].humanizer, true);
+  }
 });
 
 void test("disclosure bundles keep shared core safety tools and add category-specific tools", () => {
