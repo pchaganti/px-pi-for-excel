@@ -104,6 +104,11 @@ void test("builtins registry wires /experimental, /extensions, and /integrations
   assert.match(experimentalFlagsSource, /extension-widget-v2/);
   assert.match(experimentalFlagsSource, /external_skills_discovery/);
   assert.match(experimentalFlagsSource, /external-skills-discovery/);
+  assert.match(
+    experimentalFlagsSource,
+    /id:\s*"external_skills_discovery"[\s\S]*?wiring:\s*"wired"/,
+  );
+  assert.doesNotMatch(experimentalFlagsSource, /id:\s*"mcp_tools"/);
 });
 
 void test("taskpane init keeps getIntegrationToolNames imported when used", async () => {

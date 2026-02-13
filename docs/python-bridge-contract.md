@@ -1,4 +1,4 @@
-# Experimental Python / LibreOffice bridge contract (v1)
+# Python / LibreOffice bridge contract (v1)
 
 Status: implemented as an **opt-in local helper**.
 

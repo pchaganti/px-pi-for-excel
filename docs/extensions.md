@@ -2,7 +2,7 @@
 
 Pi for Excel supports runtime extensions that can register slash commands, register tools, and render small UI elements in the sidebar.
 
-> Status: MVP+ (in progress). Inline-code and remote-URL extensions run in sandbox runtime by default; built-in/local-module extensions stay on host runtime. Roll back untrusted sources to host runtime only via `/experimental on extension-sandbox-rollback`. Additive Widget API v2 is behind `/experimental on extension-widget-v2`.
+> Status: shipped with feature flags for advanced controls. Inline-code and remote-URL extensions run in sandbox runtime by default; built-in/local-module extensions stay on host runtime. Roll back untrusted sources to host runtime only via `/experimental on extension-sandbox-rollback`. Additive Widget API v2 is feature-flagged via `/experimental on extension-widget-v2`.
 
 ## Quick start
 
@@ -89,7 +89,7 @@ Subscribe to runtime events (returns unsubscribe function).
 Show or dismiss a full-screen overlay.
 
 ### `widget.upsert(spec)` / `widget.remove(id)` / `widget.clear()` (Widget API v2)
-Primary widget lifecycle API (experimental):
+Primary widget lifecycle API (feature-flagged):
 - `upsert` creates/updates by stable `spec.id`
 - `remove` unmounts one widget by id
 - `clear` unmounts all widgets owned by the extension
@@ -283,5 +283,5 @@ If a local specifier is not bundled, loading fails with a clear error.
 - Remote URL loading is intentionally off by default.
 - Untrusted extension sources (inline/remote) run in sandbox runtime by default.
 - Built-in/local-module extensions remain on host runtime.
-- Experimental capability gates can be enabled with `/experimental on extension-permissions`.
+- Capability gates can be enabled with `/experimental on extension-permissions`.
 - Rollback kill switch for untrusted host-runtime fallback: `/experimental on extension-sandbox-rollback`.

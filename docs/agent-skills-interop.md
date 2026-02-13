@@ -39,7 +39,7 @@ Runtime note: `skills` reads are cached per session runtime so repeated reads fo
 
 The system prompt also includes `<available_skills>` entries so the model can choose a matching skill, then load it on demand.
 
-## External discovery (experimental, off by default)
+## External discovery (feature-flagged, off by default)
 
 - Flag: `/experimental on external-skills-discovery`
 - Source: local settings key `skills.external.v1.catalog`

@@ -32,6 +32,8 @@ const DISABLE_ACTIONS = new Set(["disable", "off"]);
 const TOGGLE_ACTIONS = new Set(["toggle"]);
 const OPEN_ACTIONS = new Set(["open", "ui", "list", "status"]);
 
+const LEGACY_INTEGRATIONS_FEATURES = new Set(["mcp", "mcp-tools", "external-tools"]);
+
 const TMUX_BRIDGE_URL_ACTIONS = new Set(["tmux-bridge-url", "tmux-url", "bridge-url"]);
 const PYTHON_BRIDGE_URL_ACTIONS = new Set(["python-bridge-url", "python-url", "libreoffice-bridge-url"]);
 
@@ -153,6 +155,19 @@ function tokenize(args: string): string[] {
     .trim()
     .split(/\s+/)
     .filter((token) => token.length > 0);
+}
+
+function normalizeFeatureToken(input: string): string {
+  return input.trim().toLowerCase().replace(/[\s_]+/g, "-");
+}
+
+function getLegacyFeatureRedirectMessage(featureArg: string): string | null {
+  const normalized = normalizeFeatureToken(featureArg);
+  if (!LEGACY_INTEGRATIONS_FEATURES.has(normalized)) {
+    return null;
+  }
+
+  return "External tools (including MCP) are managed in /integrations, not /experimental.";
 }
 
 function usageText(): string {
@@ -704,6 +719,12 @@ export function createExperimentalCommands(
 
           const feature = resolved.resolveFeature(featureArg);
           if (!feature) {
+            const redirectMessage = getLegacyFeatureRedirectMessage(featureArg);
+            if (redirectMessage) {
+              resolved.showToast(redirectMessage);
+              return;
+            }
+
             resolved.showToast(
               `Unknown feature: ${featureArg}. Available: ${featureListText(resolved.getFeatureSlugs)}`,
             );
