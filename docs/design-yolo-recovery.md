@@ -42,7 +42,7 @@ Replace cumbersome up-front approval selectors with a low-friction workflow:
   - `format_cells`
   - `conditional_format`
   - `comments` (mutating actions)
-  - `modify_structure` (`rename_sheet`, `hide_sheet`, `unhide_sheet`, `insert_rows`, `insert_columns`, `add_sheet`, and `duplicate_sheet` when the duplicate has no value data)
+  - `modify_structure` (all actions; destructive deletes checkpoint only when target has no value data)
 - New tool: `workbook_history`
   - `list`
   - `restore`
@@ -61,7 +61,7 @@ Replace cumbersome up-front approval selectors with a low-friction workflow:
   - unsupported mutation tools/actions explicitly state when no checkpoint is created
   - `format_cells` checkpoint coverage now includes merge/unmerge state
   - `conditional_format` checkpoint coverage includes `custom`, `cell_value`, `contains_text`, `top_bottom`, and `preset_criteria` rules
-  - `modify_structure` now checkpoints `rename_sheet`, `hide_sheet`, `unhide_sheet`, `insert_rows`, `insert_columns`, `add_sheet`, and `duplicate_sheet` (when the duplicate has no value data)
+  - `modify_structure` now checkpoints all actions, with destructive deletes (`delete_rows`, `delete_columns`, `delete_sheet`) guarded to create checkpoints only for value-empty targets
   - structure-absence restores (`sheet_absent`, `rows_absent`, `columns_absent`) are safety-gated and blocked if target data is present
 
 ## Why this is better than approval selectors for now
@@ -72,7 +72,7 @@ Replace cumbersome up-front approval selectors with a low-friction workflow:
 
 ## Follow-ups
 
-1. Extend checkpointing to remaining unsupported destructive `modify_structure` actions (`delete_rows`, `delete_columns`, `delete_sheet`).
+1. Decide whether to support value-preserving destructive restore (capture/deep-restore deleted row/column/sheet data) vs intentionally keep destructive checkpoints limited to value-empty targets.
 2. Enrich checkpoint history UX (search/filter/export, retention controls).
 3. Evaluate host-specific full-file snapshot feasibility for coarse-grained restore points.
 4. Potentially expose “YOLO mode” toggle once we have both lightweight and strict workflows fully defined.
