@@ -1457,10 +1457,18 @@ pi-working-indicator {
   color: var(--muted-foreground);
 }
 
+.pi-files-dialog__helper {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+
 .pi-files-dialog__filters {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .pi-files-dialog__filter-label {
@@ -1486,6 +1494,40 @@ pi-working-indicator {
 
 .pi-files-dialog__filter-select:disabled {
   opacity: 0.6;
+}
+
+.pi-files-dialog__quick-filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pi-files-dialog__quick-filter {
+  border: 1px solid var(--alpha-10);
+  border-radius: var(--radius-xs);
+  background: var(--white-alpha-60);
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.pi-files-dialog__quick-filter:hover:not(:disabled) {
+  background: var(--white-alpha-70);
+  color: var(--foreground);
+}
+
+.pi-files-dialog__quick-filter.is-active {
+  border-color: var(--green-alpha-25);
+  background: var(--green-alpha-12);
+  color: var(--foreground);
+}
+
+.pi-files-dialog__quick-filter:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .pi-files-dialog__list {

@@ -1,19 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { getFilesWorkspace } from "../src/files/workspace.ts";
-
-interface CollisionSeedBackend {
-  writeBytes(path: string, bytes: Uint8Array, mimeTypeHint?: string): Promise<void>;
-}
-
-function isCollisionSeedBackend(value: unknown): value is CollisionSeedBackend {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  return typeof Reflect.get(value, "writeBytes") === "function";
-}
+import { MemoryBackend } from "../src/files/backend.ts";
+import { FilesWorkspace, getFilesWorkspace } from "../src/files/workspace.ts";
 
 function getOfficeGlobal(): unknown {
   return Reflect.get(globalThis, "Office");
@@ -142,19 +131,16 @@ void test("files workspace exposes built-in docs as read-only entries", async ()
 });
 
 void test("legacy workspace collisions on assistant-docs paths stay reachable", async () => {
-  await resetWorkspace();
-  const workspace = getFilesWorkspace();
-
-  await workspace.listFiles();
-  const backend: unknown = Reflect.get(workspace, "backend");
-  assert.ok(isCollisionSeedBackend(backend));
-  if (!isCollisionSeedBackend(backend)) return;
-
+  const backend = new MemoryBackend();
   await backend.writeBytes(
     "assistant-docs/docs/extensions.md",
     new TextEncoder().encode("legacy collision payload"),
     "text/plain",
   );
+
+  const workspace = new FilesWorkspace({
+    initialBackend: backend,
+  });
 
   const listWithCollision = await workspace.listFiles();
   const collisionEntry = listWithCollision.find((entry) => entry.path === "assistant-docs/docs/extensions.md");
