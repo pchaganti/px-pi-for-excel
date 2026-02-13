@@ -13,6 +13,7 @@ This plan focuses on a small set of “big levers” that remove ongoing mainten
 > - `tests/recovery-log-restore.test.ts`
 > - `tests/recovery-log-format.test.ts`
 > - `tests/recovery-log-structure.test.ts`
+> - run them with `npm run test:recovery` (Node v25-safe via the repo loader).
 
 ---
 
