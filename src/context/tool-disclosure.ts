@@ -2,17 +2,13 @@ import type { Context, Tool } from "@mariozechner/pi-ai";
 
 import { type CoreToolName, CORE_TOOL_NAMES } from "../tools/names.js";
 import {
-  TOOL_DISCLOSURE_BUNDLES,
-  TOOL_DISCLOSURE_FULL_ACCESS_PATTERNS,
-  TOOL_DISCLOSURE_TRIGGER_BUNDLE_ORDER,
-  TOOL_DISCLOSURE_TRIGGER_PATTERNS,
+  chooseToolDisclosureBundle,
+  filterToolsForDisclosureBundle,
   type ToolDisclosureBundleId,
 } from "../tools/capabilities.js";
 
 export type ToolBundleId = ToolDisclosureBundleId;
 
-type ActiveToolBundleId = Exclude<ToolBundleId, "none">;
-type TriggeredToolBundleId = Exclude<ToolBundleId, "none" | "core" | "full">;
 type UserMessage = Extract<Context["messages"][number], { role: "user" }>;
 
 const CORE_TOOL_NAME_SET = new Set<string>(CORE_TOOL_NAMES);
@@ -26,10 +22,6 @@ function hasOnlyCoreTools(tools: readonly Tool[]): boolean {
     if (!isCoreToolName(tool.name)) return false;
   }
   return true;
-}
-
-function matchesAny(text: string, patterns: readonly RegExp[]): boolean {
-  return patterns.some((pattern) => pattern.test(text));
 }
 
 function extractUserText(content: UserMessage["content"]): string {
@@ -60,33 +52,6 @@ function getLastUserPrompt(messages: Context["messages"]): string | null {
   return null;
 }
 
-function chooseBundle(prompt: string): ActiveToolBundleId {
-  if (matchesAny(prompt, TOOL_DISCLOSURE_FULL_ACCESS_PATTERNS)) return "full";
-
-  const matchedBundles: TriggeredToolBundleId[] = [];
-
-  for (const bundleId of TOOL_DISCLOSURE_TRIGGER_BUNDLE_ORDER) {
-    if (matchesAny(prompt, TOOL_DISCLOSURE_TRIGGER_PATTERNS[bundleId])) {
-      matchedBundles.push(bundleId);
-    }
-  }
-
-  // Mixed-intent requests (e.g. "insert a row and highlight it") need tools
-  // across categories. Fall back to full for the first call so continuation
-  // stripping doesn't block capabilities in the same turn.
-  if (matchedBundles.length > 1) return "full";
-  if (matchedBundles.length === 1) return matchedBundles[0];
-  return "core";
-}
-
-function filterToolsByBundle(tools: readonly Tool[], bundleId: ActiveToolBundleId): Tool[] {
-  if (bundleId === "full") return [...tools];
-
-  const allowed = new Set<string>(TOOL_DISCLOSURE_BUNDLES[bundleId]);
-  const filtered = tools.filter((tool) => allowed.has(tool.name));
-  return filtered.length > 0 ? filtered : [...tools];
-}
-
 export interface ToolDisclosureResult {
   tools: Context["tools"];
   bundleId: ToolBundleId;
@@ -110,7 +75,7 @@ export function selectToolBundle(context: Context): ToolDisclosureResult {
   }
 
   const prompt = getLastUserPrompt(context.messages);
-  const bundleId = prompt ? chooseBundle(prompt) : "core";
-  const tools = filterToolsByBundle(context.tools, bundleId);
+  const bundleId = prompt ? chooseToolDisclosureBundle(prompt) : "core";
+  const tools = filterToolsForDisclosureBundle(context.tools, bundleId);
   return { tools, bundleId };
 }

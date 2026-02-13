@@ -215,6 +215,40 @@ export const TOOL_DISCLOSURE_TRIGGER_BUNDLE_ORDER = [
   "formatting",
 ] as const satisfies readonly TriggeredToolDisclosureBundleId[];
 
+function matchesAny(text: string, patterns: readonly RegExp[]): boolean {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+export function chooseToolDisclosureBundle(prompt: string): ActiveToolDisclosureBundleId {
+  if (matchesAny(prompt, TOOL_DISCLOSURE_FULL_ACCESS_PATTERNS)) return "full";
+
+  const matchedBundles: TriggeredToolDisclosureBundleId[] = [];
+
+  for (const bundleId of TOOL_DISCLOSURE_TRIGGER_BUNDLE_ORDER) {
+    if (matchesAny(prompt, TOOL_DISCLOSURE_TRIGGER_PATTERNS[bundleId])) {
+      matchedBundles.push(bundleId);
+    }
+  }
+
+  // Mixed-intent requests (e.g. "insert a row and highlight it") need tools
+  // across categories. Fall back to full for the first call so continuation
+  // stripping doesn't block capabilities in the same turn.
+  if (matchedBundles.length > 1) return "full";
+  if (matchedBundles.length === 1) return matchedBundles[0];
+  return "core";
+}
+
+export function filterToolsForDisclosureBundle<TTool extends { name: string }>(
+  tools: readonly TTool[],
+  bundleId: ActiveToolDisclosureBundleId,
+): TTool[] {
+  if (bundleId === "full") return [...tools];
+
+  const allowed = new Set<string>(TOOL_DISCLOSURE_BUNDLES[bundleId]);
+  const filtered = tools.filter((tool) => allowed.has(tool.name));
+  return filtered.length > 0 ? filtered : [...tools];
+}
+
 export const AUXILIARY_UI_TOOL_NAMES = [
   "web_search",
   "mcp",
