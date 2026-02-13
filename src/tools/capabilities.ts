@@ -265,3 +265,38 @@ export const UI_TOOL_NAMES: readonly UiToolName[] = [
   ...CORE_TOOL_NAMES,
   ...AUXILIARY_UI_TOOL_NAMES,
 ];
+
+export interface ToolUiMetadata {
+  renderer: boolean;
+  humanizer: boolean;
+}
+
+export const TOOL_UI_METADATA = {
+  get_workbook_overview: { renderer: true, humanizer: true },
+  read_range: { renderer: true, humanizer: true },
+  write_cells: { renderer: true, humanizer: true },
+  fill_formula: { renderer: true, humanizer: true },
+  search_workbook: { renderer: true, humanizer: true },
+  modify_structure: { renderer: true, humanizer: true },
+  format_cells: { renderer: true, humanizer: true },
+  conditional_format: { renderer: true, humanizer: true },
+  trace_dependencies: { renderer: true, humanizer: true },
+  explain_formula: { renderer: true, humanizer: true },
+  view_settings: { renderer: true, humanizer: true },
+  comments: { renderer: true, humanizer: true },
+  instructions: { renderer: true, humanizer: true },
+  conventions: { renderer: true, humanizer: true },
+  workbook_history: { renderer: true, humanizer: true },
+  skills: { renderer: true, humanizer: true },
+  web_search: { renderer: true, humanizer: true },
+  mcp: { renderer: true, humanizer: true },
+  files: { renderer: true, humanizer: true },
+  python_transform_range: { renderer: true, humanizer: true },
+  execute_office_js: { renderer: true, humanizer: true },
+} as const satisfies Record<UiToolName, ToolUiMetadata>;
+
+export const TOOL_NAMES_WITH_RENDERER: readonly UiToolName[] = UI_TOOL_NAMES
+  .filter((name) => TOOL_UI_METADATA[name].renderer);
+
+export const TOOL_NAMES_WITH_HUMANIZER: readonly UiToolName[] = UI_TOOL_NAMES
+  .filter((name) => TOOL_UI_METADATA[name].humanizer);

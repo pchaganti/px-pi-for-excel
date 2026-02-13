@@ -14,7 +14,7 @@ import { renderCollapsibleToolCardHeader, renderToolCardHeader } from "./tool-ca
 import { cellRef, cellRefDisplay, cellRefs } from "./cell-link.js";
 import { humanizeToolInput } from "./humanize-params.js";
 import { humanizeColorsInText } from "./color-names.js";
-import { UI_TOOL_NAMES, type UiToolName } from "../tools/capabilities.js";
+import { TOOL_NAMES_WITH_RENDERER, type UiToolName } from "../tools/capabilities.js";
 import {
   isCommentsDetails,
   isConditionalFormatDetails,
@@ -1155,7 +1155,7 @@ function createExcelMarkdownRenderer(toolName: SupportedToolName): ToolRenderer<
   };
 }
 
-const CUSTOM_RENDERED_TOOL_NAMES: readonly SupportedToolName[] = UI_TOOL_NAMES;
+const CUSTOM_RENDERED_TOOL_NAMES: readonly SupportedToolName[] = TOOL_NAMES_WITH_RENDERER;
 
 for (const name of CUSTOM_RENDERED_TOOL_NAMES) {
   registerToolRenderer(name, createExcelMarkdownRenderer(name));

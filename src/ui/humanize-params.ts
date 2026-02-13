@@ -9,7 +9,10 @@
 import { html, nothing, type TemplateResult } from "lit";
 import { cellRef, cellRefs } from "./cell-link.js";
 import { formatColorLabel } from "./color-names.js";
-import type { AuxiliaryUiToolName } from "../tools/capabilities.js";
+import {
+  TOOL_NAMES_WITH_HUMANIZER,
+  type AuxiliaryUiToolName,
+} from "../tools/capabilities.js";
 import type { CoreToolName } from "../tools/names.js";
 
 /* ── Types ──────────────────────────────────────────────────── */
@@ -958,6 +961,8 @@ const HUMANIZERS: Record<string, HumanizerFn> = {
   ...EXTRA_HUMANIZERS,
 };
 
+const HUMANIZABLE_TOOL_NAME_SET = new Set<string>(TOOL_NAMES_WITH_HUMANIZER);
+
 /* ── Public API ─────────────────────────────────────────────── */
 
 /**
@@ -968,6 +973,8 @@ export function humanizeToolInput(
   toolName: string,
   params: unknown,
 ): TemplateResult | null {
+  if (!HUMANIZABLE_TOOL_NAME_SET.has(toolName)) return null;
+
   const fn = HUMANIZERS[toolName];
   if (!fn) return null;
 
