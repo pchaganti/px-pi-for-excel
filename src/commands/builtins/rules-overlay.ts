@@ -5,13 +5,13 @@
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
 import {
-  getUserInstructions,
-  getWorkbookInstructions,
-  setUserInstructions,
-  setWorkbookInstructions,
-  USER_INSTRUCTIONS_SOFT_LIMIT,
-  WORKBOOK_INSTRUCTIONS_SOFT_LIMIT,
-} from "../../instructions/store.js";
+  getUserRules,
+  getWorkbookRules,
+  setUserRules,
+  setWorkbookRules,
+  USER_RULES_SOFT_LIMIT,
+  WORKBOOK_RULES_SOFT_LIMIT,
+} from "../../rules/store.js";
 import {
   getStoredConventions,
   setStoredConventions,
@@ -285,10 +285,10 @@ function buildConventionsForm(
 
 // ── Main overlay ─────────────────────────────────────────────────────
 
-export async function showInstructionsDialog(opts?: {
+export async function showRulesDialog(opts?: {
   onSaved?: () => void | Promise<void>;
 }): Promise<void> {
-  if (closeOverlayById("pi-instructions-overlay")) {
+  if (closeOverlayById("pi-rules-overlay")) {
     return;
   }
 
@@ -297,14 +297,14 @@ export async function showInstructionsDialog(opts?: {
   const workbookId = workbookContext.workbookId;
   const workbookLabel = formatWorkbookLabel(workbookContext);
 
-  let userDraft = (await getUserInstructions(storage.settings)) ?? "";
-  let workbookDraft = (await getWorkbookInstructions(storage.settings, workbookId)) ?? "";
+  let userDraft = (await getUserRules(storage.settings)) ?? "";
+  let workbookDraft = (await getWorkbookRules(storage.settings, workbookId)) ?? "";
   const storedConventions = await getStoredConventions(storage.settings);
   const conventionsFormState = resolvedToFormState(storedConventions);
   let activeTab: RulesTab = "user";
 
   const dialog = createOverlayDialog({
-    overlayId: "pi-instructions-overlay",
+    overlayId: "pi-rules-overlay",
     cardClassName: "pi-welcome-card pi-overlay-card",
   });
 
@@ -402,8 +402,8 @@ export async function showInstructionsDialog(opts?: {
         "Your preferences and habits, e.g.\n• Always use EUR for currencies\n• Format dates as dd-mmm-yyyy\n• Check circular references after writes";
 
       const count = userDraft.length;
-      counter.textContent = formatCounterLabel(count, USER_INSTRUCTIONS_SOFT_LIMIT);
-      counter.classList.toggle("is-warning", count > USER_INSTRUCTIONS_SOFT_LIMIT);
+      counter.textContent = formatCounterLabel(count, USER_RULES_SOFT_LIMIT);
+      counter.classList.toggle("is-warning", count > USER_RULES_SOFT_LIMIT);
 
       hint.textContent =
         "Guidance given to Pi in all your conversations. Pi can also update these when you tell it your preferences — e.g. \"always use EUR\".";
@@ -417,8 +417,8 @@ export async function showInstructionsDialog(opts?: {
         "Notes about this workbook's structure, e.g.\n• DCF model for Acme Corp, FY2025\n• Revenue assumptions in Inputs!B5:B15\n• Don't modify the Summary sheet";
 
       const count = workbookDraft.length;
-      counter.textContent = formatCounterLabel(count, WORKBOOK_INSTRUCTIONS_SOFT_LIMIT);
-      counter.classList.toggle("is-warning", count > WORKBOOK_INSTRUCTIONS_SOFT_LIMIT);
+      counter.textContent = formatCounterLabel(count, WORKBOOK_RULES_SOFT_LIMIT);
+      counter.classList.toggle("is-warning", count > WORKBOOK_RULES_SOFT_LIMIT);
 
       if (!workbookId) {
         hint.textContent =
@@ -491,9 +491,9 @@ export async function showInstructionsDialog(opts?: {
       saveActiveDraft();
 
       // Save rules
-      await setUserInstructions(storage.settings, userDraft);
+      await setUserRules(storage.settings, userDraft);
       if (workbookId) {
-        await setWorkbookInstructions(storage.settings, workbookId, workbookDraft);
+        await setWorkbookRules(storage.settings, workbookId, workbookDraft);
       }
 
       // Save conventions
@@ -502,7 +502,7 @@ export async function showInstructionsDialog(opts?: {
       const merged = mergeStoredConventions(currentStored, updates);
       await setStoredConventions(storage.settings, merged);
 
-      document.dispatchEvent(new CustomEvent("pi:instructions-updated"));
+      document.dispatchEvent(new CustomEvent("pi:rules-updated"));
       document.dispatchEvent(new CustomEvent("pi:conventions-updated"));
       document.dispatchEvent(new CustomEvent("pi:status-update"));
 

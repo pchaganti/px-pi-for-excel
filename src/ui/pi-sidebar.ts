@@ -103,7 +103,7 @@ export class PiSidebar extends LitElement {
   @property({ attribute: false }) onCreateTab?: () => void;
   @property({ attribute: false }) onSelectTab?: (runtimeId: string) => void;
   @property({ attribute: false }) onCloseTab?: (runtimeId: string) => void;
-  @property({ attribute: false }) onOpenInstructions?: () => void;
+  @property({ attribute: false }) onOpenRules?: () => void;
   @property({ attribute: false }) onOpenIntegrations?: () => void;
   @property({ attribute: false }) onOpenSettings?: () => void;
   @property({ attribute: false }) onOpenFiles?: () => void;
@@ -545,7 +545,7 @@ export class PiSidebar extends LitElement {
   private _renderUtilitiesMenu() {
     return html`
       <div class="pi-utilities-menu">
-        <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenInstructions?.(); }}>
+        <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenRules?.(); }}>
           Rules…
         </button>
         <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenIntegrations?.(); }}>

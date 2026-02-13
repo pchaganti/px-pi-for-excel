@@ -38,7 +38,7 @@ import { showIntegrationsDialog } from "../commands/builtins/integrations-overla
 import { ExtensionRuntimeManager } from "../extensions/runtime-manager.js";
 import type { ResumeDialogTarget } from "../commands/builtins/resume-target.js";
 import {
-  showInstructionsDialog,
+  showRulesDialog,
   showRecoveryDialog,
   showResumeDialog,
   showShortcutsDialog,
@@ -47,10 +47,10 @@ import {
 import { wireCommandMenu } from "../commands/command-menu.js";
 import { commandRegistry } from "../commands/types.js";
 import {
-  getUserInstructions,
-  getWorkbookInstructions,
-  hasAnyInstructions,
-} from "../instructions/store.js";
+  getUserRules,
+  getWorkbookRules,
+  hasAnyRules,
+} from "../rules/store.js";
 import { getResolvedConventions } from "../conventions/store.js";
 import {
   buildIntegrationPromptEntries,
@@ -271,11 +271,11 @@ export async function initTaskpane(opts: {
   appEl.innerHTML = "";
   appEl.appendChild(sidebar);
 
-  let instructionsActive = false;
+  let rulesActive = false;
 
-  const setInstructionsActive = (next: boolean) => {
-    if (instructionsActive === next) return;
-    instructionsActive = next;
+  const setRulesActive = (next: boolean) => {
+    if (rulesActive === next) return;
+    rulesActive = next;
     document.dispatchEvent(new CustomEvent("pi:status-update"));
   };
 
@@ -335,20 +335,20 @@ export async function initTaskpane(opts: {
     const availableSkills = await resolveAvailableSkills();
 
     try {
-      const userInstructions = await getUserInstructions(settings);
-      const workbookInstructions = await getWorkbookInstructions(settings, args.workbookId);
-      setInstructionsActive(hasAnyInstructions({ userInstructions, workbookInstructions }));
+      const userRules = await getUserRules(settings);
+      const workbookRules = await getWorkbookRules(settings, args.workbookId);
+      setRulesActive(hasAnyRules({ userRules, workbookRules }));
       const conventions = await getResolvedConventions(settings);
       const activeIntegrations = buildIntegrationPromptEntries(args.activeIntegrationIds);
       return buildSystemPrompt({
-        userInstructions,
-        workbookInstructions,
+        userInstructions: userRules,
+        workbookInstructions: workbookRules,
         activeIntegrations,
         availableSkills,
         conventions,
       });
     } catch {
-      setInstructionsActive(false);
+      setRulesActive(false);
       return buildSystemPrompt({ availableSkills });
     }
   };
@@ -558,7 +558,7 @@ export async function initTaskpane(opts: {
     }
   });
 
-  document.addEventListener("pi:instructions-updated", () => {
+  document.addEventListener("pi:rules-updated", () => {
     void refreshWorkbookState();
   });
 
@@ -1024,7 +1024,7 @@ export async function initTaskpane(opts: {
       }
     },
     openInstructionsEditor: async () => {
-      await showInstructionsDialog({
+      await showRulesDialog({
         onSaved: async () => {
           await refreshWorkbookState();
         },
@@ -1095,8 +1095,8 @@ export async function initTaskpane(opts: {
   sidebar.onCloseTab = (runtimeId: string) => {
     void closeRuntimeWithRecovery(runtimeId);
   };
-  sidebar.onOpenInstructions = () => {
-    void showInstructionsDialog({
+  sidebar.onOpenRules = () => {
+    void showRulesDialog({
       onSaved: async () => {
         await refreshWorkbookState();
       },
@@ -1210,7 +1210,7 @@ export async function initTaskpane(opts: {
   injectStatusBar({
     getActiveAgent,
     getLockState: getActiveLockState,
-    getInstructionsActive: () => instructionsActive,
+    getRulesActive: () => rulesActive,
     getActiveIntegrations: getActiveIntegrationTitles,
   });
 
@@ -1307,7 +1307,7 @@ export async function initTaskpane(opts: {
     // Rules editor
     if (el.closest(".pi-status-rules")) {
       closeStatusPopover();
-      void showInstructionsDialog({
+      void showRulesDialog({
         onSaved: async () => {
           await refreshWorkbookState();
         },

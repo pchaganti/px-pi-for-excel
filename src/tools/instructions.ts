@@ -1,5 +1,8 @@
 /**
- * instructions — update persistent user/workbook instructions.
+ * instructions — update persistent user/workbook rules.
+ *
+ * The tool name remains "instructions" for backward compatibility with
+ * existing sessions. All user-facing text says "rules".
  */
 
 import { Type, type Static } from "@sinclair/typebox";
@@ -7,14 +10,14 @@ import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
 import {
-  applyInstructionAction,
-  getUserInstructions,
-  getWorkbookInstructions,
-  setUserInstructions,
-  setWorkbookInstructions,
-  USER_INSTRUCTIONS_SOFT_LIMIT,
-  WORKBOOK_INSTRUCTIONS_SOFT_LIMIT,
-} from "../instructions/store.js";
+  applyRuleAction,
+  getUserRules,
+  getWorkbookRules,
+  setUserRules,
+  setWorkbookRules,
+  USER_RULES_SOFT_LIMIT,
+  WORKBOOK_RULES_SOFT_LIMIT,
+} from "../rules/store.js";
 import { getWorkbookContext } from "../workbook/context.js";
 import { getErrorMessage } from "../utils/errors.js";
 
@@ -29,24 +32,24 @@ const schema = Type.Object({
     Type.Literal("user"),
     Type.Literal("workbook"),
   ], {
-    description: "Target instruction scope.",
+    description: "Target rule scope.",
   }),
   content: Type.String({
     description:
-      "Instruction text to save. For append, this is the new line/note to add. For replace, this becomes the full text.",
+      "Rule text to save. For append, this is the new line/note to add. For replace, this becomes the full text.",
   }),
 });
 
 type Params = Static<typeof schema>;
 
 function getSoftLimit(level: Params["level"]): number {
-  return level === "user" ? USER_INSTRUCTIONS_SOFT_LIMIT : WORKBOOK_INSTRUCTIONS_SOFT_LIMIT;
+  return level === "user" ? USER_RULES_SOFT_LIMIT : WORKBOOK_RULES_SOFT_LIMIT;
 }
 
-function emitInstructionsUpdatedEvent(): void {
+function emitRulesUpdatedEvent(): void {
   if (typeof document === "undefined") return;
 
-  document.dispatchEvent(new CustomEvent("pi:instructions-updated"));
+  document.dispatchEvent(new CustomEvent("pi:rules-updated"));
   document.dispatchEvent(new CustomEvent("pi:status-update"));
 }
 
@@ -74,27 +77,27 @@ export function createInstructionsTool(): AgentTool<typeof schema, undefined> {
         }
 
         if (params.level === "user") {
-          const current = await getUserInstructions(settings);
-          const updated = applyInstructionAction({
+          const current = await getUserRules(settings);
+          const updated = applyRuleAction({
             currentValue: current,
             action: params.action,
             content: params.content,
           });
 
-          const saved = await setUserInstructions(settings, updated);
-          emitInstructionsUpdatedEvent();
+          const saved = await setUserRules(settings, updated);
+          emitRulesUpdatedEvent();
 
           const body = saved ?? "(No user rules set.)";
           const warning =
-            saved && saved.length > USER_INSTRUCTIONS_SOFT_LIMIT
-              ? `\n\n⚠️ User rules are above the ${USER_INSTRUCTIONS_SOFT_LIMIT}-char soft limit.`
+            saved && saved.length > USER_RULES_SOFT_LIMIT
+              ? `\n\n⚠️ User rules are above the ${USER_RULES_SOFT_LIMIT}-char soft limit.`
               : "";
 
           return {
             content: [
               {
                 type: "text",
-                text: `Updated user rules (${saved?.length ?? 0}/${USER_INSTRUCTIONS_SOFT_LIMIT} chars):\n\n${body}${warning}`,
+                text: `Updated user rules (${saved?.length ?? 0}/${USER_RULES_SOFT_LIMIT} chars):\n\n${body}${warning}`,
               },
             ],
             details: undefined,
@@ -114,15 +117,15 @@ export function createInstructionsTool(): AgentTool<typeof schema, undefined> {
           };
         }
 
-        const current = await getWorkbookInstructions(settings, workbookId);
-        const updated = applyInstructionAction({
+        const current = await getWorkbookRules(settings, workbookId);
+        const updated = applyRuleAction({
           currentValue: current,
           action: params.action,
           content: params.content,
         });
 
-        const saved = await setWorkbookInstructions(settings, workbookId, updated);
-        emitInstructionsUpdatedEvent();
+        const saved = await setWorkbookRules(settings, workbookId, updated);
+        emitRulesUpdatedEvent();
 
         const limit = getSoftLimit(params.level);
         const body = saved ?? "(No workbook rules set.)";

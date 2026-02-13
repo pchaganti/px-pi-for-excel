@@ -18,7 +18,7 @@ import {
   partitionSessionIdsByWorkbook,
 } from "../../workbook/session-association.js";
 
-export { showInstructionsDialog } from "./instructions-overlay.js";
+export { showRulesDialog } from "./rules-overlay.js";
 
 function formatRelativeDate(iso: string): string {
   const d = new Date(iso);
