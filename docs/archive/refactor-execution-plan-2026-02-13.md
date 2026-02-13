@@ -5,6 +5,14 @@
 1. Recovery subsystem modularization
 2. Shared mutation-tool pipeline extraction
 
+**Status:** Completed (INT1 + CLOSE1 merged). This document is kept as a historical execution record.
+
+**Post-close note:** early PR validation steps in this plan reference `tests/workbook-recovery-log.test.ts`; CLOSE1 replaced that file with:
+- `tests/recovery-log-persistence.test.ts`
+- `tests/recovery-log-restore.test.ts`
+- `tests/recovery-log-format.test.ts`
+- `tests/recovery-log-structure.test.ts`
+
 ---
 
 ## Goals
