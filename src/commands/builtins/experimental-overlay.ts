@@ -9,9 +9,8 @@ import {
   type ExperimentalFeatureSnapshot,
 } from "../../experiments/flags.js";
 import { closeOverlayById, createOverlayDialog } from "../../ui/overlay-dialog.js";
+import { EXPERIMENTAL_OVERLAY_ID } from "../../ui/overlay-ids.js";
 import { showToast } from "../../ui/toast.js";
-
-const OVERLAY_ID = "pi-experimental-overlay";
 
 function applyStatusVisual(statusEl: HTMLSpanElement, enabled: boolean): void {
   statusEl.textContent = enabled ? "Enabled" : "Disabled";
@@ -90,12 +89,12 @@ function buildFeatureRow(feature: ExperimentalFeatureSnapshot): HTMLElement {
 }
 
 export function showExperimentalDialog(): void {
-  if (closeOverlayById(OVERLAY_ID)) {
+  if (closeOverlayById(EXPERIMENTAL_OVERLAY_ID)) {
     return;
   }
 
   const dialog = createOverlayDialog({
-    overlayId: OVERLAY_ID,
+    overlayId: EXPERIMENTAL_OVERLAY_ID,
     cardClassName: "pi-welcome-card pi-overlay-card pi-experimental-card",
   });
 

@@ -30,16 +30,12 @@ import {
   renderSandboxUiTree,
   type SandboxUiNode,
 } from "./sandbox-ui.js";
-import {
-  closeOverlayById,
-  createOverlayDialog,
-  type OverlayDialogController,
-} from "../ui/overlay-dialog.js";
+import { EXTENSION_OVERLAY_ID } from "../ui/overlay-ids.js";
+import { createOverlayDialogManager } from "../ui/overlay-dialog.js";
 import { isRecord } from "../utils/type-guards.js";
 
 const SANDBOX_CHANNEL = "pi.extension.sandbox.rpc.v1";
 const REQUEST_TIMEOUT_MS = 15_000;
-const SANDBOX_OVERLAY_ID = "pi-ext-overlay";
 const SANDBOX_WIDGET_SLOT_ID = "pi-widget-slot";
 const LEGACY_WIDGET_ID = "__legacy__";
 
@@ -205,30 +201,11 @@ function serializeForInlineScript(value: unknown): string {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
-let sandboxOverlayDialog: OverlayDialogController | null = null;
-
-function ensureSandboxOverlayDialog(): OverlayDialogController {
-  if (sandboxOverlayDialog && sandboxOverlayDialog.overlay.isConnected) {
-    return sandboxOverlayDialog;
-  }
-
-  closeOverlayById(SANDBOX_OVERLAY_ID);
-
-  const dialog = createOverlayDialog({
-    overlayId: SANDBOX_OVERLAY_ID,
-    cardClassName: "pi-welcome-card pi-overlay-card",
-    zIndex: 260,
-  });
-
-  dialog.addCleanup(() => {
-    if (sandboxOverlayDialog === dialog) {
-      sandboxOverlayDialog = null;
-    }
-  });
-
-  sandboxOverlayDialog = dialog;
-  return dialog;
-}
+const sandboxOverlayDialogManager = createOverlayDialogManager({
+  overlayId: EXTENSION_OVERLAY_ID,
+  cardClassName: "pi-welcome-card pi-overlay-card",
+  zIndex: 260,
+});
 
 function createTextOnlyUiNode(text: string): SandboxUiNode {
   return {
@@ -248,7 +225,7 @@ function showOverlayNode(
   node: SandboxUiNode,
   onAction: (actionId: string) => void,
 ): Set<string> {
-  const dialog = ensureSandboxOverlayDialog();
+  const dialog = sandboxOverlayDialogManager.ensure();
 
   const body = document.createElement("div");
   renderSandboxUiTree(body, node, onAction);
@@ -263,12 +240,7 @@ function showOverlayNode(
 }
 
 function dismissOverlay(): void {
-  if (sandboxOverlayDialog) {
-    sandboxOverlayDialog.close();
-    return;
-  }
-
-  closeOverlayById(SANDBOX_OVERLAY_ID);
+  sandboxOverlayDialogManager.dismiss();
 }
 
 function ensureWidgetSlot(): HTMLElement | null {

@@ -14,6 +14,7 @@ import { isExperimentalFeatureEnabled, setExperimentalFeatureEnabled } from "../
 import { getErrorMessage } from "../utils/errors.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../workbook/context.js";
 import { closeOverlayById, createOverlayDialog } from "./overlay-dialog.js";
+import { FILES_WORKSPACE_OVERLAY_ID } from "./overlay-ids.js";
 import {
   buildFilesDialogFilterOptions,
   countBuiltInDocs,
@@ -26,7 +27,7 @@ import {
 import { buildFilesDialogStatusMessage } from "./files-dialog-status.js";
 import { showToast } from "./toast.js";
 
-const OVERLAY_ID = "pi-files-workspace-overlay";
+const OVERLAY_ID = FILES_WORKSPACE_OVERLAY_ID;
 
 const DIALOG_AUDIT_CONTEXT: FilesWorkspaceAuditContext = {
   actor: "user",

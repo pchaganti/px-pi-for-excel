@@ -16,9 +16,8 @@ import { dispatchExperimentalToolConfigChanged } from "../../experiments/events.
 import { isExperimentalFeatureEnabled, setExperimentalFeatureEnabled } from "../../experiments/flags.js";
 import { PYTHON_BRIDGE_URL_SETTING_KEY } from "../../tools/experimental-tool-gates.js";
 import { closeOverlayById, createOverlayDialog } from "../../ui/overlay-dialog.js";
+import { EXTENSIONS_OVERLAY_ID } from "../../ui/overlay-ids.js";
 import { showToast } from "../../ui/toast.js";
-
-const OVERLAY_ID = "pi-extensions-overlay";
 
 const EXTENSION_PROMPT_TEMPLATE = [
   "Write a single-file JavaScript ES module extension for Pi for Excel.",
@@ -193,12 +192,12 @@ async function deleteSettingValue(settingKey: string): Promise<void> {
 }
 
 export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
-  if (closeOverlayById(OVERLAY_ID)) {
+  if (closeOverlayById(EXTENSIONS_OVERLAY_ID)) {
     return;
   }
 
   const dialog = createOverlayDialog({
-    overlayId: OVERLAY_ID,
+    overlayId: EXTENSIONS_OVERLAY_ID,
     cardClassName: "pi-welcome-card pi-overlay-card pi-ext-card",
   });
 

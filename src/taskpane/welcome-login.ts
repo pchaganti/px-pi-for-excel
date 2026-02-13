@@ -6,6 +6,7 @@ import type { ProviderKeysStore } from "@mariozechner/pi-web-ui/dist/storage/sto
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
 import { closeOverlayById, createOverlayDialog } from "../ui/overlay-dialog.js";
+import { WELCOME_LOGIN_OVERLAY_ID } from "../ui/overlay-ids.js";
 import { showToast } from "../ui/toast.js";
 import { setActiveProviders } from "../compat/model-selector-patch.js";
 import {
@@ -54,11 +55,11 @@ export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise
     // ignore — welcome overlay should still show
   }
 
-  closeOverlayById("pi-welcome-login-overlay");
+  closeOverlayById(WELCOME_LOGIN_OVERLAY_ID);
 
   return new Promise<void>((resolve) => {
     const dialog = createOverlayDialog({
-      overlayId: "pi-welcome-login-overlay",
+      overlayId: WELCOME_LOGIN_OVERLAY_ID,
       cardClassName: "pi-welcome-card",
     });
 

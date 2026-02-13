@@ -87,6 +87,7 @@ pi-web-ui uses Light DOM (`createRenderRoot() { return this; }`), so styles leak
 | `loading.ts` | — | Splash screen shown during init |
 | `provider-login.ts` | — | API key entry rows for the welcome overlay |
 | `overlay-dialog.ts` | — | Shared overlay lifecycle helper (single-instance toggle, Escape/backdrop close, focus restore) |
+| `overlay-ids.ts` | — | Shared overlay id constants used across builtins/extensions/taskpane |
 
 ## Wiring (taskpane.ts)
 

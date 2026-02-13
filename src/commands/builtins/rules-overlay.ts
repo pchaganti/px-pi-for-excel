@@ -21,6 +21,7 @@ import {
 import { DEFAULT_CURRENCY_SYMBOL, PRESET_DEFAULT_DP } from "../../conventions/defaults.js";
 import type { StoredConventions, NumberPreset } from "../../conventions/types.js";
 import { closeOverlayById, createOverlayDialog } from "../../ui/overlay-dialog.js";
+import { RULES_OVERLAY_ID } from "../../ui/overlay-ids.js";
 import { showToast } from "../../ui/toast.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../../workbook/context.js";
 
@@ -288,7 +289,7 @@ function buildConventionsForm(
 export async function showRulesDialog(opts?: {
   onSaved?: () => void | Promise<void>;
 }): Promise<void> {
-  if (closeOverlayById("pi-rules-overlay")) {
+  if (closeOverlayById(RULES_OVERLAY_ID)) {
     return;
   }
 
@@ -304,7 +305,7 @@ export async function showRulesDialog(opts?: {
   let activeTab: RulesTab = "user";
 
   const dialog = createOverlayDialog({
-    overlayId: "pi-rules-overlay",
+    overlayId: RULES_OVERLAY_ID,
     cardClassName: "pi-welcome-card pi-overlay-card",
   });
 
