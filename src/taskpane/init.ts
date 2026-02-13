@@ -108,7 +108,6 @@ import {
 import { showWelcomeLogin } from "./welcome-login.js";
 import {
   SessionRuntimeManager,
-  type RuntimeTabSnapshot,
   type SessionRuntime,
 } from "./session-runtime-manager.js";
 import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
@@ -180,21 +179,6 @@ function isLikelyCorsErrorMessage(msg: string): boolean {
   if (m.includes("cors requests are not allowed")) return true;
 
   return false;
-}
-
-function getActiveLockNotice(tabs: RuntimeTabSnapshot[]): string | null {
-  const activeTab = tabs.find((tab) => tab.isActive);
-  if (!activeTab) return null;
-
-  if (activeTab.lockState === "waiting_for_lock") {
-    return "Waiting for workbook lock…";
-  }
-
-  if (activeTab.lockState === "holding_lock") {
-    return "Applying workbook changes…";
-  }
-
-  return null;
 }
 
 async function awaitWithTimeout<T>(label: string, timeoutMs: number, task: Promise<T>): Promise<T> {
@@ -447,6 +431,7 @@ export async function initTaskpane(opts: {
 
     const address = restored.result.address;
     showToast(`Reverted ${address}`);
+    await refreshRecoveryQuickActionState();
   };
 
   const toRecoveryCheckpointSummary = (
@@ -459,6 +444,15 @@ export async function initTaskpane(opts: {
     changedCount: snapshot.changedCount,
     restoredFromSnapshotId: snapshot.restoredFromSnapshotId,
   });
+
+  const refreshRecoveryQuickActionState = async (): Promise<void> => {
+    try {
+      const checkpoints = await workbookRecoveryLog.listForCurrentWorkbook(1);
+      sidebar.hasRecoveryCheckpoints = checkpoints.length > 0;
+    } catch {
+      sidebar.hasRecoveryCheckpoints = false;
+    }
+  };
 
   const getActiveIntegrationTitles = (): string[] => {
     const runtime = getActiveRuntime();
@@ -544,7 +538,6 @@ export async function initTaskpane(opts: {
 
   runtimeManager.subscribe((tabs) => {
     sidebar.sessionTabs = tabs;
-    sidebar.lockNotice = getActiveLockNotice(tabs);
     sidebar.requestUpdate();
 
     const activeRuntimeId = tabs.find((tab) => tab.isActive)?.runtimeId ?? null;
@@ -591,6 +584,7 @@ export async function initTaskpane(opts: {
 
   const refreshWorkbookState = async () => {
     await resolveWorkbookContext();
+    await refreshRecoveryQuickActionState();
     sidebar.requestUpdate();
 
     await refreshCapabilitiesForAllRuntimes();
@@ -1013,6 +1007,7 @@ export async function initTaskpane(opts: {
 
     if (event.type === "completed" || event.type === "failed") {
       runtimeManager.setRuntimeLockState(runtime.runtimeId, "idle");
+      void refreshRecoveryQuickActionState();
     }
   });
 
@@ -1040,12 +1035,17 @@ export async function initTaskpane(opts: {
       },
       onRestore: async (snapshotId: string) => {
         await restoreCheckpointById(snapshotId);
+        await refreshRecoveryQuickActionState();
       },
       onDelete: async (snapshotId: string) => {
-        return workbookRecoveryLog.delete(snapshotId);
+        const removed = await workbookRecoveryLog.delete(snapshotId);
+        await refreshRecoveryQuickActionState();
+        return removed;
       },
       onClear: async () => {
-        return workbookRecoveryLog.clearForCurrentWorkbook();
+        const removed = await workbookRecoveryLog.clearForCurrentWorkbook();
+        await refreshRecoveryQuickActionState();
+        return removed;
       },
     });
   };
@@ -1207,6 +1207,9 @@ export async function initTaskpane(opts: {
         await replaceActiveRuntimeSession(sessionData);
       },
     });
+  };
+  sidebar.onReopenLastClosed = () => {
+    void reopenLastClosed();
   };
   sidebar.onOpenRecovery = () => {
     void openRecoveryDialog();

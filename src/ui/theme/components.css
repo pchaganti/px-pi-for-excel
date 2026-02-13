@@ -244,7 +244,7 @@
   top: 100%;
   right: 0;
   z-index: 210;
-  min-width: 190px;
+  min-width: 220px;
   margin-top: 6px;
   padding: 4px;
   border-radius: var(--radius-lg);
@@ -300,16 +300,6 @@
   );
 }
 
-.pi-lock-notice {
-  padding: 4px 12px;
-  font-size: var(--text-sm);
-  font-family: var(--font-mono);
-  color: var(--muted-foreground);
-  border-bottom: var(--pi-divider);
-  background: var(--green-alpha-6);
-  flex-shrink: 0;
-}
-
 .pi-messages {
   flex: 1;
   overflow-y: auto;
@@ -346,6 +336,62 @@
   pointer-events: none;
 }
 
+.pi-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.pi-quick-actions__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--alpha-10);
+  background: var(--white-alpha-35);
+  color: var(--muted-foreground);
+  border-radius: var(--radius-sm);
+  padding: 4px 9px;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), opacity var(--duration-fast);
+}
+
+.pi-quick-actions__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.82;
+}
+
+.pi-quick-actions__label {
+  letter-spacing: 0.01em;
+}
+
+.pi-quick-actions__btn:hover:not(:disabled) {
+  background: var(--pi-green-light);
+  border-color: var(--green-alpha-25);
+  color: var(--primary);
+}
+
+.pi-quick-actions__btn:focus,
+.pi-quick-actions__btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--green-alpha-12);
+}
+
+.pi-quick-actions__btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+  border-color: var(--alpha-8);
+  background: var(--white-alpha-20);
+}
+
 
 /* ═══════════════════════════════════════════════════════
    4. PI-INPUT — textarea card + send button
@@ -372,7 +418,7 @@
 
 .pi-input-drop-hint {
   position: absolute;
-  inset: 4px 36px 4px 10px;
+  inset: 4px 36px 4px 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -386,10 +432,14 @@
   pointer-events: none;
 }
 
+.pi-input-file {
+  display: none;
+}
+
 .pi-input-textarea {
   display: block;
   width: 100%;
-  padding: 11px 44px 11px 14px;
+  padding: 11px 44px 11px 40px;
   min-height: 40px;
   max-height: 40vh;
   border: none;
@@ -423,6 +473,24 @@
   justify-content: center;
   cursor: pointer;
   transition: background var(--duration-fast), transform var(--duration-fast);
+}
+
+.pi-input-btn--attach {
+  left: 8px;
+  right: auto;
+  border: 1px solid var(--alpha-10);
+  background: var(--white-alpha-55);
+  color: var(--muted-foreground);
+}
+
+.pi-input-btn--attach:hover {
+  background: var(--white-alpha-70);
+  color: var(--foreground);
+}
+
+.pi-input-btn--attach svg,
+.pi-input-btn--attach svg * {
+  pointer-events: none;
 }
 
 .pi-input-btn--send {

@@ -12,7 +12,7 @@ import { customElement, property, query, state } from "lit/decorators.js";
 import type { Agent, AgentEvent } from "@mariozechner/pi-agent-core";
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
 import type { StreamingMessageContainer } from "@mariozechner/pi-web-ui/dist/components/StreamingMessageContainer.js";
-import { ChevronRight } from "lucide";
+import { ArchiveRestore, ChevronRight, FileText, History, type IconNode } from "lucide";
 import "./pi-input.js";
 import "./working-indicator.js";
 import { initToolGrouping } from "./tool-grouping.js";
@@ -110,8 +110,9 @@ export class PiSidebar extends LitElement {
   @property({ attribute: false }) onFilesDrop?: (files: File[]) => void;
   @property({ attribute: false }) onOpenResumePicker?: () => void;
   @property({ attribute: false }) onOpenRecovery?: () => void;
+  @property({ attribute: false }) onReopenLastClosed?: () => void;
   @property({ attribute: false }) onOpenShortcuts?: () => void;
-  @property({ attribute: false }) lockNotice: string | null = null;
+  @property({ type: Boolean }) hasRecoveryCheckpoints = false;
 
   @state() private _hasMessages = false;
   @state() private _isStreaming = false;
@@ -383,6 +384,77 @@ export class PiSidebar extends LitElement {
     this.onFilesDrop?.(event.detail.files);
   };
 
+  private _renderQuickActionButton(args: {
+    label: string;
+    title: string;
+    iconNode: IconNode;
+    onClick?: () => void;
+    disabled?: boolean;
+  }) {
+    const disabled = args.disabled ?? false;
+
+    return html`
+      <button
+        type="button"
+        class="pi-quick-actions__btn"
+        title=${args.title}
+        ?disabled=${disabled}
+        @click=${() => {
+          if (disabled) return;
+          args.onClick?.();
+        }}
+      >
+        <span class="pi-quick-actions__icon" aria-hidden="true">${icon(args.iconNode, "sm")}</span>
+        <span class="pi-quick-actions__label">${args.label}</span>
+      </button>
+    `;
+  }
+
+  private _renderQuickActions() {
+    const showRules = Boolean(this.onOpenRules);
+    const showResume = Boolean(this.onOpenResumePicker);
+    const showBackups = Boolean(this.onOpenRecovery);
+
+    if (!showRules && !showResume && !showBackups) {
+      return nothing;
+    }
+
+    const backupsDisabled = showBackups && !this.hasRecoveryCheckpoints;
+    const backupsTitle = backupsDisabled
+      ? "No backups yet — run a workbook change to create the first checkpoint"
+      : "Browse and restore backups";
+
+    return html`
+      <div class="pi-quick-actions">
+        ${showRules
+          ? this._renderQuickActionButton({
+            label: "Rules",
+            title: "Edit rules and conventions",
+            iconNode: FileText,
+            onClick: this.onOpenRules,
+          })
+          : nothing}
+        ${showResume
+          ? this._renderQuickActionButton({
+            label: "Resume",
+            title: "Resume a previous session",
+            iconNode: History,
+            onClick: this.onOpenResumePicker,
+          })
+          : nothing}
+        ${showBackups
+          ? this._renderQuickActionButton({
+            label: "Backups",
+            title: backupsTitle,
+            iconNode: ArchiveRestore,
+            onClick: this.onOpenRecovery,
+            disabled: backupsDisabled,
+          })
+          : nothing}
+      </div>
+    `;
+  }
+
   private _buildToolResultsMap(): Map<string, ToolResultMessage<unknown>> {
     const map = new Map<string, ToolResultMessage<unknown>>();
     if (!this.agent) return map;
@@ -404,9 +476,6 @@ export class PiSidebar extends LitElement {
 
     return html`
       ${this._renderSessionTabs()}
-      ${this.lockNotice
-        ? html`<div class="pi-lock-notice">${this.lockNotice}</div>`
-        : nothing}
       <div class="pi-messages">
         <div class="pi-messages__inner">
           ${hasMessages ? html`
@@ -435,6 +504,7 @@ export class PiSidebar extends LitElement {
       ></pi-working-indicator>
       <div id="pi-widget-slot" class="pi-widget-slot" style="display:none"></div>
       <div class="pi-input-area">
+        ${this._renderQuickActions()}
         <pi-input
           .isStreaming=${this._isStreaming}
           @pi-send=${this._onSend}
@@ -546,7 +616,7 @@ export class PiSidebar extends LitElement {
     return html`
       <div class="pi-utilities-menu">
         <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenRules?.(); }}>
-          Rules…
+          Rules & conventions…
         </button>
         <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenIntegrations?.(); }}>
           ${INTEGRATIONS_LABEL}…
@@ -554,18 +624,30 @@ export class PiSidebar extends LitElement {
         <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenSettings?.(); }}>
           Settings…
         </button>
-        <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenFiles?.(); }}>
-          Files…
-        </button>
+
         <div class="pi-utilities-menu__divider"></div>
+
         <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenResumePicker?.(); }}>
           Resume session…
         </button>
+        ${this.onReopenLastClosed
+          ? html`
+            <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onReopenLastClosed?.(); }}>
+              Reopen last closed
+            </button>
+          `
+          : nothing}
+        <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenShortcuts?.(); }}>
+          Keyboard shortcuts…
+        </button>
+
+        <div class="pi-utilities-menu__divider"></div>
+
         <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenRecovery?.(); }}>
           Backups…
         </button>
-        <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenShortcuts?.(); }}>
-          Keyboard shortcuts…
+        <button class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenFiles?.(); }}>
+          Files workspace (Beta)…
         </button>
       </div>
     `;
