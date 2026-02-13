@@ -7,11 +7,9 @@ import { Type } from "@sinclair/typebox";
 import {
   applyExperimentalToolGates,
   buildFilesWorkspaceGateErrorMessage,
-  buildOfficeJsExecuteGateErrorMessage,
   buildPythonBridgeGateErrorMessage,
   buildTmuxBridgeGateErrorMessage,
   evaluateFilesWorkspaceGate,
-  evaluateOfficeJsExecuteGate,
   evaluatePythonBridgeGate,
   evaluateTmuxBridgeGate,
 } from "../src/tools/experimental-tool-gates.ts";
@@ -169,7 +167,7 @@ void test("files tool allows list/read while write/delete stay gated", async () 
   assert.match(buildFilesWorkspaceGateErrorMessage("files_experiment_disabled"), /files-workspace/i);
 });
 
-void test("execute_office_js stays registered and is hard-gated", async () => {
+void test("execute_office_js is available without experimental feature gates", async () => {
   let executeCount = 0;
 
   const [officeTool] = await applyExperimentalToolGates([
@@ -177,33 +175,15 @@ void test("execute_office_js stays registered and is hard-gated", async () => {
       executeCount += 1;
     }),
   ], {
-    isOfficeJsExecuteExperimentEnabled: () => false,
+    requestOfficeJsExecuteApproval: () => Promise.resolve(true),
   });
 
-  await assert.rejects(
-    () => officeTool.execute("call-office", {
-      explanation: "Update workbook metadata",
-      code: "return { ok: true };",
-    }),
-    /\/experimental on office-js-execute/i,
-  );
-
-  assert.equal(executeCount, 0);
-
-  const enabledGate = evaluateOfficeJsExecuteGate({
-    isOfficeJsExecuteExperimentEnabled: () => true,
+  await officeTool.execute("call-office", {
+    explanation: "Update workbook metadata",
+    code: "return { ok: true };",
   });
-  assert.equal(enabledGate.allowed, true);
 
-  const disabledGate = evaluateOfficeJsExecuteGate({
-    isOfficeJsExecuteExperimentEnabled: () => false,
-  });
-  assert.equal(disabledGate.allowed, false);
-  assert.equal(disabledGate.reason, "office_js_execute_experiment_disabled");
-  assert.match(
-    buildOfficeJsExecuteGateErrorMessage("office_js_execute_experiment_disabled"),
-    /office-js-execute/i,
-  );
+  assert.equal(executeCount, 1);
 });
 
 void test("execute_office_js requires explicit user approval", async () => {
@@ -214,7 +194,6 @@ void test("execute_office_js requires explicit user approval", async () => {
       executeCount += 1;
     }),
   ], {
-    isOfficeJsExecuteExperimentEnabled: () => true,
     requestOfficeJsExecuteApproval: ({ explanation, code }) => {
       assert.equal(explanation, "Rebuild totals");
       assert.equal(code, "return { ok: true };");
@@ -240,9 +219,7 @@ void test("execute_office_js fails closed when confirmation UI is unavailable", 
     createTestTool("execute_office_js", () => {
       executeCount += 1;
     }),
-  ], {
-    isOfficeJsExecuteExperimentEnabled: () => true,
-  });
+  ], {});
 
   await assert.rejects(
     () => officeTool.execute("call-office", {

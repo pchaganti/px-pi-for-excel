@@ -169,7 +169,7 @@ const TOOLS = `## Tools
 Core workbook tools:
 ${CORE_TOOL_PROMPT_LINES}
 - **extensions_manager** — list/install/reload/enable/disable/uninstall sidebar extensions from code (for extension authoring from chat)
-- **execute_office_js** — run direct Office.js against the active workbook when structured tools cannot express the operation (experimental; explanation + user approval required)
+- **execute_office_js** — run direct Office.js against the active workbook when structured tools cannot express the operation (explanation + user approval required)
 
 Other tools may be available depending on enabled experiments/integrations.
 Use **files** for workspace artifacts (list/read/write/delete files).

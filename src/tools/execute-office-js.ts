@@ -2,24 +2,17 @@
  * execute_office_js — run direct Office.js code with explicit user intent.
  *
  * Security posture:
- * - tool is experimental and hard-gated by /experimental on office-js-execute
+ * - always available (not behind /experimental)
  * - each execution requires a brief explanation (shown in tool cards and approval prompts)
- * - execution is audited as a non-checkpointed workbook mutation event
+ * - each execution requires explicit user approval
  */
 
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 
 import { excelRun } from "../excel/helpers.js";
-import {
-  getWorkbookChangeAuditLog,
-  type AppendWorkbookChangeAuditEntryArgs,
-} from "../audit/workbook-change-audit.js";
 import { getErrorMessage } from "../utils/errors.js";
 import { isRecord } from "../utils/type-guards.js";
-import {
-  NON_CHECKPOINTED_MUTATION_NOTE,
-} from "./recovery-metadata.js";
 
 const MAX_CODE_CHARS = 20_000;
 const MAX_EXPLANATION_CHARS = 50;
@@ -48,7 +41,6 @@ type ExecuteOfficeJsRunner = (context: Excel.RequestContext) => Promise<unknown>
 
 interface ExecuteOfficeJsToolDependencies {
   runCode: (code: string) => Promise<unknown>;
-  appendAuditEntry: (entry: AppendWorkbookChangeAuditEntryArgs) => Promise<void>;
 }
 
 function normalizeExplanation(explanation: string): string {
@@ -157,7 +149,6 @@ function serializeResult(result: unknown): { text: string; truncated: boolean } 
 
 const defaultDependencies: ExecuteOfficeJsToolDependencies = {
   runCode: defaultRunCode,
-  appendAuditEntry: (entry: AppendWorkbookChangeAuditEntryArgs) => getWorkbookChangeAuditLog().append(entry),
 };
 
 export function createExecuteOfficeJsTool(
@@ -165,7 +156,6 @@ export function createExecuteOfficeJsTool(
 ): AgentTool<typeof schema, undefined> {
   const resolvedDependencies: ExecuteOfficeJsToolDependencies = {
     runCode: dependencies.runCode ?? defaultDependencies.runCode,
-    appendAuditEntry: dependencies.appendAuditEntry ?? defaultDependencies.appendAuditEntry,
   };
 
   return {
@@ -176,25 +166,14 @@ export function createExecuteOfficeJsTool(
       + "Use only when structured tools cannot express the operation.",
     parameters: schema,
     execute: async (
-      toolCallId: string,
+      _toolCallId: string,
       params: Params,
     ): Promise<AgentToolResult<undefined>> => {
-      let explanation = "";
-
       try {
-        explanation = normalizeExplanation(params.explanation);
+        const explanation = normalizeExplanation(params.explanation);
         const code = normalizeCode(params.code);
         const result = await resolvedDependencies.runCode(code);
         const serialized = serializeResult(result);
-
-        await resolvedDependencies.appendAuditEntry({
-          toolName: "execute_office_js",
-          toolCallId,
-          blocked: false,
-          changedCount: 0,
-          changes: [],
-          summary: `executed Office.js: ${explanation}`,
-        });
 
         const truncatedNote = serialized.truncated
           ? `\n\nℹ️ Result truncated to ${MAX_RESULT_CHARS.toLocaleString()} characters.`
@@ -212,26 +191,17 @@ export function createExecuteOfficeJsTool(
         return {
           content: [{
             type: "text",
-            text: `${fencedResult}${truncatedNote}\n\n${NON_CHECKPOINTED_MUTATION_NOTE}`,
+            text: `${fencedResult}${truncatedNote}`,
           }],
           details: undefined,
         };
       } catch (error: unknown) {
         const message = getErrorMessage(error);
 
-        await resolvedDependencies.appendAuditEntry({
-          toolName: "execute_office_js",
-          toolCallId,
-          blocked: true,
-          changedCount: 0,
-          changes: [],
-          summary: `error: ${message}`,
-        });
-
         return {
           content: [{
             type: "text",
-            text: `Error executing Office.js: ${message}\n\n${NON_CHECKPOINTED_MUTATION_NOTE}`,
+            text: `Error executing Office.js: ${message}`,
           }],
           details: undefined,
         };
