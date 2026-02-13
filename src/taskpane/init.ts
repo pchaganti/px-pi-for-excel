@@ -18,6 +18,7 @@ import {
   DEFAULT_LOCAL_PROXY_URL,
   PROXY_HELPER_DOCS_URL,
   isLoopbackProxyUrl,
+  validateOfficeProxyUrl,
 } from "../auth/proxy-validation.js";
 import { restoreCredentials } from "../auth/restore.js";
 import { invalidateBlueprint } from "../context/blueprint.js";
@@ -199,6 +200,24 @@ async function awaitWithTimeout<T>(label: string, timeoutMs: number, task: Promi
   }
 }
 
+interface ProxySettingsStore {
+  get<T>(key: string): Promise<T | null>;
+  set(key: string, value: unknown): Promise<void>;
+}
+
+async function ensureDefaultProxyUrl(settings: ProxySettingsStore): Promise<void> {
+  try {
+    const proxyUrl = await settings.get<string>("proxy.url");
+    if (typeof proxyUrl === "string" && proxyUrl.trim().length > 0) {
+      return;
+    }
+
+    await settings.set("proxy.url", DEFAULT_LOCAL_PROXY_URL);
+  } catch {
+    // ignore
+  }
+}
+
 export async function initTaskpane(opts: {
   appEl: HTMLElement;
   errorRoot: HTMLElement;
@@ -209,6 +228,9 @@ export async function initTaskpane(opts: {
 
   // 1. Storage
   const { providerKeys, sessions, settings } = initAppStorage();
+
+  // Seed a predictable proxy default for OAuth flows.
+  await ensureDefaultProxyUrl(settings);
 
   // 1b. Auto-compaction (Pi defaults to enabled)
   let autoCompactEnabled = true;
@@ -271,10 +293,16 @@ export async function initTaskpane(opts: {
       const storage = getAppStorage();
       const enabled = await storage.settings.get("proxy.enabled");
       if (!enabled) return undefined;
-      const url = await storage.settings.get("proxy.url");
-      return typeof url === "string" && url.trim().length > 0
-        ? url.trim().replace(/\/+$/, "")
-        : undefined;
+
+      const rawUrl = await storage.settings.get("proxy.url");
+      const trimmedUrl = typeof rawUrl === "string" ? rawUrl.trim() : "";
+      const candidateUrl = trimmedUrl.length > 0 ? trimmedUrl : DEFAULT_LOCAL_PROXY_URL;
+
+      try {
+        return validateOfficeProxyUrl(candidateUrl);
+      } catch {
+        return undefined;
+      }
     } catch {
       return undefined;
     }
