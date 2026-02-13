@@ -46,6 +46,11 @@ import {
   upsertExtensionWidget,
   type ExtensionWidgetPlacement,
 } from "../extensions/internal/widget-surface.js";
+import {
+  closeOverlayById,
+  createOverlayDialog,
+  type OverlayDialogController,
+} from "../ui/overlay-dialog.js";
 import { isRecord } from "../utils/type-guards.js";
 
 export interface ExtensionCommand {
@@ -242,6 +247,7 @@ function getDefaultCapabilityErrorMessage(capability: ExtensionCapability): stri
 }
 
 const LEGACY_WIDGET_ID = "__legacy__";
+const EXTENSION_OVERLAY_ID = "pi-ext-overlay";
 const WIDGET_V2_DISABLED_ERROR = "Widget API v2 is disabled. Enable /experimental on extension-widget-v2.";
 
 function getWidgetOwnerId(options: CreateExtensionAPIOptions): string {
@@ -325,6 +331,31 @@ export function createExtensionAPI(options: CreateExtensionAPIOptions): ExcelExt
     }
   };
 
+  let overlayDialog: OverlayDialogController | null = null;
+
+  const ensureExtensionOverlayDialog = (): OverlayDialogController => {
+    if (overlayDialog && overlayDialog.overlay.isConnected) {
+      return overlayDialog;
+    }
+
+    closeOverlayById(EXTENSION_OVERLAY_ID);
+
+    const dialog = createOverlayDialog({
+      overlayId: EXTENSION_OVERLAY_ID,
+      cardClassName: "",
+      zIndex: 250,
+    });
+
+    dialog.addCleanup(() => {
+      if (overlayDialog === dialog) {
+        overlayDialog = null;
+      }
+    });
+
+    overlayDialog = dialog;
+    return dialog;
+  };
+
   return {
     registerCommand(name: string, cmd: ExtensionCommand) {
       assertCapability("commands.register");
@@ -363,34 +394,21 @@ export function createExtensionAPI(options: CreateExtensionAPIOptions): ExcelExt
       show(el: HTMLElement) {
         assertCapability("ui.overlay");
 
-        let container = document.getElementById("pi-ext-overlay");
-        if (!container) {
-          container = document.createElement("div");
-          container.id = "pi-ext-overlay";
-          container.className = "pi-welcome-overlay";
-          container.style.zIndex = "250";
-          document.body.appendChild(container);
+        const dialog = ensureExtensionOverlayDialog();
+        dialog.card.replaceChildren(el);
+
+        if (!dialog.overlay.isConnected) {
+          dialog.mount();
         }
-
-        container.replaceChildren(el);
-        container.style.display = "flex";
-
-        // ESC to dismiss
-        const handler = (e: KeyboardEvent) => {
-          if (e.key === "Escape") {
-            this.dismiss();
-            document.removeEventListener("keydown", handler);
-          }
-        };
-        document.addEventListener("keydown", handler);
       },
 
       dismiss() {
-        const container = document.getElementById("pi-ext-overlay");
-        if (container) {
-          container.style.display = "none";
-          container.replaceChildren();
+        if (overlayDialog) {
+          overlayDialog.close();
+          return;
         }
+
+        closeOverlayById(EXTENSION_OVERLAY_ID);
       },
     },
 
