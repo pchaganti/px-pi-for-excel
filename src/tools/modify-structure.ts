@@ -11,7 +11,11 @@ import { excelRun } from "../excel/helpers.js";
 import { getWorkbookChangeAuditLog } from "../audit/workbook-change-audit.js";
 import { dispatchWorkbookSnapshotCreated } from "../workbook/recovery-events.js";
 import { getWorkbookRecoveryLog } from "../workbook/recovery-log.js";
-import { captureModifyStructureState, type RecoveryModifyStructureState } from "../workbook/recovery-states.js";
+import {
+  captureModifyStructureState,
+  type RecoveryModifyStructureState,
+  type RecoverySheetVisibility,
+} from "../workbook/recovery-states.js";
 import { getErrorMessage } from "../utils/errors.js";
 import type { ModifyStructureDetails } from "./tool-details.js";
 import {
@@ -88,8 +92,11 @@ type SupportedStructureCheckpointAction =
   | "hide_sheet"
   | "unhide_sheet"
   | "insert_rows"
+  | "delete_rows"
   | "insert_columns"
+  | "delete_columns"
   | "add_sheet"
+  | "delete_sheet"
   | "duplicate_sheet";
 
 type PreMutationCapturedStructureCheckpointAction = "rename_sheet" | "hide_sheet" | "unhide_sheet";
@@ -102,8 +109,11 @@ function supportedCheckpointActionFor(
     action === "hide_sheet" ||
     action === "unhide_sheet" ||
     action === "insert_rows" ||
+    action === "delete_rows" ||
     action === "insert_columns" ||
+    action === "delete_columns" ||
     action === "add_sheet" ||
+    action === "delete_sheet" ||
     action === "duplicate_sheet"
   ) {
     return action;
@@ -126,6 +136,32 @@ function appendResultNote(result: AgentToolResult<ModifyStructureDetails>, note:
   const first = result.content[0];
   if (!first || first.type !== "text") return;
   first.text = `${first.text}\n\n${note}`;
+}
+
+function isRecoverySheetVisibility(value: unknown): value is RecoverySheetVisibility {
+  return value === "Visible" || value === "Hidden" || value === "VeryHidden";
+}
+
+async function sheetHasValueData(
+  context: Excel.RequestContext,
+  sheet: Excel.Worksheet,
+): Promise<boolean> {
+  const usedRange = sheet.getUsedRangeOrNullObject(true);
+  usedRange.load("isNullObject");
+  await context.sync();
+
+  return !usedRange.isNullObject;
+}
+
+async function rangeHasValueData(
+  context: Excel.RequestContext,
+  targetRange: Excel.Range,
+): Promise<boolean> {
+  const usedRange = targetRange.getUsedRangeOrNullObject(true);
+  usedRange.load("isNullObject");
+  await context.sync();
+
+  return !usedRange.isNullObject;
 }
 
 function columnNumberToLetter(position: number): string {
@@ -222,16 +258,31 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
               const startRow = params.position;
               const endRow = params.position + count - 1;
               const sheet = getSheet();
+              sheet.load("id,name");
+              await context.sync();
+
               const range = sheet.getRange(`${startRow}:${endRow}`);
+              const canCreateCheckpoint = !(await rangeHasValueData(context, range));
               range.delete("Up");
               await context.sync();
-              sheet.load("name");
-              await context.sync();
+
               return {
                 message: `Deleted ${count} row(s) starting at row ${startRow} in "${sheet.name}".`,
                 changedCount: count,
                 outputAddress: `${sheet.name}!${startRow}:${endRow}`,
                 summary: `deleted ${count} row(s)`,
+                checkpointState: canCreateCheckpoint
+                  ? {
+                    kind: "rows_present",
+                    sheetId: sheet.id,
+                    sheetName: sheet.name,
+                    position: startRow,
+                    count,
+                  }
+                  : undefined,
+                checkpointUnavailableReason: canCreateCheckpoint
+                  ? undefined
+                  : "Checkpoint capture was skipped for `delete_rows` because target rows contain data.",
               };
             }
 
@@ -269,16 +320,31 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
               const startLetter = columnNumberToLetter(params.position);
               const endLetter = columnNumberToLetter(params.position + count - 1);
               const sheet = getSheet();
+              sheet.load("id,name");
+              await context.sync();
+
               const range = sheet.getRange(`${startLetter}:${endLetter}`);
+              const canCreateCheckpoint = !(await rangeHasValueData(context, range));
               range.delete("Left");
               await context.sync();
-              sheet.load("name");
-              await context.sync();
+
               return {
                 message: `Deleted ${count} column(s) starting at column ${params.position} (${startLetter}) in "${sheet.name}".`,
                 changedCount: count,
                 outputAddress: `${sheet.name}!${startLetter}:${endLetter}`,
                 summary: `deleted ${count} column(s)`,
+                checkpointState: canCreateCheckpoint
+                  ? {
+                    kind: "columns_present",
+                    sheetId: sheet.id,
+                    sheetName: sheet.name,
+                    position: params.position,
+                    count,
+                  }
+                  : undefined,
+                checkpointUnavailableReason: canCreateCheckpoint
+                  ? undefined
+                  : "Checkpoint capture was skipped for `delete_columns` because target columns contain data.",
               };
             }
 
@@ -306,15 +372,36 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
 
             case "delete_sheet": {
               if (!params.sheet) throw new Error("sheet name is required for delete_sheet");
-              const sheetName = params.sheet;
-              const sheet = context.workbook.worksheets.getItem(sheetName);
+              const sheet = context.workbook.worksheets.getItem(params.sheet);
+              sheet.load("id,name,position,visibility");
+              await context.sync();
+
+              const visibility = sheet.visibility;
+              const hasValueData = await sheetHasValueData(context, sheet);
+              const canCreateCheckpoint = isRecoverySheetVisibility(visibility) && !hasValueData;
+              const checkpointUnavailableReason = isRecoverySheetVisibility(visibility)
+                ? (hasValueData
+                  ? "Checkpoint capture was skipped for `delete_sheet` because target sheet contains data."
+                  : undefined)
+                : "Checkpoint capture was skipped for `delete_sheet` (sheet visibility unsupported).";
+
               sheet.delete();
               await context.sync();
               return {
-                message: `Deleted sheet "${sheetName}".`,
+                message: `Deleted sheet "${sheet.name}".`,
                 changedCount: 1,
-                outputAddress: sheetName,
-                summary: `deleted sheet ${sheetName}`,
+                outputAddress: sheet.name,
+                summary: `deleted sheet ${sheet.name}`,
+                checkpointState: canCreateCheckpoint
+                  ? {
+                    kind: "sheet_present",
+                    sheetId: sheet.id,
+                    sheetName: sheet.name,
+                    position: sheet.position,
+                    visibility,
+                  }
+                  : undefined,
+                checkpointUnavailableReason,
               };
             }
 
