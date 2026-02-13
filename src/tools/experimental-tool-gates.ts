@@ -1,8 +1,8 @@
 /**
  * Experimental tool gatekeeper.
  *
- * Security posture for experimental capabilities (local bridges + files + direct Office.js):
- * - experimental capability mutations must be explicitly enabled via /experimental
+ * Security posture for gated capabilities (local bridges + files + direct Office.js):
+ * - experimental capability mutations must be explicitly enabled via /experimental (where applicable)
  * - local bridge URL must be configured (for bridge-backed tools)
  * - bridge must be reachable at execution time (for bridge-backed tools)
  * - tools remain registered (stable tool list / prompt caching)
@@ -79,17 +79,6 @@ export interface FilesWorkspaceGateDependencies {
   isFilesWorkspaceExperimentEnabled?: () => boolean;
 }
 
-export type OfficeJsExecuteGateReason = "office_js_execute_experiment_disabled";
-
-export interface OfficeJsExecuteGateResult {
-  allowed: boolean;
-  reason?: OfficeJsExecuteGateReason;
-}
-
-export interface OfficeJsExecuteGateDependencies {
-  isOfficeJsExecuteExperimentEnabled?: () => boolean;
-}
-
 export interface PythonBridgeApprovalRequest {
   toolName: string;
   bridgeUrl: string;
@@ -104,8 +93,7 @@ export interface OfficeJsExecuteApprovalRequest {
 export interface ExperimentalToolGateDependencies extends
   TmuxBridgeGateDependencies,
   PythonBridgeGateDependencies,
-  FilesWorkspaceGateDependencies,
-  OfficeJsExecuteGateDependencies {
+  FilesWorkspaceGateDependencies {
   requestPythonBridgeApproval?: (request: PythonBridgeApprovalRequest) => Promise<boolean>;
   getApprovedPythonBridgeUrl?: () => Promise<string | undefined>;
   setApprovedPythonBridgeUrl?: (bridgeUrl: string) => Promise<void>;
@@ -122,10 +110,6 @@ function defaultIsPythonExperimentEnabled(): boolean {
 
 function defaultIsFilesWorkspaceExperimentEnabled(): boolean {
   return isExperimentalFeatureEnabled("files_workspace");
-}
-
-function defaultIsOfficeJsExecuteExperimentEnabled(): boolean {
-  return isExperimentalFeatureEnabled("office_js_execute");
 }
 
 async function defaultGetBridgeUrl(settingKey: string): Promise<string | undefined> {
@@ -303,23 +287,6 @@ export function evaluateFilesWorkspaceGate(
   return { allowed: true };
 }
 
-export function evaluateOfficeJsExecuteGate(
-  dependencies: OfficeJsExecuteGateDependencies = {},
-): OfficeJsExecuteGateResult {
-  const isEnabled =
-    dependencies.isOfficeJsExecuteExperimentEnabled
-    ?? defaultIsOfficeJsExecuteExperimentEnabled;
-
-  if (!isEnabled()) {
-    return {
-      allowed: false,
-      reason: "office_js_execute_experiment_disabled",
-    };
-  }
-
-  return { allowed: true };
-}
-
 export function buildTmuxBridgeGateErrorMessage(reason: TmuxBridgeGateReason): string {
   switch (reason) {
     case "tmux_experiment_disabled":
@@ -350,13 +317,6 @@ export function buildFilesWorkspaceGateErrorMessage(reason: FilesWorkspaceGateRe
   switch (reason) {
     case "files_experiment_disabled":
       return "Files workspace write/delete actions are disabled. Enable them with /experimental on files-workspace.";
-  }
-}
-
-export function buildOfficeJsExecuteGateErrorMessage(reason: OfficeJsExecuteGateReason): string {
-  switch (reason) {
-    case "office_js_execute_experiment_disabled":
-      return "Direct Office.js execution is disabled. Enable it with /experimental on office-js-execute.";
   }
 }
 
@@ -527,12 +487,6 @@ function wrapExecuteOfficeJsToolWithHardGate(
   return {
     ...tool,
     execute: async (toolCallId, params, signal, onUpdate) => {
-      const gate = evaluateOfficeJsExecuteGate(dependencies);
-      if (!gate.allowed) {
-        const reason = gate.reason ?? "office_js_execute_experiment_disabled";
-        throw new Error(buildOfficeJsExecuteGateErrorMessage(reason));
-      }
-
       const approved = await requestApproval(getOfficeJsExecuteApprovalRequest(params));
       if (!approved) {
         throw new Error("Office.js execution cancelled by user.");
@@ -594,7 +548,7 @@ function wrapPythonBridgeToolWithHardGate(
  * Current rules:
  * - `tmux`, `files`, `execute_office_js`, `python_run`, `libreoffice_convert`, and
  *   `python_transform_range` stay registered to keep the tool list stable.
- * - each gated tool execution re-checks experiment flags (and bridge health where relevant).
+ * - bridge-backed tools re-check experiment flags (and bridge health) on every execution.
  * - `files` keeps list/read available when disabled, but still gates write/delete.
  * - python/libreoffice bridge tools require user confirmation once per configured bridge URL.
  * - execute_office_js requires explicit user confirmation on every execution.
