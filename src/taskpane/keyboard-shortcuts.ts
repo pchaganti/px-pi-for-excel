@@ -12,7 +12,7 @@ import { moveCursorToEnd } from "../ui/input-focus.js";
 import { isActionToastVisible, showToast } from "../ui/toast.js";
 
 import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
-import { blurTextEntryTarget, isTextEntryTarget } from "../utils/text-entry.js";
+import { blurTextEntryTarget, getTextEntryElement, isTextEntryTarget } from "../utils/text-entry.js";
 import { commandRegistry } from "../commands/types.js";
 import {
   handleCommandMenuKey,
@@ -33,6 +33,8 @@ type ActionQueue = {
 
 interface TabShortcutEventLike {
   key: string;
+  code?: string;
+  keyCode?: number;
   metaKey: boolean;
   ctrlKey: boolean;
   shiftKey: boolean;
@@ -167,32 +169,68 @@ export function cycleThinkingLevel(agent: Agent): ThinkingLevel {
   return next;
 }
 
+function isShortcutLetter(
+  event: TabShortcutEventLike,
+  letter: "t" | "w" | "z",
+): boolean {
+  if (event.key.toLowerCase() === letter) {
+    return true;
+  }
+
+  const upper = letter.toUpperCase();
+  if (event.code === `Key${upper}`) {
+    return true;
+  }
+
+  const keyCode = letter === "t" ? 84 : letter === "w" ? 87 : 90;
+  if (event.keyCode === keyCode) {
+    return true;
+  }
+
+  return false;
+}
+
+function textEntryHasContent(target: EventTarget | null | undefined): boolean {
+  const element = getTextEntryElement(target);
+  if (!element) return false;
+
+  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+    return element.value.length > 0;
+  }
+
+  if (element instanceof HTMLSelectElement) {
+    return element.value.length > 0;
+  }
+
+  return (element.textContent ?? "").length > 0;
+}
+
 export function isCreateTabShortcut(event: CreateTabShortcutEventLike): boolean {
   if (!(event.metaKey || event.ctrlKey)) return false;
   if (event.shiftKey || event.altKey) return false;
 
-  return event.key.toLowerCase() === "t";
+  return isShortcutLetter(event, "t");
 }
 
 export function isCloseActiveTabShortcut(event: CloseTabShortcutEventLike): boolean {
   if (!(event.metaKey || event.ctrlKey)) return false;
   if (event.shiftKey || event.altKey) return false;
 
-  return event.key.toLowerCase() === "w";
+  return isShortcutLetter(event, "w");
 }
 
 export function isUndoCloseTabShortcut(event: UndoCloseShortcutEventLike): boolean {
   if (!(event.metaKey || event.ctrlKey)) return false;
   if (event.shiftKey || event.altKey) return false;
 
-  return event.key.toLowerCase() === "z";
+  return isShortcutLetter(event, "z");
 }
 
 export function isReopenLastClosedShortcut(event: ReopenShortcutEventLike): boolean {
   if (!(event.metaKey || event.ctrlKey)) return false;
   if (!event.shiftKey || event.altKey) return false;
 
-  return event.key.toLowerCase() === "t";
+  return isShortcutLetter(event, "t");
 }
 
 export function isFocusInputShortcut(event: FocusInputShortcutEventLike): boolean {
@@ -257,11 +295,16 @@ export function shouldAbortFromEscape(opts: {
 }
 
 export function shouldHandleUndoCloseTabShortcut(opts: {
+  canUndoCloseTab: boolean;
   isTextEntry: boolean;
+  textEntryHasContent: boolean;
   actionToastVisible: boolean;
 }): boolean {
-  if (opts.isTextEntry && !opts.actionToastVisible) return false;
-  return true;
+  if (!opts.canUndoCloseTab) return false;
+  if (opts.actionToastVisible) return true;
+  if (!opts.isTextEntry) return true;
+  if (!opts.textEntryHasContent) return true;
+  return false;
 }
 
 export function installKeyboardShortcuts(opts: {
@@ -273,6 +316,7 @@ export function installKeyboardShortcuts(opts: {
   onCreateTab?: () => void;
   onCloseActiveTab?: () => void;
   onReopenLastClosed?: () => void;
+  canUndoCloseTab?: () => boolean;
   onSwitchAdjacentTab?: (direction: -1 | 1) => void;
 }): () => void {
   const {
@@ -284,6 +328,7 @@ export function installKeyboardShortcuts(opts: {
     onCreateTab,
     onCloseActiveTab,
     onReopenLastClosed,
+    canUndoCloseTab,
     onSwitchAdjacentTab,
   } = opts;
 
@@ -394,7 +439,9 @@ export function installKeyboardShortcuts(opts: {
       if (!onReopenLastClosed) return;
 
       const shouldHandleUndoClose = shouldHandleUndoCloseTabShortcut({
+        canUndoCloseTab: canUndoCloseTab?.() ?? true,
         isTextEntry: isTextEntryTarget(keyTarget),
+        textEntryHasContent: textEntryHasContent(keyTarget),
         actionToastVisible: isActionToastVisible(),
       });
 

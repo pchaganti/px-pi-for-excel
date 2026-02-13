@@ -241,6 +241,30 @@ void test("Cmd/Ctrl+Z detection ignores Shift/Alt-modified chords", () => {
 
   assert.equal(
     isUndoCloseTabShortcut({
+      key: "Unidentified",
+      code: "KeyZ",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    isUndoCloseTabShortcut({
+      key: "Unidentified",
+      keyCode: 90,
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    isUndoCloseTabShortcut({
       key: "z",
       metaKey: true,
       ctrlKey: false,
@@ -262,10 +286,22 @@ void test("Cmd/Ctrl+Z detection ignores Shift/Alt-modified chords", () => {
   );
 });
 
-void test("Undo-close handling allows Cmd/Ctrl+Z in text fields only when action toast is visible", () => {
+void test("Undo-close handling supports empty input + non-input contexts while preserving text undo", () => {
   assert.equal(
     shouldHandleUndoCloseTabShortcut({
+      canUndoCloseTab: false,
       isTextEntry: false,
+      textEntryHasContent: false,
+      actionToastVisible: true,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldHandleUndoCloseTabShortcut({
+      canUndoCloseTab: true,
+      isTextEntry: false,
+      textEntryHasContent: false,
       actionToastVisible: false,
     }),
     true,
@@ -273,7 +309,19 @@ void test("Undo-close handling allows Cmd/Ctrl+Z in text fields only when action
 
   assert.equal(
     shouldHandleUndoCloseTabShortcut({
+      canUndoCloseTab: true,
       isTextEntry: true,
+      textEntryHasContent: false,
+      actionToastVisible: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldHandleUndoCloseTabShortcut({
+      canUndoCloseTab: true,
+      isTextEntry: true,
+      textEntryHasContent: true,
       actionToastVisible: false,
     }),
     false,
@@ -281,7 +329,9 @@ void test("Undo-close handling allows Cmd/Ctrl+Z in text fields only when action
 
   assert.equal(
     shouldHandleUndoCloseTabShortcut({
+      canUndoCloseTab: true,
       isTextEntry: true,
+      textEntryHasContent: true,
       actionToastVisible: true,
     }),
     true,
