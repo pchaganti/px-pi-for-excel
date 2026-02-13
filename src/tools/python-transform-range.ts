@@ -38,9 +38,10 @@ import type { PythonTransformRangeDetails } from "./tool-details.js";
 import {
   CHECKPOINT_SKIPPED_NOTE,
   CHECKPOINT_SKIPPED_REASON,
-  recoveryCheckpointCreated,
-  recoveryCheckpointUnavailable,
 } from "./recovery-metadata.js";
+import { finalizeMutationOperation } from "./mutation/finalize.js";
+import type { MutationFinalizeDependencies } from "./mutation/types.js";
+import { appendMutationResultNote } from "./mutation/result-note.js";
 
 const MIN_TIMEOUT_MS = 100;
 const MAX_TIMEOUT_MS = 120_000;
@@ -116,6 +117,10 @@ export interface PythonTransformRangeToolDependencies {
   readInputRange?: (rangeRef: string) => Promise<InputRangeSnapshot>;
   writeOutputValues?: (request: WriteOutputRequest) => Promise<WriteOutputResult>;
 }
+
+const mutationFinalizeDependencies: MutationFinalizeDependencies = {
+  appendAuditEntry: (entry) => getWorkbookChangeAuditLog().append(entry),
+};
 
 function cleanOptionalString(value: string | undefined): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -462,14 +467,16 @@ export function createPythonTransformRangeTool(
             },
           };
 
-          await getWorkbookChangeAuditLog().append({
-            toolName: "python_transform_range",
-            toolCallId,
-            blocked: true,
-            inputAddress: sourceAddress,
-            outputAddress: writeResult.outputAddress,
-            changedCount: 0,
-            changes: [],
+          await finalizeMutationOperation(mutationFinalizeDependencies, {
+            auditEntry: {
+              toolName: "python_transform_range",
+              toolCallId,
+              blocked: true,
+              inputAddress: sourceAddress,
+              outputAddress: writeResult.outputAddress,
+              changedCount: 0,
+              changes: [],
+            },
           });
 
           return blockedResult;
@@ -517,43 +524,47 @@ export function createPythonTransformRangeTool(
           },
         };
 
-        await getWorkbookChangeAuditLog().append({
-          toolName: "python_transform_range",
-          toolCallId,
-          blocked: false,
-          inputAddress: sourceAddress,
-          outputAddress: writeResult.outputAddress,
-          changedCount: changes?.changedCount ?? writeResult.rowsWritten * writeResult.colsWritten,
-          changes: changes?.sample ?? [],
-        });
+        const changedCount = changes?.changedCount ?? writeResult.rowsWritten * writeResult.colsWritten;
 
-        if (writeResult.beforeValues && writeResult.beforeFormulas) {
-          const checkpoint = await getWorkbookRecoveryLog().append({
+        await finalizeMutationOperation(mutationFinalizeDependencies, {
+          auditEntry: {
             toolName: "python_transform_range",
             toolCallId,
-            address: writeResult.outputAddress,
-            changedCount: changes?.changedCount ?? writeResult.rowsWritten * writeResult.colsWritten,
-            beforeValues: writeResult.beforeValues,
-            beforeFormulas: writeResult.beforeFormulas,
-          });
+            blocked: false,
+            inputAddress: sourceAddress,
+            outputAddress: writeResult.outputAddress,
+            changedCount,
+            changes: changes?.sample ?? [],
+          },
+          recovery: {
+            result: successResult,
+            appendRecoverySnapshot: () => {
+              if (!writeResult.beforeValues || !writeResult.beforeFormulas) {
+                return Promise.resolve(null);
+              }
 
-          if (checkpoint) {
-            successResult.details.recovery = recoveryCheckpointCreated(checkpoint.id);
-
-            dispatchWorkbookSnapshotCreated({
-              snapshotId: checkpoint.id,
-              toolName: checkpoint.toolName,
-              address: checkpoint.address,
-              changedCount: checkpoint.changedCount,
-            });
-          } else {
-            successResult.details.recovery = recoveryCheckpointUnavailable(CHECKPOINT_SKIPPED_REASON);
-            appendResultNote(successResult, CHECKPOINT_SKIPPED_NOTE);
-          }
-        } else {
-          successResult.details.recovery = recoveryCheckpointUnavailable(CHECKPOINT_SKIPPED_REASON);
-          appendResultNote(successResult, CHECKPOINT_SKIPPED_NOTE);
-        }
+              return getWorkbookRecoveryLog().append({
+                toolName: "python_transform_range",
+                toolCallId,
+                address: writeResult.outputAddress,
+                changedCount,
+                beforeValues: writeResult.beforeValues,
+                beforeFormulas: writeResult.beforeFormulas,
+              });
+            },
+            appendResultNote: appendMutationResultNote,
+            unavailableReason: CHECKPOINT_SKIPPED_REASON,
+            unavailableNote: CHECKPOINT_SKIPPED_NOTE,
+            dispatchSnapshotCreated: (checkpoint) => {
+              dispatchWorkbookSnapshotCreated({
+                snapshotId: checkpoint.id,
+                toolName: checkpoint.toolName,
+                address: checkpoint.address,
+                changedCount: checkpoint.changedCount,
+              });
+            },
+          },
+        });
 
         return successResult;
       } catch (error: unknown) {
@@ -571,9 +582,3 @@ export function createPythonTransformRangeTool(
   };
 }
 
-function appendResultNote(result: AgentToolResult<PythonTransformRangeDetails>, note: string): void {
-  const first = result.content[0];
-  if (!first || first.type !== "text") return;
-
-  first.text = `${first.text}\n\n${note}`;
-}

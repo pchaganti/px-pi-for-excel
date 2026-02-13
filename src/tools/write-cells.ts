@@ -23,9 +23,10 @@ import { getErrorMessage } from "../utils/errors.js";
 import {
   CHECKPOINT_SKIPPED_NOTE,
   CHECKPOINT_SKIPPED_REASON,
-  recoveryCheckpointCreated,
-  recoveryCheckpointUnavailable,
 } from "./recovery-metadata.js";
+import { finalizeMutationOperation } from "./mutation/finalize.js";
+import type { MutationFinalizeDependencies } from "./mutation/types.js";
+import { appendMutationResultNote } from "./mutation/result-note.js";
 
 const schema = Type.Object({
   start_cell: Type.String({
@@ -77,6 +78,10 @@ type WriteCellsResult =
 
 type BlockedWriteCellsResult = Extract<WriteCellsResult, { blocked: true }>;
 type SuccessWriteCellsResult = Extract<WriteCellsResult, { blocked: false }>;
+
+const mutationFinalizeDependencies: MutationFinalizeDependencies = {
+  appendAuditEntry: (entry) => getWorkbookChangeAuditLog().append(entry),
+};
 
 export function createWriteCellsTool(): AgentTool<typeof schema, WriteCellsDetails> {
   return {
@@ -187,13 +192,15 @@ export function createWriteCellsTool(): AgentTool<typeof schema, WriteCellsDetai
         if (result.blocked) {
           const blockedResult = formatBlocked(result);
 
-          await getWorkbookChangeAuditLog().append({
-            toolName: "write_cells",
-            toolCallId,
-            blocked: true,
-            outputAddress: blockedResult.details.address,
-            changedCount: 0,
-            changes: [],
+          await finalizeMutationOperation(mutationFinalizeDependencies, {
+            auditEntry: {
+              toolName: "write_cells",
+              toolCallId,
+              blocked: true,
+              outputAddress: blockedResult.details.address,
+              changedCount: 0,
+              changes: [],
+            },
           });
 
           return blockedResult;
@@ -201,37 +208,38 @@ export function createWriteCellsTool(): AgentTool<typeof schema, WriteCellsDetai
 
         const successResult = formatSuccess(result, rows, cols);
 
-        await getWorkbookChangeAuditLog().append({
-          toolName: "write_cells",
-          toolCallId,
-          blocked: false,
-          outputAddress: successResult.details.address,
-          changedCount: successResult.details.changes?.changedCount ?? 0,
-          changes: successResult.details.changes?.sample ?? [],
+        await finalizeMutationOperation(mutationFinalizeDependencies, {
+          auditEntry: {
+            toolName: "write_cells",
+            toolCallId,
+            blocked: false,
+            outputAddress: successResult.details.address,
+            changedCount: successResult.details.changes?.changedCount ?? 0,
+            changes: successResult.details.changes?.sample ?? [],
+          },
+          recovery: {
+            result: successResult,
+            appendRecoverySnapshot: () => getWorkbookRecoveryLog().append({
+              toolName: "write_cells",
+              toolCallId,
+              address: successResult.details.address ?? qualifiedAddress(result.sheetName, result.address),
+              changedCount: successResult.details.changes?.changedCount ?? 0,
+              beforeValues: result.beforeValues,
+              beforeFormulas: result.beforeFormulas,
+            }),
+            appendResultNote: appendMutationResultNote,
+            unavailableReason: CHECKPOINT_SKIPPED_REASON,
+            unavailableNote: CHECKPOINT_SKIPPED_NOTE,
+            dispatchSnapshotCreated: (checkpoint) => {
+              dispatchWorkbookSnapshotCreated({
+                snapshotId: checkpoint.id,
+                toolName: checkpoint.toolName,
+                address: checkpoint.address,
+                changedCount: checkpoint.changedCount,
+              });
+            },
+          },
         });
-
-        const checkpoint = await getWorkbookRecoveryLog().append({
-          toolName: "write_cells",
-          toolCallId,
-          address: successResult.details.address ?? qualifiedAddress(result.sheetName, result.address),
-          changedCount: successResult.details.changes?.changedCount ?? 0,
-          beforeValues: result.beforeValues,
-          beforeFormulas: result.beforeFormulas,
-        });
-
-        if (checkpoint) {
-          successResult.details.recovery = recoveryCheckpointCreated(checkpoint.id);
-
-          dispatchWorkbookSnapshotCreated({
-            snapshotId: checkpoint.id,
-            toolName: checkpoint.toolName,
-            address: checkpoint.address,
-            changedCount: checkpoint.changedCount,
-          });
-        } else {
-          successResult.details.recovery = recoveryCheckpointUnavailable(CHECKPOINT_SKIPPED_REASON);
-          appendResultNote(successResult, CHECKPOINT_SKIPPED_NOTE);
-        }
 
         return successResult;
       } catch (e: unknown) {
@@ -470,9 +478,3 @@ function formatSuccess(result: SuccessWriteCellsResult, rows: number, cols: numb
   return { content: [{ type: "text", text: lines.join("\n") }], details };
 }
 
-function appendResultNote(result: AgentToolResult<WriteCellsDetails>, note: string): void {
-  const first = result.content[0];
-  if (!first || first.type !== "text") return;
-
-  first.text = `${first.text}\n\n${note}`;
-}
