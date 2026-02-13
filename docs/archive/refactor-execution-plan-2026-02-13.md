@@ -125,8 +125,10 @@ Primary files:
 
 ### Track T (Tests/docs closeout; starts near end)
 Primary files:
-- `tests/workbook-recovery-log.test.ts` (then split)
-- `tests/recovery-log-*.test.ts` (new)
+- `tests/recovery-log-persistence.test.ts`
+- `tests/recovery-log-restore.test.ts`
+- `tests/recovery-log-format.test.ts`
+- `tests/recovery-log-structure.test.ts`
 - `docs/archive/codebase-simplification-plan.md`
 - `src/tools/DECISIONS.md` (only if behavior detail changes)
 
