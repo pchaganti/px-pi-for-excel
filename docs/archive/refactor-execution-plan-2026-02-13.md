@@ -13,6 +13,8 @@
 - `tests/recovery-log-format.test.ts`
 - `tests/recovery-log-structure.test.ts`
 
+Use `npm run test:recovery` for a reproducible recovery-suite command on current Node versions (including Node v25).
+
 ---
 
 ## Goals
@@ -123,8 +125,10 @@ Primary files:
 
 ### Track T (Tests/docs closeout; starts near end)
 Primary files:
-- `tests/workbook-recovery-log.test.ts` (then split)
-- `tests/recovery-log-*.test.ts` (new)
+- `tests/recovery-log-persistence.test.ts`
+- `tests/recovery-log-restore.test.ts`
+- `tests/recovery-log-format.test.ts`
+- `tests/recovery-log-structure.test.ts`
 - `docs/archive/codebase-simplification-plan.md`
 - `src/tools/DECISIONS.md` (only if behavior detail changes)
 
@@ -163,7 +167,7 @@ Primary files:
 
 **Validation**
 - `npm run check`
-- `node --test --experimental-strip-types tests/workbook-recovery-log.test.ts`
+- `npm run test:recovery`
 - `npm run build`
 
 ---
@@ -179,7 +183,7 @@ Primary files:
 
 **Validation**
 - `npm run check`
-- `node --test --experimental-strip-types tests/workbook-recovery-log.test.ts`
+- `npm run test:recovery`
 
 ### R2 — Extract structure-state capture/apply
 **Changes**
@@ -188,7 +192,7 @@ Primary files:
 
 **Validation**
 - `npm run check`
-- `node --test --experimental-strip-types tests/workbook-recovery-log.test.ts`
+- `npm run test:recovery`
 
 ### R3 — Extract conditional-format + comment state
 **Changes**
@@ -199,7 +203,7 @@ Primary files:
 
 **Validation**
 - `npm run check`
-- `node --test --experimental-strip-types tests/workbook-recovery-log.test.ts`
+- `npm run test:recovery`
 - `npm run build`
 
 ---
@@ -215,7 +219,7 @@ Primary files:
 
 **Validation**
 - `npm run check`
-- `node --test --experimental-strip-types tests/workbook-recovery-log.test.ts`
+- `npm run test:recovery`
 
 ### L2 — Recovery restore strategy module
 **Changes**
@@ -225,7 +229,7 @@ Primary files:
 
 **Validation**
 - `npm run check`
-- `node --test --experimental-strip-types tests/workbook-recovery-log.test.ts`
+- `npm run test:recovery`
 - `npm run build`
 
 ---
@@ -324,8 +328,8 @@ Primary files:
 
 To keep feedback fast, run focused suites per PR, then full gate in convergence.
 
-- **R track PRs:** `tests/workbook-recovery-log.test.ts`
-- **L track PRs:** `tests/workbook-recovery-log.test.ts`
+- **R track PRs:** `npm run test:recovery`
+- **L track PRs:** `npm run test:recovery`
 - **M track PRs:**
   - `tests/tool-result-shaping.test.ts`
   - `tests/workbook-change-audit.test.ts`
