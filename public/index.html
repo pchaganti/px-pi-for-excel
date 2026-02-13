@@ -81,6 +81,21 @@
       font-size: 20px;
       line-height: 1;
     }
+    .exp-badge {
+      display: inline-flex;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: oklch(0.55 0.15 50 / 0.10);
+      color: oklch(0.48 0.12 50);
+      border: 1px solid oklch(0.55 0.15 50 / 0.18);
+      margin-left: 10px;
+    }
     .nav-links { display: flex; align-items: center; gap: 20px; }
     .nav-links a {
       font-size: 13px;
@@ -605,7 +620,7 @@
 
   <!-- Nav -->
   <nav>
-    <a href="/" class="nav-mark"><span>π</span> Pi for Excel</a>
+    <a href="/" class="nav-mark"><span>π</span> Pi for Excel <span class="exp-badge">Experimental</span></a>
     <div class="nav-links">
       <a href="#install">Install</a>
       <a href="#connect">Connect</a>
@@ -621,7 +636,7 @@
   <div class="hero">
     <h1>A powerful, open-source agent inside&nbsp;Excel</h1>
     <p class="hero-sub">
-      If you use a &ldquo;coding&rdquo; agent to do research, write reports, or build things — you know those tools can do way more than write code. Pi for Excel puts that same power inside your spreadsheets, where you can actually work with it interactively. No separate login: use it with wherever you get your AI from.
+      If you use a &ldquo;coding&rdquo; agent to do research, write reports, or build things: you know they can do way more than write code. Pi for Excel puts some of that power inside your spreadsheets, where you can actually work with it interactively. No account needed: login with wherever you get your AI from.
     </p>
     <a href="#install" class="hero-cta">
       Install it
@@ -655,10 +670,10 @@
     </div>
 
     <div class="prompts">
-      <div class="prompt-example">Trace all the dependencies of the formula in D14 and explain the chain</div>
-      <div class="prompt-example">Write a VLOOKUP across these two sheets, then flag outliers with conditional formatting</div>
-      <div class="prompt-example">Search the whole workbook for references to 'Revenue' and summarize what I've got</div>
-      <div class="prompt-example">Something's off in row 23 — can you check the formulas?</div>
+      <div class="prompt-example">I pasted raw data in Sheet2. Clean it up, figure out what it is, and build me a summary.</div>
+      <div class="prompt-example">What assumptions is this model making? Walk me through the logic. Cross-check with web search and the PDFs.</div>
+      <div class="prompt-example">Fetch today's FX rates and update the currency column, then build an /fx extension to do that automatically.</div>
+      <div class="prompt-example">Use tmux to ask Claude Code to build &amp; open a webpage based on this file's analysis.</div>
     </div>
   </section>
 
