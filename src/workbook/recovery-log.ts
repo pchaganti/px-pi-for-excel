@@ -505,6 +505,10 @@ function isRecoverySheetVisibility(value: unknown): value is "Visible" | "Hidden
   return value === "Visible" || value === "Hidden" || value === "VeryHidden";
 }
 
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
 function isRecoveryModifyStructureState(value: unknown): value is RecoveryModifyStructureState {
   if (!isRecord(value)) return false;
 
@@ -514,6 +518,39 @@ function isRecoveryModifyStructureState(value: unknown): value is RecoveryModify
 
   if (value.kind === "sheet_visibility") {
     return typeof value.sheetId === "string" && isRecoverySheetVisibility(value.visibility);
+  }
+
+  if (value.kind === "sheet_absent") {
+    return typeof value.sheetId === "string" && typeof value.sheetName === "string";
+  }
+
+  if (value.kind === "sheet_present") {
+    return (
+      typeof value.sheetId === "string" &&
+      typeof value.sheetName === "string" &&
+      typeof value.position === "number" &&
+      Number.isInteger(value.position) &&
+      value.position >= 0 &&
+      isRecoverySheetVisibility(value.visibility)
+    );
+  }
+
+  if (value.kind === "rows_absent" || value.kind === "rows_present") {
+    return (
+      typeof value.sheetId === "string" &&
+      typeof value.sheetName === "string" &&
+      isPositiveInteger(value.position) &&
+      isPositiveInteger(value.count)
+    );
+  }
+
+  if (value.kind === "columns_absent" || value.kind === "columns_present") {
+    return (
+      typeof value.sheetId === "string" &&
+      typeof value.sheetName === "string" &&
+      isPositiveInteger(value.position) &&
+      isPositiveInteger(value.count)
+    );
   }
 
   return false;

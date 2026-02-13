@@ -96,16 +96,17 @@ Delivered for this phase:
 https://github.com/tmustier/pi-for-excel/issues/27
 
 **Status note:** rollback UX is now in place:
-- automatic backups for `write_cells`, `fill_formula`, `python_transform_range`, `format_cells` (with scoped limits), `conditional_format`, mutating `comments` actions, and supported `modify_structure` actions (`rename_sheet`, `hide_sheet`, `unhide_sheet`)
+- automatic backups for `write_cells`, `fill_formula`, `python_transform_range`, `format_cells` (with scoped limits), `conditional_format`, mutating `comments` actions, and supported `modify_structure` actions (`rename_sheet`, `hide_sheet`, `unhide_sheet`, `insert_rows`, `insert_columns`, `add_sheet`, and `duplicate_sheet` when the duplicate has no value data)
 - new `workbook_history` tool (list / restore / delete / clear)
 - backup browser overlay (menu + `/history`) plus `/revert` for latest-backup rollback
 - dedicated backup browser overlay (menu + `/history`) with restore/delete/clear controls
 - restore creates an inverse backup so rollbacks are themselves reversible
-- unsupported mutation tools/actions (including unsupported `modify_structure` variants) explicitly report when no backup is created
+- unsupported mutation tools/actions (including unsupported destructive `modify_structure` variants: `delete_rows`, `delete_columns`, `delete_sheet`) explicitly report when no backup is created
+- structure-absence restores (`sheet_absent`, `rows_absent`, `columns_absent`) are blocked when target data exists to avoid irreversible deletes
 - conditional-format backup restore now covers all current rule families: `custom`, `cell_value`, `contains_text`, `top_bottom`, `preset_criteria`, `data_bar`, `color_scale`, `icon_set`
 
 **Remaining follow-up:**
-- broader remaining coverage (unsupported `modify_structure` actions)
+- broader remaining coverage (unsupported destructive `modify_structure` actions: `delete_rows`, `delete_columns`, `delete_sheet`)
 - richer history UX (search/filter/export, retention controls)
 - feasibility deep-dive for full-file snapshots vs range snapshots in Office.js
 
