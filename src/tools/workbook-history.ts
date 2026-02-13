@@ -14,6 +14,8 @@ import {
   type AppendWorkbookChangeAuditEntryArgs,
 } from "../audit/workbook-change-audit.js";
 import { getErrorMessage } from "../utils/errors.js";
+import { finalizeMutationOperation } from "./mutation/finalize.js";
+import type { MutationFinalizeDependencies } from "./mutation/types.js";
 import type { WorkbookHistoryDetails } from "./tool-details.js";
 
 const schema = Type.Object({
@@ -117,6 +119,9 @@ export function createWorkbookHistoryTool(
     getRecoveryLog: dependencies.getRecoveryLog ?? defaultDependencies.getRecoveryLog,
     appendAuditEntry: dependencies.appendAuditEntry ?? defaultDependencies.appendAuditEntry,
   };
+  const mutationFinalizeDependencies: MutationFinalizeDependencies = {
+    appendAuditEntry: (entry) => resolvedDependencies.appendAuditEntry(entry),
+  };
 
   return {
     name: "workbook_history",
@@ -175,13 +180,15 @@ export function createWorkbookHistoryTool(
               },
             };
 
-            await resolvedDependencies.appendAuditEntry({
-              toolName: "workbook_history",
-              toolCallId,
-              blocked: true,
-              changedCount: 0,
-              changes: [],
-              summary: "error: no backups available to restore",
+            await finalizeMutationOperation(mutationFinalizeDependencies, {
+              auditEntry: {
+                toolName: "workbook_history",
+                toolCallId,
+                blocked: true,
+                changedCount: 0,
+                changes: [],
+                summary: "error: no backups available to restore",
+              },
             });
 
             return restoreUnavailableResult;
@@ -196,14 +203,16 @@ export function createWorkbookHistoryTool(
             lines.push(`Rollback backup created: \`${shortId(restored.inverseSnapshotId)}\`.`);
           }
 
-          await resolvedDependencies.appendAuditEntry({
-            toolName: "workbook_history",
-            toolCallId,
-            blocked: false,
-            outputAddress: restored.address,
-            changedCount: restored.changedCount,
-            changes: [],
-            summary: `restored backup ${shortId(restored.restoredSnapshotId)} at ${restored.address}`,
+          await finalizeMutationOperation(mutationFinalizeDependencies, {
+            auditEntry: {
+              toolName: "workbook_history",
+              toolCallId,
+              blocked: false,
+              outputAddress: restored.address,
+              changedCount: restored.changedCount,
+              changes: [],
+              summary: `restored backup ${shortId(restored.restoredSnapshotId)} at ${restored.address}`,
+            },
           });
 
           return {
@@ -270,13 +279,15 @@ export function createWorkbookHistoryTool(
         const message = getErrorMessage(error);
 
         if (action === "restore") {
-          await resolvedDependencies.appendAuditEntry({
-            toolName: "workbook_history",
-            toolCallId,
-            blocked: true,
-            changedCount: 0,
-            changes: [],
-            summary: `error: ${message}`,
+          await finalizeMutationOperation(mutationFinalizeDependencies, {
+            auditEntry: {
+              toolName: "workbook_history",
+              toolCallId,
+              blocked: true,
+              changedCount: 0,
+              changes: [],
+              summary: `error: ${message}`,
+            },
           });
         }
 
