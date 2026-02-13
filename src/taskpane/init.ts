@@ -143,6 +143,28 @@ function isRuntimeAgentTool(value: unknown): value is AgentTool {
     && typeof value.execute === "function";
 }
 
+function normalizeRuntimeTools(candidates: unknown[]): AgentTool[] {
+  const seen = new Set<string>();
+  const out: AgentTool[] = [];
+
+  for (const candidate of candidates) {
+    if (!isRuntimeAgentTool(candidate)) {
+      console.warn("[pi] Ignoring invalid runtime tool payload", candidate);
+      continue;
+    }
+
+    if (seen.has(candidate.name)) {
+      console.warn(`[pi] Ignoring duplicate runtime tool name: ${candidate.name}`);
+      continue;
+    }
+
+    seen.add(candidate.name);
+    out.push(candidate);
+  }
+
+  return out;
+}
+
 function isLikelyCorsErrorMessage(msg: string): boolean {
   const m = msg.toLowerCase();
 
@@ -173,6 +195,24 @@ function getActiveLockNotice(tabs: RuntimeTabSnapshot[]): string | null {
   }
 
   return null;
+}
+
+async function awaitWithTimeout<T>(label: string, timeoutMs: number, task: Promise<T>): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+
+    return await Promise.race([task, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 export async function initTaskpane(opts: {
@@ -210,13 +250,25 @@ export async function initTaskpane(opts: {
     // ignore
   }
 
-  // 2. Restore auth
-  await restoreCredentials(providerKeys, settings);
+  // 2. Restore auth (bounded to avoid indefinite startup hang)
+  try {
+    await awaitWithTimeout("Credential restore", 6000, restoreCredentials(providerKeys, settings));
+  } catch (error: unknown) {
+    console.warn("[auth] Credential restore skipped:", error);
+  }
 
   // 2b. Welcome/login if no providers
-  const configuredProviders = await providerKeys.list();
-  if (configuredProviders.length === 0) {
-    await showWelcomeLogin(providerKeys);
+  let availableProviders: string[] = [];
+  try {
+    availableProviders = await awaitWithTimeout("Provider key lookup", 3000, providerKeys.list());
+  } catch (error: unknown) {
+    console.warn("[auth] Provider lookup failed during startup:", error);
+  }
+
+  if (availableProviders.length === 0) {
+    void showWelcomeLogin(providerKeys).catch((error: unknown) => {
+      console.warn("[auth] Failed to open welcome login:", error);
+    });
   }
 
   // 3. Change tracker
@@ -224,7 +276,6 @@ export async function initTaskpane(opts: {
 
   // 4. Shared runtime dependencies
   // Workbook structure context is injected separately by transformContext.
-  const availableProviders = await providerKeys.list();
   setActiveProviders(new Set(availableProviders));
   const defaultModel = pickDefaultModel(availableProviders);
 
@@ -602,14 +653,14 @@ export async function initTaskpane(opts: {
         skillReadCache: runtimeSkillReadCache,
       }).filter(isRuntimeAgentTool);
       const gatedCoreTools = await applyExperimentalToolGates(coreTools);
-      const allTools = [
+      const runtimeTools = normalizeRuntimeTools([
         ...gatedCoreTools,
         ...createToolsForIntegrations(activeIntegrationIds),
         ...extensionManager.getRegisteredTools(),
-      ];
+      ]);
 
       const tools = withWorkbookCoordinator(
-        allTools,
+        runtimeTools,
         workbookCoordinator,
         {
           getWorkbookId: resolveWorkbookId,
@@ -764,6 +815,17 @@ export async function initTaskpane(opts: {
     );
 
     return runtime;
+  };
+
+  const createRuntimeFromUi = async (): Promise<SessionRuntime | null> => {
+    try {
+      return await createRuntime({ activate: true, autoRestoreLatest: false });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      console.warn("[pi] Failed to create a new runtime:", error);
+      showToast(`Couldn't open a new tab: ${message}`);
+      return null;
+    }
   };
 
   const restorePersistedTabLayout = async (): Promise<SessionRuntime | null> => {
@@ -1000,7 +1062,7 @@ export async function initTaskpane(opts: {
       await activeRuntime.persistence.renameSession(title);
     },
     createRuntime: async () => {
-      await createRuntime({ activate: true, autoRestoreLatest: false });
+      await createRuntimeFromUi();
     },
     openResumeDialog: async (defaultTarget: ResumeDialogTarget = "new_tab") => {
       await showResumeDialog({
@@ -1085,7 +1147,7 @@ export async function initTaskpane(opts: {
   };
 
   sidebar.onCreateTab = () => {
-    void createRuntime({ activate: true, autoRestoreLatest: false });
+    void createRuntimeFromUi();
   };
 
   sidebar.onSelectTab = (runtimeId: string) => {

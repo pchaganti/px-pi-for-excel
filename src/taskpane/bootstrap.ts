@@ -28,6 +28,24 @@ function showFatalError(errorRoot: HTMLElement, message: string): void {
   render(renderError(message), errorRoot);
 }
 
+async function awaitWithTimeout<T>(label: string, timeoutMs: number, task: Promise<T>): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+
+    return await Promise.race([task, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 export function bootstrapTaskpane(): void {
   const appEl = getRequiredElement<HTMLElement>("app");
   const loadingRoot = getRequiredElement<HTMLElement>("loading-root");
@@ -43,25 +61,37 @@ export function bootstrapTaskpane(): void {
   // Office bootstrap (with fallback for local dev)
   let initialized = false;
 
-  void Office.onReady(async (info) => {
+  const runInit = () => {
+    if (initialized) return;
+
+    initialized = true;
+
+    void awaitWithTimeout(
+      "Taskpane initialization",
+      12_000,
+      initTaskpane({ appEl, errorRoot }),
+    ).catch((error: unknown) => {
+      loadingRoot.innerHTML = "";
+      showFatalError(errorRoot, `Failed to initialize: ${getErrorMessage(error)}`);
+      console.error("[pi] Init error:", error);
+    });
+  };
+
+  if (typeof Office === "undefined") {
+    console.warn("[pi] Office.js is unavailable — initializing without Excel");
+    runInit();
+    return;
+  }
+
+  void Office.onReady((info) => {
     console.log(`[pi] Office.js ready: host=${info.host}, platform=${info.platform}`);
-    try {
-      initialized = true;
-      await initTaskpane({ appEl, errorRoot });
-    } catch (e: unknown) {
-      showFatalError(errorRoot, `Failed to initialize: ${getErrorMessage(e)}`);
-      console.error("[pi] Init error:", e);
-    }
+    runInit();
   });
 
   setTimeout(() => {
     if (initialized) return;
 
     console.warn("[pi] Office.js not ready after 3s — initializing without Excel");
-    initialized = true;
-    initTaskpane({ appEl, errorRoot }).catch((e: unknown) => {
-      showFatalError(errorRoot, `Failed to initialize: ${getErrorMessage(e)}`);
-      console.error("[pi] Init error:", e);
-    });
+    runInit();
   }, 3000);
 }

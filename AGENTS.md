@@ -60,6 +60,11 @@ Notes for agents working in this repo.
 - `npm run test:context` when touching prompt/context/tool disclosure/session wiring
 - `npm run test:security` when touching proxy/bridge/auth/HTML safety paths
 - Manual Excel smoke test when touching session persistence, tools, auth, or UI wiring
+- For UI/bootstrap issues (e.g. endless "Initializing…"), inspect the page with `agent-browser` first:
+  - `agent-browser --ignore-https-errors open https://localhost:3000/src/taskpane.html`
+  - `agent-browser snapshot -i -c --json`
+  - `agent-browser console --json`
+  - `agent-browser errors --json`
 
 ## Pre-commit
 - `.githooks/pre-commit` runs `npm run lint` + `npm run typecheck`.
