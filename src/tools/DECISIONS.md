@@ -139,8 +139,8 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **UI:** explanation card renders clickable reference citations with value previews.
 - **Rationale:** users need plain-English interpretation without losing inspectability; bounded reference previews preserve responsiveness on dense workbooks.
 
-## Experimental tmux bridge tool (`tmux`)
-- **Availability:** non-core experimental tool, always registered via `createAllTools()`; execution is gated by `applyExperimentalToolGates()`.
+## Feature-flagged tmux bridge tool (`tmux`)
+- **Availability:** non-core feature-flagged tool, always registered via `createAllTools()`; execution is gated by `applyExperimentalToolGates()`.
 - **Gate model:** requires `tmux-bridge` experiment enabled, configured `tmux.bridge.url`, and successful bridge `/health` probe.
 - **Execution policy:** classified as `read/none` in workbook coordinator (no workbook lock writes or blueprint invalidation).
 - **Bridge implementation:** local helper script `scripts/tmux-bridge-server.mjs`.
@@ -157,8 +157,8 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Diagnostics UX:** `/experimental tmux-status` reports feature flag, URL/token config, gate result, and bridge health details for quick troubleshooting.
 - **Rationale:** stable local adapter contract now (issue #3) with safe stub-first rollout and incremental hardening.
 
-## Experimental Python / LibreOffice bridge tools (`python_run`, `libreoffice_convert`, `python_transform_range`)
-- **Availability:** non-core experimental tools, always registered via `createAllTools()`; execution is gated by `applyExperimentalToolGates()`.
+## Feature-flagged Python / LibreOffice bridge tools (`python_run`, `libreoffice_convert`, `python_transform_range`)
+- **Availability:** non-core feature-flagged tools, always registered via `createAllTools()`; execution is gated by `applyExperimentalToolGates()`.
 - **Gate model:** requires `python-bridge` experiment enabled, configured `python.bridge.url`, successful bridge `/health` probe, and user confirmation once per configured bridge URL.
 - **Execution policy:**
   - `python_run` + `libreoffice_convert` → `read/none` (no direct workbook mutation)
@@ -204,7 +204,7 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Interactivity:** host supports explicit action callbacks via `data-pi-action` markers mapped to click dispatch inside the sandbox.
 - **Rationale:** graduate sandbox hardening into default behavior while preserving a guarded rollback path.
 
-## Experimental extension widget API v2 (`extension-widget-v2`)
+## Feature-flagged extension widget API v2 (`extension-widget-v2`)
 - **Activation:** opt-in via `/experimental on extension-widget-v2`; default behavior stays on legacy `widget.show/dismiss` semantics.
 - **API:** additive `widget.upsert/remove/clear` methods with stable widget ids.
 - **Placement/order:** widgets sort deterministically by `(order asc, createdAt asc, id asc)` within `above-input` / `below-input` buckets.
@@ -215,7 +215,7 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Compatibility:** legacy `widget.show/dismiss` remains supported and maps to a reserved legacy widget id when v2 is enabled.
 - **Rationale:** establish predictable multi-widget lifecycle semantics before richer layout controls.
 
-## Experimental files workspace tool (`files`)
+## Feature-flagged files workspace tool (`files`)
 - **Availability:** non-core tool, always registered. `list`/`read` stay available even when `files-workspace` is off; `write`/`delete` remain gated by `files-workspace`.
 - **Built-in assistant docs:** a read-only `assistant-docs/` namespace ships with the app (README + key docs) and is always visible to both UI and tool.
 - **Backend strategy:** native folder handle (when permitted) → OPFS → in-memory fallback.

@@ -164,6 +164,23 @@ void test("/experimental on with unknown feature reports available slugs", async
   assert.match(toasts[0], /tmux-bridge/u);
 });
 
+void test("/experimental on mcp-tools redirects to /integrations", async () => {
+  const toasts: string[] = [];
+
+  const command = getExperimentalCommand({
+    showExperimentalDialog: () => {},
+    showToast: (message) => {
+      toasts.push(message);
+    },
+    resolveFeature: () => null,
+  });
+
+  await command.execute("on mcp-tools");
+
+  assert.equal(toasts.length, 1);
+  assert.match(toasts[0], /managed in \/integrations/u);
+});
+
 void test("/experimental tmux-bridge-url shows configured value", async () => {
   const toasts: string[] = [];
 

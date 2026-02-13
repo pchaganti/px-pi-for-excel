@@ -49,10 +49,14 @@ Pi for Excel gives you a conversational AI assistant that can read, write, and f
 - **Web Search** (Brave Search) — look up external facts without leaving Excel
 - **MCP Gateway** — connect to user-configured MCP servers for custom tool access
 
-**Experimental features** (opt-in via `/experimental`):
-- Tmux bridge — remote terminal control from the sidebar
+**Feature-flagged capabilities** (managed via `/experimental`):
+- Tmux bridge — local terminal control from the sidebar
 - Python / LibreOffice bridge — run Python scripts and convert files locally
-- Files workspace — shared artifact storage across sessions (assistant built-in docs under `assistant-docs/` are always available read-only)
+- Files workspace write/delete gate — shared artifact storage across sessions (assistant built-in docs under `assistant-docs/` are always available read-only)
+- External skills discovery — opt-in loading of locally configured external `SKILL.md` sources
+- Advanced extension controls — remote URL opt-in, permission enforcement, sandbox rollback, and Widget API v2
+
+(Web Search + MCP are managed in `/integrations`.)
 
 ## Install
 
@@ -147,7 +151,7 @@ src/
 ├── taskpane.html      # Entry HTML (loads Office.js + taskpane.ts)
 ├── taskpane.ts        # Entry script
 ├── boot.ts            # Pre-mount setup (CSS, patches)
-├── tools/             # 16 core tools + experimental tools + registry
+├── tools/             # 16 core tools + feature-flagged tools + registry
 ├── prompt/            # System prompt builder
 ├── context/           # Workbook blueprint cache, selection/change tracking
 ├── auth/              # OAuth providers, API proxy, credential restore
@@ -164,7 +168,7 @@ src/
 ├── rules/             # Persistent user/workbook rules store
 ├── compaction/        # Auto-compaction thresholds + logic
 ├── storage/           # IndexedDB initialization
-├── files/             # Files workspace (experimental)
+├── files/             # Files workspace (read/list always on; write/delete feature-gated)
 ├── audit/             # Workbook change audit log
 ├── messages/          # Message conversion helpers
 ├── debug/             # Debug mode utilities

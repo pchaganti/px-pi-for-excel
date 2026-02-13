@@ -12,6 +12,22 @@ import { closeOverlayById, createOverlayDialog } from "../../ui/overlay-dialog.j
 import { EXPERIMENTAL_OVERLAY_ID } from "../../ui/overlay-ids.js";
 import { showToast } from "../../ui/toast.js";
 
+const ADVANCED_SECURITY_FEATURE_IDS = new Set<ExperimentalFeatureSnapshot["id"]>([
+  "remote_extension_urls",
+  "extension_permission_gates",
+  "extension_sandbox_runtime",
+]);
+
+interface FeatureSectionSpec {
+  title: string;
+  hint: string;
+  features: ExperimentalFeatureSnapshot[];
+}
+
+function isAdvancedSecurityFeature(feature: ExperimentalFeatureSnapshot): boolean {
+  return ADVANCED_SECURITY_FEATURE_IDS.has(feature.id);
+}
+
 function applyStatusVisual(statusEl: HTMLSpanElement, enabled: boolean): void {
   statusEl.textContent = enabled ? "Enabled" : "Disabled";
   statusEl.classList.toggle("is-enabled", enabled);
@@ -88,6 +104,29 @@ function buildFeatureRow(feature: ExperimentalFeatureSnapshot): HTMLElement {
   return row;
 }
 
+function buildFeatureSection(spec: FeatureSectionSpec): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "pi-overlay-section";
+
+  const title = document.createElement("h3");
+  title.className = "pi-overlay-section-title";
+  title.textContent = spec.title;
+
+  const hint = document.createElement("p");
+  hint.className = "pi-overlay-hint";
+  hint.textContent = spec.hint;
+
+  const list = document.createElement("div");
+  list.className = "pi-experimental-list";
+
+  for (const feature of spec.features) {
+    list.appendChild(buildFeatureRow(feature));
+  }
+
+  section.append(title, hint, list);
+  return section;
+}
+
 export function showExperimentalDialog(): void {
   if (closeOverlayById(EXPERIMENTAL_OVERLAY_ID)) {
     return;
@@ -105,13 +144,20 @@ export function showExperimentalDialog(): void {
   const subtitle = document.createElement("p");
   subtitle.className = "pi-overlay-subtitle";
   subtitle.textContent =
-    "These toggles are local to this browser profile. Use carefully — some are security-sensitive.";
+    "These toggles are local to this browser profile. Use carefully — some are security-sensitive. "
+    + "Web Search and MCP are managed in /integrations.";
 
-  const list = document.createElement("div");
-  list.className = "pi-experimental-list";
+  const snapshots = getExperimentalFeatureSnapshots();
+  const experimentalFeatures: ExperimentalFeatureSnapshot[] = [];
+  const advancedSecurityFeatures: ExperimentalFeatureSnapshot[] = [];
 
-  for (const feature of getExperimentalFeatureSnapshots()) {
-    list.appendChild(buildFeatureRow(feature));
+  for (const feature of snapshots) {
+    if (isAdvancedSecurityFeature(feature)) {
+      advancedSecurityFeatures.push(feature);
+      continue;
+    }
+
+    experimentalFeatures.push(feature);
   }
 
   const footer = document.createElement("p");
@@ -121,7 +167,32 @@ export function showExperimentalDialog(): void {
 
   const body = document.createElement("div");
   body.className = "pi-overlay-body";
-  body.append(title, subtitle, list, footer);
+  body.append(title, subtitle);
+
+  if (experimentalFeatures.length > 0) {
+    body.appendChild(buildFeatureSection({
+      title: "Experimental capabilities",
+      hint: "In-progress features that may evolve quickly.",
+      features: experimentalFeatures,
+    }));
+  }
+
+  if (advancedSecurityFeatures.length > 0) {
+    body.appendChild(buildFeatureSection({
+      title: "Advanced / security controls",
+      hint: "Power-user toggles for extension trust, permissions, and rollback behavior.",
+      features: advancedSecurityFeatures,
+    }));
+  }
+
+  if (snapshots.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "pi-overlay-empty";
+    empty.textContent = "No experimental features are currently available.";
+    body.appendChild(empty);
+  }
+
+  body.appendChild(footer);
 
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";

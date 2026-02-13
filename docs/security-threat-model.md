@@ -70,7 +70,7 @@ Hosted taskpane is protected with CSP in `vercel.json` (scripts/styles/fonts/con
 - Untrusted extension sources (inline code + remote URL) run in sandbox iframe runtime by default
 - Rollback kill switch exists for maintainers (`/experimental on extension-sandbox-rollback`) and should be temporary only
 - Capability permissions are persisted per extension (`extensions.registry.v2`)
-- Capability enforcement is available behind `/experimental on extension-permissions`
+- Capability enforcement is feature-flagged via `/experimental on extension-permissions`
 
 ## Known limitations
 

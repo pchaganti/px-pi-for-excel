@@ -1,4 +1,4 @@
-# Experimental tmux bridge contract (v1)
+# Tmux bridge contract (v1)
 
 Status:
 - Add-in adapter implemented in `src/tools/tmux.ts`

@@ -11,7 +11,6 @@ import { dispatchExperimentalFeatureChanged } from "./events.js";
 export type ExperimentalFeatureId =
   | "tmux_bridge"
   | "python_bridge"
-  | "mcp_tools"
   | "files_workspace"
   | "external_skills_discovery"
   | "remote_extension_urls"
@@ -56,15 +55,6 @@ const EXPERIMENTAL_FEATURES = [
     storageKey: "pi.experimental.pythonBridge",
   },
   {
-    id: "mcp_tools",
-    slug: "mcp-tools",
-    aliases: ["mcp", "external-tools"],
-    title: "MCP / external tools",
-    description: "Allow experimental external tool integration (MCP, web tools).",
-    wiring: "flag-only",
-    storageKey: "pi.experimental.mcpTools",
-  },
-  {
     id: "files_workspace",
     slug: "files-workspace",
     aliases: ["files", "workspace-files", "artifacts"],
@@ -80,7 +70,7 @@ const EXPERIMENTAL_FEATURES = [
     title: "External skills discovery",
     description: "Allow loading Agent Skills from local externally configured SKILL.md sources.",
     warning: "Security: external skills can contain untrusted instructions and executable references.",
-    wiring: "flag-only",
+    wiring: "wired",
     storageKey: "pi.experimental.externalSkillsDiscovery",
   },
   {

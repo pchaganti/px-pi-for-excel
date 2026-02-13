@@ -19,9 +19,9 @@ This folder contains **current** docs that should match shipped behavior.
 - [UI architecture](../src/ui/README.md)
 - [Tool behavior decisions](../src/tools/DECISIONS.md)
 
-## Experimental local bridge contracts
-- [Experimental tmux bridge contract (v1)](./tmux-bridge-contract.md)
-- [Experimental Python / LibreOffice bridge contract (v1)](./python-bridge-contract.md)
+## Feature-flagged local bridge contracts
+- [Tmux bridge contract (v1)](./tmux-bridge-contract.md)
+- [Python / LibreOffice bridge contract (v1)](./python-bridge-contract.md)
 
 ## Archive
 Historical planning/design docs were moved to [./archive](./archive/README.md) to keep top-level docs focused and current.

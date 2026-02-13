@@ -14,6 +14,7 @@ import {
   isUndoCloseTabShortcut,
   shouldAbortFromEscape,
   shouldBlurEditorFromEscape,
+  shouldHandleUndoCloseTabShortcut,
 } from "../src/taskpane/keyboard-shortcuts.ts";
 import { RecentlyClosedStack } from "../src/taskpane/recently-closed.ts";
 import {
@@ -258,6 +259,32 @@ void test("Cmd/Ctrl+Z detection ignores Shift/Alt-modified chords", () => {
       altKey: true,
     }),
     false,
+  );
+});
+
+void test("Undo-close handling allows Cmd/Ctrl+Z in text fields only when action toast is visible", () => {
+  assert.equal(
+    shouldHandleUndoCloseTabShortcut({
+      isTextEntry: false,
+      actionToastVisible: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldHandleUndoCloseTabShortcut({
+      isTextEntry: true,
+      actionToastVisible: false,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldHandleUndoCloseTabShortcut({
+      isTextEntry: true,
+      actionToastVisible: true,
+    }),
+    true,
   );
 });
 
