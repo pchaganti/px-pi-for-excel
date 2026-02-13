@@ -140,7 +140,7 @@ Completed for this phase:
 
 **Implication:** further tuning (e.g., provider/model-family threshold adjustments) should be tracked as focused follow-up issues, not reopened umbrella scope.
 
-**Policy reference:** see [`docs/context-management-policy.md`](./context-management-policy.md) for the active cache-safe rollout slices (payload snapshots, progressive tool disclosure, tool-result shaping, workbook-context invalidation).
+**Policy reference:** see [`docs/context-management-policy.md`](../context-management-policy.md) for the active cache-safe rollout slices (payload snapshots, progressive tool disclosure, tool-result shaping, workbook-context invalidation).
 
 ---
 

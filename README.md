@@ -41,7 +41,7 @@ Pi for Excel gives you a conversational AI assistant that can read, write, and f
 
 **Formatting conventions** — define your house style once (currency symbol, negative style, decimal places) and the AI follows it automatically.
 
-**Slash commands** — `/model`, `/login`, `/settings`, `/instructions`, `/extensions`, `/integrations`, `/export`, `/compact`, `/new`, `/resume`, `/history`, `/shortcuts`, and more.
+**Slash commands** — `/model`, `/login`, `/settings`, `/rules`, `/extensions`, `/integrations`, `/export`, `/compact`, `/new`, `/resume`, `/history`, `/shortcuts`, and more.
 
 **Extensions** — install sidebar extensions (mini-apps) from chat. The AI can generate and install extension code directly via the `extensions_manager` tool. Extensions run in an iframe sandbox by default.
 
@@ -161,7 +161,7 @@ src/
 ├── experiments/       # Feature flag definitions + toggle logic
 ├── workbook/          # Workbook identity (hashed), session association, coordinator
 ├── conventions/       # Formatting defaults (currency, negatives, dp)
-├── instructions/      # Persistent user/workbook instruction store
+├── rules/             # Persistent user/workbook rules store
 ├── compaction/        # Auto-compaction thresholds + logic
 ├── storage/           # IndexedDB initialization
 ├── files/             # Files workspace (experimental)
@@ -174,7 +174,7 @@ src/
 
 scripts/               # Dev helpers — CORS proxy, tmux/python bridges, manifest gen
 tests/                 # Unit + security tests (~50 test files)
-docs/                  # Design docs, install guide, deploy guide, threat model
+docs/                  # Current docs (install/deploy/features/policy) + archive/ for historical plans
 skills/                # Bundled Agent Skill definitions (web-search, mcp-gateway)
 public/assets/         # Add-in icons (16/32/80/128px)
 ```

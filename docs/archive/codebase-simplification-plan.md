@@ -4,7 +4,7 @@ Goal: make the repo **simple, easy to understand, easy to navigate, and easy to 
 
 This plan focuses on a small set of “big levers” that remove ongoing maintenance tax (drift, duplication, brittle parsing) rather than lots of local micro-refactors.
 
-> Context strategy and caching guardrails now live in: [`docs/context-management-policy.md`](./context-management-policy.md).
+> Context strategy and caching guardrails now live in: [`docs/context-management-policy.md`](../context-management-policy.md).
 > Keep simplification work aligned with that policy (especially deterministic tool metadata, context shaping, and debug observability).
 
 ---

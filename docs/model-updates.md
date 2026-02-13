@@ -1,12 +1,12 @@
 # Model / dependency update playbook
 
-**Last verified:** 2026-02-05
+**Last verified:** 2026-02-13
 
 This repo hardcodes a small set of "featured" and "preferred" model IDs (for sorting + default selection). Those IDs come from Pi’s model registry (`@mariozechner/pi-ai`) and will drift as new models ship (e.g. `gpt-5.3-codex`, `claude-opus-4-6`).
 
 This doc describes how to update:
 - the **Pi dependency versions** we ship (`@mariozechner/pi-ai`, `@mariozechner/pi-web-ui`, `@mariozechner/pi-agent-core`)
-- the **model IDs** we pin in the add-in (`src/taskpane.ts`)
+- the **model ordering/default-selection behavior** in the add-in (`src/models/model-ordering.ts`, `src/taskpane/default-model.ts`, `src/compat/model-selector-patch.ts`)
 
 ## Source of truth
 
@@ -67,8 +67,9 @@ If an ID doesn’t appear there, **don’t** add it to the add-in yet—either:
 ### 5) Update model ordering + default selection logic (avoid hardcoding exact IDs)
 
 Files:
-- `src/taskpane.ts` (ModelSelector patch + default-model rules)
 - `src/models/model-ordering.ts` (provider/family priority + version/recency scoring)
+- `src/taskpane/default-model.ts` (default-model selection rules)
+- `src/compat/model-selector-patch.ts` (ModelSelector ordering/featured-model behavior)
 - `tests/model-ordering.test.ts` (sanity tests; run `npm run test:models` — requires Node 22+)
 
 We intentionally avoid pinning exact versioned IDs now. Instead we:
@@ -145,7 +146,7 @@ npm run sideload
 
 1) **Provider filter:** the model picker only shows models for **connected providers** (saved API key/OAuth). Make sure the provider is connected.
 2) **Excel caching:** quit Excel completely (Cmd+Q) and reopen.
-3) **Hot reload note:** taskpane JS/CSS is served from Vite; edits to `src/taskpane.ts` (including model ordering rules) should apply via HMR without needing to re-sideload, as long as Excel is pointed at the same running dev server.
+3) **Hot reload note:** taskpane JS/CSS is served from Vite; edits to model-selection files (`src/models/model-ordering.ts`, `src/taskpane/default-model.ts`, `src/compat/model-selector-patch.ts`) should apply via HMR without needing to re-sideload, as long as Excel is pointed at the same running dev server.
 4) **Vite optimized deps:** after dependency bumps, clear and restart:
 
 ```bash
