@@ -1,14 +1,76 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { WorkbookRecoveryLog } from "../src/workbook/recovery-log.ts";
+import { MAX_RECOVERY_CELLS, WorkbookRecoveryLog } from "../src/workbook/recovery-log.ts";
 import type { WorkbookContext } from "../src/workbook/context.ts";
+import { captureValueDataRange } from "../src/workbook/recovery/structure-state.ts";
 import { type RecoveryModifyStructureState } from "../src/workbook/recovery-states.ts";
 import {
   createInMemorySettingsStore,
   findSnapshotById,
   withoutUndefined,
 } from "./recovery-log-test-helpers.test.ts";
+
+void test("captureValueDataRange short-circuits oversized captures before loading cell grids", async () => {
+  const loadCalls: Array<string | string[]> = [];
+
+  const usedRange = {
+    isNullObject: false,
+    address: "Sheet1!A1:CV201",
+    rowCount: 201,
+    columnCount: 100,
+    values: [] as unknown[][],
+    formulas: [] as unknown[][],
+    load: (propertyNames: string | string[]): void => {
+      loadCalls.push(propertyNames);
+    },
+  };
+
+  const targetRange = {
+    getUsedRangeOrNullObject: (_valuesOnly?: boolean): typeof usedRange => usedRange,
+  };
+
+  const context = {
+    sync: (): Promise<unknown> => Promise.resolve(),
+  };
+
+  const capture = await captureValueDataRange(context, targetRange, MAX_RECOVERY_CELLS);
+
+  assert.equal(capture.status, "too_large");
+  assert.ok(capture.cellCount > MAX_RECOVERY_CELLS);
+  assert.deepEqual(loadCalls, [["isNullObject", "address", "rowCount", "columnCount"]]);
+});
+
+void test("captureValueDataRange captures in-range value/formula payloads", async () => {
+  const usedRange = {
+    isNullObject: false,
+    address: "Sheet1!B2:C3",
+    rowCount: 2,
+    columnCount: 2,
+    values: [[1, 2], [3, 4]],
+    formulas: [["", ""], ["", ""]],
+    load: (_propertyNames: string | string[]): void => {},
+  };
+
+  const targetRange = {
+    getUsedRangeOrNullObject: (_valuesOnly?: boolean): typeof usedRange => usedRange,
+  };
+
+  const context = {
+    sync: (): Promise<unknown> => Promise.resolve(),
+  };
+
+  const capture = await captureValueDataRange(context, targetRange, MAX_RECOVERY_CELLS);
+
+  assert.equal(capture.status, "captured");
+  assert.deepEqual(capture.dataRange, {
+    address: "B2:C3",
+    rowCount: 2,
+    columnCount: 2,
+    values: [[1, 2], [3, 4]],
+    formulas: [["", ""], ["", ""]],
+  });
+});
 
 void test("persisted modify-structure checkpoints retain extended state kinds", async () => {
   const settingsStore = createInMemorySettingsStore();
@@ -24,6 +86,7 @@ void test("persisted modify-structure checkpoints retain extended state kinds", 
       kind: "sheet_absent",
       sheetId: "sheet-added-1",
       sheetName: "Draft",
+      allowDataDelete: true,
     },
     {
       kind: "sheet_present",
@@ -31,6 +94,13 @@ void test("persisted modify-structure checkpoints retain extended state kinds", 
       sheetName: "Roadmap",
       position: 2,
       visibility: "Visible",
+      dataRange: {
+        address: "A1:B2",
+        rowCount: 2,
+        columnCount: 2,
+        values: [["Title", "Owner"], ["Roadmap", "Pi"]],
+        formulas: [["", ""], ["", ""]],
+      },
     },
     {
       kind: "rows_absent",
@@ -38,6 +108,7 @@ void test("persisted modify-structure checkpoints retain extended state kinds", 
       sheetName: "Data",
       position: 4,
       count: 2,
+      allowDataDelete: true,
     },
     {
       kind: "rows_present",
@@ -45,6 +116,13 @@ void test("persisted modify-structure checkpoints retain extended state kinds", 
       sheetName: "Data",
       position: 4,
       count: 2,
+      dataRange: {
+        address: "B4:C5",
+        rowCount: 2,
+        columnCount: 2,
+        values: [[1, 2], [3, 4]],
+        formulas: [["", ""], ["", ""]],
+      },
     },
     {
       kind: "columns_absent",
@@ -52,6 +130,7 @@ void test("persisted modify-structure checkpoints retain extended state kinds", 
       sheetName: "Data",
       position: 3,
       count: 1,
+      allowDataDelete: true,
     },
     {
       kind: "columns_present",
@@ -59,6 +138,13 @@ void test("persisted modify-structure checkpoints retain extended state kinds", 
       sheetName: "Data",
       position: 3,
       count: 1,
+      dataRange: {
+        address: "C2:C4",
+        rowCount: 3,
+        columnCount: 1,
+        values: [["Q1"], ["Q2"], ["Q3"]],
+        formulas: [[""], [""], [""]],
+      },
     },
   ];
 
@@ -307,6 +393,31 @@ void test("restore round-trips extended modify-structure kinds", async () => {
       },
     },
     {
+      name: "sheet_present_with_data",
+      address: "Archive",
+      changedCount: 1,
+      targetState: {
+        kind: "sheet_present",
+        sheetId: "sheet-archive",
+        sheetName: "Archive",
+        position: 4,
+        visibility: "Visible",
+        dataRange: {
+          address: "A1:B2",
+          rowCount: 2,
+          columnCount: 2,
+          values: [["Year", "Value"], [2024, 100]],
+          formulas: [["", ""], ["", ""]],
+        },
+      },
+      currentState: {
+        kind: "sheet_absent",
+        sheetId: "sheet-archive",
+        sheetName: "Archive",
+        allowDataDelete: true,
+      },
+    },
+    {
       name: "rows_absent",
       address: "Data!8:9",
       changedCount: 2,
@@ -316,6 +427,7 @@ void test("restore round-trips extended modify-structure kinds", async () => {
         sheetName: "Data",
         position: 8,
         count: 2,
+        allowDataDelete: true,
       },
       currentState: {
         kind: "rows_present",
@@ -323,6 +435,13 @@ void test("restore round-trips extended modify-structure kinds", async () => {
         sheetName: "Data",
         position: 8,
         count: 2,
+        dataRange: {
+          address: "B8:C9",
+          rowCount: 2,
+          columnCount: 2,
+          values: [[10, 20], [30, 40]],
+          formulas: [["", ""], ["", ""]],
+        },
       },
     },
     {
@@ -335,6 +454,13 @@ void test("restore round-trips extended modify-structure kinds", async () => {
         sheetName: "Data",
         position: 15,
         count: 2,
+        dataRange: {
+          address: "A15:B16",
+          rowCount: 2,
+          columnCount: 2,
+          values: [["A", "B"], ["C", "D"]],
+          formulas: [["", ""], ["", ""]],
+        },
       },
       currentState: {
         kind: "rows_absent",
@@ -342,6 +468,7 @@ void test("restore round-trips extended modify-structure kinds", async () => {
         sheetName: "Data",
         position: 15,
         count: 2,
+        allowDataDelete: true,
       },
     },
     {
@@ -354,6 +481,7 @@ void test("restore round-trips extended modify-structure kinds", async () => {
         sheetName: "Data",
         position: 3,
         count: 2,
+        allowDataDelete: true,
       },
       currentState: {
         kind: "columns_present",
@@ -361,6 +489,13 @@ void test("restore round-trips extended modify-structure kinds", async () => {
         sheetName: "Data",
         position: 3,
         count: 2,
+        dataRange: {
+          address: "C2:D4",
+          rowCount: 3,
+          columnCount: 2,
+          values: [["Q1", "Q2"], ["Q3", "Q4"], ["Q5", "Q6"]],
+          formulas: [["", ""], ["", ""], ["", ""]],
+        },
       },
     },
     {
@@ -373,6 +508,13 @@ void test("restore round-trips extended modify-structure kinds", async () => {
         sheetName: "Data",
         position: 6,
         count: 2,
+        dataRange: {
+          address: "F1:G2",
+          rowCount: 2,
+          columnCount: 2,
+          values: [[1, 2], [3, 4]],
+          formulas: [["", ""], ["", ""]],
+        },
       },
       currentState: {
         kind: "columns_absent",
@@ -380,6 +522,7 @@ void test("restore round-trips extended modify-structure kinds", async () => {
         sheetName: "Data",
         position: 6,
         count: 2,
+        allowDataDelete: true,
       },
     },
   ];
