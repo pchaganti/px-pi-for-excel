@@ -155,22 +155,13 @@ async function sheetHasValueData(
 
 async function rangeHasValueData(
   context: Excel.RequestContext,
-  sheet: Excel.Worksheet,
   targetRange: Excel.Range,
 ): Promise<boolean> {
-  const usedRange = sheet.getUsedRangeOrNullObject(true);
+  const usedRange = targetRange.getUsedRangeOrNullObject(true);
   usedRange.load("isNullObject");
   await context.sync();
 
-  if (usedRange.isNullObject) {
-    return false;
-  }
-
-  const overlap = usedRange.getIntersectionOrNullObject(targetRange);
-  overlap.load("isNullObject");
-  await context.sync();
-
-  return !overlap.isNullObject;
+  return !usedRange.isNullObject;
 }
 
 function columnNumberToLetter(position: number): string {
@@ -271,7 +262,7 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
               await context.sync();
 
               const range = sheet.getRange(`${startRow}:${endRow}`);
-              const canCreateCheckpoint = !(await rangeHasValueData(context, sheet, range));
+              const canCreateCheckpoint = !(await rangeHasValueData(context, range));
               range.delete("Up");
               await context.sync();
 
@@ -333,7 +324,7 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
               await context.sync();
 
               const range = sheet.getRange(`${startLetter}:${endLetter}`);
-              const canCreateCheckpoint = !(await rangeHasValueData(context, sheet, range));
+              const canCreateCheckpoint = !(await rangeHasValueData(context, range));
               range.delete("Left");
               await context.sync();
 
