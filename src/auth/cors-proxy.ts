@@ -12,7 +12,10 @@
 
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
-import { validateOfficeProxyUrl } from "./proxy-validation.js";
+import {
+  DEFAULT_LOCAL_PROXY_URL,
+  validateOfficeProxyUrl,
+} from "./proxy-validation.js";
 
 const DEV_REWRITES: [string, string][] = [
   // OAuth token endpoints
@@ -70,14 +73,12 @@ async function getEnabledProxyUrl(): Promise<string | undefined> {
     return undefined;
   }
 
-  if (typeof url !== "string" || url.trim().length === 0) {
-    proxyCache.url = undefined;
-    return undefined;
-  }
+  const trimmed = typeof url === "string" ? url.trim() : "";
+  const candidateUrl = trimmed.length > 0 ? trimmed : DEFAULT_LOCAL_PROXY_URL;
 
   // Guardrails: validate proxy URL (and fail fast for mixed-content HTTP proxies).
   // This may throw and should surface to the caller.
-  const validated = validateOfficeProxyUrl(url);
+  const validated = validateOfficeProxyUrl(candidateUrl);
   proxyCache.url = validated;
   return validated;
 }

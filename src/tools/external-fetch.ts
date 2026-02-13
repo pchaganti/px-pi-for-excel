@@ -3,7 +3,10 @@
  * CORS proxy.
  */
 
-import { validateOfficeProxyUrl } from "../auth/proxy-validation.js";
+import {
+  DEFAULT_LOCAL_PROXY_URL,
+  validateOfficeProxyUrl,
+} from "../auth/proxy-validation.js";
 
 export interface ProxyAwareSettingsStore {
   get(key: string): Promise<unknown>;
@@ -32,12 +35,11 @@ export async function getEnabledProxyBaseUrl(
   if (!parseEnabledFlag(enabledRaw)) return undefined;
 
   const proxyUrlRaw = await settings.get("proxy.url");
-  if (typeof proxyUrlRaw !== "string") return undefined;
-  const trimmed = proxyUrlRaw.trim();
-  if (trimmed.length === 0) return undefined;
+  const trimmed = typeof proxyUrlRaw === "string" ? proxyUrlRaw.trim() : "";
+  const candidateUrl = trimmed.length > 0 ? trimmed : DEFAULT_LOCAL_PROXY_URL;
 
   try {
-    return validateOfficeProxyUrl(trimmed);
+    return validateOfficeProxyUrl(candidateUrl);
   } catch {
     return undefined;
   }
