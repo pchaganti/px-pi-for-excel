@@ -2078,6 +2078,36 @@ async function loadSheetByIdOrName(
   return byName;
 }
 
+async function sheetHasValueData(
+  context: Excel.RequestContext,
+  sheet: Excel.Worksheet,
+): Promise<boolean> {
+  const usedRange = sheet.getUsedRangeOrNullObject(true);
+  usedRange.load("isNullObject");
+  await context.sync();
+  return !usedRange.isNullObject;
+}
+
+async function rangeHasValueData(
+  context: Excel.RequestContext,
+  sheet: Excel.Worksheet,
+  targetRange: Excel.Range,
+): Promise<boolean> {
+  const usedRange = sheet.getUsedRangeOrNullObject(true);
+  usedRange.load("isNullObject");
+  await context.sync();
+
+  if (usedRange.isNullObject) {
+    return false;
+  }
+
+  const overlap = usedRange.getIntersectionOrNullObject(targetRange);
+  overlap.load("isNullObject");
+  await context.sync();
+
+  return !overlap.isNullObject;
+}
+
 export async function captureModifyStructureState(
   args: CaptureModifyStructureStateArgs,
 ): Promise<RecoveryModifyStructureState | null> {
@@ -2193,6 +2223,12 @@ export async function applyModifyStructureState(
         throw new Error("Sheet visibility is unsupported for structure checkpoint restore.");
       }
 
+      if (await sheetHasValueData(context, sheet)) {
+        throw new Error(
+          "Structure checkpoint restore is blocked: target sheet contains data and cannot be deleted safely.",
+        );
+      }
+
       const currentState: RecoveryModifyStructureState = {
         kind: "sheet_present",
         sheetId: sheet.id,
@@ -2259,6 +2295,12 @@ export async function applyModifyStructureState(
       const range = sheet.getRange(`${position}:${endRow}`);
 
       if (targetState.kind === "rows_absent") {
+        if (await rangeHasValueData(context, sheet, range)) {
+          throw new Error(
+            "Structure checkpoint restore is blocked: target rows contain data and cannot be deleted safely.",
+          );
+        }
+
         const currentState: RecoveryModifyStructureState = {
           kind: "rows_present",
           sheetId: sheet.id,
@@ -2300,6 +2342,13 @@ export async function applyModifyStructureState(
     const endLetter = columnNumberToLetter(position + count - 1);
 
     if (targetState.kind === "columns_absent") {
+      const range = sheet.getRange(`${startLetter}:${endLetter}`);
+      if (await rangeHasValueData(context, sheet, range)) {
+        throw new Error(
+          "Structure checkpoint restore is blocked: target columns contain data and cannot be deleted safely.",
+        );
+      }
+
       const currentState: RecoveryModifyStructureState = {
         kind: "columns_present",
         sheetId: sheet.id,
@@ -2308,7 +2357,6 @@ export async function applyModifyStructureState(
         count,
       };
 
-      const range = sheet.getRange(`${startLetter}:${endLetter}`);
       range.delete("Left");
       await context.sync();
       return currentState;

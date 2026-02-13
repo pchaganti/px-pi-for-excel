@@ -349,16 +349,26 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
               }
 
               const targetName = copy.name;
+              const usedRange = copy.getUsedRangeOrNullObject(true);
+              usedRange.load("isNullObject");
+              await context.sync();
+
+              const canCreateCheckpoint = usedRange.isNullObject;
               return {
                 message: `Duplicated "${params.sheet}" as "${targetName}".`,
                 changedCount: 1,
                 outputAddress: targetName,
                 summary: `duplicated sheet ${params.sheet} as ${targetName}`,
-                checkpointState: {
-                  kind: "sheet_absent",
-                  sheetId: copy.id,
-                  sheetName: targetName,
-                },
+                checkpointState: canCreateCheckpoint
+                  ? {
+                    kind: "sheet_absent",
+                    sheetId: copy.id,
+                    sheetName: targetName,
+                  }
+                  : undefined,
+                checkpointUnavailableReason: canCreateCheckpoint
+                  ? undefined
+                  : "Checkpoint capture was skipped for `duplicate_sheet` because duplicated sheet contains data.",
               };
             }
 
