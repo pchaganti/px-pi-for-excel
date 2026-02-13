@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pi for Excel — AI help inside your spreadsheet</title>
+    <meta
+      name="description"
+      content="Pi for Excel is an open-source AI sidebar for Microsoft Excel. Non-technical setup, clear install steps, and practical examples."
+    />
+
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700&display=swap");
+
+      :root {
+        --paper: #f7f4eb;
+        --paper-2: #fffdf8;
+        --ink: #1f2933;
+        --ink-muted: #556170;
+        --line: #d9d3c4;
+        --mint: #1f8a70;
+        --mint-dark: #0f5a4a;
+        --mint-soft: #dcefe8;
+        --card-shadow: 0 16px 40px rgba(28, 39, 49, 0.08), 0 4px 12px rgba(28, 39, 49, 0.05);
+        --radius-xl: 24px;
+        --radius-lg: 18px;
+        --radius-md: 12px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        color: var(--ink);
+        background: radial-gradient(circle at 20% -10%, #fef3cf 0%, transparent 35%), var(--paper);
+        font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, sans-serif;
+      }
+
+      img {
+        max-width: 100%;
+        display: block;
+      }
+
+      .page {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 24px 20px 72px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 700;
+      }
+
+      .brand img {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+      }
+
+      .chip {
+        font-size: 12px;
+        color: var(--ink-muted);
+        border: 1px solid var(--line);
+        background: var(--paper-2);
+        padding: 6px 10px;
+        border-radius: 999px;
+      }
+
+      .hero {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-xl);
+        background:
+          linear-gradient(120deg, rgba(31, 138, 112, 0.08), rgba(246, 195, 98, 0.1) 45%, transparent 65%),
+          var(--paper-2);
+        box-shadow: var(--card-shadow);
+        padding: 28px;
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 18px;
+      }
+
+      .hero h1 {
+        margin: 0;
+        font-family: "Fraunces", ui-serif, Georgia, serif;
+        font-size: clamp(2rem, 4vw, 3rem);
+        line-height: 1.08;
+      }
+
+      .lead {
+        margin: 14px 0 0;
+        color: var(--ink-muted);
+        font-size: 1.06rem;
+        max-width: 62ch;
+      }
+
+      .hero-points {
+        margin: 18px 0 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 10px;
+      }
+
+      .hero-points li {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        color: #2a3440;
+      }
+
+      .hero-points li::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--mint);
+        margin-top: 8px;
+        flex: none;
+      }
+
+      .cta-panel {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: rgba(255, 255, 255, 0.72);
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+        align-content: start;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        border-radius: var(--radius-md);
+        text-decoration: none;
+        font-weight: 700;
+        border: 1px solid transparent;
+        transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+      }
+
+      .btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .btn-primary {
+        background: var(--mint);
+        color: white;
+        box-shadow: 0 8px 20px rgba(31, 138, 112, 0.28);
+      }
+
+      .btn-primary:hover {
+        background: var(--mint-dark);
+      }
+
+      .btn-secondary {
+        background: white;
+        color: var(--ink);
+        border-color: var(--line);
+      }
+
+      .muted {
+        color: var(--ink-muted);
+        font-size: 0.92rem;
+        line-height: 1.5;
+      }
+
+      .muted a {
+        color: var(--mint-dark);
+      }
+
+      section {
+        margin-top: 22px;
+      }
+
+      .section-card {
+        background: var(--paper-2);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--card-shadow);
+        padding: 22px;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: clamp(1.45rem, 2.1vw, 1.9rem);
+        font-family: "Fraunces", ui-serif, Georgia, serif;
+      }
+
+      .subhead {
+        margin: 8px 0 0;
+        color: var(--ink-muted);
+      }
+
+      .principles {
+        margin-top: 16px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+
+      .principle {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: #fff;
+        padding: 14px;
+      }
+
+      .principle b {
+        display: block;
+        margin-bottom: 6px;
+      }
+
+      .install-grid {
+        margin-top: 16px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      .step {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: #fff;
+        padding: 14px;
+      }
+
+      .step-num {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        background: var(--mint-soft);
+        color: var(--mint-dark);
+        margin-bottom: 10px;
+      }
+
+      .step p,
+      .step li {
+        color: #334155;
+      }
+
+      .step ul {
+        margin: 10px 0 0;
+        padding-left: 18px;
+      }
+
+      code {
+        background: #f4f3ed;
+        border: 1px solid #e2ded2;
+        border-radius: 6px;
+        padding: 2px 6px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.92em;
+      }
+
+      .get-started {
+        margin-top: 16px;
+        border: 1px dashed #ccbfa0;
+        border-radius: var(--radius-md);
+        background: #fffdf4;
+        padding: 14px;
+      }
+
+      .shots {
+        margin-top: 16px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+
+      figure {
+        margin: 0;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fff;
+        overflow: hidden;
+      }
+
+      .shot-frame {
+        aspect-ratio: 16 / 10;
+        width: 100%;
+        border-bottom: 1px solid var(--line);
+        background: repeating-linear-gradient(
+          -45deg,
+          #f8f7f1,
+          #f8f7f1 12px,
+          #f1eee4 12px,
+          #f1eee4 24px
+        );
+        color: #5d6878;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        padding: 16px;
+        font-size: 0.92rem;
+      }
+
+      figcaption {
+        padding: 10px;
+        font-size: 0.9rem;
+        color: #344050;
+      }
+
+      .footer {
+        margin-top: 22px;
+        color: var(--ink-muted);
+        font-size: 0.9rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .footer a {
+        color: var(--mint-dark);
+        text-underline-offset: 3px;
+      }
+
+      @media (max-width: 980px) {
+        .hero,
+        .install-grid,
+        .principles,
+        .shots {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <main class="page">
+      <div class="topbar">
+        <div class="brand">
+          <img src="/assets/icon-128.png" alt="Pi for Excel logo" />
+          <span>Pi for Excel</span>
+        </div>
+        <span class="chip">Open source • MIT</span>
+      </div>
+
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <h1 id="hero-title">AI help inside Excel, in plain English.</h1>
+          <p class="lead">
+            Pi for Excel is a friendly sidebar assistant for spreadsheets. Ask normal questions,
+            get clear answers, and automate repetitive work without leaving your workbook.
+          </p>
+
+          <ul class="hero-points">
+            <li>Works with your model of choice (Claude, GPT, Gemini, and more).</li>
+            <li>No coding needed to install — download one file and add it in Excel.</li>
+            <li>Your workbook stays in Excel; you stay in control of what gets changed.</li>
+          </ul>
+        </div>
+
+        <aside class="cta-panel" aria-label="primary actions">
+          <a class="btn btn-primary" href="/manifest.prod.xml" download>Download manifest.prod.xml</a>
+          <a class="btn btn-secondary" href="https://github.com/tmustier/pi-for-excel/blob/main/docs/install.md" target="_blank" rel="noreferrer">Open full install guide</a>
+          <a class="btn btn-secondary" href="https://github.com/tmustier/pi-for-excel" target="_blank" rel="noreferrer">View source on GitHub</a>
+          <p class="muted">
+            Quick diagnostics link:
+            <a href="/src/taskpane.html" target="_blank" rel="noreferrer">taskpane.html</a>
+          </p>
+        </aside>
+      </section>
+
+      <section class="section-card" aria-labelledby="principles-title">
+        <h2 id="principles-title">What this is (and how it feels to use)</h2>
+        <p class="subhead">Built for non-technical users who still want serious spreadsheet help.</p>
+
+        <div class="principles">
+          <article class="principle">
+            <b>1) Ask naturally</b>
+            “Summarize this selection”, “fix this formula”, or “find where EBITDA is used”.
+          </article>
+          <article class="principle">
+            <b>2) Keep context</b>
+            Pi can read your current sheet/selection so you spend less time explaining what you’re looking at.
+          </article>
+          <article class="principle">
+            <b>3) Stay in control</b>
+            You can review responses, interrupt with <code>Esc</code>, and decide when to apply edits.
+          </article>
+        </div>
+      </section>
+
+      <section class="section-card" aria-labelledby="install-title">
+        <h2 id="install-title">Install + get started (about 2 minutes)</h2>
+        <p class="subhead">No dev tools required. If you can upload a file in Excel, you can install this.</p>
+
+        <div class="install-grid">
+          <article class="step">
+            <div class="step-num">1</div>
+            <p><b>Download</b> <code>manifest.prod.xml</code> using the green button above.</p>
+          </article>
+
+          <article class="step">
+            <div class="step-num">2</div>
+            <p><b>Add it in Excel</b>:</p>
+            <ul>
+              <li><b>Windows:</b> Insert → My Add-ins → Upload My Add-in</li>
+              <li><b>macOS:</b> copy the file to Excel’s <code>wef</code> folder (full guide linked above)</li>
+            </ul>
+          </article>
+
+          <article class="step">
+            <div class="step-num">3</div>
+            <p>Open <b>Pi</b> from the ribbon and run <code>/login</code> once.</p>
+          </article>
+
+          <article class="step">
+            <div class="step-num">4</div>
+            <p>Send your first prompt, for example:</p>
+            <ul>
+              <li>“What sheet am I on?”</li>
+              <li>“Summarize my current selection.”</li>
+              <li>“Find formulas referencing Inputs.”</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="get-started">
+          <b>Tip:</b> API key login is usually the easiest path. OAuth can need a local HTTPS proxy helper on some Excel/macOS setups.
+        </div>
+      </section>
+
+      <section class="section-card" aria-labelledby="screenshots-title">
+        <h2 id="screenshots-title">Helpful screenshots</h2>
+        <p class="subhead">What Pi looks like inside an actual workbook.</p>
+
+        <div class="shots">
+          <figure>
+            <div class="shot-frame">Screenshot placeholder<br /><code>excel-sidebar-overview.png</code></div>
+            <figcaption>Pi lives in the Excel sidebar, next to your sheet.</figcaption>
+          </figure>
+          <figure>
+            <div class="shot-frame">Screenshot placeholder<br /><code>search-modes-walkthrough.png</code></div>
+            <figcaption>Clear, step-by-step guidance with concrete examples.</figcaption>
+          </figure>
+          <figure>
+            <div class="shot-frame">Screenshot placeholder<br /><code>search-modes-summary.png</code></div>
+            <figcaption>Structured outputs (tables, JSON snippets, summaries) when useful.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span>Need help?</span>
+        <a href="https://github.com/tmustier/pi-for-excel/blob/main/docs/install.md" target="_blank" rel="noreferrer">Install guide</a>
+        <span>•</span>
+        <a href="https://github.com/tmustier/pi-for-excel/issues" target="_blank" rel="noreferrer">Report an issue</a>
+      </footer>
+    </main>
+  </body>
+</html>
