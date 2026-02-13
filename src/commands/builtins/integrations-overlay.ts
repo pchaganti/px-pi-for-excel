@@ -39,10 +39,10 @@ import {
   type McpServerConfig,
 } from "../../tools/mcp-config.js";
 import { closeOverlayById, createOverlayDialog } from "../../ui/overlay-dialog.js";
+import { INTEGRATIONS_OVERLAY_ID } from "../../ui/overlay-ids.js";
 import { showToast } from "../../ui/toast.js";
 import { isRecord } from "../../utils/type-guards.js";
 
-const OVERLAY_ID = "pi-integrations-overlay";
 const MCP_PROBE_TIMEOUT_MS = 8_000;
 
 interface WorkbookContextSnapshot {
@@ -372,12 +372,12 @@ function createIntegrationCard(args: {
 }
 
 export function showIntegrationsDialog(dependencies: IntegrationsDialogDependencies): void {
-  if (closeOverlayById(OVERLAY_ID)) {
+  if (closeOverlayById(INTEGRATIONS_OVERLAY_ID)) {
     return;
   }
 
   const dialog = createOverlayDialog({
-    overlayId: OVERLAY_ID,
+    overlayId: INTEGRATIONS_OVERLAY_ID,
     cardClassName: "pi-welcome-card pi-overlay-card pi-integrations-dialog",
   });
 

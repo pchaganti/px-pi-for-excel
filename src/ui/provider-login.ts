@@ -15,6 +15,7 @@ import {
   DEFAULT_LOCAL_PROXY_URL,
   PROXY_HELPER_DOCS_URL,
 } from "../auth/proxy-validation.js";
+import { PROVIDER_PROMPT_OVERLAY_ID } from "./overlay-ids.js";
 import { getErrorMessage } from "../utils/errors.js";
 
 export interface ProviderDef {
@@ -122,11 +123,11 @@ function promptForText(opts: {
   submitLabel?: string;
 }): Promise<string> {
   return new Promise((resolve, reject) => {
-    const existing = document.getElementById("pi-prompt-overlay");
+    const existing = document.getElementById(PROVIDER_PROMPT_OVERLAY_ID);
     existing?.remove();
 
     const overlay = document.createElement("div");
-    overlay.id = "pi-prompt-overlay";
+    overlay.id = PROVIDER_PROMPT_OVERLAY_ID;
     overlay.className = "pi-welcome-overlay";
     overlay.dataset.claimsEscape = "true";
     overlay.innerHTML = `

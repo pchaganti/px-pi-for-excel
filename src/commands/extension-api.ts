@@ -46,11 +46,8 @@ import {
   upsertExtensionWidget,
   type ExtensionWidgetPlacement,
 } from "../extensions/internal/widget-surface.js";
-import {
-  closeOverlayById,
-  createOverlayDialog,
-  type OverlayDialogController,
-} from "../ui/overlay-dialog.js";
+import { EXTENSION_OVERLAY_ID } from "../ui/overlay-ids.js";
+import { createOverlayDialogManager } from "../ui/overlay-dialog.js";
 import { isRecord } from "../utils/type-guards.js";
 
 export interface ExtensionCommand {
@@ -247,7 +244,6 @@ function getDefaultCapabilityErrorMessage(capability: ExtensionCapability): stri
 }
 
 const LEGACY_WIDGET_ID = "__legacy__";
-const EXTENSION_OVERLAY_ID = "pi-ext-overlay";
 const WIDGET_V2_DISABLED_ERROR = "Widget API v2 is disabled. Enable /experimental on extension-widget-v2.";
 
 function getWidgetOwnerId(options: CreateExtensionAPIOptions): string {
@@ -331,30 +327,11 @@ export function createExtensionAPI(options: CreateExtensionAPIOptions): ExcelExt
     }
   };
 
-  let overlayDialog: OverlayDialogController | null = null;
-
-  const ensureExtensionOverlayDialog = (): OverlayDialogController => {
-    if (overlayDialog && overlayDialog.overlay.isConnected) {
-      return overlayDialog;
-    }
-
-    closeOverlayById(EXTENSION_OVERLAY_ID);
-
-    const dialog = createOverlayDialog({
-      overlayId: EXTENSION_OVERLAY_ID,
-      cardClassName: "",
-      zIndex: 250,
-    });
-
-    dialog.addCleanup(() => {
-      if (overlayDialog === dialog) {
-        overlayDialog = null;
-      }
-    });
-
-    overlayDialog = dialog;
-    return dialog;
-  };
+  const overlayDialogManager = createOverlayDialogManager({
+    overlayId: EXTENSION_OVERLAY_ID,
+    cardClassName: "",
+    zIndex: 250,
+  });
 
   return {
     registerCommand(name: string, cmd: ExtensionCommand) {
@@ -394,7 +371,7 @@ export function createExtensionAPI(options: CreateExtensionAPIOptions): ExcelExt
       show(el: HTMLElement) {
         assertCapability("ui.overlay");
 
-        const dialog = ensureExtensionOverlayDialog();
+        const dialog = overlayDialogManager.ensure();
         dialog.card.replaceChildren(el);
 
         if (!dialog.overlay.isConnected) {
@@ -403,12 +380,7 @@ export function createExtensionAPI(options: CreateExtensionAPIOptions): ExcelExt
       },
 
       dismiss() {
-        if (overlayDialog) {
-          overlayDialog.close();
-          return;
-        }
-
-        closeOverlayById(EXTENSION_OVERLAY_ID);
+        overlayDialogManager.dismiss();
       },
     },
 

@@ -45,6 +45,12 @@ export interface OverlayDialogController {
   addCleanup: (cleanup: () => void) => void;
 }
 
+export interface OverlayDialogManager {
+  ensure: () => OverlayDialogController;
+  dismiss: () => void;
+  getCurrent: () => OverlayDialogController | null;
+}
+
 export function createOverlayDialog(options: OverlayDialogOptions): OverlayDialogController {
   const overlay = document.createElement("div");
   overlay.id = options.overlayId;
@@ -116,5 +122,40 @@ export function createOverlayDialog(options: OverlayDialogOptions): OverlayDialo
 
       cleanups.push(cleanup);
     },
+  };
+}
+
+export function createOverlayDialogManager(options: OverlayDialogOptions): OverlayDialogManager {
+  let current: OverlayDialogController | null = null;
+
+  const ensure = (): OverlayDialogController => {
+    if (current && current.overlay.isConnected) {
+      return current;
+    }
+
+    closeOverlayById(options.overlayId);
+
+    const dialog = createOverlayDialog(options);
+    dialog.addCleanup(() => {
+      if (current === dialog) {
+        current = null;
+      }
+    });
+
+    current = dialog;
+    return dialog;
+  };
+
+  return {
+    ensure,
+    dismiss: () => {
+      if (current) {
+        current.close();
+        return;
+      }
+
+      closeOverlayById(options.overlayId);
+    },
+    getCurrent: () => current,
   };
 }
