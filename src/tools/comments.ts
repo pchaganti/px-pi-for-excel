@@ -24,9 +24,10 @@ import type { CommentsDetails } from "./tool-details.js";
 import {
   CHECKPOINT_SKIPPED_NOTE,
   CHECKPOINT_SKIPPED_REASON,
-  recoveryCheckpointCreated,
-  recoveryCheckpointUnavailable,
 } from "./recovery-metadata.js";
+import { finalizeMutationOperation } from "./mutation/finalize.js";
+import { appendMutationResultNote } from "./mutation/result-note.js";
+import type { MutationFinalizeDependencies } from "./mutation/types.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -174,6 +175,9 @@ export function createCommentsTool(
       params: Params,
     ): Promise<AgentToolResult<CommentsDetails>> => {
       const isMutation = isMutatingCommentsAction(params.action);
+      const mutationFinalizeDependencies: MutationFinalizeDependencies = {
+        appendAuditEntry: (entry) => resolvedDependencies.appendAuditEntry(entry),
+      };
 
       try {
         let beforeThreadState: RecoveryCommentThreadState | null = null;
@@ -183,18 +187,6 @@ export function createCommentsTool(
         }
 
         const result = await resolvedDependencies.dispatchAction(params);
-
-        if (isMutation) {
-          await resolvedDependencies.appendAuditEntry({
-            toolName: "comments",
-            toolCallId,
-            blocked: false,
-            outputAddress: result.outputAddress ?? params.range,
-            changedCount: result.changedCount ?? 1,
-            changes: [],
-            summary: result.summary ?? `${params.action} comment action`,
-          });
-        }
 
         const output: AgentToolResult<CommentsDetails> = {
           content: [{
@@ -208,40 +200,58 @@ export function createCommentsTool(
           },
         };
 
-        if (!isMutation || !beforeThreadState) {
+        if (!isMutation) {
           return output;
         }
 
-        const checkpoint = await resolvedDependencies.appendRecoverySnapshot({
-          toolName: "comments",
-          toolCallId,
-          address: result.outputAddress ?? params.range,
-          changedCount: result.changedCount ?? 1,
-          commentThreadState: beforeThreadState,
+        const outputAddress = result.outputAddress ?? params.range;
+        const changedCount = result.changedCount ?? 1;
+
+        await finalizeMutationOperation(mutationFinalizeDependencies, {
+          auditEntry: {
+            toolName: "comments",
+            toolCallId,
+            blocked: false,
+            outputAddress,
+            changedCount,
+            changes: [],
+            summary: result.summary ?? `${params.action} comment action`,
+          },
+          recovery: beforeThreadState
+            ? {
+              result: output,
+              appendRecoverySnapshot: () => resolvedDependencies.appendRecoverySnapshot({
+                toolName: "comments",
+                toolCallId,
+                address: outputAddress,
+                changedCount,
+                commentThreadState: beforeThreadState,
+              }),
+              appendResultNote: appendMutationResultNote,
+              unavailableReason: CHECKPOINT_SKIPPED_REASON,
+              unavailableNote: CHECKPOINT_SKIPPED_NOTE,
+              dispatchSnapshotCreated: (checkpoint) => {
+                resolvedDependencies.dispatchSnapshotCreated(checkpoint);
+              },
+            }
+            : undefined,
         });
-
-        if (!checkpoint) {
-          output.details.recovery = recoveryCheckpointUnavailable(CHECKPOINT_SKIPPED_REASON);
-          appendResultNote(output, CHECKPOINT_SKIPPED_NOTE);
-          return output;
-        }
-
-        output.details.recovery = recoveryCheckpointCreated(checkpoint.id);
-        resolvedDependencies.dispatchSnapshotCreated(checkpoint);
 
         return output;
       } catch (e: unknown) {
         const message = getErrorMessage(e);
 
         if (isMutation) {
-          await resolvedDependencies.appendAuditEntry({
-            toolName: "comments",
-            toolCallId,
-            blocked: true,
-            outputAddress: params.range,
-            changedCount: 0,
-            changes: [],
-            summary: `error: ${message}`,
+          await finalizeMutationOperation(mutationFinalizeDependencies, {
+            auditEntry: {
+              toolName: "comments",
+              toolCallId,
+              blocked: true,
+              outputAddress: params.range,
+              changedCount: 0,
+              changes: [],
+              summary: `error: ${message}`,
+            },
           });
         }
 
@@ -472,9 +482,3 @@ async function executeSetResolved(ref: string, resolved: boolean): Promise<Comme
   };
 }
 
-function appendResultNote(result: AgentToolResult<CommentsDetails>, note: string): void {
-  const first = result.content[0];
-  if (!first || first.type !== "text") return;
-
-  first.text = `${first.text}\n\n${note}`;
-}

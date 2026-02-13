@@ -18,9 +18,10 @@ import { resolveStyles } from "../conventions/index.js";
 import {
   CHECKPOINT_SKIPPED_NOTE,
   CHECKPOINT_SKIPPED_REASON,
-  recoveryCheckpointCreated,
-  recoveryCheckpointUnavailable,
 } from "./recovery-metadata.js";
+import { finalizeMutationOperation, finalizeMutationRecoveryStep } from "./mutation/finalize.js";
+import { appendMutationResultNote } from "./mutation/result-note.js";
+import type { MutationFinalizeDependencies } from "./mutation/types.js";
 import type { BorderWeight } from "../conventions/index.js";
 import { getResolvedConventions } from "../conventions/store.js";
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
@@ -223,11 +224,9 @@ function buildFormatCheckpointPlan(
   };
 }
 
-function appendResultNote(result: AgentToolResult<FormatCellsDetails>, note: string): void {
-  const first = result.content[0];
-  if (!first || first.type !== "text") return;
-  first.text = `${first.text}\n\n${note}`;
-}
+const mutationFinalizeDependencies: MutationFinalizeDependencies = {
+  appendAuditEntry: (entry) => getWorkbookChangeAuditLog().append(entry),
+};
 
 export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDetails> {
   return {
@@ -509,56 +508,65 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
           },
         };
 
-        if (!checkpointCapture.supported || !checkpointCapture.state) {
-          const reason = checkpointCapture.reason ?? CHECKPOINT_SKIPPED_REASON;
-          toolResult.details.recovery = recoveryCheckpointUnavailable(reason);
-          appendResultNote(toolResult, CHECKPOINT_SKIPPED_NOTE);
-        } else {
-          const checkpoint = await getWorkbookRecoveryLog().appendFormatCells({
-            toolName: "format_cells",
-            toolCallId,
-            address: fullAddr,
-            changedCount: result.cellCount,
-            formatRangeState: checkpointCapture.state,
-          });
+        const recoveryUnavailableReason = checkpointCapture.supported && checkpointCapture.state
+          ? CHECKPOINT_SKIPPED_REASON
+          : (checkpointCapture.reason ?? CHECKPOINT_SKIPPED_REASON);
 
-          if (!checkpoint) {
-            toolResult.details.recovery = recoveryCheckpointUnavailable(CHECKPOINT_SKIPPED_REASON);
-            appendResultNote(toolResult, CHECKPOINT_SKIPPED_NOTE);
-          } else {
-            toolResult.details.recovery = recoveryCheckpointCreated(checkpoint.id);
+        await finalizeMutationRecoveryStep({
+          result: toolResult,
+          appendRecoverySnapshot: () => {
+            if (!checkpointCapture.supported || !checkpointCapture.state) {
+              return Promise.resolve(null);
+            }
+
+            return getWorkbookRecoveryLog().appendFormatCells({
+              toolName: "format_cells",
+              toolCallId,
+              address: fullAddr,
+              changedCount: result.cellCount,
+              formatRangeState: checkpointCapture.state,
+            });
+          },
+          appendResultNote: appendMutationResultNote,
+          unavailableReason: recoveryUnavailableReason,
+          unavailableNote: CHECKPOINT_SKIPPED_NOTE,
+          dispatchSnapshotCreated: (checkpoint) => {
             dispatchWorkbookSnapshotCreated({
               snapshotId: checkpoint.id,
               toolName: checkpoint.toolName,
               address: checkpoint.address,
               changedCount: checkpoint.changedCount,
             });
-          }
-        }
+          },
+        });
 
-        await getWorkbookChangeAuditLog().append({
-          toolName: "format_cells",
-          toolCallId,
-          blocked: false,
-          outputAddress: fullAddr,
-          changedCount: result.cellCount,
-          changes: [],
-          summary: `formatted ${result.cellCount} cell(s)` +
-            (result.warnings.length > 0 ? ` with ${result.warnings.length} warning(s)` : ""),
+        await finalizeMutationOperation(mutationFinalizeDependencies, {
+          auditEntry: {
+            toolName: "format_cells",
+            toolCallId,
+            blocked: false,
+            outputAddress: fullAddr,
+            changedCount: result.cellCount,
+            changes: [],
+            summary: `formatted ${result.cellCount} cell(s)` +
+              (result.warnings.length > 0 ? ` with ${result.warnings.length} warning(s)` : ""),
+          },
         });
 
         return toolResult;
       } catch (e: unknown) {
         const message = getErrorMessage(e);
 
-        await getWorkbookChangeAuditLog().append({
-          toolName: "format_cells",
-          toolCallId,
-          blocked: true,
-          outputAddress: params.range,
-          changedCount: 0,
-          changes: [],
-          summary: `error: ${message}`,
+        await finalizeMutationOperation(mutationFinalizeDependencies, {
+          auditEntry: {
+            toolName: "format_cells",
+            toolCallId,
+            blocked: true,
+            outputAddress: params.range,
+            changedCount: 0,
+            changes: [],
+            summary: `error: ${message}`,
+          },
         });
 
         return {

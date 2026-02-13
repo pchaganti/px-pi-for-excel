@@ -21,9 +21,10 @@ import type { ModifyStructureDetails } from "./tool-details.js";
 import {
   CHECKPOINT_SKIPPED_NOTE,
   CHECKPOINT_SKIPPED_REASON,
-  recoveryCheckpointCreated,
-  recoveryCheckpointUnavailable,
 } from "./recovery-metadata.js";
+import { finalizeMutationOperation } from "./mutation/finalize.js";
+import { appendMutationResultNote } from "./mutation/result-note.js";
+import type { MutationFinalizeDependencies } from "./mutation/types.js";
 
 // Helper for string enum (TypeBox doesn't have a built-in StringEnum)
 function StringEnum<T extends string[]>(values: [...T], opts?: { description?: string }) {
@@ -132,11 +133,9 @@ function unsupportedStructureCheckpointReason(action: Params["action"]): string 
   return `Checkpoint capture is not yet supported for modify_structure action \`${action}\`.`;
 }
 
-function appendResultNote(result: AgentToolResult<ModifyStructureDetails>, note: string): void {
-  const first = result.content[0];
-  if (!first || first.type !== "text") return;
-  first.text = `${first.text}\n\n${note}`;
-}
+const mutationFinalizeDependencies: MutationFinalizeDependencies = {
+  appendAuditEntry: (entry) => getWorkbookChangeAuditLog().append(entry),
+};
 
 function isRecoverySheetVisibility(value: unknown): value is RecoverySheetVisibility {
   return value === "Visible" || value === "Hidden" || value === "VeryHidden";
@@ -490,16 +489,6 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
           }
         });
 
-        await getWorkbookChangeAuditLog().append({
-          toolName: "modify_structure",
-          toolCallId,
-          blocked: false,
-          outputAddress: result.outputAddress,
-          changedCount: result.changedCount,
-          changes: [],
-          summary: result.summary,
-        });
-
         const toolResult: AgentToolResult<ModifyStructureDetails> = {
           content: [{ type: "text", text: result.message }],
           details: {
@@ -510,48 +499,65 @@ export function createModifyStructureTool(): AgentTool<typeof schema, ModifyStru
 
         const checkpointAddress = result.outputAddress ?? params.sheet ?? params.action;
         const checkpointState = result.checkpointState ?? preMutationCheckpointState;
+        const recoveryUnavailableReason = checkpointAction && checkpointState
+          ? CHECKPOINT_SKIPPED_REASON
+          : (checkpointAction
+            ? (result.checkpointUnavailableReason ?? checkpointUnavailableReason ?? CHECKPOINT_SKIPPED_REASON)
+            : unsupportedStructureCheckpointReason(params.action));
 
-        if (checkpointAction && checkpointState) {
-          const checkpoint = await getWorkbookRecoveryLog().appendModifyStructure({
+        await finalizeMutationOperation(mutationFinalizeDependencies, {
+          auditEntry: {
             toolName: "modify_structure",
             toolCallId,
-            address: checkpointAddress,
+            blocked: false,
+            outputAddress: result.outputAddress,
             changedCount: result.changedCount,
-            modifyStructureState: checkpointState,
-          });
+            changes: [],
+            summary: result.summary,
+          },
+          recovery: {
+            result: toolResult,
+            appendRecoverySnapshot: () => {
+              if (!checkpointAction || !checkpointState) {
+                return Promise.resolve(null);
+              }
 
-          if (checkpoint) {
-            toolResult.details.recovery = recoveryCheckpointCreated(checkpoint.id);
-            dispatchWorkbookSnapshotCreated({
-              snapshotId: checkpoint.id,
-              toolName: checkpoint.toolName,
-              address: checkpoint.address,
-              changedCount: checkpoint.changedCount,
-            });
-          } else {
-            toolResult.details.recovery = recoveryCheckpointUnavailable(CHECKPOINT_SKIPPED_REASON);
-            appendResultNote(toolResult, CHECKPOINT_SKIPPED_NOTE);
-          }
-        } else {
-          const reason = checkpointAction
-            ? (result.checkpointUnavailableReason ?? checkpointUnavailableReason ?? CHECKPOINT_SKIPPED_REASON)
-            : unsupportedStructureCheckpointReason(params.action);
-          toolResult.details.recovery = recoveryCheckpointUnavailable(reason);
-          appendResultNote(toolResult, CHECKPOINT_SKIPPED_NOTE);
-        }
+              return getWorkbookRecoveryLog().appendModifyStructure({
+                toolName: "modify_structure",
+                toolCallId,
+                address: checkpointAddress,
+                changedCount: result.changedCount,
+                modifyStructureState: checkpointState,
+              });
+            },
+            appendResultNote: appendMutationResultNote,
+            unavailableReason: recoveryUnavailableReason,
+            unavailableNote: CHECKPOINT_SKIPPED_NOTE,
+            dispatchSnapshotCreated: (checkpoint) => {
+              dispatchWorkbookSnapshotCreated({
+                snapshotId: checkpoint.id,
+                toolName: checkpoint.toolName,
+                address: checkpoint.address,
+                changedCount: checkpoint.changedCount,
+              });
+            },
+          },
+        });
 
         return toolResult;
       } catch (e: unknown) {
         const message = getErrorMessage(e);
 
-        await getWorkbookChangeAuditLog().append({
-          toolName: "modify_structure",
-          toolCallId,
-          blocked: true,
-          outputAddress: params.sheet,
-          changedCount: 0,
-          changes: [],
-          summary: `error: ${message}`,
+        await finalizeMutationOperation(mutationFinalizeDependencies, {
+          auditEntry: {
+            toolName: "modify_structure",
+            toolCallId,
+            blocked: true,
+            outputAddress: params.sheet,
+            changedCount: 0,
+            changes: [],
+            summary: `error: ${message}`,
+          },
         });
 
         return {

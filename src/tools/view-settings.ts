@@ -17,6 +17,9 @@ import {
   NON_CHECKPOINTED_MUTATION_REASON,
   recoveryCheckpointUnavailable,
 } from "./recovery-metadata.js";
+import { finalizeMutationOperation } from "./mutation/finalize.js";
+import { appendMutationResultNote } from "./mutation/result-note.js";
+import type { MutationFinalizeDependencies } from "./mutation/types.js";
 import type { ViewSettingsDetails } from "./tool-details.js";
 
 function StringEnum<T extends string[]>(values: [...T], opts?: { description?: string }) {
@@ -144,13 +147,31 @@ export function createViewSettingsTool(
       params: Params,
     ): Promise<AgentToolResult<ViewSettingsDetails | undefined>> => {
       const isMutation = isMutatingViewSettingsAction(params.action);
+      const mutationFinalizeDependencies: MutationFinalizeDependencies = {
+        appendAuditEntry: (entry) => resolvedDependencies.appendAuditEntry(entry),
+      };
 
       try {
         const result = await resolvedDependencies.executeAction(params);
         const outputAddress = result.outputAddress ?? params.range ?? params.sheet;
 
-        if (isMutation) {
-          await resolvedDependencies.appendAuditEntry({
+        if (!isMutation) {
+          return {
+            content: [{ type: "text", text: result.text }],
+            details: undefined,
+          };
+        }
+
+        const output: AgentToolResult<ViewSettingsDetails> = {
+          content: [{ type: "text", text: result.text }],
+          details: buildMutationDetails({
+            action: params.action,
+            address: outputAddress,
+          }),
+        };
+
+        await finalizeMutationOperation(mutationFinalizeDependencies, {
+          auditEntry: {
             toolName: "view_settings",
             toolCallId,
             blocked: false,
@@ -158,30 +179,38 @@ export function createViewSettingsTool(
             changedCount: result.changedCount ?? 1,
             changes: [],
             summary: result.summary ?? `${params.action} view setting`,
-          });
-        }
+          },
+          recovery: {
+            result: output,
+            appendRecoverySnapshot: () => Promise.resolve(null),
+            appendResultNote: appendMutationResultNote,
+            unavailableReason: NON_CHECKPOINTED_MUTATION_REASON,
+            unavailableNote: NON_CHECKPOINTED_MUTATION_NOTE,
+          },
+        });
 
-        const details = isMutation
-          ? buildMutationDetails({
-              action: params.action,
-              address: outputAddress,
-            })
-          : undefined;
-
-        const note = isMutation
-          ? `${result.text}\n\n${NON_CHECKPOINTED_MUTATION_NOTE}`
-          : result.text;
-
-        return {
-          content: [{ type: "text", text: note }],
-          details,
-        };
+        return output;
       } catch (e: unknown) {
         const message = getErrorMessage(e);
         const outputAddress = params.range ?? params.sheet;
 
-        if (isMutation) {
-          await resolvedDependencies.appendAuditEntry({
+        if (!isMutation) {
+          return {
+            content: [{ type: "text", text: `Error: ${message}` }],
+            details: undefined,
+          };
+        }
+
+        const output: AgentToolResult<ViewSettingsDetails> = {
+          content: [{ type: "text", text: `Error: ${message}` }],
+          details: buildMutationDetails({
+            action: params.action,
+            address: outputAddress,
+          }),
+        };
+
+        await finalizeMutationOperation(mutationFinalizeDependencies, {
+          auditEntry: {
             toolName: "view_settings",
             toolCallId,
             blocked: true,
@@ -189,24 +218,17 @@ export function createViewSettingsTool(
             changedCount: 0,
             changes: [],
             summary: `error: ${message}`,
-          });
-        }
+          },
+          recovery: {
+            result: output,
+            appendRecoverySnapshot: () => Promise.resolve(null),
+            appendResultNote: appendMutationResultNote,
+            unavailableReason: NON_CHECKPOINTED_MUTATION_REASON,
+            unavailableNote: NON_CHECKPOINTED_MUTATION_NOTE,
+          },
+        });
 
-        const details = isMutation
-          ? buildMutationDetails({
-              action: params.action,
-              address: outputAddress,
-            })
-          : undefined;
-
-        const errorText = isMutation
-          ? `Error: ${message}\n\n${NON_CHECKPOINTED_MUTATION_NOTE}`
-          : `Error: ${message}`;
-
-        return {
-          content: [{ type: "text", text: errorText }],
-          details,
-        };
+        return output;
       }
     },
   };
