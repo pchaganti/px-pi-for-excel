@@ -624,6 +624,7 @@ export function showShortcutsDialog(): void {
     ["Ctrl+PageUp/PageDown", "Switch chats (fallback on Windows hosts)"],
     ["⌘/Ctrl+T", "Open new tab"],
     ["⌘/Ctrl+W", "Close active tab"],
+    ["⌘/Ctrl+Z", "Undo close tab"],
     ["⌘/Ctrl+⇧T", "Reopen last closed tab"],
     ["F2", "Focus chat input"],
     ["F6", "Focus: Sheet ↔ Sidebar"],

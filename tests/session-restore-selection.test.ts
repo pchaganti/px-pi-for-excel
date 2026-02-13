@@ -11,6 +11,7 @@ import {
   isCreateTabShortcut,
   isFocusInputShortcut,
   isReopenLastClosedShortcut,
+  isUndoCloseTabShortcut,
   shouldAbortFromEscape,
   shouldBlurEditorFromEscape,
 } from "../src/taskpane/keyboard-shortcuts.ts";
@@ -205,6 +206,52 @@ void test("Cmd/Ctrl+W detection ignores Shift/Alt-modified chords", () => {
   assert.equal(
     isCloseActiveTabShortcut({
       key: "w",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+    }),
+    false,
+  );
+});
+
+void test("Cmd/Ctrl+Z detection ignores Shift/Alt-modified chords", () => {
+  assert.equal(
+    isUndoCloseTabShortcut({
+      key: "z",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    isUndoCloseTabShortcut({
+      key: "Z",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    isUndoCloseTabShortcut({
+      key: "z",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+    }),
+    false,
+  );
+
+  assert.equal(
+    isUndoCloseTabShortcut({
+      key: "z",
       metaKey: true,
       ctrlKey: false,
       shiftKey: false,

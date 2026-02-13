@@ -40,6 +40,7 @@ interface TabShortcutEventLike {
 }
 
 type ReopenShortcutEventLike = TabShortcutEventLike;
+type UndoCloseShortcutEventLike = TabShortcutEventLike;
 type CreateTabShortcutEventLike = TabShortcutEventLike;
 type CloseTabShortcutEventLike = TabShortcutEventLike;
 
@@ -178,6 +179,13 @@ export function isCloseActiveTabShortcut(event: CloseTabShortcutEventLike): bool
   if (event.shiftKey || event.altKey) return false;
 
   return event.key.toLowerCase() === "w";
+}
+
+export function isUndoCloseTabShortcut(event: UndoCloseShortcutEventLike): boolean {
+  if (!(event.metaKey || event.ctrlKey)) return false;
+  if (event.shiftKey || event.altKey) return false;
+
+  return event.key.toLowerCase() === "z";
 }
 
 export function isReopenLastClosedShortcut(event: ReopenShortcutEventLike): boolean {
@@ -370,6 +378,16 @@ export function installKeyboardShortcuts(opts: {
       e.stopPropagation();
       e.stopImmediatePropagation();
       onCloseActiveTab();
+      return;
+    }
+
+    // Cmd/Ctrl+Z — undo close tab (reopen most recently closed tab)
+    if (isUndoCloseTabShortcut(e) && !isTextEntryTarget(keyTarget)) {
+      if (!onReopenLastClosed) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      onReopenLastClosed();
       return;
     }
 
