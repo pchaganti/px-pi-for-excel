@@ -1,0 +1,82 @@
+export const TMUX_TOOL_NAME = "tmux";
+export const FILES_TOOL_NAME = "files";
+export const EXECUTE_OFFICE_JS_TOOL_NAME = "execute_office_js";
+export const PYTHON_TOOL_NAMES = new Set<string>([
+  "python_run",
+  "libreoffice_convert",
+  "python_transform_range",
+]);
+
+export const TMUX_BRIDGE_URL_SETTING_KEY = "tmux.bridge.url";
+export const PYTHON_BRIDGE_URL_SETTING_KEY = "python.bridge.url";
+export const PYTHON_BRIDGE_APPROVED_URL_SETTING_KEY = "python.bridge.approved.url";
+
+export type TmuxBridgeGateReason =
+  | "tmux_experiment_disabled"
+  | "missing_bridge_url"
+  | "invalid_bridge_url"
+  | "bridge_unreachable";
+
+export interface TmuxBridgeGateResult {
+  allowed: boolean;
+  bridgeUrl?: string;
+  reason?: TmuxBridgeGateReason;
+}
+
+export interface TmuxBridgeGateDependencies {
+  isTmuxExperimentEnabled?: () => boolean;
+  getTmuxBridgeUrl?: () => Promise<string | undefined>;
+  validateBridgeUrl?: (url: string) => string | null;
+  probeTmuxBridge?: (bridgeUrl: string) => Promise<boolean>;
+}
+
+export type PythonBridgeGateReason =
+  | "python_experiment_disabled"
+  | "missing_bridge_url"
+  | "invalid_bridge_url"
+  | "bridge_unreachable";
+
+export interface PythonBridgeGateResult {
+  allowed: boolean;
+  bridgeUrl?: string;
+  reason?: PythonBridgeGateReason;
+}
+
+export interface PythonBridgeGateDependencies {
+  isPythonExperimentEnabled?: () => boolean;
+  getPythonBridgeUrl?: () => Promise<string | undefined>;
+  validatePythonBridgeUrl?: (url: string) => string | null;
+  probePythonBridge?: (bridgeUrl: string) => Promise<boolean>;
+}
+
+export type FilesWorkspaceGateReason = "files_experiment_disabled";
+
+export interface FilesWorkspaceGateResult {
+  allowed: boolean;
+  reason?: FilesWorkspaceGateReason;
+}
+
+export interface FilesWorkspaceGateDependencies {
+  isFilesWorkspaceExperimentEnabled?: () => boolean;
+}
+
+export interface PythonBridgeApprovalRequest {
+  toolName: string;
+  bridgeUrl: string;
+  params: unknown;
+}
+
+export interface OfficeJsExecuteApprovalRequest {
+  explanation: string;
+  code: string;
+}
+
+export interface ExperimentalToolGateDependencies extends
+  TmuxBridgeGateDependencies,
+  PythonBridgeGateDependencies,
+  FilesWorkspaceGateDependencies {
+  requestPythonBridgeApproval?: (request: PythonBridgeApprovalRequest) => Promise<boolean>;
+  getApprovedPythonBridgeUrl?: () => Promise<string | undefined>;
+  setApprovedPythonBridgeUrl?: (bridgeUrl: string) => Promise<void>;
+  requestOfficeJsExecuteApproval?: (request: OfficeJsExecuteApprovalRequest) => Promise<boolean>;
+}
