@@ -12,6 +12,9 @@ import {
   parsePersistedSnapshots,
 } from "./recovery/log-codec.js";
 import {
+  restoreWorkbookRecoverySnapshot,
+} from "./recovery/log-restore.js";
+import {
   defaultGetSettingsStore,
   readPersistedWorkbookRecoveryPayload,
   type SettingsStoreLike,
@@ -686,159 +689,25 @@ export class WorkbookRecoveryLog {
     }
 
     const workbookContext = await this.dependencies.getWorkbookContext();
-    if (!snapshot.workbookId) {
-      throw new Error("Snapshot is missing workbook identity and cannot be restored safely.");
-    }
 
-    if (!workbookContext.workbookId) {
-      throw new Error("Current workbook identity is unavailable; cannot safely restore this snapshot.");
-    }
-
-    if (snapshot.workbookId !== workbookContext.workbookId) {
-      throw new Error("Snapshot belongs to a different workbook.");
-    }
-
-    const snapshotKind = snapshot.snapshotKind ?? "range_values";
-
-    if (snapshotKind === "format_cells_state") {
-      const targetState = snapshot.formatRangeState;
-      if (!targetState) {
-        throw new Error("Format backup data is missing.");
-      }
-
-      const currentState = await this.dependencies.applyFormatCellsSnapshot(snapshot.address, targetState);
-      const inverseSnapshot = await this.appendFormatCellsWithContext(
-        {
-          toolName: "restore_snapshot",
-          toolCallId: `restore:${snapshot.id}`,
-          address: snapshot.address,
-          changedCount: snapshot.changedCount,
-          formatRangeState: currentState,
-          restoredFromSnapshotId: snapshot.id,
-        },
-        workbookContext,
-      );
-
-      return {
-        restoredSnapshotId: snapshot.id,
-        inverseSnapshotId: inverseSnapshot?.id ?? null,
-        address: snapshot.address,
-        changedCount: snapshot.changedCount,
-      };
-    }
-
-    if (snapshotKind === "modify_structure_state") {
-      const targetState = snapshot.modifyStructureState;
-      if (!targetState) {
-        throw new Error("Structure backup data is missing.");
-      }
-
-      const currentState = await this.dependencies.applyModifyStructureSnapshot(snapshot.address, targetState);
-      const inverseSnapshot = await this.appendModifyStructureWithContext(
-        {
-          toolName: "restore_snapshot",
-          toolCallId: `restore:${snapshot.id}`,
-          address: snapshot.address,
-          changedCount: snapshot.changedCount,
-          modifyStructureState: currentState,
-          restoredFromSnapshotId: snapshot.id,
-        },
-        workbookContext,
-      );
-
-      return {
-        restoredSnapshotId: snapshot.id,
-        inverseSnapshotId: inverseSnapshot?.id ?? null,
-        address: snapshot.address,
-        changedCount: snapshot.changedCount,
-      };
-    }
-
-    if (snapshotKind === "conditional_format_rules") {
-      const rules = snapshot.conditionalFormatRules ?? [];
-      const currentState = await this.dependencies.applyConditionalFormatSnapshot(snapshot.address, rules);
-
-      if (!currentState.supported) {
-        throw new Error(currentState.reason ?? "Conditional format backup cannot be restored safely.");
-      }
-
-      const inverseSnapshot = await this.appendConditionalFormatWithContext(
-        {
-          toolName: "restore_snapshot",
-          toolCallId: `restore:${snapshot.id}`,
-          address: snapshot.address,
-          changedCount: snapshot.changedCount,
-          cellCount: snapshot.cellCount,
-          conditionalFormatRules: currentState.rules,
-          restoredFromSnapshotId: snapshot.id,
-        },
-        workbookContext,
-      );
-
-      return {
-        restoredSnapshotId: snapshot.id,
-        inverseSnapshotId: inverseSnapshot?.id ?? null,
-        address: snapshot.address,
-        changedCount: snapshot.changedCount,
-      };
-    }
-
-    if (snapshotKind === "comment_thread") {
-      const targetState = snapshot.commentThreadState;
-      if (!targetState) {
-        throw new Error("Comment backup data is missing.");
-      }
-
-      const currentState = await this.dependencies.applyCommentThreadSnapshot(snapshot.address, targetState);
-      const inverseSnapshot = await this.appendCommentThreadWithContext(
-        {
-          toolName: "restore_snapshot",
-          toolCallId: `restore:${snapshot.id}`,
-          address: snapshot.address,
-          changedCount: snapshot.changedCount,
-          commentThreadState: currentState,
-          restoredFromSnapshotId: snapshot.id,
-        },
-        workbookContext,
-      );
-
-      return {
-        restoredSnapshotId: snapshot.id,
-        inverseSnapshotId: inverseSnapshot?.id ?? null,
-        address: snapshot.address,
-        changedCount: snapshot.changedCount,
-      };
-    }
-
-    const restoreValues = toRestoreValues(snapshot.beforeValues, snapshot.beforeFormulas);
-    const currentState = await this.dependencies.applySnapshot(snapshot.address, restoreValues);
-
-    const inverseChangedCount = countChangedCells({
-      beforeValues: currentState.values,
-      beforeFormulas: currentState.formulas,
-      afterValues: snapshot.beforeValues,
-      afterFormulas: snapshot.beforeFormulas,
-    });
-
-    const inverseSnapshot = await this.appendRangeWithContext(
-      {
-        toolName: "restore_snapshot",
-        toolCallId: `restore:${snapshot.id}`,
-        address: snapshot.address,
-        changedCount: inverseChangedCount,
-        beforeValues: currentState.values,
-        beforeFormulas: currentState.formulas,
-        restoredFromSnapshotId: snapshot.id,
-      },
+    return restoreWorkbookRecoverySnapshot({
+      snapshot,
       workbookContext,
-    );
-
-    return {
-      restoredSnapshotId: snapshot.id,
-      inverseSnapshotId: inverseSnapshot?.id ?? null,
-      address: snapshot.address,
-      changedCount: inverseChangedCount,
-    };
+      dependencies: {
+        applySnapshot: this.dependencies.applySnapshot,
+        applyFormatCellsSnapshot: this.dependencies.applyFormatCellsSnapshot,
+        applyModifyStructureSnapshot: this.dependencies.applyModifyStructureSnapshot,
+        applyConditionalFormatSnapshot: this.dependencies.applyConditionalFormatSnapshot,
+        applyCommentThreadSnapshot: this.dependencies.applyCommentThreadSnapshot,
+        appendRangeSnapshot: (args, context) => this.appendRangeWithContext(args, context),
+        appendFormatCellsSnapshot: (args, context) => this.appendFormatCellsWithContext(args, context),
+        appendModifyStructureSnapshot: (args, context) => this.appendModifyStructureWithContext(args, context),
+        appendConditionalFormatSnapshot: (args, context) => this.appendConditionalFormatWithContext(args, context),
+        appendCommentThreadSnapshot: (args, context) => this.appendCommentThreadWithContext(args, context),
+        toRestoreValues,
+        countChangedCells,
+      },
+    });
   }
 
   async restoreLatestForCurrentWorkbook(): Promise<RestoreWorkbookRecoverySnapshotResult> {
