@@ -18,9 +18,10 @@ import { getErrorMessage } from "../utils/errors.js";
 import {
   CHECKPOINT_SKIPPED_NOTE,
   CHECKPOINT_SKIPPED_REASON,
-  recoveryCheckpointCreated,
-  recoveryCheckpointUnavailable,
 } from "./recovery-metadata.js";
+import { finalizeMutationOperation } from "./mutation/finalize.js";
+import type { MutationFinalizeDependencies } from "./mutation/types.js";
+import { appendMutationResultNote } from "./mutation/result-note.js";
 
 const schema = Type.Object({
   range: Type.String({
@@ -59,6 +60,10 @@ type FillFormulaResult =
     readBackValues: unknown[][];
     readBackFormulas: unknown[][];
   };
+
+const mutationFinalizeDependencies: MutationFinalizeDependencies = {
+  appendAuditEntry: (entry) => getWorkbookChangeAuditLog().append(entry),
+};
 
 export function createFillFormulaTool(): AgentTool<typeof schema, FillFormulaDetails> {
   return {
@@ -153,13 +158,15 @@ export function createFillFormulaTool(): AgentTool<typeof schema, FillFormulaDet
             },
           };
 
-          await getWorkbookChangeAuditLog().append({
-            toolName: "fill_formula",
-            toolCallId,
-            blocked: true,
-            outputAddress: fullAddr,
-            changedCount: 0,
-            changes: [],
+          await finalizeMutationOperation(mutationFinalizeDependencies, {
+            auditEntry: {
+              toolName: "fill_formula",
+              toolCallId,
+              blocked: true,
+              outputAddress: fullAddr,
+              changedCount: 0,
+              changes: [],
+            },
           });
 
           return blockedResult;
@@ -211,40 +218,45 @@ export function createFillFormulaTool(): AgentTool<typeof schema, FillFormulaDet
           changes,
         };
 
-        await getWorkbookChangeAuditLog().append({
-          toolName: "fill_formula",
-          toolCallId,
-          blocked: false,
-          outputAddress: fullAddr,
-          changedCount: changes.changedCount,
-          changes: changes.sample,
+        const toolResult: AgentToolResult<FillFormulaDetails> = {
+          content: [{ type: "text", text: lines.join("\n") }],
+          details,
+        };
+
+        await finalizeMutationOperation(mutationFinalizeDependencies, {
+          auditEntry: {
+            toolName: "fill_formula",
+            toolCallId,
+            blocked: false,
+            outputAddress: fullAddr,
+            changedCount: changes.changedCount,
+            changes: changes.sample,
+          },
+          recovery: {
+            result: toolResult,
+            appendRecoverySnapshot: () => getWorkbookRecoveryLog().append({
+              toolName: "fill_formula",
+              toolCallId,
+              address: fullAddr,
+              changedCount: changes.changedCount,
+              beforeValues: result.beforeValues,
+              beforeFormulas: result.beforeFormulas,
+            }),
+            appendResultNote: appendMutationResultNote,
+            unavailableReason: CHECKPOINT_SKIPPED_REASON,
+            unavailableNote: CHECKPOINT_SKIPPED_NOTE,
+            dispatchSnapshotCreated: (checkpoint) => {
+              dispatchWorkbookSnapshotCreated({
+                snapshotId: checkpoint.id,
+                toolName: checkpoint.toolName,
+                address: checkpoint.address,
+                changedCount: checkpoint.changedCount,
+              });
+            },
+          },
         });
 
-        const checkpoint = await getWorkbookRecoveryLog().append({
-          toolName: "fill_formula",
-          toolCallId,
-          address: fullAddr,
-          changedCount: changes.changedCount,
-          beforeValues: result.beforeValues,
-          beforeFormulas: result.beforeFormulas,
-        });
-
-        if (checkpoint) {
-          details.recovery = recoveryCheckpointCreated(checkpoint.id);
-
-          dispatchWorkbookSnapshotCreated({
-            snapshotId: checkpoint.id,
-            toolName: checkpoint.toolName,
-            address: checkpoint.address,
-            changedCount: checkpoint.changedCount,
-          });
-        } else {
-          details.recovery = recoveryCheckpointUnavailable(CHECKPOINT_SKIPPED_REASON);
-          lines.push("");
-          lines.push(CHECKPOINT_SKIPPED_NOTE);
-        }
-
-        return { content: [{ type: "text", text: lines.join("\n") }], details };
+        return toolResult;
       } catch (e: unknown) {
         return {
           content: [{ type: "text", text: `Error filling formula: ${getErrorMessage(e)}` }],
