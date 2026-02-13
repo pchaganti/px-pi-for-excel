@@ -1,352 +1,915 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pi for Excel</title>
-    <meta
-      name="description"
-      content="An open-source, multi-model AI sidebar add-in for Microsoft Excel — powered by Pi."
-    />
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pi for Excel</title>
+  <meta name="description" content="A powerful, open-source agent inside Excel. Reads your spreadsheets, writes formulas, formats cells — powered by the models you already use." />
+  <link rel="icon" href="/assets/icon-32.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
 
-    <style>
-      @import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=JetBrains+Mono:wght@300;400;500&display=swap");
+    :root {
+      --bg: oklch(0.985 0.002 90);
+      --fg: oklch(0.18 0 0);
+      --muted: oklch(0.50 0 0);
+      --faint: oklch(0.65 0 0);
+      --green: oklch(0.45 0.12 160);
+      --green-strong: oklch(0.40 0.12 160);
+      --green-light: oklch(0.45 0.12 160 / 0.08);
+      --green-lighter: oklch(0.45 0.12 160 / 0.04);
+      --green-border: oklch(0.45 0.12 160 / 0.14);
+      --border: oklch(0 0 0 / 0.08);
+      --border-light: oklch(0 0 0 / 0.05);
+      --card-bg: oklch(1 0 0 / 0.72);
+      --card-border: oklch(1 0 0 / 0.50);
+      --shadow: 0 2px 8px oklch(0 0 0 / 0.06), 0 0.5px 0 oklch(0 0 0 / 0.04);
+      --shadow-lg: 0 12px 40px oklch(0 0 0 / 0.08), 0 2px 6px oklch(0 0 0 / 0.05);
+      --glass-highlight: inset 0 1px 0 0 oklch(1 0 0 / 0.60), inset 1px 0 0 0 oklch(1 0 0 / 0.30);
+      --glass-inner: inset 0 -1px 0 0 oklch(0 0 0 / 0.04), inset -1px 0 0 0 oklch(0 0 0 / 0.02);
+      --radius: 16px;
+      --radius-sm: 10px;
+      --radius-xs: 6px;
+      --font: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+      --font-display: 'Instrument Serif', Georgia, serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      --terminal-bg: oklch(0.16 0.005 260);
+      --terminal-fg: oklch(0.88 0.01 110);
+      --terminal-muted: oklch(0.55 0.01 260);
+      --terminal-green: oklch(0.72 0.16 155);
+    }
 
-      :root {
-        --bg: oklch(0.985 0.002 90);
-        --fg: oklch(0.18 0 0);
-        --muted: oklch(0.50 0 0);
-        --muted-2: oklch(0.62 0 0);
-        --border: oklch(0 0 0 / 0.10);
-        --card: oklch(1 0 0 / 0.70);
-        --card-2: oklch(1 0 0 / 0.50);
-        --primary: oklch(0.45 0.12 160);
-        --primary-ink: oklch(0.98 0 0);
-        --shadow: 0 12px 40px oklch(0 0 0 / 0.08), 0 2px 6px oklch(0 0 0 / 0.05);
-        --radius: 18px;
-        --sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
-        --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-      }
+    body {
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--fg);
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(oklch(0.45 0.08 160 / 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, oklch(0.45 0.08 160 / 0.04) 1px, transparent 1px);
+      background-size: 80px 21px;
+      background-position: -1px -1px;
+      -webkit-font-smoothing: antialiased;
+    }
 
-      * {
-        box-sizing: border-box;
-      }
+    .page { max-width: 660px; margin: 0 auto; padding: 0 24px; }
 
-      html,
-      body {
-        height: 100%;
-        margin: 0;
-        padding: 0;
-        color: var(--fg);
-        background: var(--bg);
-        font-family: var(--sans);
-      }
+    /* ── Nav ── */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 0 0;
+    }
+    .nav-mark {
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--green);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .nav-mark span {
+      font-family: var(--font-display);
+      font-size: 20px;
+      line-height: 1;
+    }
+    .nav-links { display: flex; align-items: center; gap: 20px; }
+    .nav-links a {
+      font-size: 13px;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .nav-links a:hover { color: var(--fg); }
+    .gh-link { display: inline-flex; align-items: center; gap: 5px; }
+    .gh-link svg { width: 16px; height: 16px; fill: currentColor; }
 
-      body {
-        /* Spreadsheet-ish grid */
-        background-image:
-          linear-gradient(oklch(0.45 0.08 160 / 0.05) 1px, transparent 1px),
-          linear-gradient(90deg, oklch(0.45 0.08 160 / 0.05) 1px, transparent 1px);
-        background-size: 64px 28px;
-        background-position: -1px -1px;
-      }
+    /* ── Hero ── */
+    .hero {
+      padding: 72px 0 56px;
+      position: relative;
+    }
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: clamp(36px, 6.5vw, 50px);
+      font-weight: 400;
+      line-height: 1.12;
+      letter-spacing: -0.015em;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    .hero h1 em {
+      font-style: italic;
+      color: var(--green);
+    }
+    .hero-sub {
+      font-size: 16px;
+      line-height: 1.7;
+      color: var(--muted);
+      max-width: 500px;
+      margin-bottom: 32px;
+    }
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--green);
+      color: white;
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 11px 22px;
+      border-radius: 999px;
+      border: none;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.15s;
+      box-shadow: 0 2px 12px oklch(0.45 0.12 160 / 0.25);
+    }
+    .hero-cta:hover { background: var(--green-strong); color: white; transform: translateY(-1px); }
+    .hero-cta svg {
+      width: 14px; height: 14px; fill: none;
+      stroke: currentColor; stroke-width: 2;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+    .hero-note {
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--faint);
+    }
+    .hero-note a { text-decoration: none; }
+    .hero-note a:hover { text-decoration: underline; }
 
-      a {
-        color: inherit;
-        text-decoration: none;
-      }
+    /* ── Sections ── */
+    section { margin-bottom: 64px; }
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--green);
+      margin-bottom: 10px;
+    }
+    .section-title {
+      font-family: var(--font-display);
+      font-size: clamp(26px, 4.5vw, 34px);
+      font-weight: 400;
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+      margin-bottom: 14px;
+    }
+    .section-desc {
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--muted);
+      max-width: 520px;
+      margin-bottom: 28px;
+    }
 
-      .wrap {
-        max-width: 980px;
-        margin: 0 auto;
-        padding: 48px 18px 72px;
-      }
+    /* ── Glass card ── */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow), var(--glass-highlight), var(--glass-inner);
+      backdrop-filter: blur(3px) saturate(1.6) brightness(1.04);
+      -webkit-backdrop-filter: blur(3px) saturate(1.6) brightness(1.04);
+    }
+    .card + .card { margin-top: 12px; }
+    .card h3 {
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .card p, .card li {
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--muted);
+    }
+    .card p + p { margin-top: 8px; }
+    .card a { text-decoration: none; }
+    .card a:hover { text-decoration: underline; }
 
-      .hero {
-        display: grid;
-        grid-template-columns: 1.2fr 0.8fr;
-        gap: 18px;
-        align-items: stretch;
-      }
+    /* Step number */
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px; height: 26px;
+      border-radius: 999px;
+      background: var(--green);
+      color: white;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
 
-      @media (max-width: 900px) {
-        .hero {
-          grid-template-columns: 1fr;
-        }
-      }
+    /* ── Narrative block (the "why" sections) ── */
+    .narrative {
+      margin-bottom: 48px;
+    }
+    .narrative h3 {
+      font-family: var(--font-display);
+      font-size: clamp(22px, 4vw, 28px);
+      font-weight: 400;
+      line-height: 1.25;
+      margin-bottom: 12px;
+    }
+    .narrative p {
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--muted);
+      max-width: 540px;
+    }
+    .narrative p + p { margin-top: 10px; }
 
-      .card {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        box-shadow: var(--shadow);
-        backdrop-filter: blur(10px) saturate(1.5) brightness(1.02);
-        -webkit-backdrop-filter: blur(10px) saturate(1.5) brightness(1.02);
-      }
+    /* ── Convention demo ── */
+    .convention-demo {
+      margin-top: 20px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow), var(--glass-highlight), var(--glass-inner);
+      backdrop-filter: blur(3px) saturate(1.6) brightness(1.04);
+      -webkit-backdrop-filter: blur(3px) saturate(1.6) brightness(1.04);
+    }
+    .convention-demo-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid oklch(0 0 0 / 0.05);
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--faint);
+    }
+    .convention-row {
+      display: flex;
+      align-items: baseline;
+      padding: 12px 20px;
+      border-bottom: 1px solid oklch(0 0 0 / 0.04);
+      gap: 16px;
+    }
+    .convention-row:last-child { border-bottom: none; }
+    .convention-label {
+      font-size: 13px;
+      color: var(--muted);
+      min-width: 120px;
+      flex-shrink: 0;
+    }
+    .convention-value {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--fg);
+      font-weight: 500;
+    }
+    .convention-value .green-swatch {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border-radius: 3px;
+      background: rgb(0, 128, 0);
+      vertical-align: middle;
+      margin-right: 6px;
+      border: 1px solid oklch(0 0 0 / 0.1);
+    }
 
-      .card-inner {
-        padding: 22px;
-      }
+    /* ── Prompt examples ── */
+    .prompts {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 20px;
+    }
+    .prompt-example {
+      padding: 12px 16px;
+      background: oklch(1 0 0 / 0.70);
+      border: 1px solid oklch(0 0 0 / 0.06);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      color: var(--fg);
+      font-style: italic;
+      line-height: 1.5;
+      box-shadow: 0 1px 3px oklch(0 0 0 / 0.03);
+    }
+    .prompt-example::before {
+      content: '"';
+      color: var(--green);
+      font-family: var(--font-display);
+      font-size: 18px;
+      margin-right: 2px;
+    }
+    .prompt-example::after {
+      content: '"';
+      color: var(--green);
+      font-family: var(--font-display);
+      font-size: 18px;
+      margin-left: 1px;
+    }
 
-      .brand {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
+    /* ── Placeholder section ── */
+    .placeholder-card {
+      border: 1px dashed oklch(0 0 0 / 0.12);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      background: oklch(1 0 0 / 0.40);
+      text-align: center;
+    }
+    .placeholder-card p {
+      font-size: 14px;
+      color: var(--faint);
+      font-style: italic;
+    }
 
-      .logo {
-        width: 44px;
-        height: 44px;
-        border-radius: 14px;
-        display: grid;
-        place-items: center;
-        background: oklch(0.45 0.12 160 / 0.10);
-        border: 1px solid oklch(0.45 0.12 160 / 0.14);
-        font-weight: 700;
-        font-size: 22px;
-        color: var(--primary);
-      }
+    /* ── Download button ── */
+    .dl-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+      padding: 10px 18px;
+      background: var(--green-light);
+      border: 1px solid var(--green-border);
+      border-radius: var(--radius-sm);
+      color: var(--green);
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .dl-btn:hover {
+      background: oklch(0.45 0.12 160 / 0.14);
+      border-color: oklch(0.45 0.12 160 / 0.25);
+      text-decoration: none;
+    }
+    .dl-btn svg {
+      width: 16px; height: 16px; fill: none;
+      stroke: currentColor; stroke-width: 2;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
 
-      h1 {
-        font-size: 28px;
-        margin: 0;
-        letter-spacing: -0.02em;
-      }
+    /* ── Terminal block ── */
+    .terminal {
+      background: var(--terminal-bg);
+      border-radius: var(--radius-sm);
+      margin-top: 14px;
+      overflow: hidden;
+    }
+    .terminal-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px;
+      background: oklch(0.20 0.005 260);
+      border-bottom: 1px solid oklch(1 0 0 / 0.06);
+    }
+    .terminal-dots { display: flex; gap: 6px; }
+    .terminal-dots span {
+      width: 10px; height: 10px; border-radius: 999px;
+      background: oklch(0.30 0 0);
+    }
+    .terminal-copy {
+      background: none;
+      border: 1px solid oklch(1 0 0 / 0.12);
+      border-radius: var(--radius-xs);
+      color: var(--terminal-muted);
+      font-family: var(--font);
+      font-size: 11px;
+      padding: 3px 10px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .terminal-copy:hover {
+      color: var(--terminal-fg);
+      border-color: oklch(1 0 0 / 0.25);
+    }
+    .terminal-copy.copied {
+      color: var(--terminal-green);
+      border-color: oklch(0.72 0.16 155 / 0.4);
+    }
+    .terminal pre {
+      padding: 16px;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--terminal-fg);
+    }
+    .terminal pre .comment { color: var(--terminal-muted); }
+    .terminal pre .prompt { color: var(--terminal-green); user-select: none; }
 
-      .tagline {
-        margin: 10px 0 0;
-        color: var(--muted);
-        font-size: 15px;
-        line-height: 1.5;
-      }
+    /* ── Callout ── */
+    .callout {
+      margin-top: 14px;
+      padding: 14px 16px;
+      background: var(--green-lighter);
+      border: 1px solid var(--green-border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+    .callout strong { color: var(--fg); font-weight: 600; }
+    .callout code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: oklch(0 0 0 / 0.05);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
 
-      .pillrow {
-        margin-top: 14px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
+    /* ── OS toggle ── */
+    .os-toggle {
+      display: inline-flex;
+      background: oklch(0 0 0 / 0.04);
+      border-radius: 999px;
+      padding: 3px;
+      margin-bottom: 24px;
+      border: 1px solid var(--border-light);
+    }
+    .os-toggle button {
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 6px 16px;
+      border: none;
+      border-radius: 999px;
+      cursor: pointer;
+      background: transparent;
+      color: var(--muted);
+      transition: all 0.15s;
+    }
+    .os-toggle button.active {
+      background: white;
+      color: var(--fg);
+      box-shadow: 0 1px 4px oklch(0 0 0 / 0.08);
+    }
+    .os-panel { display: none; }
+    .os-panel.active { display: block; }
 
-      .pill {
-        font-family: var(--mono);
-        font-size: 11px;
-        padding: 4px 8px;
-        border-radius: 999px;
-        background: oklch(1 0 0 / 0.55);
-        border: 1px solid oklch(0 0 0 / 0.08);
-        color: oklch(0.30 0 0);
-      }
+    /* ── Connect options ── */
+    .connect-option {
+      padding: 20px 24px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow), var(--glass-highlight), var(--glass-inner);
+      backdrop-filter: blur(3px) saturate(1.6) brightness(1.04);
+      -webkit-backdrop-filter: blur(3px) saturate(1.6) brightness(1.04);
+    }
+    .connect-option + .connect-option { margin-top: 12px; }
+    .connect-option h3 {
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .connect-option > p {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+    .badge {
+      display: inline-block;
+      font-family: var(--font);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--green-light);
+      color: var(--green);
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+    .badge-simple {
+      background: oklch(0.45 0.08 90 / 0.10);
+      color: oklch(0.45 0.04 90);
+    }
 
-      .cta {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
+    /* ── Inline elements ── */
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.9em;
+      background: oklch(0 0 0 / 0.05);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+    kbd {
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 2px 7px;
+      background: oklch(0 0 0 / 0.06);
+      border: 1px solid oklch(0 0 0 / 0.10);
+      border-radius: 5px;
+      box-shadow: 0 1px 0 oklch(0 0 0 / 0.08);
+    }
+    .path {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--green);
+      font-weight: 500;
+    }
+    .card ol {
+      padding-left: 0;
+      list-style: none;
+      counter-reset: steps;
+    }
+    .card ol li {
+      counter-increment: steps;
+      padding-left: 24px;
+      position: relative;
+      margin-bottom: 6px;
+    }
+    .card ol li::before {
+      content: counter(steps) ".";
+      position: absolute;
+      left: 0;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--green);
+    }
 
-      .btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        height: 42px;
-        padding: 0 14px;
-        border-radius: 12px;
-        border: 1px solid oklch(0 0 0 / 0.10);
-        background: oklch(1 0 0 / 0.60);
-        font-weight: 600;
-        cursor: pointer;
-        transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
-      }
+    /* ── Footer ── */
+    footer {
+      padding: 48px 0;
+      border-top: 1px solid oklch(0 0 0 / 0.06);
+      margin-top: 24px;
+    }
+    .footer-pi {
+      font-family: var(--font-display);
+      font-size: 32px;
+      color: var(--green);
+      opacity: 0.15;
+      display: block;
+      margin-bottom: 12px;
+    }
+    footer p {
+      font-size: 13px;
+      color: var(--faint);
+      line-height: 1.7;
+    }
+    a { color: var(--green); }
+    a:hover { color: var(--green-strong); }
+    footer a { text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
 
-      .btn:hover {
-        transform: translateY(-1px);
-        border-color: oklch(0.45 0.12 160 / 0.25);
-      }
+    /* ── Animations ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .hero h1 { animation: fadeUp 0.6s ease both; }
+    .hero-sub { animation: fadeUp 0.6s ease 0.08s both; }
+    .hero-cta { animation: fadeUp 0.6s ease 0.16s both; }
+    .hero-note { animation: fadeUp 0.6s ease 0.22s both; }
+    .reveal {
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
 
-      .btn-primary {
-        background: var(--primary);
-        border-color: oklch(0.45 0.12 160);
-        color: var(--primary-ink);
-      }
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .hero { padding: 56px 0 44px; }
+      .card { padding: 18px; }
+      .connect-option { padding: 18px; }
+      .convention-row { flex-direction: column; gap: 4px; }
+      .convention-label { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
 
-      .btn-primary:hover {
-        background: oklch(0.43 0.12 160);
-      }
+<div class="page">
 
-      .btn-small {
-        height: 36px;
-        border-radius: 10px;
-        font-size: 13px;
-      }
+  <!-- Nav -->
+  <nav>
+    <a href="/" class="nav-mark"><span>π</span> Pi for Excel</a>
+    <div class="nav-links">
+      <a href="#install">Install</a>
+      <a href="#connect">Connect</a>
+      <a href="https://github.com/tmustier/pi-for-excel" class="gh-link" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </nav>
 
-      .meta {
-        font-size: 12px;
-        color: var(--muted-2);
-        line-height: 1.45;
-      }
 
-      .grid {
-        margin-top: 18px;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 18px;
-      }
+  <!-- Hero -->
+  <div class="hero">
+    <h1>A powerful, open-source agent inside&nbsp;Excel</h1>
+    <p class="hero-sub">
+      If you use a &ldquo;coding&rdquo; agent to do research, write reports, or build things — you know those tools can do way more than write code. Pi for Excel puts that same power inside your spreadsheets, where you can actually work with it interactively. No separate login: use it with wherever you get your AI from.
+    </p>
+    <a href="#install" class="hero-cta">
+      Install it
+      <svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg>
+    </a>
+    <p class="hero-note">Free &amp; open source. <a href="https://github.com/tmustier/pi-for-excel" target="_blank" rel="noopener">View on GitHub</a></p>
+  </div>
 
-      @media (max-width: 900px) {
-        .grid {
-          grid-template-columns: 1fr;
-        }
-      }
 
-      h2 {
-        font-size: 14px;
-        margin: 0 0 10px;
-        letter-spacing: 0.01em;
-      }
+  <!-- Why native -->
+  <section class="reveal">
+    <div class="narrative">
+      <div class="section-label">Why in Excel</div>
+      <h3>The agent sees what you see</h3>
+      <p>
+        Excel is the calculator <em>and</em> the UI. When the agent writes a formula or reformats a column, you see it happen in real time — no waiting for a script to finish, no parsing a CSV to check if it worked.
+      </p>
+      <p>
+        Pi reads the actual workbook: the structure, the formatting, the formulas, your current selection. It doesn't need an export. It's working in the same place you are.
+      </p>
+    </div>
 
-      ol {
-        margin: 0;
-        padding-left: 18px;
-        color: var(--muted);
-        font-size: 13.5px;
-        line-height: 1.55;
-      }
+    <div class="narrative">
+      <h3>Built for real work</h3>
+      <p>
+        Multiple session tabs, conversation history, auto-context on every turn, any model you want.
+      </p>
+      <p>
+        Every mutation gets an automatic checkpoint until you save. If something goes wrong, one-click undo.
+      </p>
+    </div>
 
-      .note {
-        margin-top: 10px;
-        padding: 10px 12px;
-        border-radius: 14px;
-        background: var(--card-2);
-        border: 1px solid oklch(0 0 0 / 0.08);
-        color: var(--muted);
-        font-size: 12.5px;
-        line-height: 1.45;
-      }
+    <div class="prompts">
+      <div class="prompt-example">Trace all the dependencies of the formula in D14 and explain the chain</div>
+      <div class="prompt-example">Write a VLOOKUP across these two sheets, then flag outliers with conditional formatting</div>
+      <div class="prompt-example">Search the whole workbook for references to 'Revenue' and summarize what I've got</div>
+      <div class="prompt-example">Something's off in row 23 — can you check the formulas?</div>
+    </div>
+  </section>
 
-      footer {
-        margin-top: 22px;
-        display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
-        align-items: center;
-        color: var(--muted-2);
-        font-size: 12px;
-      }
 
-      .link {
-        text-decoration: underline;
-        text-underline-offset: 3px;
-        color: oklch(0.25 0.02 160);
-      }
+  <!-- Your rules -->
+  <section class="reveal">
+    <div class="narrative">
+      <div class="section-label">Your rules</div>
+      <h3>Make it work exactly how you want</h3>
+      <p>
+        If you have opinions about how your spreadsheets should look — and you probably do — you can set your conventions once and the agent follows them automatically. Number formats, currency style, how negatives display, colours for cross-sheet links.
+      </p>
+      <p>
+        You can also set house rules for yourself or specific files — like <code>AGENTS.md</code> and <code>CLAUDE.md</code>, but for spreadsheets.
+      </p>
+    </div>
 
-      .sep {
-        opacity: 0.5;
-      }
-
-      .fadein {
-        animation: fadein 400ms ease both;
-      }
-
-      @keyframes fadein {
-        from {
-          opacity: 0;
-          transform: translateY(6px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-    </style>
-  </head>
-
-  <body>
-    <div class="wrap fadein">
-      <div class="hero">
-        <div class="card">
-          <div class="card-inner">
-            <div class="brand">
-              <div class="logo">π</div>
-              <div>
-                <h1>Pi for Excel</h1>
-                <p class="tagline">
-                  An open-source, multi-model AI sidebar add-in for Microsoft Excel — powered by Pi.
-                  Bring your own key. Your workbook stays local.
-                </p>
-              </div>
-            </div>
-
-            <div class="pillrow" aria-label="highlights">
-              <span class="pill">BYOK</span>
-              <span class="pill">Claude • GPT • Gemini • …</span>
-              <span class="pill">Sessions</span>
-              <span class="pill">Excel tools</span>
-              <span class="pill">Extensions</span>
-            </div>
-
-            <div class="grid">
-              <div>
-                <h2>Install (2 minutes)</h2>
-                <ol>
-                  <li>Download <b>manifest.prod.xml</b>.</li>
-                  <li>
-                    In Excel: <b>Insert → Add-ins → My Add-ins → Add from file / Upload</b>.
-                  </li>
-                  <li>Open <b>Pi</b> from the ribbon, then run <b>/login</b>.</li>
-                </ol>
-                <div class="note">
-                  Updates are automatic: the manifest points to this hosted URL. When we deploy a
-                  new build, you usually get it next time you open the taskpane.
-                </div>
-              </div>
-
-              <div>
-                <h2>Get the files</h2>
-                <div class="cta">
-                  <a class="btn btn-primary" href="/manifest.prod.xml" download>
-                    Download manifest.prod.xml
-                  </a>
-                  <a class="btn" href="https://github.com/tmustier/pi-for-excel" target="_blank" rel="noreferrer">
-                    View source on GitHub
-                  </a>
-                  <a class="btn btn-small" href="/src/taskpane.html" target="_blank" rel="noreferrer">
-                    Open taskpane.html (diagnostics)
-                  </a>
-                </div>
-                <p class="meta" style="margin: 10px 0 0;">
-                  Note: some OAuth/subscription flows may require a local HTTPS proxy helper on macOS
-                  Excel (WKWebView mixed-content restrictions).
-                </p>
-              </div>
-            </div>
-
-            <footer>
-              <span>MIT licensed</span>
-              <span class="sep">•</span>
-              <a class="link" href="https://github.com/tmustier/pi-for-excel/issues" target="_blank" rel="noreferrer">Issues</a>
-              <span class="sep">•</span>
-              <a class="link" href="https://github.com/tmustier/pi-for-excel#readme" target="_blank" rel="noreferrer">README</a>
-            </footer>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-inner">
-            <h2>What can it do?</h2>
-            <ol>
-              <li>Read your selection automatically</li>
-              <li>Write formulas + format ranges</li>
-              <li>Search workbook + trace dependencies</li>
-              <li>Persist sessions (resume later)</li>
-              <li>Extend with slash-command extensions</li>
-            </ol>
-
-            <div class="note" style="margin-top: 14px;">
-              Tip: type <b>/</b> to browse commands. Press <b>Esc</b> to interrupt.
-            </div>
-          </div>
-        </div>
+    <div class="convention-demo">
+      <div class="convention-demo-header">Example conventions</div>
+      <div class="convention-row">
+        <span class="convention-label">Number format</span>
+        <span class="convention-value">#,##0.0_);(#,##0.0_);--_)</span>
+      </div>
+      <div class="convention-row">
+        <span class="convention-label">Cross-sheet links</span>
+        <span class="convention-value"><span class="green-swatch"></span>rgb(0, 128, 0)</span>
+      </div>
+      <div class="convention-row">
+        <span class="convention-label">Negative numbers</span>
+        <span class="convention-value">(1,234.5) — red parentheses</span>
+      </div>
+      <div class="convention-row">
+        <span class="convention-label">Zero display</span>
+        <span class="convention-value">--</span>
       </div>
     </div>
-  </body>
+  </section>
+
+
+  <!-- Extends itself -->
+  <section class="reveal">
+    <div class="narrative">
+      <div class="section-label">Extensions</div>
+      <h3>It can extend itself</h3>
+      <p>
+        You can ask Pi to build sidebar extensions — small tools and widgets that live right inside Excel. The agent writes the code, installs it, and you can use it immediately. If you already ask &ldquo;coding&rdquo; agents to build you things, same idea — but the tools stay in your spreadsheet.
+      </p>
+    </div>
+
+    <div class="placeholder-card">
+      <p>Examples coming soon — we're collecting real ones from actual use.</p>
+    </div>
+  </section>
+
+
+  <!-- Install -->
+  <section id="install" class="reveal">
+    <div class="section-label">Installation</div>
+    <div class="section-title">Three steps, no dev tools</div>
+    <p class="section-desc">
+      Download one file, drop it in a folder, open Excel. If you have an agent like Claude Code or <a href="https://pi.dev" target="_blank" rel="noopener">Pi</a> handy, you can just ask it to do all of this for you.
+    </p>
+
+    <div class="os-toggle">
+      <button class="active" onclick="switchOS('mac')">macOS</button>
+      <button onclick="switchOS('win')">Windows</button>
+    </div>
+
+    <!-- macOS -->
+    <div id="panel-mac" class="os-panel active">
+      <div class="card">
+        <h3><span class="step-num">1</span> Download the manifest</h3>
+        <p>This small file tells Excel where to find Pi. It's the only thing you need to download.</p>
+        <a href="/manifest.prod.xml" download class="dl-btn">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          manifest.prod.xml
+        </a>
+      </div>
+
+      <div class="card">
+        <h3><span class="step-num">2</span> Copy it to Excel's add-in folder</h3>
+        <p>Open <strong>Terminal</strong> and paste this. It creates the folder if needed and copies the file.</p>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <div class="terminal-dots"><span></span><span></span><span></span></div>
+            <button class="terminal-copy" onclick="copyCmd(this)">Copy</button>
+          </div>
+          <pre><span class="prompt">$ </span>mkdir -p ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef && \
+  cp ~/Downloads/manifest.prod.xml ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/</pre>
+        </div>
+        <div class="callout">
+          <strong>Saved it somewhere other than Downloads?</strong> Change <code>~/Downloads/</code> to wherever you put it.
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span class="step-num">3</span> Open Pi in Excel</h3>
+        <ol>
+          <li>Quit Excel completely (<kbd>⌘Q</kbd>) and reopen it</li>
+          <li>Go to <strong>Insert → My Add-ins</strong></li>
+          <li>Click <strong>Pi for Excel</strong> to open the sidebar</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Windows -->
+    <div id="panel-win" class="os-panel">
+      <div class="callout" style="margin-top: 0; margin-bottom: 16px;">
+        <strong>Heads up —</strong> Pi was built and tested on macOS. It <em>should</em> work on Windows (the underlying tech is cross-platform) but hasn't been extensively tested. Worth a try! If you hit issues, <a href="https://github.com/tmustier/pi-for-excel/issues" target="_blank" rel="noopener">open a GitHub issue</a>.
+      </div>
+
+      <div class="card">
+        <h3><span class="step-num">1</span> Download the manifest</h3>
+        <p>Same file — a small config that tells Excel where to find Pi.</p>
+        <a href="/manifest.prod.xml" download class="dl-btn">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          manifest.prod.xml
+        </a>
+      </div>
+
+      <div class="card">
+        <h3><span class="step-num">2</span> Upload it in Excel</h3>
+        <ol>
+          <li>Open Excel</li>
+          <li>Go to <strong>Insert → My Add-ins → Upload My Add-in…</strong></li>
+          <li>Select the <code>manifest.prod.xml</code> file you downloaded</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h3><span class="step-num">3</span> Open the sidebar</h3>
+        <p>Click <strong>Open Pi</strong> in the ribbon.</p>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- Connect -->
+  <section id="connect" class="reveal">
+    <div class="section-label">Connect a provider</div>
+    <div class="section-title">Use the models you already pay&nbsp;for</div>
+    <p class="section-desc">
+      Works with your existing subscriptions, or with a plain API key.
+    </p>
+
+    <div class="connect-option">
+      <h3>Login with your subscription <span class="badge">Recommended</span></h3>
+      <p>
+        If you already pay for Claude, Copilot, or another provider, you can log in directly — no API key needed. You just need to run a small local helper first.
+      </p>
+
+      <p style="margin-top: 12px;">
+        <strong>One-time setup</strong> — open Terminal and run these, or just ask your agent to set it up:
+      </p>
+
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="terminal-dots"><span></span><span></span><span></span></div>
+          <button class="terminal-copy" onclick="copyCmd(this)">Copy</button>
+        </div>
+        <pre><span class="comment"># Install mkcert (creates local HTTPS certificates)</span>
+<span class="prompt">$ </span>brew install mkcert
+
+<span class="comment"># Download Pi for Excel and set up the login helper</span>
+<span class="prompt">$ </span>git clone https://github.com/tmustier/pi-for-excel.git
+<span class="prompt">$ </span>cd pi-for-excel
+<span class="prompt">$ </span>npm install
+<span class="prompt">$ </span>mkcert -install && mkcert localhost
+<span class="prompt">$ </span>mv localhost-key.pem key.pem && mv localhost.pem cert.pem</pre>
+      </div>
+
+      <p style="margin-top: 16px;">
+        <strong>Then, whenever you use Pi</strong>, start the helper:
+      </p>
+
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="terminal-dots"><span></span><span></span><span></span></div>
+          <button class="terminal-copy" onclick="copyCmd(this)">Copy</button>
+        </div>
+        <pre><span class="prompt">$ </span>cd pi-for-excel && npm run proxy:https</pre>
+      </div>
+
+      <p style="margin-top: 12px; font-size: 14px; color: var(--muted);">
+        Keep it running while you use Pi. In the sidebar: <span class="path">/settings</span> → Proxy → enable, set URL to <code>https://localhost:3003</code>. Then <span class="path">/login</span> and sign in.
+      </p>
+
+      <div class="callout">
+        <strong>What does this do?</strong> It runs a tiny local server on your machine (called a CORS proxy) that lets your browser connect to your AI provider. Your data goes directly between your computer and your provider — nothing passes through any third party. <a href="https://github.com/tmustier/pi-for-excel" target="_blank" rel="noopener">The code is open source.</a>
+      </div>
+    </div>
+
+    <div class="connect-option">
+      <h3>Paste an API key <span class="badge badge-simple">Simpler</span></h3>
+      <p>
+        If you have an API key, just paste it. No proxy needed. In the sidebar, type <span class="path">/login</span>, expand a provider, paste your key, hit Save.
+      </p>
+    </div>
+  </section>
+
+
+  <!-- Footer -->
+  <footer>
+    <span class="footer-pi">π</span>
+    <p>
+      Pi for Excel is free, open source, and <a href="https://github.com/tmustier/pi-for-excel/blob/main/LICENSE" target="_blank" rel="noopener">MIT licensed</a>.
+      Updates are automatic — close and reopen the sidebar to get the latest version.
+    </p>
+    <p style="margin-top: 8px;">
+      Built by <a href="https://github.com/tmustier" target="_blank" rel="noopener">Thomas Mustier</a>.
+      Powered by <a href="https://pi.dev" target="_blank" rel="noopener">Pi</a>, an extensible coding agent by <a href="https://github.com/badlogic" target="_blank" rel="noopener">Mario Zechner</a>.
+    </p>
+  </footer>
+
+</div>
+
+
+<script>
+  function switchOS(os) {
+    document.querySelectorAll('.os-toggle button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.os-panel').forEach(p => p.classList.remove('active'));
+    if (os === 'mac') {
+      document.querySelector('.os-toggle button:first-child').classList.add('active');
+      document.getElementById('panel-mac').classList.add('active');
+    } else {
+      document.querySelector('.os-toggle button:last-child').classList.add('active');
+      document.getElementById('panel-win').classList.add('active');
+    }
+  }
+
+  function copyCmd(btn) {
+    const pre = btn.closest('.terminal').querySelector('pre');
+    const text = pre.textContent
+      .split('\n')
+      .filter(line => !line.trim().startsWith('#'))
+      .map(line => line.replace(/^\$ /, ''))
+      .filter(line => line.trim())
+      .join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+
+  const observer = new IntersectionObserver(
+    entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); }),
+    { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+  );
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+
+</body>
 </html>
