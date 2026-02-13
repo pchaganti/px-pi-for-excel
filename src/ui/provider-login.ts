@@ -16,6 +16,7 @@ import {
   PROXY_HELPER_DOCS_URL,
 } from "../auth/proxy-validation.js";
 import { PROVIDER_PROMPT_OVERLAY_ID } from "./overlay-ids.js";
+import { closeOverlayById, createOverlayDialog } from "./overlay-dialog.js";
 import { getErrorMessage } from "../utils/errors.js";
 
 export interface ProviderDef {
@@ -123,84 +124,103 @@ function promptForText(opts: {
   submitLabel?: string;
 }): Promise<string> {
   return new Promise((resolve, reject) => {
-    const existing = document.getElementById(PROVIDER_PROMPT_OVERLAY_ID);
-    existing?.remove();
+    closeOverlayById(PROVIDER_PROMPT_OVERLAY_ID);
 
-    const overlay = document.createElement("div");
-    overlay.id = PROVIDER_PROMPT_OVERLAY_ID;
-    overlay.className = "pi-welcome-overlay";
-    overlay.dataset.claimsEscape = "true";
-    overlay.innerHTML = `
-      <div class="pi-welcome-card pi-prompt-card">
-        <h2 class="pi-prompt-title"></h2>
-        <p class="pi-prompt-message"></p>
-        <p class="pi-prompt-helper" hidden></p>
-        <input class="pi-prompt-input" type="text" />
-        <div class="pi-prompt-actions">
-          <button class="pi-prompt-cancel">Cancel</button>
-          <button class="pi-prompt-ok">Continue</button>
-        </div>
-      </div>
-    `;
+    const dialog = createOverlayDialog({
+      overlayId: PROVIDER_PROMPT_OVERLAY_ID,
+      cardClassName: "pi-welcome-card pi-prompt-card",
+      restoreFocusOnClose: false,
+    });
 
-    const titleEl = overlay.querySelector<HTMLElement>(".pi-prompt-title");
-    const msgEl = overlay.querySelector<HTMLElement>(".pi-prompt-message");
-    const helperEl = overlay.querySelector<HTMLElement>(".pi-prompt-helper");
-    const input = overlay.querySelector<HTMLInputElement>(".pi-prompt-input");
-    const cancelBtn = overlay.querySelector<HTMLButtonElement>(".pi-prompt-cancel");
-    const okBtn = overlay.querySelector<HTMLButtonElement>(".pi-prompt-ok");
-
-    if (!titleEl || !msgEl || !helperEl || !input || !cancelBtn || !okBtn) {
-      overlay.remove();
-      reject(new Error("Prompt UI failed to render"));
-      return;
-    }
-
+    const titleEl = document.createElement("h2");
+    titleEl.className = "pi-prompt-title";
     titleEl.textContent = opts.title;
-    msgEl.textContent = opts.message;
+
+    const messageEl = document.createElement("p");
+    messageEl.className = "pi-prompt-message";
+    messageEl.textContent = opts.message;
+
+    const helperEl = document.createElement("p");
+    helperEl.className = "pi-prompt-helper";
+    helperEl.hidden = true;
+
+    const input = document.createElement("input");
+    input.className = "pi-prompt-input";
+    input.type = "text";
+
+    const actions = document.createElement("div");
+    actions.className = "pi-prompt-actions";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "pi-prompt-cancel";
+    cancelBtn.textContent = "Cancel";
+
+    const okBtn = document.createElement("button");
+    okBtn.type = "button";
+    okBtn.className = "pi-prompt-ok";
+    okBtn.textContent = opts.submitLabel ?? "Continue";
+
+    actions.append(cancelBtn, okBtn);
+    dialog.card.append(titleEl, messageEl, helperEl, input, actions);
+
     if (opts.helperText) {
       helperEl.textContent = opts.helperText;
       helperEl.hidden = false;
     }
-    if (opts.placeholder) input.placeholder = opts.placeholder;
-    if (opts.submitLabel) okBtn.textContent = opts.submitLabel;
 
-    const cleanup = () => {
-      overlay.remove();
-      document.removeEventListener("keydown", onKeyDown, true);
-    };
+    if (opts.placeholder) {
+      input.placeholder = opts.placeholder;
+    }
 
-    const submit = () => {
+    let settled = false;
+
+    const submit = (): void => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
       const value = input.value.trim();
-      cleanup();
+      dialog.close();
       resolve(value);
     };
 
-    const cancel = () => {
-      cleanup();
+    const cancel = (): void => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      dialog.close();
       reject(new PromptCancelledError());
     };
 
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        cancel();
+    const onInputKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== "Enter") {
+        return;
       }
-      if (e.key === "Enter") {
-        e.preventDefault();
-        submit();
-      }
-    };
 
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) cancel();
-    });
+      event.preventDefault();
+      submit();
+    };
 
     cancelBtn.addEventListener("click", cancel);
     okBtn.addEventListener("click", submit);
+    input.addEventListener("keydown", onInputKeyDown);
 
-    document.addEventListener("keydown", onKeyDown, true);
-    document.body.appendChild(overlay);
+    dialog.addCleanup(() => {
+      cancelBtn.removeEventListener("click", cancel);
+      okBtn.removeEventListener("click", submit);
+      input.removeEventListener("keydown", onInputKeyDown);
+
+      if (!settled) {
+        settled = true;
+        reject(new PromptCancelledError());
+      }
+    });
+
+    dialog.mount();
     requestAnimationFrame(() => input.focus());
   });
 }

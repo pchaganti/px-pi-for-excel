@@ -4,7 +4,7 @@
  * Extracted from taskpane.ts to keep the entrypoint thin.
  */
 
-import type { Agent, AgentMessage, ThinkingLevel } from "@mariozechner/pi-agent-core";
+import type { Agent, ThinkingLevel } from "@mariozechner/pi-agent-core";
 import { supportsXhigh } from "@mariozechner/pi-ai";
 
 import type { PiSidebar } from "../ui/pi-sidebar.js";
@@ -12,8 +12,7 @@ import { moveCursorToEnd } from "../ui/input-focus.js";
 import { isActionToastVisible, showToast } from "../ui/toast.js";
 
 import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
-import { blurTextEntryTarget, getTextEntryElement, isTextEntryTarget } from "../utils/text-entry.js";
-import { commandRegistry } from "../commands/types.js";
+import { blurTextEntryTarget, isTextEntryTarget } from "../utils/text-entry.js";
 import {
   handleCommandMenuKey,
   hideCommandMenu,
@@ -21,49 +20,46 @@ import {
 } from "../commands/command-menu.js";
 
 import { flashThinkingLevel, updateStatusBarForAgent } from "./status-bar.js";
+import {
+  handleSlashCommandExecution,
+  handleStreamingSteerOrFollowUp,
+  type ActionQueue,
+  type QueueDisplay,
+} from "./keyboard-shortcuts/editor-actions.js";
+import { shouldHandleUndoCloseTabShortcut, textEntryHasContent } from "./keyboard-shortcuts/guards.js";
+import {
+  getAdjacentTabDirectionFromShortcut,
+  isCloseActiveTabShortcut,
+  isCreateTabShortcut,
+  isFocusInputShortcut,
+  isReopenLastClosedShortcut,
+  isUndoCloseTabShortcut,
+  shouldAbortFromEscape,
+  shouldBlurEditorFromEscape,
+} from "./keyboard-shortcuts/matchers.js";
 
-type QueueDisplay = {
-  add: (type: "steer" | "follow-up", text: string) => void;
-};
+export {
+  getAdjacentTabDirectionFromShortcut,
+  isCloseActiveTabShortcut,
+  isCreateTabShortcut,
+  isFocusInputShortcut,
+  isReopenLastClosedShortcut,
+  isUndoCloseTabShortcut,
+  shouldAbortFromEscape,
+  shouldBlurEditorFromEscape,
+} from "./keyboard-shortcuts/matchers.js";
+export { shouldHandleUndoCloseTabShortcut } from "./keyboard-shortcuts/guards.js";
 
-type ActionQueue = {
-  enqueueCommand: (name: string, args: string) => void;
-  isBusy: () => boolean;
-};
-
-interface TabShortcutEventLike {
-  key: string;
-  code?: string;
-  keyCode?: number;
-  metaKey: boolean;
-  ctrlKey: boolean;
-  shiftKey: boolean;
-  altKey: boolean;
+interface KeydownContext {
+  event: KeyboardEvent;
+  agent: Agent | null;
+  textarea: HTMLTextAreaElement | undefined;
+  keyTarget: Node | null;
+  isInEditor: boolean;
+  isStreaming: boolean;
 }
 
-type ReopenShortcutEventLike = TabShortcutEventLike;
-type UndoCloseShortcutEventLike = TabShortcutEventLike;
-type CreateTabShortcutEventLike = TabShortcutEventLike;
-type CloseTabShortcutEventLike = TabShortcutEventLike;
-
-interface FocusInputShortcutEventLike {
-  key: string;
-  metaKey: boolean;
-  ctrlKey: boolean;
-  shiftKey: boolean;
-  altKey: boolean;
-}
-
-interface AdjacentTabShortcutEventLike {
-  key: string;
-  code?: string;
-  keyCode?: number;
-  repeat: boolean;
-  metaKey: boolean;
-  ctrlKey: boolean;
-  shiftKey: boolean;
-  altKey: boolean;
-}
+type ShortcutHandler = (context: KeydownContext) => boolean;
 
 const THINKING_COLORS: Record<ThinkingLevel, string> = {
   off: "#a0a0a0",
@@ -73,8 +69,6 @@ const THINKING_COLORS: Record<ThinkingLevel, string> = {
   high: "#875f87",
   xhigh: "#8b008b",
 };
-
-const BUSY_ALLOWED_COMMANDS = new Set(["compact", "new", "resume", "reopen"]);
 
 function isInsideSessionTabs(target: EventTarget | null | undefined): boolean {
   if (!(target instanceof Element)) {
@@ -136,6 +130,34 @@ function expandThinkingBlocks(): void {
   }
 }
 
+function buildKeydownContext(args: {
+  event: KeyboardEvent;
+  agent: Agent | null;
+  sidebar: PiSidebar;
+}): KeydownContext {
+  const { event, agent, sidebar } = args;
+  const textarea = sidebar.getTextarea();
+  const eventTarget = event.target instanceof Node ? event.target : null;
+  const keyTarget = eventTarget ?? (document.activeElement instanceof Node ? document.activeElement : null);
+  const isInSidebarInput = keyTarget instanceof Element
+    ? keyTarget.closest(".pi-input-card") !== null
+    : false;
+
+  const isInEditor = Boolean(
+    isInSidebarInput
+    || (textarea && keyTarget && (keyTarget === textarea || textarea.contains(keyTarget))),
+  );
+
+  return {
+    event,
+    agent,
+    textarea,
+    keyTarget,
+    isInEditor,
+    isStreaming: agent?.state.isStreaming ?? false,
+  };
+}
+
 export function getThinkingLevels(agent: Agent): ThinkingLevel[] {
   const model = agent.state.model;
   if (!model || !model.reasoning) return ["off"];
@@ -169,144 +191,6 @@ export function cycleThinkingLevel(agent: Agent): ThinkingLevel {
   return next;
 }
 
-function isShortcutLetter(
-  event: TabShortcutEventLike,
-  letter: "t" | "w" | "z",
-): boolean {
-  if (event.key.toLowerCase() === letter) {
-    return true;
-  }
-
-  const upper = letter.toUpperCase();
-  if (event.code === `Key${upper}`) {
-    return true;
-  }
-
-  const keyCode = letter === "t" ? 84 : letter === "w" ? 87 : 90;
-  if (event.keyCode === keyCode) {
-    return true;
-  }
-
-  return false;
-}
-
-function textEntryHasContent(target: EventTarget | null | undefined): boolean {
-  const element = getTextEntryElement(target);
-  if (!element) return false;
-
-  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-    return element.value.length > 0;
-  }
-
-  if (element instanceof HTMLSelectElement) {
-    return element.value.length > 0;
-  }
-
-  return (element.textContent ?? "").length > 0;
-}
-
-export function isCreateTabShortcut(event: CreateTabShortcutEventLike): boolean {
-  if (!(event.metaKey || event.ctrlKey)) return false;
-  if (event.shiftKey || event.altKey) return false;
-
-  return isShortcutLetter(event, "t");
-}
-
-export function isCloseActiveTabShortcut(event: CloseTabShortcutEventLike): boolean {
-  if (!(event.metaKey || event.ctrlKey)) return false;
-  if (event.shiftKey || event.altKey) return false;
-
-  return isShortcutLetter(event, "w");
-}
-
-export function isUndoCloseTabShortcut(event: UndoCloseShortcutEventLike): boolean {
-  if (!(event.metaKey || event.ctrlKey)) return false;
-  if (event.shiftKey || event.altKey) return false;
-
-  return isShortcutLetter(event, "z");
-}
-
-export function isReopenLastClosedShortcut(event: ReopenShortcutEventLike): boolean {
-  if (!(event.metaKey || event.ctrlKey)) return false;
-  if (!event.shiftKey || event.altKey) return false;
-
-  return isShortcutLetter(event, "t");
-}
-
-export function isFocusInputShortcut(event: FocusInputShortcutEventLike): boolean {
-  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false;
-  return event.key === "F2";
-}
-
-export function getAdjacentTabDirectionFromShortcut(
-  event: AdjacentTabShortcutEventLike,
-): -1 | 1 | null {
-  if (event.repeat) return null;
-
-  const key = event.key;
-  const code = event.code;
-  const keyCode = event.keyCode;
-
-  // Fallback chords for hosts that swallow plain arrow keys.
-  if (event.metaKey && event.shiftKey && !event.ctrlKey && !event.altKey) {
-    if (key === "[") return -1;
-    if (key === "]") return 1;
-    return null;
-  }
-
-  if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
-    if (key === "PageUp") return -1;
-    if (key === "PageDown") return 1;
-  }
-
-  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return null;
-
-  if (key === "ArrowLeft" || key === "Left" || code === "ArrowLeft" || keyCode === 37) {
-    return -1;
-  }
-
-  if (key === "ArrowRight" || key === "Right" || code === "ArrowRight" || keyCode === 39) {
-    return 1;
-  }
-
-  return null;
-}
-
-export function shouldBlurEditorFromEscape(opts: {
-  key: string;
-  isInEditor: boolean;
-  isStreaming: boolean;
-}): boolean {
-  if (opts.key !== "Escape" && opts.key !== "Esc") return false;
-  if (!opts.isInEditor) return false;
-  if (opts.isStreaming) return false;
-  return true;
-}
-
-export function shouldAbortFromEscape(opts: {
-  isStreaming: boolean;
-  hasAgent: boolean;
-  escapeClaimedByOverlay: boolean;
-}): boolean {
-  if (!opts.isStreaming) return false;
-  if (!opts.hasAgent) return false;
-  if (opts.escapeClaimedByOverlay) return false;
-  return true;
-}
-
-export function shouldHandleUndoCloseTabShortcut(opts: {
-  canUndoCloseTab: boolean;
-  isTextEntry: boolean;
-  textEntryHasContent: boolean;
-  actionToastVisible: boolean;
-}): boolean {
-  if (!opts.canUndoCloseTab) return false;
-  if (opts.actionToastVisible) return true;
-  if (!opts.isTextEntry) return true;
-  if (!opts.textEntryHasContent) return true;
-  return false;
-}
-
 export function installKeyboardShortcuts(opts: {
   getActiveAgent: () => Agent | null;
   getActiveQueueDisplay: () => QueueDisplay | null;
@@ -332,32 +216,16 @@ export function installKeyboardShortcuts(opts: {
     onSwitchAdjacentTab,
   } = opts;
 
-  const onKeyDown = (e: KeyboardEvent) => {
-    // Command menu takes priority
-    if (isCommandMenuVisible()) {
-      if (handleCommandMenuKey(e)) return;
-    }
+  const shortcutHandlers: readonly ShortcutHandler[] = [
+    (context) => {
+      const { event } = context;
+      if (!isFocusInputShortcut(event)) return false;
 
-    const agent = getActiveAgent();
-    const textarea = sidebar.getTextarea();
-    const eventTarget = e.target instanceof Node ? e.target : null;
-    const keyTarget = eventTarget ?? (document.activeElement instanceof Node ? document.activeElement : null);
-    const isInSidebarInput = keyTarget instanceof Element
-      ? keyTarget.closest(".pi-input-card") !== null
-      : false;
-    const isInEditor = Boolean(
-      isInSidebarInput
-      || (textarea && keyTarget && (keyTarget === textarea || textarea.contains(keyTarget))),
-    );
-    const isStreaming = agent?.state.isStreaming ?? false;
-
-    // F2 — focus chat input
-    if (isFocusInputShortcut(e)) {
       const input = sidebar.getInput();
-      if (!input) return;
+      if (!input) return false;
 
-      e.preventDefault();
-      e.stopPropagation();
+      event.preventDefault();
+      event.stopPropagation();
       input.focus();
 
       const activeTextarea = sidebar.getTextarea();
@@ -365,78 +233,78 @@ export function installKeyboardShortcuts(opts: {
         moveCursorToEnd(activeTextarea);
       }
 
-      return;
-    }
+      return true;
+    },
+    (context) => {
+      const { event } = context;
+      if (event.key !== "Escape" || !isCommandMenuVisible()) return false;
 
-    // ESC — dismiss command menu
-    if (e.key === "Escape" && isCommandMenuVisible()) {
-      e.preventDefault();
+      event.preventDefault();
       hideCommandMenu();
-      return;
-    }
+      return true;
+    },
+    (context) => {
+      const { event, isInEditor, isStreaming, keyTarget } = context;
+      if (!shouldBlurEditorFromEscape({ key: event.key, isInEditor, isStreaming })) return false;
 
-    const isEscapeKey = e.key === "Escape" || e.key === "Esc";
-    const escapeClaimedByOverlay = isEscapeKey && doesOverlayClaimEscape(keyTarget);
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
 
-    // ESC — leave editor focus (when not streaming)
-    if (
-      shouldBlurEditorFromEscape({
-        key: e.key,
-        isInEditor,
-        isStreaming,
-      })
-    ) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
       const blurred = blurTextEntryTarget(keyTarget);
       if (blurred) {
         requestAnimationFrame(() => {
           sidebar.focusTabNavigationAnchor();
         });
       }
-      return;
-    }
 
-    // ESC — abort (only when no overlay/dialog is claiming Escape)
-    if (
-      isEscapeKey
-      && shouldAbortFromEscape({
-        isStreaming,
-        hasAgent: agent !== null,
-        escapeClaimedByOverlay,
-      })
-      && agent
-    ) {
-      e.preventDefault();
+      return true;
+    },
+    (context) => {
+      const { event, isStreaming, agent, keyTarget } = context;
+      const isEscapeKey = event.key === "Escape" || event.key === "Esc";
+      const escapeClaimedByOverlay = isEscapeKey && doesOverlayClaimEscape(keyTarget);
+
+      if (
+        !isEscapeKey
+        || !shouldAbortFromEscape({
+          isStreaming,
+          hasAgent: agent !== null,
+          escapeClaimedByOverlay,
+        })
+        || !agent
+      ) {
+        return false;
+      }
+
+      event.preventDefault();
       markUserAborted(agent);
       agent.abort();
-      return;
-    }
+      return true;
+    },
+    (context) => {
+      const { event } = context;
+      if (!isCreateTabShortcut(event) || !onCreateTab) return false;
 
-    // Cmd/Ctrl+T — open a new tab/session
-    if (isCreateTabShortcut(e)) {
-      if (!onCreateTab) return;
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
       onCreateTab();
-      return;
-    }
+      return true;
+    },
+    (context) => {
+      const { event } = context;
+      if (!isCloseActiveTabShortcut(event) || !onCloseActiveTab) return false;
 
-    // Cmd/Ctrl+W — close active tab/session
-    if (isCloseActiveTabShortcut(e)) {
-      if (!onCloseActiveTab) return;
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
       onCloseActiveTab();
-      return;
-    }
-
-    // Cmd/Ctrl+Z — undo close tab (reopen most recently closed tab)
-    if (isUndoCloseTabShortcut(e)) {
-      if (!onReopenLastClosed) return;
+      return true;
+    },
+    (context) => {
+      const { event, keyTarget } = context;
+      if (!isUndoCloseTabShortcut(event) || !onReopenLastClosed) return false;
 
       const shouldHandleUndoClose = shouldHandleUndoCloseTabShortcut({
         canUndoCloseTab: canUndoCloseTab?.() ?? true,
@@ -445,47 +313,52 @@ export function installKeyboardShortcuts(opts: {
         actionToastVisible: isActionToastVisible(),
       });
 
-      if (!shouldHandleUndoClose) return;
+      if (!shouldHandleUndoClose) return false;
 
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
       onReopenLastClosed();
-      return;
-    }
+      return true;
+    },
+    (context) => {
+      const { event } = context;
+      if (!isReopenLastClosedShortcut(event) || !onReopenLastClosed) return false;
 
-    // Cmd/Ctrl+Shift+T — reopen last closed tab/session
-    if (isReopenLastClosedShortcut(e)) {
-      if (!onReopenLastClosed) return;
-      e.preventDefault();
+      event.preventDefault();
       onReopenLastClosed();
-      return;
-    }
+      return true;
+    },
+    (context) => {
+      const { event, keyTarget } = context;
+      const adjacentTabDirection = getAdjacentTabDirectionFromShortcut(event);
 
-    // ←/→ — switch tabs when editor is not focused
-    const adjacentTabDirection = getAdjacentTabDirectionFromShortcut(e);
-    if (
-      adjacentTabDirection
-      && onSwitchAdjacentTab
-      && !isTextEntryTarget(keyTarget)
-      && !isInsideSessionTabs(keyTarget)
-    ) {
-      e.preventDefault();
+      if (
+        !adjacentTabDirection
+        || !onSwitchAdjacentTab
+        || isTextEntryTarget(keyTarget)
+        || isInsideSessionTabs(keyTarget)
+      ) {
+        return false;
+      }
+
+      event.preventDefault();
       onSwitchAdjacentTab(adjacentTabDirection);
-      return;
-    }
+      return true;
+    },
+    (context) => {
+      const { event, agent } = context;
+      if (!(event.shiftKey && event.key === "Tab") || !agent) return false;
 
-    // Shift+Tab — cycle thinking level
-    if (e.shiftKey && e.key === "Tab") {
-      if (!agent) return;
-      e.preventDefault();
+      event.preventDefault();
       cycleThinkingLevel(agent);
-      return;
-    }
+      return true;
+    },
+    (context) => {
+      const { event } = context;
+      if (!(event.ctrlKey || event.metaKey) || event.key !== "o") return false;
 
-    // Ctrl+O — toggle thinking/tool visibility
-    if ((e.ctrlKey || e.metaKey) && e.key === "o") {
-      e.preventDefault();
+      event.preventDefault();
       const collapsed = document.body.classList.toggle("pi-hide-internals");
 
       // Collapse/expand tool cards to match the new mode.
@@ -497,79 +370,50 @@ export function installKeyboardShortcuts(opts: {
       );
 
       showToast(collapsed ? "Details hidden (⌃O)" : "Details shown (⌃O)", 1500);
+      return true;
+    },
+  ];
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    // Command menu takes priority
+    if (isCommandMenuVisible() && handleCommandMenuKey(event)) {
       return;
     }
 
-    // Slash command execution
-    if (
-      isInEditor &&
-      textarea &&
-      e.key === "Enter" &&
-      !e.shiftKey &&
-      textarea.value.startsWith("/")
-    ) {
-      const val = textarea.value.trim();
-      const spaceIdx = val.indexOf(" ");
-      const cmdName = spaceIdx > 0 ? val.slice(1, spaceIdx) : val.slice(1);
-      const args = spaceIdx > 0 ? val.slice(spaceIdx + 1) : "";
-      const cmd = commandRegistry.get(cmdName);
-      if (cmd) {
-        const actionQueue = getActiveActionQueue();
-        const busy = isStreaming || actionQueue?.isBusy() === true;
+    const context = buildKeydownContext({
+      event,
+      agent: getActiveAgent(),
+      sidebar,
+    });
 
-        if (busy && !BUSY_ALLOWED_COMMANDS.has(cmdName)) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          showToast(`Can't run /${cmdName} while Pi is busy`);
-          return;
-        }
-
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        hideCommandMenu();
-        const input = sidebar.getInput();
-        if (input) input.clear();
-
-        if (cmdName === "compact") {
-          if (!actionQueue) {
-            showToast("No active session");
-            return;
-          }
-          actionQueue.enqueueCommand(cmdName, args);
-        } else {
-          void cmd.execute(args);
-        }
-
+    for (const handler of shortcutHandlers) {
+      if (handler(context)) {
         return;
       }
     }
 
-    // Enter/Alt+Enter while streaming — steer or follow-up
-    if (isInEditor && textarea && e.key === "Enter" && !e.shiftKey && isStreaming && agent) {
-      const text = textarea.value.trim();
-      if (!text) return;
-
-      e.preventDefault();
-      e.stopImmediatePropagation();
-
-      const msg: AgentMessage = {
-        role: "user",
-        content: [{ type: "text", text }],
-        timestamp: Date.now(),
-      };
-
-      if (e.altKey) {
-        agent.followUp(msg);
-        getActiveQueueDisplay()?.add("follow-up", text);
-      } else {
-        agent.steer(msg);
-        getActiveQueueDisplay()?.add("steer", text);
-      }
-
-      const input = sidebar.getInput();
-      if (input) input.clear();
+    if (
+      handleSlashCommandExecution({
+        event,
+        textarea: context.textarea,
+        isInEditor: context.isInEditor,
+        isStreaming: context.isStreaming,
+        getActiveActionQueue,
+        sidebar,
+      })
+    ) {
       return;
     }
+
+    void handleStreamingSteerOrFollowUp({
+      event,
+      textarea: context.textarea,
+      isInEditor: context.isInEditor,
+      isStreaming: context.isStreaming,
+      agent: context.agent,
+      getActiveQueueDisplay,
+      sidebar,
+    });
   };
 
   document.addEventListener("keydown", onKeyDown, true);
