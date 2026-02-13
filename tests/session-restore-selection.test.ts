@@ -7,8 +7,11 @@ import {
 } from "../src/commands/builtins/resume-target.ts";
 import {
   getAdjacentTabDirectionFromShortcut,
+  isCloseActiveTabShortcut,
+  isCreateTabShortcut,
   isFocusInputShortcut,
   isReopenLastClosedShortcut,
+  isUndoCloseTabShortcut,
   shouldAbortFromEscape,
   shouldBlurEditorFromEscape,
 } from "../src/taskpane/keyboard-shortcuts.ts";
@@ -117,6 +120,144 @@ void test("resume target labels and workbook confirmation copy follow selected t
   assert.match(
     getCrossWorkbookResumeConfirmMessage("replace_current"),
     /replace the current chat/i,
+  );
+});
+
+void test("Cmd/Ctrl+T detection ignores Shift/Alt-modified chords", () => {
+  assert.equal(
+    isCreateTabShortcut({
+      key: "t",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    isCreateTabShortcut({
+      key: "T",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    isCreateTabShortcut({
+      key: "t",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+    }),
+    false,
+  );
+
+  assert.equal(
+    isCreateTabShortcut({
+      key: "t",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+    }),
+    false,
+  );
+});
+
+void test("Cmd/Ctrl+W detection ignores Shift/Alt-modified chords", () => {
+  assert.equal(
+    isCloseActiveTabShortcut({
+      key: "w",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    isCloseActiveTabShortcut({
+      key: "W",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    isCloseActiveTabShortcut({
+      key: "w",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+    }),
+    false,
+  );
+
+  assert.equal(
+    isCloseActiveTabShortcut({
+      key: "w",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+    }),
+    false,
+  );
+});
+
+void test("Cmd/Ctrl+Z detection ignores Shift/Alt-modified chords", () => {
+  assert.equal(
+    isUndoCloseTabShortcut({
+      key: "z",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    isUndoCloseTabShortcut({
+      key: "Z",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    }),
+    true,
+  );
+
+  assert.equal(
+    isUndoCloseTabShortcut({
+      key: "z",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+    }),
+    false,
+  );
+
+  assert.equal(
+    isUndoCloseTabShortcut({
+      key: "z",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+    }),
+    false,
   );
 });
 

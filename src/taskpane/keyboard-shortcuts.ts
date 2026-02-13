@@ -31,13 +31,18 @@ type ActionQueue = {
   isBusy: () => boolean;
 };
 
-interface ReopenShortcutEventLike {
+interface TabShortcutEventLike {
   key: string;
   metaKey: boolean;
   ctrlKey: boolean;
   shiftKey: boolean;
   altKey: boolean;
 }
+
+type ReopenShortcutEventLike = TabShortcutEventLike;
+type UndoCloseShortcutEventLike = TabShortcutEventLike;
+type CreateTabShortcutEventLike = TabShortcutEventLike;
+type CloseTabShortcutEventLike = TabShortcutEventLike;
 
 interface FocusInputShortcutEventLike {
   key: string;
@@ -162,6 +167,27 @@ export function cycleThinkingLevel(agent: Agent): ThinkingLevel {
   return next;
 }
 
+export function isCreateTabShortcut(event: CreateTabShortcutEventLike): boolean {
+  if (!(event.metaKey || event.ctrlKey)) return false;
+  if (event.shiftKey || event.altKey) return false;
+
+  return event.key.toLowerCase() === "t";
+}
+
+export function isCloseActiveTabShortcut(event: CloseTabShortcutEventLike): boolean {
+  if (!(event.metaKey || event.ctrlKey)) return false;
+  if (event.shiftKey || event.altKey) return false;
+
+  return event.key.toLowerCase() === "w";
+}
+
+export function isUndoCloseTabShortcut(event: UndoCloseShortcutEventLike): boolean {
+  if (!(event.metaKey || event.ctrlKey)) return false;
+  if (event.shiftKey || event.altKey) return false;
+
+  return event.key.toLowerCase() === "z";
+}
+
 export function isReopenLastClosedShortcut(event: ReopenShortcutEventLike): boolean {
   if (!(event.metaKey || event.ctrlKey)) return false;
   if (!event.shiftKey || event.altKey) return false;
@@ -236,6 +262,8 @@ export function installKeyboardShortcuts(opts: {
   getActiveActionQueue: () => ActionQueue | null;
   sidebar: PiSidebar;
   markUserAborted: (agent: Agent) => void;
+  onCreateTab?: () => void;
+  onCloseActiveTab?: () => void;
   onReopenLastClosed?: () => void;
   onSwitchAdjacentTab?: (direction: -1 | 1) => void;
 }): () => void {
@@ -245,6 +273,8 @@ export function installKeyboardShortcuts(opts: {
     getActiveActionQueue,
     sidebar,
     markUserAborted,
+    onCreateTab,
+    onCloseActiveTab,
     onReopenLastClosed,
     onSwitchAdjacentTab,
   } = opts;
@@ -328,6 +358,36 @@ export function installKeyboardShortcuts(opts: {
       e.preventDefault();
       markUserAborted(agent);
       agent.abort();
+      return;
+    }
+
+    // Cmd/Ctrl+T — open a new tab/session
+    if (isCreateTabShortcut(e)) {
+      if (!onCreateTab) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      onCreateTab();
+      return;
+    }
+
+    // Cmd/Ctrl+W — close active tab/session
+    if (isCloseActiveTabShortcut(e)) {
+      if (!onCloseActiveTab) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      onCloseActiveTab();
+      return;
+    }
+
+    // Cmd/Ctrl+Z — undo close tab (reopen most recently closed tab)
+    if (isUndoCloseTabShortcut(e) && !isTextEntryTarget(keyTarget)) {
+      if (!onReopenLastClosed) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      onReopenLastClosed();
       return;
     }
 

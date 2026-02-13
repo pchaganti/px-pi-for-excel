@@ -198,6 +198,115 @@ void test("persisted format checkpoints retain dimension state", async () => {
   assert.deepEqual(withoutUndefined(entries[0]?.formatRangeState), withoutUndefined(formatState));
 });
 
+void test("persisted modify-structure checkpoints retain extended state kinds", async () => {
+  const settingsStore = createInMemorySettingsStore();
+
+  const getWorkbookContext = (): Promise<WorkbookContext> => Promise.resolve({
+    workbookId: "url_sha256:workbook-structure-persist",
+    workbookName: "Ops.xlsx",
+    source: "document.url",
+  });
+
+  const states: readonly RecoveryModifyStructureState[] = [
+    {
+      kind: "sheet_absent",
+      sheetId: "sheet-added-1",
+      sheetName: "Draft",
+    },
+    {
+      kind: "sheet_present",
+      sheetId: "sheet-added-2",
+      sheetName: "Roadmap",
+      position: 2,
+      visibility: "Visible",
+    },
+    {
+      kind: "rows_absent",
+      sheetId: "sheet-grid-1",
+      sheetName: "Data",
+      position: 4,
+      count: 2,
+    },
+    {
+      kind: "rows_present",
+      sheetId: "sheet-grid-1",
+      sheetName: "Data",
+      position: 4,
+      count: 2,
+    },
+    {
+      kind: "columns_absent",
+      sheetId: "sheet-grid-1",
+      sheetName: "Data",
+      position: 3,
+      count: 1,
+    },
+    {
+      kind: "columns_present",
+      sheetId: "sheet-grid-1",
+      sheetName: "Data",
+      position: 3,
+      count: 1,
+    },
+  ];
+
+  let idCounter = 0;
+  const createId = (): string => {
+    idCounter += 1;
+    return `snap-structure-persist-${idCounter}`;
+  };
+
+  const logA = new WorkbookRecoveryLog({
+    getSettingsStore: () => Promise.resolve(settingsStore),
+    getWorkbookContext,
+    now: () => 1700000000150,
+    createId,
+    applySnapshot: () => Promise.resolve({ values: [["old"]], formulas: [["old"]] }),
+  });
+
+  for (let index = 0; index < states.length; index += 1) {
+    const state = states[index];
+    if (!state) {
+      throw new Error("Expected structure checkpoint state.");
+    }
+
+    const appended = await logA.appendModifyStructure({
+      toolName: "modify_structure",
+      toolCallId: `call-structure-persist-${index + 1}`,
+      address: "Sheet1",
+      changedCount: 1,
+      modifyStructureState: state,
+    });
+
+    assert.ok(appended);
+  }
+
+  const logB = new WorkbookRecoveryLog({
+    getSettingsStore: () => Promise.resolve(settingsStore),
+    getWorkbookContext,
+    applySnapshot: () => Promise.resolve({ values: [["old"]], formulas: [["old"]] }),
+  });
+
+  const entries = await logB.listForCurrentWorkbook(20);
+  assert.equal(entries.length, states.length);
+
+  for (let index = 0; index < states.length; index += 1) {
+    const expectedState = states[index];
+    if (!expectedState) {
+      throw new Error("Expected structure checkpoint state.");
+    }
+
+    const toolCallId = `call-structure-persist-${index + 1}`;
+    const entry = entries.find((snapshot) => snapshot.toolCallId === toolCallId);
+    if (!entry) {
+      throw new Error(`Expected checkpoint entry for ${toolCallId}.`);
+    }
+
+    assert.equal(entry.snapshotKind, "modify_structure_state");
+    assert.deepEqual(withoutUndefined(entry.modifyStructureState), withoutUndefined(expectedState));
+  }
+});
+
 void test("persisted conditional-format checkpoints retain extended rule types", async () => {
   const settingsStore = createInMemorySettingsStore();
 
@@ -721,6 +830,82 @@ void test("restore applies modify-structure checkpoints and creates inverse chec
   assert.equal(restored.address, "Revenue (draft)");
   assert.equal(restored.restoredSnapshotId, appended?.id);
   assert.equal(appliedAddress, "Revenue (draft)");
+  assert.deepEqual(appliedState, restoredState);
+
+  const snapshots = await log.listForCurrentWorkbook(10);
+  const inverse = restored.inverseSnapshotId
+    ? findSnapshotById(snapshots, restored.inverseSnapshotId)
+    : null;
+
+  assert.ok(inverse);
+  assert.equal(inverse?.toolName, "restore_snapshot");
+  assert.equal(inverse?.snapshotKind, "modify_structure_state");
+  assert.equal(inverse?.restoredFromSnapshotId, appended?.id);
+  assert.deepEqual(inverse?.modifyStructureState, currentState);
+});
+
+void test("restore applies row-structure checkpoints and creates inverse checkpoint", async () => {
+  const settingsStore = createInMemorySettingsStore();
+
+  const workbookContext: WorkbookContext = {
+    workbookId: "url_sha256:workbook-structure-rows",
+    workbookName: "StructureRows.xlsx",
+    source: "document.url",
+  };
+
+  let idCounter = 0;
+  const createId = (): string => {
+    idCounter += 1;
+    return `snap-structure-rows-${idCounter}`;
+  };
+
+  let appliedAddress = "";
+  let appliedState: RecoveryModifyStructureState | null = null;
+
+  const restoredState: RecoveryModifyStructureState = {
+    kind: "rows_absent",
+    sheetId: "sheet-id-rows",
+    sheetName: "Data",
+    position: 4,
+    count: 2,
+  };
+
+  const currentState: RecoveryModifyStructureState = {
+    kind: "rows_present",
+    sheetId: "sheet-id-rows",
+    sheetName: "Data",
+    position: 4,
+    count: 2,
+  };
+
+  const log = new WorkbookRecoveryLog({
+    getSettingsStore: () => Promise.resolve(settingsStore),
+    getWorkbookContext: () => Promise.resolve(workbookContext),
+    now: () => 1700000001950,
+    createId,
+    applySnapshot: () => Promise.resolve({ values: [[1]], formulas: [[1]] }),
+    applyModifyStructureSnapshot: (address, state) => {
+      appliedAddress = address;
+      appliedState = state;
+      return Promise.resolve(currentState);
+    },
+  });
+
+  const appended = await log.appendModifyStructure({
+    toolName: "modify_structure",
+    toolCallId: "call-structure-rows",
+    address: "Data!4:5",
+    changedCount: 2,
+    modifyStructureState: restoredState,
+  });
+
+  assert.ok(appended);
+
+  const restored = await log.restore(appended?.id ?? "");
+
+  assert.equal(restored.address, "Data!4:5");
+  assert.equal(restored.restoredSnapshotId, appended?.id);
+  assert.equal(appliedAddress, "Data!4:5");
   assert.deepEqual(appliedState, restoredState);
 
   const snapshots = await log.listForCurrentWorkbook(10);
