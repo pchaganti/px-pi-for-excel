@@ -14,6 +14,16 @@ import { isExperimentalFeatureEnabled, setExperimentalFeatureEnabled } from "../
 import { getErrorMessage } from "../utils/errors.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../workbook/context.js";
 import { closeOverlayById, createOverlayDialog } from "./overlay-dialog.js";
+import {
+  buildFilesDialogFilterOptions,
+  countBuiltInDocs,
+  fileMatchesFilesDialogFilter,
+  isFilesDialogFilterSelectable,
+  parseFilesDialogFilterValue,
+  type FilesDialogFilterOption,
+  type FilesDialogFilterValue,
+} from "./files-dialog-filtering.js";
+import { buildFilesDialogStatusMessage } from "./files-dialog-status.js";
 import { showToast } from "./toast.js";
 
 const OVERLAY_ID = "pi-files-workspace-overlay";
@@ -82,88 +92,6 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return out;
 }
 
-type FilesDialogFilterValue = "all" | "current" | "untagged" | "builtin" | `tag:${string}`;
-
-interface FilesDialogFilterOption {
-  value: FilesDialogFilterValue;
-  label: string;
-  disabled?: boolean;
-}
-
-function makeTagFilterValue(workbookId: string): `tag:${string}` {
-  return `tag:${workbookId}`;
-}
-
-function buildWorkbookTagFilterOptions(files: WorkspaceFileEntry[]): FilesDialogFilterOption[] {
-  const byWorkbook = new Map<string, { label: string; count: number }>();
-
-  for (const file of files) {
-    const tag = file.workbookTag;
-    if (!tag) continue;
-
-    const existing = byWorkbook.get(tag.workbookId);
-    if (existing) {
-      existing.count += 1;
-      continue;
-    }
-
-    byWorkbook.set(tag.workbookId, {
-      label: tag.workbookLabel,
-      count: 1,
-    });
-  }
-
-  const entries = [...byWorkbook.entries()]
-    .sort((a, b) => a[1].label.localeCompare(b[1].label));
-
-  return entries.map(([workbookId, info]) => ({
-    value: makeTagFilterValue(workbookId),
-    label: `${info.label} (${info.count})`,
-  }));
-}
-
-function parseFilterValue(value: string): FilesDialogFilterValue {
-  if (value === "all" || value === "current" || value === "untagged" || value === "builtin") {
-    return value;
-  }
-
-  const tagPrefix = "tag:";
-  if (value.startsWith(tagPrefix) && value.length > tagPrefix.length) {
-    return makeTagFilterValue(value.slice(tagPrefix.length));
-  }
-
-  return "all";
-}
-
-function fileMatchesFilter(args: {
-  file: WorkspaceFileEntry;
-  filter: FilesDialogFilterValue;
-  currentWorkbookId: string | null;
-}): boolean {
-  if (args.filter === "all") return true;
-
-  if (args.filter === "untagged") {
-    return args.file.workbookTag === undefined;
-  }
-
-  if (args.filter === "current") {
-    if (!args.currentWorkbookId) return false;
-    return args.file.workbookTag?.workbookId === args.currentWorkbookId;
-  }
-
-  if (args.filter === "builtin") {
-    return args.file.sourceKind === "builtin-doc";
-  }
-
-  const tagPrefix = "tag:";
-  if (args.filter.startsWith(tagPrefix)) {
-    const workbookId = args.filter.slice(tagPrefix.length);
-    return args.file.workbookTag?.workbookId === workbookId;
-  }
-
-  return true;
-}
-
 export async function showFilesWorkspaceDialog(): Promise<void> {
   if (closeOverlayById(OVERLAY_ID)) {
     return;
@@ -200,6 +128,10 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
   const statusLine = document.createElement("div");
   statusLine.className = "pi-files-dialog__status";
 
+  const helperLine = document.createElement("div");
+  helperLine.className = "pi-files-dialog__helper";
+  helperLine.textContent = "Built-in docs are always available. Enable files-workspace for assistant write/delete.";
+
   const filters = document.createElement("div");
   filters.className = "pi-files-dialog__filters";
 
@@ -210,7 +142,20 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
   const filterSelect = document.createElement("select");
   filterSelect.className = "pi-files-dialog__filter-select";
   filterLabel.appendChild(filterSelect);
-  filters.appendChild(filterLabel);
+
+  const quickFilters = document.createElement("div");
+  quickFilters.className = "pi-files-dialog__quick-filters";
+
+  const quickAllButton = makeButton("All", "pi-files-dialog__quick-filter");
+  const quickBuiltinButton = makeButton("Built-in docs", "pi-files-dialog__quick-filter");
+  const quickCurrentButton = makeButton("Current workbook", "pi-files-dialog__quick-filter");
+
+  quickAllButton.dataset.filter = "all";
+  quickBuiltinButton.dataset.filter = "builtin";
+  quickCurrentButton.dataset.filter = "current";
+
+  quickFilters.append(quickAllButton, quickBuiltinButton, quickCurrentButton);
+  filters.append(filterLabel, quickFilters);
 
   const list = document.createElement("div");
   list.className = "pi-files-dialog__list";
@@ -285,6 +230,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     controls,
     hiddenInput,
     statusLine,
+    helperLine,
     filters,
     list,
     viewer,
@@ -300,6 +246,15 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
   let currentWorkbookId: string | null = null;
   let currentWorkbookLabel: string | null = null;
 
+  const quickFilterButtons: Array<{
+    value: FilesDialogFilterValue;
+    button: HTMLButtonElement;
+  }> = [
+    { value: "all", button: quickAllButton },
+    { value: "builtin", button: quickBuiltinButton },
+    { value: "current", button: quickCurrentButton },
+  ];
+
   const revokeObjectUrl = () => {
     if (!activeObjectUrl) return;
     URL.revokeObjectURL(activeObjectUrl);
@@ -310,6 +265,18 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
   const setStatus = (message: string) => {
     statusLine.textContent = message;
+  };
+
+  const syncQuickFilterButtons = (options: FilesDialogFilterOption[]) => {
+    for (const quickFilter of quickFilterButtons) {
+      const option = options.find((candidate) => candidate.value === quickFilter.value);
+      const isSelectable = option !== undefined && option.disabled !== true;
+      quickFilter.button.disabled = !isSelectable;
+
+      const isActive = selectedFilter === quickFilter.value;
+      quickFilter.button.classList.toggle("is-active", isActive);
+      quickFilter.button.setAttribute("aria-pressed", isActive ? "true" : "false");
+    }
   };
 
   const setViewerMode = (mode: "hidden" | "text" | "preview") => {
@@ -541,23 +508,22 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       ? formatWorkbookLabel(workbookContext)
       : null;
 
-    const builtinDocsCount = files.filter((file) => file.sourceKind === "builtin-doc").length;
+    const builtinDocsCount = countBuiltInDocs(files);
+    quickBuiltinButton.textContent = builtinDocsCount > 0
+      ? `Built-in docs (${builtinDocsCount})`
+      : "Built-in docs";
 
-    const filterOptions: FilesDialogFilterOption[] = [
-      { value: "all", label: "All files" },
-      {
-        value: "current",
-        label: currentWorkbookLabel
-          ? `Current workbook: ${currentWorkbookLabel}`
-          : "Current workbook (unavailable)",
-        disabled: currentWorkbookId === null,
-      },
-      { value: "builtin", label: `Built-in docs (${builtinDocsCount})` },
-      { value: "untagged", label: "Untagged files" },
-      ...buildWorkbookTagFilterOptions(files),
-    ];
+    const filterOptions = buildFilesDialogFilterOptions({
+      files,
+      currentWorkbookId,
+      currentWorkbookLabel,
+      builtinDocsCount,
+    });
 
-    if (!filterOptions.some((option) => option.value === selectedFilter)) {
+    if (!isFilesDialogFilterSelectable({
+      filter: selectedFilter,
+      options: filterOptions,
+    })) {
       selectedFilter = "all";
     }
 
@@ -571,8 +537,9 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       filterSelect.appendChild(optionElement);
     }
     filterSelect.disabled = files.length === 0;
+    syncQuickFilterButtons(filterOptions);
 
-    const filteredFiles = files.filter((file) => fileMatchesFilter({
+    const filteredFiles = files.filter((file) => fileMatchesFilesDialogFilter({
       file,
       filter: selectedFilter,
       currentWorkbookId,
@@ -592,15 +559,15 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     nativeButton.hidden = !backend.nativeSupported;
     disconnectNativeButton.hidden = backend.kind !== "native-directory";
 
-    if (!filesExperimentEnabled) {
-      setStatus(
-        `Built-in docs stay available (${builtinDocsCount}). Enable files-workspace for assistant write/delete on workspace files (${workspaceFilesCount}).`,
-      );
-    } else if (selectedFilter === "all") {
-      setStatus(`${files.length} file${files.length === 1 ? "" : "s"} available to the assistant.`);
-    } else {
-      setStatus(`${filteredFiles.length} of ${files.length} file${files.length === 1 ? "" : "s"} shown · ${activeFilterLabel}.`);
-    }
+    setStatus(buildFilesDialogStatusMessage({
+      filesExperimentEnabled,
+      totalCount: files.length,
+      filteredCount: filteredFiles.length,
+      selectedFilter,
+      activeFilterLabel,
+      builtinDocsCount,
+      workspaceFilesCount,
+    }));
 
     list.replaceChildren();
 
@@ -747,9 +714,17 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
   });
 
   filterSelect.addEventListener("change", () => {
-    selectedFilter = parseFilterValue(filterSelect.value);
+    selectedFilter = parseFilesDialogFilterValue(filterSelect.value);
     void renderList();
   });
+
+  for (const quickFilter of quickFilterButtons) {
+    quickFilter.button.addEventListener("click", () => {
+      selectedFilter = quickFilter.value;
+      filterSelect.value = quickFilter.value;
+      void renderList();
+    });
+  }
 
   newFileButton.addEventListener("click", () => {
     const path = window.prompt("New text file path", "notes.md");

@@ -365,6 +365,10 @@ function backendLabel(kind: WorkspaceBackendStatus["kind"]): string {
   }
 }
 
+export interface FilesWorkspaceOptions {
+  initialBackend?: WorkspaceBackend;
+}
+
 export class FilesWorkspace {
   private backend: WorkspaceBackend | null = null;
   private backendPromise: Promise<WorkspaceBackend> | null = null;
@@ -375,6 +379,12 @@ export class FilesWorkspace {
 
   private auditLoaded = false;
   private auditEntries: FilesWorkspaceAuditEntry[] = [];
+
+  constructor(options: FilesWorkspaceOptions = {}) {
+    if (options.initialBackend) {
+      this.backend = options.initialBackend;
+    }
+  }
 
   private async initializeBackend(): Promise<WorkspaceBackend> {
     const persistedNative = await readPersistedNativeHandle();
