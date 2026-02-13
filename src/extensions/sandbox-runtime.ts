@@ -30,6 +30,11 @@ import {
   renderSandboxUiTree,
   type SandboxUiNode,
 } from "./sandbox-ui.js";
+import {
+  closeOverlayById,
+  createOverlayDialog,
+  type OverlayDialogController,
+} from "../ui/overlay-dialog.js";
 import { isRecord } from "../utils/type-guards.js";
 
 const SANDBOX_CHANNEL = "pi.extension.sandbox.rpc.v1";
@@ -200,17 +205,29 @@ function serializeForInlineScript(value: unknown): string {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
-function ensureOverlayContainer(): HTMLElement {
-  let container = document.getElementById(SANDBOX_OVERLAY_ID);
-  if (!container) {
-    container = document.createElement("div");
-    container.id = SANDBOX_OVERLAY_ID;
-    container.className = "pi-welcome-overlay";
-    container.style.zIndex = "260";
-    document.body.appendChild(container);
+let sandboxOverlayDialog: OverlayDialogController | null = null;
+
+function ensureSandboxOverlayDialog(): OverlayDialogController {
+  if (sandboxOverlayDialog && sandboxOverlayDialog.overlay.isConnected) {
+    return sandboxOverlayDialog;
   }
 
-  return container;
+  closeOverlayById(SANDBOX_OVERLAY_ID);
+
+  const dialog = createOverlayDialog({
+    overlayId: SANDBOX_OVERLAY_ID,
+    cardClassName: "pi-welcome-card pi-overlay-card",
+    zIndex: 260,
+  });
+
+  dialog.addCleanup(() => {
+    if (sandboxOverlayDialog === dialog) {
+      sandboxOverlayDialog = null;
+    }
+  });
+
+  sandboxOverlayDialog = dialog;
+  return dialog;
 }
 
 function createTextOnlyUiNode(text: string): SandboxUiNode {
@@ -231,29 +248,27 @@ function showOverlayNode(
   node: SandboxUiNode,
   onAction: (actionId: string) => void,
 ): Set<string> {
-  const container = ensureOverlayContainer();
-
-  const card = document.createElement("div");
-  card.className = "pi-welcome-card pi-overlay-card";
+  const dialog = ensureSandboxOverlayDialog();
 
   const body = document.createElement("div");
   renderSandboxUiTree(body, node, onAction);
 
-  card.appendChild(body);
-  container.replaceChildren(card);
-  container.style.display = "flex";
+  dialog.card.replaceChildren(body);
+
+  if (!dialog.overlay.isConnected) {
+    dialog.mount();
+  }
 
   return new Set(collectSandboxUiActionIds(node));
 }
 
 function dismissOverlay(): void {
-  const container = document.getElementById(SANDBOX_OVERLAY_ID);
-  if (!container) {
+  if (sandboxOverlayDialog) {
+    sandboxOverlayDialog.close();
     return;
   }
 
-  container.style.display = "none";
-  container.replaceChildren();
+  closeOverlayById(SANDBOX_OVERLAY_ID);
 }
 
 function ensureWidgetSlot(): HTMLElement | null {
