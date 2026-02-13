@@ -1,4 +1,4 @@
-# Refactor Execution Plan (Phase 1)
+# Refactor Execution Plan (Phase 1, Parallelized)
 
 **Date:** 2026-02-13  
 **Scope:** Execute the two highest-ROI refactors from `docs/archive/deep-refactor-review-2026-02-13.md`:
@@ -40,242 +40,327 @@
   - `captureCommentThreadState`, `applyCommentThreadState`
 - **No tool copy changes unless unavoidable** (to avoid snapshot/golden test churn).
 - **Small PRs only**: each PR should be reviewable independently and pass gates.
+- **Refactor-first commits**: extraction/moves should be isolated from behavior edits.
 
 ---
 
-## PR-by-PR plan
+## Parallelization model
 
-## PR 0 — Baseline + guard tests (prep)
+## Serial gates (short)
 
-**Purpose:** freeze expected behavior before structural extraction.
+These are intentionally sequential because they unblock all other workstreams:
 
-### Changes
+- **Gate A (PR0):** baseline/guard tests
+- **Gate B (PR1):** recovery package scaffolding + compatibility facades
+
+After **Gate B**, run three parallel tracks.
+
+---
+
+## Dependency DAG
+
+```text
+PR0 -> PR1 -> {R1, L1, M1}
+
+R1 -> R2 -> R3
+L1 -> L2
+M1 -> M2 -> M3
+
+{R3, L2, M3} -> INT1 -> CLOSE1
+```
+
+Where:
+- `R*` = Recovery-state decomposition track
+- `L*` = Recovery-log decomposition track
+- `M*` = Mutation-pipeline extraction track
+- `INT1` = integration/convergence PR
+- `CLOSE1` = tests split + docs closeout
+
+---
+
+## Track ownership and file boundaries
+
+To reduce merge conflicts, each track should primarily touch separate file sets.
+
+### Track R (Recovery state decomposition)
+Primary files:
+- `src/workbook/recovery-states.ts`
+- `src/workbook/recovery/format-state.ts`
+- `src/workbook/recovery/format-selection.ts`
+- `src/workbook/recovery/structure-state.ts`
+- `src/workbook/recovery/conditional-format-state.ts`
+- `src/workbook/recovery/comment-state.ts`
+
+### Track L (Recovery log decomposition)
+Primary files:
+- `src/workbook/recovery-log.ts`
+- `src/workbook/recovery/log-codec.ts`
+- `src/workbook/recovery/log-store.ts`
+- `src/workbook/recovery/log-restore.ts`
+
+### Track M (Mutation pipeline extraction)
+Primary files:
+- `src/tools/mutation/finalize.ts`
+- `src/tools/mutation/result-note.ts`
+- `src/tools/mutation/types.ts`
+- `src/tools/write-cells.ts`
+- `src/tools/fill-formula.ts`
+- `src/tools/python-transform-range.ts`
+- `src/tools/format-cells.ts`
+- `src/tools/modify-structure.ts`
+- `src/tools/comments.ts`
+- `src/tools/conditional-format.ts`
+- `src/tools/view-settings.ts`
+- `src/tools/workbook-history.ts`
+
+### Track T (Tests/docs closeout; starts near end)
+Primary files:
+- `tests/workbook-recovery-log.test.ts` (then split)
+- `tests/recovery-log-*.test.ts` (new)
+- `docs/archive/codebase-simplification-plan.md`
+- `src/tools/DECISIONS.md` (only if behavior detail changes)
+
+---
+
+## PR plan (parallel-ready)
+
+## Gate A
+
+### PR0 — Baseline + guard tests (prep)
+**Purpose:** freeze expected behavior before extraction.
+
+**Changes**
 - Add baseline assertions where coverage is thin around recovery restore paths:
   - structure states (`sheet_absent/present`, rows, columns)
   - conditional format rule round-trips
   - comment thread restore round-trips
-- Add a short developer note to `docs/codebase-simplification-plan.md` linking this execution plan.
+- Add short note in `docs/archive/codebase-simplification-plan.md` linking this plan.
 
-### Validation
+**Validation**
 - `npm run check`
 - `npm run test:context`
 - `npm run build`
 
-### Exit criteria
-- Baseline tests protect current behavior before refactor starts.
-
 ---
 
-## PR 1 — Create recovery package structure + compatibility facades
+## Gate B
 
+### PR1 — Recovery package scaffolding + facades
 **Purpose:** establish modular boundaries with near-zero behavior change.
 
-### Changes
-- Create new folder:
-  - `src/workbook/recovery/`
-- Add foundational modules:
-  - `types.ts` (public recovery types)
-  - `guards.ts` (type guards)
-  - `clone.ts` (clone helpers)
-  - `address.ts` (address/range parsing helpers)
-- Keep existing entrypoints as facades:
-  - `src/workbook/recovery-states.ts` re-exports from new modules (no call-site churn initially).
+**Changes**
+- Create `src/workbook/recovery/` with foundational modules:
+  - `types.ts`, `guards.ts`, `clone.ts`, `address.ts`
+- Keep existing entrypoints as compatibility facades.
 
-### Validation
+**Validation**
 - `npm run check`
 - `node --test --experimental-strip-types tests/workbook-recovery-log.test.ts`
 - `npm run build`
 
-### Exit criteria
-- No behavior change; module boundaries ready for incremental extraction.
-
 ---
 
-## PR 2 — Extract format-state capture/apply logic
+## Parallel track R (start after PR1)
 
-**Purpose:** isolate the most complex subset first.
-
-### Changes
-- New modules:
+### R1 — Extract format-state capture/apply
+**Changes**
+- Add/move to:
   - `src/workbook/recovery/format-state.ts`
   - `src/workbook/recovery/format-selection.ts`
-- Move from `recovery-states.ts`:
-  - format selection planning helpers
-  - capture logic (`captureFormatCellsState` and internals)
-  - apply logic (`applyFormatCellsState` and internals)
-  - format cell-count estimation (`estimateFormatCaptureCellCount`)
-- Keep exports stable via facade.
+- Keep exports stable via `recovery-states.ts` facade.
 
-### Validation
+**Validation**
 - `npm run check`
 - `node --test --experimental-strip-types tests/workbook-recovery-log.test.ts`
-- `npm run build`
 
-### Exit criteria
-- `recovery-states.ts` shrinks substantially with format logic removed.
+### R2 — Extract structure-state capture/apply
+**Changes**
+- Add/move to `src/workbook/recovery/structure-state.ts`
+- Keep facade exports stable.
 
----
+**Validation**
+- `npm run check`
+- `node --test --experimental-strip-types tests/workbook-recovery-log.test.ts`
 
-## PR 3 — Extract structure / conditional-format / comment state logic
-
-**Purpose:** complete recovery-state decomposition.
-
-### Changes
-- New modules:
-  - `src/workbook/recovery/structure-state.ts`
+### R3 — Extract conditional-format + comment state
+**Changes**
+- Add/move to:
   - `src/workbook/recovery/conditional-format-state.ts`
   - `src/workbook/recovery/comment-state.ts`
-- Move capture/apply logic and rule handlers out of `recovery-states.ts`.
-- Keep existing exports and behavior via facade.
+- Reduce `recovery-states.ts` to orchestration/re-exports.
 
-### Validation
+**Validation**
 - `npm run check`
 - `node --test --experimental-strip-types tests/workbook-recovery-log.test.ts`
 - `npm run build`
 
-### Exit criteria
-- `recovery-states.ts` reduced to orchestration + re-exports.
-
 ---
 
-## PR 4 — Split recovery log into codec/store/restore modules
+## Parallel track L (start after PR1)
 
-**Purpose:** reduce `recovery-log.ts` complexity while preserving runtime behavior.
+### L1 — Recovery log codec/store split
+**Changes**
+- Add:
+  - `src/workbook/recovery/log-codec.ts`
+  - `src/workbook/recovery/log-store.ts`
+- Keep schema/key unchanged (`workbook.recovery-snapshots.v1`).
 
-### Changes
-- New modules:
-  - `src/workbook/recovery/log-codec.ts` (payload parsing/serialization)
-  - `src/workbook/recovery/log-store.ts` (settings load/persist + filtering)
-  - `src/workbook/recovery/log-restore.ts` (restore strategy by snapshot kind)
-- Keep public class API stable:
-  - `WorkbookRecoveryLog`
-  - `getWorkbookRecoveryLog()`
-- Persisted key and schema remain unchanged:
-  - `workbook.recovery-snapshots.v1`
+**Validation**
+- `npm run check`
+- `node --test --experimental-strip-types tests/workbook-recovery-log.test.ts`
 
-### Validation
+### L2 — Recovery restore strategy module
+**Changes**
+- Add `src/workbook/recovery/log-restore.ts`
+- Keep `WorkbookRecoveryLog` and `getWorkbookRecoveryLog()` public API unchanged.
+- Make `recovery-log.ts` thin composition root.
+
+**Validation**
 - `npm run check`
 - `node --test --experimental-strip-types tests/workbook-recovery-log.test.ts`
 - `npm run build`
 
-### Exit criteria
-- `recovery-log.ts` becomes thin composition root.
-
 ---
 
-## PR 5 — Introduce shared mutation pipeline helpers (first migration set)
+## Parallel track M (start after PR1)
 
-**Purpose:** remove duplication across primary cell mutation tools.
-
-### Changes
-- New module(s):
+### M1 — Shared mutation helper primitives
+**Changes**
+- Add:
   - `src/tools/mutation/finalize.ts`
   - `src/tools/mutation/result-note.ts`
   - `src/tools/mutation/types.ts`
-- Shared responsibilities:
-  - append checkpoint note consistently
-  - checkpoint created/unavailable wiring
-  - snapshot-created event dispatch helper
-  - standardized audit append wrappers
-- Migrate first set:
+- Introduce helper APIs without tool migrations yet.
+
+**Validation**
+- `npm run check`
+- `node --test --experimental-strip-types tests/tool-result-shaping.test.ts tests/workbook-change-audit.test.ts`
+
+### M2 — Migrate first mutation set
+**Changes**
+- Migrate:
   - `src/tools/write-cells.ts`
   - `src/tools/fill-formula.ts`
   - `src/tools/python-transform-range.ts`
 
-### Validation
+**Validation**
 - `npm run check`
-- `node --test --experimental-strip-types tests/tool-result-shaping.test.ts tests/workbook-recovery-log.test.ts tests/workbook-change-audit.test.ts tests/python-transform-range-tool.test.ts`
-- `npm run build`
+- `node --test --experimental-strip-types tests/tool-result-shaping.test.ts tests/python-transform-range-tool.test.ts tests/workbook-change-audit.test.ts`
 
-### Exit criteria
-- These tools no longer duplicate checkpoint/audit plumbing.
-
----
-
-## PR 6 — Migrate remaining mutating tools to shared pipeline
-
-**Purpose:** finish consistency pass for mutation/recovery/audit flows.
-
-### Changes
+### M3 — Migrate remaining mutation set
+**Changes**
 - Migrate where applicable:
   - `src/tools/format-cells.ts`
   - `src/tools/modify-structure.ts`
   - `src/tools/comments.ts`
   - `src/tools/conditional-format.ts`
-  - `src/tools/view-settings.ts` (non-checkpointed mutation path)
-  - `src/tools/workbook-history.ts` (restore audit path alignment)
-- Remove local helper duplication (`appendResultNote`, repeated checkpoint fallbacks, etc.).
+  - `src/tools/view-settings.ts`
+  - `src/tools/workbook-history.ts`
 
-### Validation
+**Validation**
 - `npm run check`
 - `npm run test:context`
 - `npm run build`
 
-### Exit criteria
-- Mutation behavior remains same, but instrumentation/recovery plumbing is centralized.
-
 ---
 
-## PR 7 — Test decomposition + docs closeout
+## Integration and closeout (serial)
 
-**Purpose:** reduce future maintenance burden and finalize documentation.
+### INT1 — Convergence PR
+**Purpose:** merge all parallel tracks cleanly and resolve cross-track conflicts.
 
-### Changes
-- Split `tests/workbook-recovery-log.test.ts` into focused files:
+**Changes**
+- Resolve any overlap between `recovery-log` and mutation helper usage.
+- Ensure import paths and facades are final.
+- Keep behavior snapshots stable.
+
+**Validation**
+- `npm run check`
+- `npm run test:context`
+- `npm run build`
+
+### CLOSE1 — Test decomposition + docs closeout
+**Changes**
+- Split `tests/workbook-recovery-log.test.ts` into focused suites:
   - `tests/recovery-log-persistence.test.ts`
   - `tests/recovery-log-restore.test.ts`
   - `tests/recovery-log-format.test.ts`
   - `tests/recovery-log-structure.test.ts`
-- Update docs:
-  - `docs/codebase-simplification-plan.md`
-  - `src/tools/DECISIONS.md` (only if any implementation details changed)
+- Update docs and remove stale references.
 
-### Validation
+**Validation**
 - `npm run check`
 - `npm run test:context`
 - `npm run build`
 
-### Exit criteria
-- Phase 1 complete with smaller modules + clearer tests + updated docs.
+---
+
+## Merge/branch strategy for parallel work
+
+- Branch all tracks from **PR1 merge commit**.
+- Use naming convention:
+  - `refactor/recovery-r1-format-state`
+  - `refactor/recovery-l1-log-codec-store`
+  - `refactor/mutation-m2-core-tools`
+- Rebase at least daily onto main to keep conflicts small.
+- Merge order recommendation:
+  1. `R1`, `L1`, `M1`
+  2. `R2`, `L2`, `M2`
+  3. `R3`, `M3`
+  4. `INT1`
+  5. `CLOSE1`
 
 ---
 
-## Risk register
+## CI/test matrix by track
 
-1. **Risk:** subtle restore behavior regression after extraction.  
-   **Mitigation:** PR0 baseline tests + PR2/PR3/PR4 targeted test runs.
+To keep feedback fast, run focused suites per PR, then full gate in convergence.
 
-2. **Risk:** accidental output text drift in mutation tools.  
-   **Mitigation:** keep content strings unchanged; only centralize plumbing.
+- **R track PRs:** `tests/workbook-recovery-log.test.ts`
+- **L track PRs:** `tests/workbook-recovery-log.test.ts`
+- **M track PRs:**
+  - `tests/tool-result-shaping.test.ts`
+  - `tests/workbook-change-audit.test.ts`
+  - plus tool-specific tests touched
+- **INT1/CLOSE1:** full `npm run test:context`
 
-3. **Risk:** increased import churn creates cyclic dependencies.  
-   **Mitigation:** keep recovery modules dependency direction one-way (`types/guards` → domain modules → facade).
-
-4. **Risk:** long-lived PRs become hard to review.  
-   **Mitigation:** keep PRs scoped to one extraction axis each.
+Always run:
+- `npm run check`
+- `npm run build`
 
 ---
 
-## Suggested execution order and effort
+## Team sizing suggestion
 
-- PR0: 0.5 day
-- PR1: 0.5 day
-- PR2: 1 day
-- PR3: 1 day
-- PR4: 1 day
-- PR5: 1 day
-- PR6: 1 day
-- PR7: 0.5 day
+- **3 engineers minimum** for true parallelism:
+  - Engineer A: Track R
+  - Engineer B: Track L
+  - Engineer C: Track M
+- Optional 4th engineer for Track T + convergence assistance.
 
-**Total:** ~6.5 developer-days (can be parallelized partly after PR1).
+Estimated elapsed wall-clock with parallel tracks: **~3.5 to 4.5 working days** (vs ~6.5 sequential).
+
+---
+
+## Risk register (parallel-specific)
+
+1. **Risk:** cross-track conflict on shared types/exports.  
+   **Mitigation:** PR1 establishes stable facade contracts before branching tracks.
+
+2. **Risk:** behavior drift while tools migrate to shared helpers.  
+   **Mitigation:** M1 introduces helpers first; M2/M3 are mechanical migrations with unchanged text outputs.
+
+3. **Risk:** integration debt at the end.  
+   **Mitigation:** reserve explicit `INT1` convergence PR; do not “sneak merge” large unresolved overlaps.
+
+4. **Risk:** test runtime too slow in parallel CI.  
+   **Mitigation:** focused suites per track + full gate only at convergence/closeout.
 
 ---
 
 ## Ready-to-start sequence
 
-If executing immediately, start with:
-1. PR0 (baseline tests)
-2. PR1 (recovery package scaffolding)
-3. PR2 (format-state extraction)
-
-These three PRs derisk the rest of the phase and keep behavioral confidence high.
+1. Merge **PR0** (baseline tests)
+2. Merge **PR1** (scaffolding + facades)
+3. Immediately branch and run **R1 / L1 / M1 in parallel**
+4. Continue with DAG above until **INT1** and **CLOSE1**
