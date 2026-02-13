@@ -10,6 +10,8 @@ import type { WorkbookContext } from "../src/workbook/context.ts";
 import {
   estimateFormatCaptureCellCount,
   firstCellAddress,
+  type RecoveryCommentThreadState,
+  type RecoveryConditionalFormatRule,
   type RecoveryFormatRangeState,
   type RecoveryModifyStructureState,
 } from "../src/workbook/recovery-states.ts";
@@ -920,6 +922,202 @@ void test("restore applies row-structure checkpoints and creates inverse checkpo
   assert.deepEqual(inverse?.modifyStructureState, currentState);
 });
 
+void test("restore round-trips extended modify-structure kinds", async () => {
+  const scenarios: ReadonlyArray<{
+    name: string;
+    address: string;
+    changedCount: number;
+    targetState: RecoveryModifyStructureState;
+    currentState: RecoveryModifyStructureState;
+  }> = [
+    {
+      name: "sheet_absent",
+      address: "Draft",
+      changedCount: 1,
+      targetState: {
+        kind: "sheet_absent",
+        sheetId: "sheet-draft",
+        sheetName: "Draft",
+      },
+      currentState: {
+        kind: "sheet_present",
+        sheetId: "sheet-draft",
+        sheetName: "Draft",
+        position: 1,
+        visibility: "Visible",
+      },
+    },
+    {
+      name: "sheet_present",
+      address: "Backlog",
+      changedCount: 1,
+      targetState: {
+        kind: "sheet_present",
+        sheetId: "sheet-backlog",
+        sheetName: "Backlog",
+        position: 3,
+        visibility: "Hidden",
+      },
+      currentState: {
+        kind: "sheet_absent",
+        sheetId: "sheet-backlog",
+        sheetName: "Backlog",
+      },
+    },
+    {
+      name: "rows_absent",
+      address: "Data!8:9",
+      changedCount: 2,
+      targetState: {
+        kind: "rows_absent",
+        sheetId: "sheet-grid",
+        sheetName: "Data",
+        position: 8,
+        count: 2,
+      },
+      currentState: {
+        kind: "rows_present",
+        sheetId: "sheet-grid",
+        sheetName: "Data",
+        position: 8,
+        count: 2,
+      },
+    },
+    {
+      name: "rows_present",
+      address: "Data!15:16",
+      changedCount: 2,
+      targetState: {
+        kind: "rows_present",
+        sheetId: "sheet-grid",
+        sheetName: "Data",
+        position: 15,
+        count: 2,
+      },
+      currentState: {
+        kind: "rows_absent",
+        sheetId: "sheet-grid",
+        sheetName: "Data",
+        position: 15,
+        count: 2,
+      },
+    },
+    {
+      name: "columns_absent",
+      address: "Data!C:D",
+      changedCount: 2,
+      targetState: {
+        kind: "columns_absent",
+        sheetId: "sheet-grid",
+        sheetName: "Data",
+        position: 3,
+        count: 2,
+      },
+      currentState: {
+        kind: "columns_present",
+        sheetId: "sheet-grid",
+        sheetName: "Data",
+        position: 3,
+        count: 2,
+      },
+    },
+    {
+      name: "columns_present",
+      address: "Data!F:G",
+      changedCount: 2,
+      targetState: {
+        kind: "columns_present",
+        sheetId: "sheet-grid",
+        sheetName: "Data",
+        position: 6,
+        count: 2,
+      },
+      currentState: {
+        kind: "columns_absent",
+        sheetId: "sheet-grid",
+        sheetName: "Data",
+        position: 6,
+        count: 2,
+      },
+    },
+  ];
+
+  for (let index = 0; index < scenarios.length; index += 1) {
+    const scenario = scenarios[index];
+    if (!scenario) {
+      throw new Error("Expected structure scenario.");
+    }
+
+    const settingsStore = createInMemorySettingsStore();
+
+    const workbookContext: WorkbookContext = {
+      workbookId: `url_sha256:workbook-structure-roundtrip-${index}`,
+      workbookName: "StructureRoundtrip.xlsx",
+      source: "document.url",
+    };
+
+    let idCounter = 0;
+    const createId = (): string => {
+      idCounter += 1;
+      return `snap-structure-roundtrip-${index}-${idCounter}`;
+    };
+
+    let appliedAddress = "";
+    let appliedState: RecoveryModifyStructureState | null = null;
+
+    const log = new WorkbookRecoveryLog({
+      getSettingsStore: () => Promise.resolve(settingsStore),
+      getWorkbookContext: () => Promise.resolve(workbookContext),
+      now: () => 1700000001960 + index,
+      createId,
+      applySnapshot: () => Promise.resolve({ values: [[1]], formulas: [[1]] }),
+      applyModifyStructureSnapshot: (address, state) => {
+        appliedAddress = address;
+        appliedState = state;
+        return Promise.resolve(scenario.currentState);
+      },
+    });
+
+    const appended = await log.appendModifyStructure({
+      toolName: "modify_structure",
+      toolCallId: `call-structure-roundtrip-${scenario.name}`,
+      address: scenario.address,
+      changedCount: scenario.changedCount,
+      modifyStructureState: scenario.targetState,
+    });
+
+    assert.ok(appended, `Expected appended checkpoint for ${scenario.name}.`);
+    if (!appended) {
+      throw new Error(`Expected appended checkpoint for ${scenario.name}.`);
+    }
+
+    const restored = await log.restore(appended.id);
+
+    assert.equal(restored.address, scenario.address, `Expected restored address for ${scenario.name}.`);
+    assert.equal(
+      restored.restoredSnapshotId,
+      appended.id,
+      `Expected restored snapshot id for ${scenario.name}.`,
+    );
+    assert.equal(appliedAddress, scenario.address, `Expected apply address for ${scenario.name}.`);
+    assert.deepEqual(appliedState, scenario.targetState, `Expected target state for ${scenario.name}.`);
+
+    const snapshots = await log.listForCurrentWorkbook(10);
+    const inverse = restored.inverseSnapshotId
+      ? findSnapshotById(snapshots, restored.inverseSnapshotId)
+      : null;
+
+    assert.ok(inverse, `Expected inverse snapshot for ${scenario.name}.`);
+    assert.equal(inverse?.snapshotKind, "modify_structure_state", `Expected structure kind for ${scenario.name}.`);
+    assert.equal(inverse?.restoredFromSnapshotId, appended.id, `Expected inverse source for ${scenario.name}.`);
+    assert.deepEqual(
+      inverse?.modifyStructureState,
+      scenario.currentState,
+      `Expected inverse state for ${scenario.name}.`,
+    );
+  }
+});
+
 void test("restore applies conditional-format checkpoints and creates inverse checkpoint", async () => {
   const settingsStore = createInMemorySettingsStore();
 
@@ -1164,6 +1362,126 @@ void test("restore applies conditional-format checkpoints and creates inverse ch
   );
 });
 
+void test("restore round-trips conditional-format rules in target and inverse snapshots", async () => {
+  const settingsStore = createInMemorySettingsStore();
+
+  const workbookContext: WorkbookContext = {
+    workbookId: "url_sha256:workbook-cf-roundtrip",
+    workbookName: "ConditionalRoundtrip.xlsx",
+    source: "document.url",
+  };
+
+  let idCounter = 0;
+  const createId = (): string => {
+    idCounter += 1;
+    return `snap-cf-roundtrip-${idCounter}`;
+  };
+
+  const targetRules: RecoveryConditionalFormatRule[] = [
+    {
+      type: "custom",
+      formula: "=A1>5",
+      fillColor: "#F4CCCC",
+      appliesToAddress: "Sheet1!A1:A3",
+    },
+    {
+      type: "data_bar",
+      appliesToAddress: "Sheet1!B1:B10",
+      dataBar: {
+        axisColor: "#000000",
+        axisFormat: "Automatic",
+        barDirection: "Context",
+        showDataBarOnly: false,
+        lowerBoundRule: { type: "LowestValue" },
+        upperBoundRule: { type: "HighestValue" },
+      },
+    },
+    {
+      type: "icon_set",
+      appliesToAddress: "Sheet1!C1:C6",
+      iconSet: {
+        style: "ThreeSymbols",
+        reverseIconOrder: false,
+        showIconOnly: false,
+        criteria: [
+          { type: "Percent", operator: "GreaterThanOrEqual", formula: "0" },
+          { type: "Percent", operator: "GreaterThanOrEqual", formula: "33" },
+          { type: "Percent", operator: "GreaterThanOrEqual", formula: "67" },
+        ],
+      },
+    },
+  ];
+
+  const currentRules: RecoveryConditionalFormatRule[] = [
+    {
+      type: "text_comparison",
+      textOperator: "Contains",
+      text: "priority",
+      fillColor: "#FFF2CC",
+      appliesToAddress: "Sheet1!D1:D10",
+    },
+    {
+      type: "color_scale",
+      appliesToAddress: "Sheet1!E1:E10",
+      colorScale: {
+        minimum: { type: "LowestValue", color: "#F8696B" },
+        midpoint: { type: "Percentile", formula: "50", color: "#FFEB84" },
+        maximum: { type: "HighestValue", color: "#63BE7B" },
+      },
+    },
+  ];
+
+  let appliedAddress = "";
+  let appliedRules: RecoveryConditionalFormatRule[] = [];
+
+  const log = new WorkbookRecoveryLog({
+    getSettingsStore: () => Promise.resolve(settingsStore),
+    getWorkbookContext: () => Promise.resolve(workbookContext),
+    now: () => 1700000002500,
+    createId,
+    applySnapshot: () => Promise.resolve({ values: [[1]], formulas: [[1]] }),
+    applyConditionalFormatSnapshot: (address, rules) => {
+      appliedAddress = address;
+      appliedRules = [...rules];
+      return Promise.resolve({
+        supported: true,
+        rules: currentRules,
+      });
+    },
+  });
+
+  const appended = await log.appendConditionalFormat({
+    toolName: "conditional_format",
+    toolCallId: "call-cf-roundtrip",
+    address: "Sheet1!A1:E10",
+    changedCount: 10,
+    cellCount: 10,
+    conditionalFormatRules: targetRules,
+  });
+
+  assert.ok(appended);
+  if (!appended) {
+    throw new Error("Expected appended conditional format checkpoint.");
+  }
+
+  const restored = await log.restore(appended.id);
+
+  assert.equal(restored.address, "Sheet1!A1:E10");
+  assert.equal(restored.restoredSnapshotId, appended.id);
+  assert.equal(appliedAddress, "Sheet1!A1:E10");
+  assert.deepEqual(withoutUndefined(appliedRules), withoutUndefined(targetRules));
+
+  const snapshots = await log.listForCurrentWorkbook(10);
+  const inverse = restored.inverseSnapshotId
+    ? findSnapshotById(snapshots, restored.inverseSnapshotId)
+    : null;
+
+  assert.ok(inverse);
+  assert.equal(inverse?.snapshotKind, "conditional_format_rules");
+  assert.equal(inverse?.restoredFromSnapshotId, appended.id);
+  assert.deepEqual(withoutUndefined(inverse?.conditionalFormatRules), withoutUndefined(currentRules));
+});
+
 void test("restore applies comment-thread checkpoints and creates inverse checkpoint", async () => {
   const settingsStore = createInMemorySettingsStore();
 
@@ -1236,6 +1554,121 @@ void test("restore applies comment-thread checkpoints and creates inverse checkp
   assert.equal(inverse?.toolName, "restore_snapshot");
   assert.equal(inverse?.snapshotKind, "comment_thread");
   assert.equal(inverse?.restoredFromSnapshotId, appended?.id);
+});
+
+void test("restore round-trips comment-thread states for present and absent threads", async () => {
+  const scenarios: ReadonlyArray<{
+    name: string;
+    targetState: RecoveryCommentThreadState;
+    currentState: RecoveryCommentThreadState;
+  }> = [
+    {
+      name: "present",
+      targetState: {
+        exists: true,
+        content: "Original thread",
+        resolved: false,
+        replies: ["Reply A", "Reply B"],
+      },
+      currentState: {
+        exists: true,
+        content: "Current thread",
+        resolved: true,
+        replies: ["Current reply"],
+      },
+    },
+    {
+      name: "absent",
+      targetState: {
+        exists: false,
+        content: "",
+        resolved: false,
+        replies: [],
+      },
+      currentState: {
+        exists: true,
+        content: "Current thread before delete",
+        resolved: false,
+        replies: ["Keep me"],
+      },
+    },
+  ];
+
+  for (let index = 0; index < scenarios.length; index += 1) {
+    const scenario = scenarios[index];
+    if (!scenario) {
+      throw new Error("Expected comment scenario.");
+    }
+
+    const settingsStore = createInMemorySettingsStore();
+
+    const workbookContext: WorkbookContext = {
+      workbookId: `url_sha256:workbook-comment-roundtrip-${index}`,
+      workbookName: "CommentsRoundtrip.xlsx",
+      source: "document.url",
+    };
+
+    let idCounter = 0;
+    const createId = (): string => {
+      idCounter += 1;
+      return `snap-comment-roundtrip-${index}-${idCounter}`;
+    };
+
+    let appliedAddress = "";
+    let appliedState: RecoveryCommentThreadState | null = null;
+
+    const log = new WorkbookRecoveryLog({
+      getSettingsStore: () => Promise.resolve(settingsStore),
+      getWorkbookContext: () => Promise.resolve(workbookContext),
+      now: () => 1700000003200 + index,
+      createId,
+      applySnapshot: () => Promise.resolve({ values: [[1]], formulas: [[1]] }),
+      applyCommentThreadSnapshot: (address, state) => {
+        appliedAddress = address;
+        appliedState = state;
+        return Promise.resolve(scenario.currentState);
+      },
+    });
+
+    const address = `Sheet1!C${index + 10}`;
+    const appended = await log.appendCommentThread({
+      toolName: "comments",
+      toolCallId: `call-comment-roundtrip-${scenario.name}`,
+      address,
+      changedCount: 1,
+      commentThreadState: scenario.targetState,
+    });
+
+    assert.ok(appended, `Expected appended comment checkpoint for ${scenario.name}.`);
+    if (!appended) {
+      throw new Error(`Expected appended comment checkpoint for ${scenario.name}.`);
+    }
+
+    const restored = await log.restore(appended.id);
+
+    assert.equal(restored.address, address, `Expected restored address for ${scenario.name}.`);
+    assert.equal(
+      restored.restoredSnapshotId,
+      appended.id,
+      `Expected restored snapshot id for ${scenario.name}.`,
+    );
+    assert.equal(appliedAddress, address, `Expected apply address for ${scenario.name}.`);
+    assert.deepEqual(appliedState, scenario.targetState, `Expected applied state for ${scenario.name}.`);
+
+    const snapshots = await log.listForCurrentWorkbook(10);
+    const inverse = restored.inverseSnapshotId
+      ? findSnapshotById(snapshots, restored.inverseSnapshotId)
+      : null;
+
+    assert.ok(inverse, `Expected inverse snapshot for ${scenario.name}.`);
+    assert.equal(inverse?.snapshotKind, "comment_thread", `Expected comment kind for ${scenario.name}.`);
+    assert.equal(inverse?.restoredFromSnapshotId, appended.id, `Expected inverse source for ${scenario.name}.`);
+    assert.deepEqual(
+      inverse?.commentThreadState,
+      scenario.currentState,
+      `Expected inverse state for ${scenario.name}.`,
+    );
+  }
 });
 
 void test("clearForCurrentWorkbook removes only matching workbook checkpoints", async () => {

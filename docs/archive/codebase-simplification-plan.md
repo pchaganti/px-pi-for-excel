@@ -6,6 +6,8 @@ This plan focuses on a small set of “big levers” that remove ongoing mainten
 
 > Context strategy and caching guardrails now live in: [`docs/context-management-policy.md`](../context-management-policy.md).
 > Keep simplification work aligned with that policy (especially deterministic tool metadata, context shaping, and debug observability).
+>
+> Phase 1 recovery/mutation execution tracker: [`docs/archive/refactor-execution-plan-2026-02-13.md`](./refactor-execution-plan-2026-02-13.md).
 
 ---
 
