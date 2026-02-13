@@ -243,6 +243,7 @@ void test("persisted conditional-format checkpoints retain extended rule types",
     },
     {
       type: "data_bar",
+      stopIfTrue: true,
       appliesToAddress: "Sheet1!F1:F10",
       dataBar: {
         axisColor: "#000000",
@@ -262,6 +263,7 @@ void test("persisted conditional-format checkpoints retain extended rule types",
     },
     {
       type: "color_scale",
+      stopIfTrue: false,
       appliesToAddress: "Sheet1!G1:G10",
       colorScale: {
         minimum: { type: "LowestValue", color: "#F8696B" },
@@ -271,6 +273,7 @@ void test("persisted conditional-format checkpoints retain extended rule types",
     },
     {
       type: "icon_set",
+      stopIfTrue: true,
       appliesToAddress: "Sheet1!H1:H10",
       iconSet: {
         style: "ThreeTrafficLights1",
@@ -813,6 +816,7 @@ void test("restore applies conditional-format checkpoints and creates inverse ch
       },
       {
         type: "data_bar",
+        stopIfTrue: true,
         appliesToAddress: "Sheet1!F1:F10",
         dataBar: {
           axisColor: "#000000",
@@ -832,6 +836,7 @@ void test("restore applies conditional-format checkpoints and creates inverse ch
       },
       {
         type: "color_scale",
+        stopIfTrue: false,
         appliesToAddress: "Sheet1!G1:G10",
         colorScale: {
           minimum: { type: "LowestValue", color: "#F8696B" },
@@ -841,6 +846,7 @@ void test("restore applies conditional-format checkpoints and creates inverse ch
       },
       {
         type: "icon_set",
+        stopIfTrue: true,
         appliesToAddress: "Sheet1!H1:H10",
         iconSet: {
           style: "ThreeTrafficLights1",
@@ -902,6 +908,7 @@ void test("restore applies conditional-format checkpoints and creates inverse ch
       },
       {
         type: "data_bar",
+        stopIfTrue: true,
         appliesToAddress: "Sheet1!F1:F10",
         dataBar: {
           axisColor: "#000000",
@@ -921,6 +928,7 @@ void test("restore applies conditional-format checkpoints and creates inverse ch
       },
       {
         type: "color_scale",
+        stopIfTrue: false,
         appliesToAddress: "Sheet1!G1:G10",
         colorScale: {
           minimum: { type: "LowestValue", color: "#F8696B" },
@@ -930,6 +938,7 @@ void test("restore applies conditional-format checkpoints and creates inverse ch
       },
       {
         type: "icon_set",
+        stopIfTrue: true,
         appliesToAddress: "Sheet1!H1:H10",
         iconSet: {
           style: "ThreeTrafficLights1",

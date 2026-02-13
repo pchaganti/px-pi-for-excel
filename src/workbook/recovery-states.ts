@@ -2588,6 +2588,7 @@ const CONDITIONAL_FORMAT_RULE_HANDLERS = {
         supported: true,
         rule: {
           type: "data_bar",
+          stopIfTrue: captureContext.stopIfTrue,
           appliesToAddress: captureContext.appliesToAddress,
           dataBar: {
             axisColor: normalizeOptionalString(dataBar.axisColor),
@@ -2639,6 +2640,10 @@ const CONDITIONAL_FORMAT_RULE_HANDLERS = {
       dataBar.negativeFormat.matchPositiveFillColor = state.negativeMatchPositiveFillColor;
       dataBar.negativeFormat.matchPositiveBorderColor = state.negativeMatchPositiveBorderColor;
 
+      if (rule.stopIfTrue !== undefined) {
+        conditionalFormat.stopIfTrue = rule.stopIfTrue;
+      }
+
       conditionalFormat.setRanges(targetAddress);
     },
   },
@@ -2683,6 +2688,7 @@ const CONDITIONAL_FORMAT_RULE_HANDLERS = {
         supported: true,
         rule: {
           type: "color_scale",
+          stopIfTrue: captureContext.stopIfTrue,
           appliesToAddress: captureContext.appliesToAddress,
           colorScale: {
             minimum,
@@ -2709,6 +2715,11 @@ const CONDITIONAL_FORMAT_RULE_HANDLERS = {
       }
 
       conditionalFormat.colorScale.criteria = criteria;
+
+      if (rule.stopIfTrue !== undefined) {
+        conditionalFormat.stopIfTrue = rule.stopIfTrue;
+      }
+
       conditionalFormat.setRanges(targetAddress);
     },
   },
@@ -2767,6 +2778,7 @@ const CONDITIONAL_FORMAT_RULE_HANDLERS = {
         supported: true,
         rule: {
           type: "icon_set",
+          stopIfTrue: captureContext.stopIfTrue,
           appliesToAddress: captureContext.appliesToAddress,
           iconSet: {
             style,
@@ -2788,6 +2800,11 @@ const CONDITIONAL_FORMAT_RULE_HANDLERS = {
       conditionalFormat.iconSet.reverseIconOrder = state.reverseIconOrder;
       conditionalFormat.iconSet.showIconOnly = state.showIconOnly;
       conditionalFormat.iconSet.criteria = state.criteria.map((criterion) => toIconCriterion(criterion));
+
+      if (rule.stopIfTrue !== undefined) {
+        conditionalFormat.stopIfTrue = rule.stopIfTrue;
+      }
+
       conditionalFormat.setRanges(targetAddress);
     },
   },
