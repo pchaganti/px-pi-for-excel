@@ -111,3 +111,13 @@ export function showActionToast(opts: ActionToastOptions): void {
     },
   });
 }
+
+export function isActionToastVisible(): boolean {
+  if (!toastElements) {
+    return false;
+  }
+
+  return toastElements.root.classList.contains("visible")
+    && toastElements.root.classList.contains("pi-toast--action")
+    && !toastElements.action.hidden;
+}

@@ -9,7 +9,7 @@ import { supportsXhigh } from "@mariozechner/pi-ai";
 
 import type { PiSidebar } from "../ui/pi-sidebar.js";
 import { moveCursorToEnd } from "../ui/input-focus.js";
-import { showToast } from "../ui/toast.js";
+import { isActionToastVisible, showToast } from "../ui/toast.js";
 
 import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
 import { blurTextEntryTarget, isTextEntryTarget } from "../utils/text-entry.js";
@@ -256,6 +256,14 @@ export function shouldAbortFromEscape(opts: {
   return true;
 }
 
+export function shouldHandleUndoCloseTabShortcut(opts: {
+  isTextEntry: boolean;
+  actionToastVisible: boolean;
+}): boolean {
+  if (opts.isTextEntry && !opts.actionToastVisible) return false;
+  return true;
+}
+
 export function installKeyboardShortcuts(opts: {
   getActiveAgent: () => Agent | null;
   getActiveQueueDisplay: () => QueueDisplay | null;
@@ -382,8 +390,16 @@ export function installKeyboardShortcuts(opts: {
     }
 
     // Cmd/Ctrl+Z — undo close tab (reopen most recently closed tab)
-    if (isUndoCloseTabShortcut(e) && !isTextEntryTarget(keyTarget)) {
+    if (isUndoCloseTabShortcut(e)) {
       if (!onReopenLastClosed) return;
+
+      const shouldHandleUndoClose = shouldHandleUndoCloseTabShortcut({
+        isTextEntry: isTextEntryTarget(keyTarget),
+        actionToastVisible: isActionToastVisible(),
+      });
+
+      if (!shouldHandleUndoClose) return;
+
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
