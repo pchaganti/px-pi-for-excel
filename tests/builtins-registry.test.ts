@@ -233,12 +233,16 @@ void test("extension registry migrates legacy v1 entries to v2 permissions", asy
   assert.equal(migrated.items.length, 1);
 });
 
-void test("tool disclosure bundles keep skills available in core-only contexts", async () => {
-  const source = await readFile(new URL("../src/context/tool-disclosure.ts", import.meta.url), "utf8");
+void test("tool disclosure bundles are centralized in capabilities metadata", async () => {
+  const disclosureSource = await readFile(new URL("../src/context/tool-disclosure.ts", import.meta.url), "utf8");
+  assert.match(disclosureSource, /chooseToolDisclosureBundle/);
+  assert.match(disclosureSource, /filterToolsForDisclosureBundle/);
 
-  assert.match(source, /core:\s*\[[\s\S]*"skills"[\s\S]*\],/);
-  assert.match(source, /analysis:\s*\[[\s\S]*"skills"[\s\S]*\],/);
-  assert.match(source, /formatting:\s*\[[\s\S]*"skills"[\s\S]*\],/);
-  assert.match(source, /structure:\s*\[[\s\S]*"skills"[\s\S]*\],/);
-  assert.match(source, /comments:\s*\[[\s\S]*"skills"[\s\S]*\],/);
+  const capabilitiesSource = await readFile(new URL("../src/tools/capabilities.ts", import.meta.url), "utf8");
+  assert.match(capabilitiesSource, /TOOL_DISCLOSURE_BUNDLES/);
+  assert.match(capabilitiesSource, /core:\s*buildCoreDisclosureBundle/);
+  assert.match(capabilitiesSource, /analysis:\s*buildCoreDisclosureBundle/);
+  assert.match(capabilitiesSource, /formatting:\s*buildCoreDisclosureBundle/);
+  assert.match(capabilitiesSource, /structure:\s*buildCoreDisclosureBundle/);
+  assert.match(capabilitiesSource, /comments:\s*buildCoreDisclosureBundle/);
 });

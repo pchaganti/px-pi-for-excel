@@ -124,6 +124,131 @@ export function buildCoreToolPromptLines(): string {
     .join("\n");
 }
 
+export type ToolDisclosureBundleId = "none" | "core" | "analysis" | "formatting" | "structure" | "comments" | "full";
+
+type ActiveToolDisclosureBundleId = Exclude<ToolDisclosureBundleId, "none">;
+
+type TriggeredToolDisclosureBundleId = Exclude<ToolDisclosureBundleId, "none" | "core" | "full">;
+
+const TOOL_DISCLOSURE_CATEGORY_SETS = {
+  core: ["read", "write", "navigate", "instructions", "recovery", "skills"],
+  analysis: ["read", "write", "navigate", "inspect", "instructions", "recovery", "skills"],
+  formatting: ["read", "write", "navigate", "format", "view", "instructions", "recovery", "skills"],
+  structure: ["read", "write", "navigate", "structure", "view", "instructions", "recovery", "skills"],
+  comments: ["read", "write", "navigate", "collaboration", "instructions", "recovery", "skills"],
+} as const satisfies Record<TriggeredToolDisclosureBundleId | "core", readonly CoreToolCapabilityCategory[]>;
+
+function buildCoreDisclosureBundle(categorySet: readonly CoreToolCapabilityCategory[]): readonly CoreToolName[] {
+  const allowedCategories = new Set<CoreToolCapabilityCategory>(categorySet);
+
+  return CORE_TOOL_CAPABILITIES
+    .filter((capability) => allowedCategories.has(capability.category))
+    .map((capability) => capability.name);
+}
+
+export const TOOL_DISCLOSURE_BUNDLES = {
+  core: buildCoreDisclosureBundle(TOOL_DISCLOSURE_CATEGORY_SETS.core),
+  analysis: buildCoreDisclosureBundle(TOOL_DISCLOSURE_CATEGORY_SETS.analysis),
+  formatting: buildCoreDisclosureBundle(TOOL_DISCLOSURE_CATEGORY_SETS.formatting),
+  structure: buildCoreDisclosureBundle(TOOL_DISCLOSURE_CATEGORY_SETS.structure),
+  comments: buildCoreDisclosureBundle(TOOL_DISCLOSURE_CATEGORY_SETS.comments),
+  full: CORE_TOOL_NAMES,
+} as const satisfies Record<ActiveToolDisclosureBundleId, readonly CoreToolName[]>;
+
+export const TOOL_DISCLOSURE_FULL_ACCESS_PATTERNS: readonly RegExp[] = [
+  /\ball tools?\b/,
+  /\bany tools?\b/,
+  /\bfull tool(set)?\b/,
+  /\bfull access\b/,
+  /\buse whatever tools?\b/,
+];
+
+export const TOOL_DISCLOSURE_TRIGGER_PATTERNS = {
+  comments: [
+    /\bcomment(s)?\b/,
+    /\breply\b/,
+    /\bthread(s)?\b/,
+    /\bresolve\b/,
+    /\bannotation(s)?\b/,
+  ],
+  analysis: [
+    /\btrace\b/,
+    /\bprecedent(s)?\b/,
+    /\bdependent(s)?\b/,
+    /\bdependenc(y|ies)\b/,
+    /\blineage\b/,
+    /\bformula (audit|debug|explain)\b/,
+  ],
+  structure: [
+    /\b(insert|delete|rename|move|shift)\b[^\n]{0,40}\b(row|rows|column|columns|sheet|sheets|tab|tabs)\b/,
+    /\b(add|remove)\b[^\n]{0,20}\b(sheet|sheets|tab|tabs)\b/,
+    /\bhide\b[^\n]{0,20}\b(sheet|sheets|tab|tabs)\b/,
+    /\bunhide\b[^\n]{0,20}\b(sheet|sheets|tab|tabs)\b/,
+    /\bfreeze panes?\b/,
+    /\bgridlines?\b/,
+    /\bheadings?\b/,
+    /\btab color\b/,
+  ],
+  formatting: [
+    /\bformat(ting)?\b/,
+    /\bstyle(s)?\b/,
+    /\bbold\b/,
+    /\bborder(s)?\b/,
+    /\bfont\b/,
+    /\bfill\b/,
+    /\bcolor(s)?\b/,
+    /\bhighlight\b/,
+    /\bconditional format(ting)?\b/,
+    /\bnumber format\b/,
+    /\bcurrency\b/,
+    /\bpercent(age)?\b/,
+    /\bdecimal(s)?\b/,
+    /\balignment\b/,
+    /\bwrap text\b/,
+  ],
+} as const satisfies Record<TriggeredToolDisclosureBundleId, readonly RegExp[]>;
+
+export const TOOL_DISCLOSURE_TRIGGER_BUNDLE_ORDER = [
+  "comments",
+  "analysis",
+  "structure",
+  "formatting",
+] as const satisfies readonly TriggeredToolDisclosureBundleId[];
+
+function matchesAny(text: string, patterns: readonly RegExp[]): boolean {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+export function chooseToolDisclosureBundle(prompt: string): ActiveToolDisclosureBundleId {
+  if (matchesAny(prompt, TOOL_DISCLOSURE_FULL_ACCESS_PATTERNS)) return "full";
+
+  const matchedBundles: TriggeredToolDisclosureBundleId[] = [];
+
+  for (const bundleId of TOOL_DISCLOSURE_TRIGGER_BUNDLE_ORDER) {
+    if (matchesAny(prompt, TOOL_DISCLOSURE_TRIGGER_PATTERNS[bundleId])) {
+      matchedBundles.push(bundleId);
+    }
+  }
+
+  // Mixed-intent requests (e.g. "insert a row and highlight it") need tools
+  // across categories. Fall back to full for the first call so continuation
+  // stripping doesn't block capabilities in the same turn.
+  if (matchedBundles.length > 1) return "full";
+  if (matchedBundles.length === 1) return matchedBundles[0];
+  return "core";
+}
+
+export function filterToolsForDisclosureBundle<TTool extends { name: string }>(
+  tools: readonly TTool[],
+  bundleId: ActiveToolDisclosureBundleId,
+): TTool[] {
+  if (bundleId === "full") return [...tools];
+
+  const allowed = new Set<string>(TOOL_DISCLOSURE_BUNDLES[bundleId]);
+  const filtered = tools.filter((tool) => allowed.has(tool.name));
+  return filtered.length > 0 ? filtered : [...tools];
+}
+
 export const AUXILIARY_UI_TOOL_NAMES = [
   "web_search",
   "mcp",
