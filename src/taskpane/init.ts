@@ -1244,6 +1244,18 @@ export async function initTaskpane(opts: {
     markUserAborted: (agent: Agent) => {
       abortedAgents.add(agent);
     },
+    onCreateTab: () => {
+      void createRuntimeFromUi();
+    },
+    onCloseActiveTab: () => {
+      const activeRuntime = getActiveRuntime();
+      if (!activeRuntime) {
+        showToast("No active session");
+        return;
+      }
+
+      void closeRuntimeWithRecovery(activeRuntime.runtimeId);
+    },
     onReopenLastClosed: () => {
       void reopenLastClosed();
     },
