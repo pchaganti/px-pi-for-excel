@@ -43,6 +43,35 @@ const PRESET_NAMES: NumberPreset[] = [
   "text",
 ];
 
+function cloneBuilderParams(value: FormatBuilderParams | undefined): FormatBuilderParams | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  return {
+    dp: value.dp,
+    negativeStyle: value.negativeStyle,
+    zeroStyle: value.zeroStyle,
+    thousandsSeparator: value.thousandsSeparator,
+    currencySymbol: value.currencySymbol,
+  };
+}
+
+function cloneFormatPreset(value: StoredFormatPreset): StoredFormatPreset {
+  return {
+    format: value.format,
+    builderParams: cloneBuilderParams(value.builderParams),
+  };
+}
+
+function cloneCustomPreset(value: StoredCustomPreset): StoredCustomPreset {
+  return {
+    format: value.format,
+    description: value.description,
+    builderParams: cloneBuilderParams(value.builderParams),
+  };
+}
+
 function normalizeNumberInRange(value: unknown, min: number, max: number): number | null {
   if (typeof value !== "number" || Number.isNaN(value) || !Number.isFinite(value)) {
     return null;
@@ -340,24 +369,29 @@ export function resolveConventions(stored: StoredConventions): ResolvedConventio
   const normalized = validateStoredConventions(stored);
 
   const presetFormats: Record<NumberPreset, StoredFormatPreset> = {
-    ...DEFAULT_PRESET_FORMATS,
+    number: cloneFormatPreset(DEFAULT_PRESET_FORMATS.number),
+    integer: cloneFormatPreset(DEFAULT_PRESET_FORMATS.integer),
+    currency: cloneFormatPreset(DEFAULT_PRESET_FORMATS.currency),
+    percent: cloneFormatPreset(DEFAULT_PRESET_FORMATS.percent),
+    ratio: cloneFormatPreset(DEFAULT_PRESET_FORMATS.ratio),
+    text: cloneFormatPreset(DEFAULT_PRESET_FORMATS.text),
   };
 
   for (const preset of PRESET_NAMES) {
     const override = normalized.presetFormats?.[preset];
     if (override) {
-      presetFormats[preset] = {
-        format: override.format,
-        builderParams: override.builderParams,
-      };
+      presetFormats[preset] = cloneFormatPreset(override);
     }
+  }
+
+  const customPresets: Record<string, StoredCustomPreset> = {};
+  for (const [name, preset] of Object.entries(normalized.customPresets ?? {})) {
+    customPresets[name] = cloneCustomPreset(preset);
   }
 
   return {
     presetFormats,
-    customPresets: {
-      ...(normalized.customPresets ?? {}),
-    },
+    customPresets,
     visualDefaults: {
       fontName: normalized.visualDefaults?.fontName ?? DEFAULT_VISUAL_DEFAULTS.fontName,
       fontSize: normalized.visualDefaults?.fontSize ?? DEFAULT_VISUAL_DEFAULTS.fontSize,

@@ -155,6 +155,27 @@ void describe("resolveConventions", () => {
     assert.deepEqual(resolved.customPresets, {});
   });
 
+  void test("returns deep-cloned preset defaults", () => {
+    const first = resolveConventions({});
+    const second = resolveConventions({});
+
+    const firstCurrencyBuilder = first.presetFormats.currency.builderParams;
+    const secondCurrencyBuilder = second.presetFormats.currency.builderParams;
+
+    assert.ok(firstCurrencyBuilder);
+    assert.ok(secondCurrencyBuilder);
+
+    if (!firstCurrencyBuilder || !secondCurrencyBuilder) {
+      assert.fail("Expected currency builder params to be defined");
+    }
+
+    firstCurrencyBuilder.dp = 4;
+    first.presetFormats.currency.format = "custom";
+
+    assert.equal(secondCurrencyBuilder.dp, DEFAULT_PRESET_FORMATS.currency.builderParams?.dp);
+    assert.equal(second.presetFormats.currency.format, DEFAULT_PRESET_FORMATS.currency.format);
+  });
+
   void test("merges overrides over defaults", () => {
     const resolved = resolveConventions({
       presetFormats: {
