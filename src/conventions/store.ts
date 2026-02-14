@@ -1,96 +1,32 @@
 /**
- * Persistent conventions storage.
- *
- * Reads/writes user-level formatting conventions from SettingsStore.
- * All fields are optional — omitted values fall back to hardcoded defaults.
+ * Persistent conventions storage + resolution.
  */
 
-import type { NumberPreset, StoredConventions, ResolvedConventions } from "./types.js";
-import { DEFAULT_CONVENTIONS, DEFAULT_CURRENCY_SYMBOL, PRESET_DEFAULT_DP } from "./defaults.js";
+import {
+  DEFAULT_COLOR_CONVENTIONS,
+  DEFAULT_HEADER_STYLE,
+  DEFAULT_PRESET_FORMATS,
+  DEFAULT_VISUAL_DEFAULTS,
+} from "./defaults.js";
+import type {
+  FormatBuilderParams,
+  NumberPreset,
+  ResolvedConventions,
+  StoredColorConventions,
+  StoredConventions,
+  StoredCustomPreset,
+  StoredFormatPreset,
+  StoredHeaderStyle,
+  StoredVisualDefaults,
+} from "./types.js";
+import { isRecord } from "../utils/type-guards.js";
 
 const CONVENTIONS_KEY = "conventions.v1";
-
-/** Presets that support dp overrides (excludes "text"). */
-const DP_OVERRIDABLE_PRESETS: readonly NumberPreset[] = [
-  "number", "integer", "currency", "percent", "ratio",
-];
 
 export interface ConventionsStore {
   get: (key: string) => Promise<unknown>;
   set: (key: string, value: unknown) => Promise<void>;
 }
-
-// ── Read / write ─────────────────────────────────────────────────────
-
-export async function getStoredConventions(store: ConventionsStore): Promise<StoredConventions> {
-  const raw = await store.get(CONVENTIONS_KEY);
-  if (!raw || typeof raw !== "object") return {};
-  return validateStoredConventions(raw as Record<string, unknown>);
-}
-
-export async function setStoredConventions(
-  store: ConventionsStore,
-  value: StoredConventions,
-): Promise<void> {
-  await store.set(CONVENTIONS_KEY, value);
-}
-
-// ── Resolve (merge stored over defaults) ─────────────────────────────
-
-export function resolveConventions(stored: StoredConventions): ResolvedConventions {
-  const conventions = {
-    negativeStyle: stored.negativeStyle ?? DEFAULT_CONVENTIONS.negativeStyle,
-    zeroStyle: stored.zeroStyle ?? DEFAULT_CONVENTIONS.zeroStyle,
-    thousandsSeparator: stored.thousandsSeparator ?? DEFAULT_CONVENTIONS.thousandsSeparator,
-    accountingPadding: stored.accountingPadding ?? DEFAULT_CONVENTIONS.accountingPadding,
-  };
-
-  const currencySymbol = stored.currencySymbol ?? DEFAULT_CURRENCY_SYMBOL;
-
-  const presetDp: Record<NumberPreset, number | null> = { ...PRESET_DEFAULT_DP };
-  if (stored.presetDp) {
-    for (const key of DP_OVERRIDABLE_PRESETS) {
-      const val = stored.presetDp[key];
-      if (typeof val === "number") {
-        presetDp[key] = val;
-      }
-    }
-  }
-
-  return { conventions, currencySymbol, presetDp };
-}
-
-/** Load stored conventions and resolve against defaults in one call. */
-export async function getResolvedConventions(
-  store: ConventionsStore,
-): Promise<ResolvedConventions> {
-  const stored = await getStoredConventions(store);
-  return resolveConventions(stored);
-}
-
-// ── Merge helper (for partial "set" updates) ─────────────────────────
-
-/** Merge partial updates into existing stored conventions. */
-export function mergeStoredConventions(
-  current: StoredConventions,
-  updates: StoredConventions,
-): StoredConventions {
-  const result: StoredConventions = { ...current };
-
-  if (updates.currencySymbol !== undefined) result.currencySymbol = updates.currencySymbol;
-  if (updates.negativeStyle !== undefined) result.negativeStyle = updates.negativeStyle;
-  if (updates.zeroStyle !== undefined) result.zeroStyle = updates.zeroStyle;
-  if (updates.thousandsSeparator !== undefined) result.thousandsSeparator = updates.thousandsSeparator;
-  if (updates.accountingPadding !== undefined) result.accountingPadding = updates.accountingPadding;
-
-  if (updates.presetDp !== undefined) {
-    result.presetDp = { ...current.presetDp, ...updates.presetDp };
-  }
-
-  return result;
-}
-
-// ── Diff helper (for system prompt / UI) ─────────────────────────────
 
 export interface ConventionDiff {
   field: string;
@@ -98,73 +34,534 @@ export interface ConventionDiff {
   value: string;
 }
 
-/** Return list of fields that differ from hardcoded defaults. */
+const PRESET_NAMES: NumberPreset[] = [
+  "number",
+  "integer",
+  "currency",
+  "percent",
+  "ratio",
+  "text",
+];
+
+function normalizeNumberInRange(value: unknown, min: number, max: number): number | null {
+  if (typeof value !== "number" || Number.isNaN(value) || !Number.isFinite(value)) {
+    return null;
+  }
+
+  if (value < min || value > max) {
+    return null;
+  }
+
+  return value;
+}
+
+function normalizeIntegerInRange(value: unknown, min: number, max: number): number | null {
+  const n = normalizeNumberInRange(value, min, max);
+  if (n === null || !Number.isInteger(n)) {
+    return null;
+  }
+
+  return n;
+}
+
+function normalizeHexColor(value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  const shortMatch = /^#([0-9a-fA-F]{3})$/u.exec(trimmed);
+  if (shortMatch) {
+    const [r, g, b] = shortMatch[1].split("");
+    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
+  }
+
+  const fullMatch = /^#([0-9a-fA-F]{6})$/u.exec(trimmed);
+  if (fullMatch) {
+    return `#${fullMatch[1].toUpperCase()}`;
+  }
+
+  return null;
+}
+
+function normalizeRgbColor(value: string): string | null {
+  const match = /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/u.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+
+  const channels = match.slice(1).map((v) => Number(v));
+  if (channels.some((channel) => Number.isNaN(channel) || channel < 0 || channel > 255)) {
+    return null;
+  }
+
+  const [r, g, b] = channels;
+  const toHex = (channel: number) => channel.toString(16).padStart(2, "0").toUpperCase();
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+export function normalizeConventionColor(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  return normalizeHexColor(value) ?? normalizeRgbColor(value);
+}
+
+function normalizeBuilderParams(raw: unknown): FormatBuilderParams | undefined {
+  if (!isRecord(raw)) {
+    return undefined;
+  }
+
+  const result: FormatBuilderParams = {};
+
+  const dp = normalizeIntegerInRange(raw.dp, 0, 10);
+  if (dp !== null) {
+    result.dp = dp;
+  }
+
+  if (raw.negativeStyle === "parens" || raw.negativeStyle === "minus") {
+    result.negativeStyle = raw.negativeStyle;
+  }
+
+  if (raw.zeroStyle === "dash" || raw.zeroStyle === "single-dash" || raw.zeroStyle === "zero" || raw.zeroStyle === "blank") {
+    result.zeroStyle = raw.zeroStyle;
+  }
+
+  if (typeof raw.thousandsSeparator === "boolean") {
+    result.thousandsSeparator = raw.thousandsSeparator;
+  }
+
+  if (typeof raw.currencySymbol === "string" && raw.currencySymbol.trim().length > 0) {
+    result.currencySymbol = raw.currencySymbol.trim();
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizeStoredFormatPreset(raw: unknown): StoredFormatPreset | null {
+  if (!isRecord(raw)) {
+    return null;
+  }
+
+  const format = typeof raw.format === "string" ? raw.format.trim() : "";
+  if (format.length === 0) {
+    return null;
+  }
+
+  const builderParams = normalizeBuilderParams(raw.builderParams);
+  return {
+    format,
+    builderParams,
+  };
+}
+
+function normalizeStoredCustomPreset(raw: unknown): StoredCustomPreset | null {
+  const base = normalizeStoredFormatPreset(raw);
+  if (!base || !isRecord(raw)) {
+    return null;
+  }
+
+  const description = typeof raw.description === "string"
+    ? raw.description.trim()
+    : undefined;
+
+  return {
+    ...base,
+    description: description && description.length > 0 ? description : undefined,
+  };
+}
+
+function normalizePresetFormats(raw: unknown): Partial<Record<NumberPreset, StoredFormatPreset>> | undefined {
+  if (!isRecord(raw)) {
+    return undefined;
+  }
+
+  const result: Partial<Record<NumberPreset, StoredFormatPreset>> = {};
+
+  for (const preset of PRESET_NAMES) {
+    const normalized = normalizeStoredFormatPreset(raw[preset]);
+    if (normalized) {
+      result[preset] = normalized;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizeCustomPresetName(name: string): string | null {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  return trimmed;
+}
+
+function normalizeCustomPresets(raw: unknown): Record<string, StoredCustomPreset> | undefined {
+  if (!isRecord(raw)) {
+    return undefined;
+  }
+
+  const result: Record<string, StoredCustomPreset> = {};
+
+  for (const [name, value] of Object.entries(raw)) {
+    const normalizedName = normalizeCustomPresetName(name);
+    if (!normalizedName) {
+      continue;
+    }
+
+    const normalizedPreset = normalizeStoredCustomPreset(value);
+    if (!normalizedPreset) {
+      continue;
+    }
+
+    result[normalizedName] = normalizedPreset;
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizeVisualDefaults(raw: unknown): StoredVisualDefaults | undefined {
+  if (!isRecord(raw)) {
+    return undefined;
+  }
+
+  const result: StoredVisualDefaults = {};
+
+  if (typeof raw.fontName === "string" && raw.fontName.trim().length > 0) {
+    result.fontName = raw.fontName.trim();
+  }
+
+  const fontSize = normalizeNumberInRange(raw.fontSize, 6, 72);
+  if (fontSize !== null) {
+    result.fontSize = fontSize;
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizeColorConventions(raw: unknown): StoredColorConventions | undefined {
+  if (!isRecord(raw)) {
+    return undefined;
+  }
+
+  const result: StoredColorConventions = {};
+
+  const hardcoded = normalizeConventionColor(raw.hardcodedValueColor);
+  if (hardcoded) {
+    result.hardcodedValueColor = hardcoded;
+  }
+
+  const crossSheet = normalizeConventionColor(raw.crossSheetLinkColor);
+  if (crossSheet) {
+    result.crossSheetLinkColor = crossSheet;
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizeHeaderStyle(raw: unknown): StoredHeaderStyle | undefined {
+  if (!isRecord(raw)) {
+    return undefined;
+  }
+
+  const result: StoredHeaderStyle = {};
+
+  const fillColor = normalizeConventionColor(raw.fillColor);
+  if (fillColor) {
+    result.fillColor = fillColor;
+  }
+
+  const fontColor = normalizeConventionColor(raw.fontColor);
+  if (fontColor) {
+    result.fontColor = fontColor;
+  }
+
+  if (typeof raw.bold === "boolean") {
+    result.bold = raw.bold;
+  }
+
+  if (typeof raw.wrapText === "boolean") {
+    result.wrapText = raw.wrapText;
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function validateStoredConventions(raw: unknown): StoredConventions {
+  if (!isRecord(raw)) {
+    return {};
+  }
+
+  const result: StoredConventions = {};
+
+  const presetFormats = normalizePresetFormats(raw.presetFormats);
+  if (presetFormats) {
+    result.presetFormats = presetFormats;
+  }
+
+  const customPresets = normalizeCustomPresets(raw.customPresets);
+  if (customPresets) {
+    result.customPresets = customPresets;
+  }
+
+  const visualDefaults = normalizeVisualDefaults(raw.visualDefaults);
+  if (visualDefaults) {
+    result.visualDefaults = visualDefaults;
+  }
+
+  const colorConventions = normalizeColorConventions(raw.colorConventions);
+  if (colorConventions) {
+    result.colorConventions = colorConventions;
+  }
+
+  const headerStyle = normalizeHeaderStyle(raw.headerStyle);
+  if (headerStyle) {
+    result.headerStyle = headerStyle;
+  }
+
+  return result;
+}
+
+export async function getStoredConventions(store: ConventionsStore): Promise<StoredConventions> {
+  const raw = await store.get(CONVENTIONS_KEY);
+  return validateStoredConventions(raw);
+}
+
+export async function setStoredConventions(
+  store: ConventionsStore,
+  value: StoredConventions,
+): Promise<void> {
+  await store.set(CONVENTIONS_KEY, validateStoredConventions(value));
+}
+
+export function resolveConventions(stored: StoredConventions): ResolvedConventions {
+  const normalized = validateStoredConventions(stored);
+
+  const presetFormats: Record<NumberPreset, StoredFormatPreset> = {
+    ...DEFAULT_PRESET_FORMATS,
+  };
+
+  for (const preset of PRESET_NAMES) {
+    const override = normalized.presetFormats?.[preset];
+    if (override) {
+      presetFormats[preset] = {
+        format: override.format,
+        builderParams: override.builderParams,
+      };
+    }
+  }
+
+  return {
+    presetFormats,
+    customPresets: {
+      ...(normalized.customPresets ?? {}),
+    },
+    visualDefaults: {
+      fontName: normalized.visualDefaults?.fontName ?? DEFAULT_VISUAL_DEFAULTS.fontName,
+      fontSize: normalized.visualDefaults?.fontSize ?? DEFAULT_VISUAL_DEFAULTS.fontSize,
+    },
+    colorConventions: {
+      hardcodedValueColor: normalized.colorConventions?.hardcodedValueColor
+        ?? DEFAULT_COLOR_CONVENTIONS.hardcodedValueColor,
+      crossSheetLinkColor: normalized.colorConventions?.crossSheetLinkColor
+        ?? DEFAULT_COLOR_CONVENTIONS.crossSheetLinkColor,
+    },
+    headerStyle: {
+      fillColor: normalized.headerStyle?.fillColor ?? DEFAULT_HEADER_STYLE.fillColor,
+      fontColor: normalized.headerStyle?.fontColor ?? DEFAULT_HEADER_STYLE.fontColor,
+      bold: normalized.headerStyle?.bold ?? DEFAULT_HEADER_STYLE.bold,
+      wrapText: normalized.headerStyle?.wrapText ?? DEFAULT_HEADER_STYLE.wrapText,
+    },
+  };
+}
+
+export async function getResolvedConventions(
+  store: ConventionsStore,
+): Promise<ResolvedConventions> {
+  const stored = await getStoredConventions(store);
+  return resolveConventions(stored);
+}
+
+function mergeSection<T extends object>(current: T | undefined, updates: T | undefined): T | undefined {
+  if (!updates) {
+    return current;
+  }
+
+  return {
+    ...(current ?? {}),
+    ...updates,
+  };
+}
+
+export function mergeStoredConventions(
+  current: StoredConventions,
+  updates: StoredConventions,
+): StoredConventions {
+  const normalizedCurrent = validateStoredConventions(current);
+  const normalizedUpdates = validateStoredConventions(updates);
+
+  const merged: StoredConventions = {
+    presetFormats: mergeSection(normalizedCurrent.presetFormats, normalizedUpdates.presetFormats),
+    customPresets: mergeSection(normalizedCurrent.customPresets, normalizedUpdates.customPresets),
+    visualDefaults: mergeSection(normalizedCurrent.visualDefaults, normalizedUpdates.visualDefaults),
+    colorConventions: mergeSection(normalizedCurrent.colorConventions, normalizedUpdates.colorConventions),
+    headerStyle: mergeSection(normalizedCurrent.headerStyle, normalizedUpdates.headerStyle),
+  };
+
+  return validateStoredConventions(merged);
+}
+
+export function removeCustomPresets(
+  current: StoredConventions,
+  presetNames: readonly string[],
+): StoredConventions {
+  const normalizedCurrent = validateStoredConventions(current);
+  const custom = { ...(normalizedCurrent.customPresets ?? {}) };
+
+  for (const name of presetNames) {
+    const normalized = normalizeCustomPresetName(name);
+    if (!normalized) {
+      continue;
+    }
+
+    delete custom[normalized];
+  }
+
+  return validateStoredConventions({
+    ...normalizedCurrent,
+    customPresets: Object.keys(custom).length > 0 ? custom : undefined,
+  });
+}
+
+function formatBoolean(value: boolean): string {
+  return value ? "yes" : "no";
+}
+
+function formatPresetDiffLabel(preset: string): string {
+  return `${preset} format`;
+}
+
 export function diffFromDefaults(resolved: ResolvedConventions): ConventionDiff[] {
   const diffs: ConventionDiff[] = [];
 
-  if (resolved.currencySymbol !== DEFAULT_CURRENCY_SYMBOL) {
-    diffs.push({ field: "currencySymbol", label: "Currency", value: resolved.currencySymbol });
-  }
-  if (resolved.conventions.negativeStyle !== DEFAULT_CONVENTIONS.negativeStyle) {
-    const label = resolved.conventions.negativeStyle === "parens" ? "parentheses" : "minus sign";
-    diffs.push({ field: "negativeStyle", label: "Negatives", value: label });
-  }
-  if (resolved.conventions.zeroStyle !== DEFAULT_CONVENTIONS.zeroStyle) {
-    const labels: Record<string, string> = { dash: "dash (--)", zero: "literal 0", blank: "blank" };
-    diffs.push({ field: "zeroStyle", label: "Zeros", value: labels[resolved.conventions.zeroStyle] ?? resolved.conventions.zeroStyle });
-  }
-  if (resolved.conventions.thousandsSeparator !== DEFAULT_CONVENTIONS.thousandsSeparator) {
-    diffs.push({ field: "thousandsSeparator", label: "Thousands sep", value: resolved.conventions.thousandsSeparator ? "yes" : "no" });
-  }
-  if (resolved.conventions.accountingPadding !== DEFAULT_CONVENTIONS.accountingPadding) {
-    diffs.push({ field: "accountingPadding", label: "Accounting padding", value: resolved.conventions.accountingPadding ? "yes" : "no" });
+  for (const preset of PRESET_NAMES) {
+    const current = resolved.presetFormats[preset]?.format;
+    const fallback = DEFAULT_PRESET_FORMATS[preset].format;
+    if (current !== fallback) {
+      diffs.push({
+        field: `presetFormats.${preset}`,
+        label: formatPresetDiffLabel(preset),
+        value: current,
+      });
+    }
   }
 
-  for (const key of DP_OVERRIDABLE_PRESETS) {
-    if (resolved.presetDp[key] !== PRESET_DEFAULT_DP[key]) {
-      const val = resolved.presetDp[key];
-      if (val !== null) {
-        diffs.push({ field: `presetDp.${key}`, label: `${key} dp`, value: `${val}` });
-      }
-    }
+  for (const [name, preset] of Object.entries(resolved.customPresets)) {
+    const suffix = preset.description ? ` — ${preset.description}` : "";
+    diffs.push({
+      field: `customPresets.${name}`,
+      label: `custom preset ${name}`,
+      value: `${preset.format}${suffix}`,
+    });
+  }
+
+  if (resolved.visualDefaults.fontName !== DEFAULT_VISUAL_DEFAULTS.fontName) {
+    diffs.push({
+      field: "visualDefaults.fontName",
+      label: "Default font",
+      value: resolved.visualDefaults.fontName,
+    });
+  }
+
+  if (resolved.visualDefaults.fontSize !== DEFAULT_VISUAL_DEFAULTS.fontSize) {
+    diffs.push({
+      field: "visualDefaults.fontSize",
+      label: "Default font size",
+      value: `${resolved.visualDefaults.fontSize}`,
+    });
+  }
+
+  if (resolved.colorConventions.hardcodedValueColor !== DEFAULT_COLOR_CONVENTIONS.hardcodedValueColor) {
+    diffs.push({
+      field: "colorConventions.hardcodedValueColor",
+      label: "Hardcoded value font color",
+      value: resolved.colorConventions.hardcodedValueColor,
+    });
+  }
+
+  if (resolved.colorConventions.crossSheetLinkColor !== DEFAULT_COLOR_CONVENTIONS.crossSheetLinkColor) {
+    diffs.push({
+      field: "colorConventions.crossSheetLinkColor",
+      label: "Cross-sheet link font color",
+      value: resolved.colorConventions.crossSheetLinkColor,
+    });
+  }
+
+  if (resolved.headerStyle.fillColor !== DEFAULT_HEADER_STYLE.fillColor) {
+    diffs.push({
+      field: "headerStyle.fillColor",
+      label: "Header fill",
+      value: resolved.headerStyle.fillColor,
+    });
+  }
+
+  if (resolved.headerStyle.fontColor !== DEFAULT_HEADER_STYLE.fontColor) {
+    diffs.push({
+      field: "headerStyle.fontColor",
+      label: "Header font color",
+      value: resolved.headerStyle.fontColor,
+    });
+  }
+
+  if (resolved.headerStyle.bold !== DEFAULT_HEADER_STYLE.bold) {
+    diffs.push({
+      field: "headerStyle.bold",
+      label: "Header bold",
+      value: formatBoolean(resolved.headerStyle.bold),
+    });
+  }
+
+  if (resolved.headerStyle.wrapText !== DEFAULT_HEADER_STYLE.wrapText) {
+    diffs.push({
+      field: "headerStyle.wrapText",
+      label: "Header wrap text",
+      value: formatBoolean(resolved.headerStyle.wrapText),
+    });
   }
 
   return diffs;
 }
 
-// ── Validation ───────────────────────────────────────────────────────
+export function normalizePresetName(name: string): string {
+  return name.trim();
+}
 
-function validateStoredConventions(raw: Record<string, unknown>): StoredConventions {
-  const result: StoredConventions = {};
+export function isBuiltinPresetName(value: string): value is NumberPreset {
+  return value === "number"
+    || value === "integer"
+    || value === "currency"
+    || value === "percent"
+    || value === "ratio"
+    || value === "text";
+}
 
-  if (typeof raw.currencySymbol === "string" && raw.currencySymbol.trim().length > 0) {
-    result.currencySymbol = raw.currencySymbol.trim();
-  }
-  if (raw.negativeStyle === "parens" || raw.negativeStyle === "minus") {
-    result.negativeStyle = raw.negativeStyle;
-  }
-  if (raw.zeroStyle === "dash" || raw.zeroStyle === "zero" || raw.zeroStyle === "blank") {
-    result.zeroStyle = raw.zeroStyle;
-  }
-  if (typeof raw.thousandsSeparator === "boolean") {
-    result.thousandsSeparator = raw.thousandsSeparator;
-  }
-  if (typeof raw.accountingPadding === "boolean") {
-    result.accountingPadding = raw.accountingPadding;
-  }
-  if (raw.presetDp && typeof raw.presetDp === "object") {
-    const dpRaw = raw.presetDp as Record<string, unknown>;
-    const dp: Partial<Record<NumberPreset, number>> = {};
-    for (const key of DP_OVERRIDABLE_PRESETS) {
-      const val = dpRaw[key];
-      if (typeof val === "number" && Number.isInteger(val) && val >= 0 && val <= 10) {
-        dp[key] = val;
-      }
-    }
-    if (Object.keys(dp).length > 0) {
-      result.presetDp = dp;
-    }
+export function isPresetName(value: string, resolved: ResolvedConventions): boolean {
+  if (isBuiltinPresetName(value)) {
+    return true;
   }
 
-  return result;
+  return Object.prototype.hasOwnProperty.call(resolved.customPresets, value);
+}
+
+export function getPresetFormat(
+  resolved: ResolvedConventions,
+  presetName: string,
+): StoredFormatPreset | StoredCustomPreset | null {
+  if (isBuiltinPresetName(presetName)) {
+    return resolved.presetFormats[presetName];
+  }
+
+  return resolved.customPresets[presetName] ?? null;
 }

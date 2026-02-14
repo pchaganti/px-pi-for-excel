@@ -33,14 +33,26 @@ void test("system prompt omits convention overrides when all defaults", () => {
 
 void test("system prompt includes convention overrides when customized", () => {
   const conventions = resolveConventions({
-    currencySymbol: "£",
-    negativeStyle: "minus",
+    visualDefaults: {
+      fontName: "Calibri",
+    },
+    colorConventions: {
+      hardcodedValueColor: "#FF0000",
+    },
+    customPresets: {
+      bps: {
+        format: '#,##0 "bps"',
+        description: "Basis points",
+      },
+    },
   });
   const prompt = buildSystemPrompt({ conventions });
 
+  assert.match(prompt, /Custom format presets/);
+  assert.match(prompt, /`bps` — Basis points/);
   assert.match(prompt, /Active convention overrides/);
-  assert.match(prompt, /Currency: £/);
-  assert.match(prompt, /Negatives: minus sign/);
+  assert.match(prompt, /Default font: Calibri/);
+  assert.match(prompt, /Hardcoded value font color: #FF0000/);
 });
 
 void test("system prompt lists the conventions tool", () => {

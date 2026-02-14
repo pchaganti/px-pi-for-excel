@@ -680,34 +680,45 @@ function humanizeInstructions(p: Record<string, unknown>): ParamItem[] {
 
 function humanizeConventions(p: Record<string, unknown>): ParamItem[] {
   const items: ParamItem[] = [];
-  const action = str(p.action);
+  const action = str(p.action || "get");
 
-  if (action) {
-    items.push({ label: "Action", value: action });
+  items.push({ label: "Action", value: action });
+
+  if (action !== "set") {
+    return items;
   }
 
-  if (action === "set") {
-    const fields: Array<{ key: string; label: string }> = [
-      { key: "currency_symbol", label: "Currency" },
-      { key: "negative_style", label: "Negatives" },
-      { key: "zero_style", label: "Zeros" },
-      { key: "thousands_separator", label: "Thousands sep" },
-      { key: "accounting_padding", label: "Accounting padding" },
-      { key: "number_dp", label: "Number dp" },
-      { key: "currency_dp", label: "Currency dp" },
-      { key: "percent_dp", label: "Percent dp" },
-      { key: "ratio_dp", label: "Ratio dp" },
-    ];
-
-    for (const { key, label } of fields) {
-      const val = p[key];
-      if (val !== undefined && val !== null) {
-        const display = typeof val === "string" || typeof val === "number" || typeof val === "boolean"
-          ? String(val)
-          : JSON.stringify(val);
-        items.push({ label, value: display });
-      }
+  const presetFormats = p.preset_formats;
+  if (presetFormats && typeof presetFormats === "object") {
+    const count = Object.keys(presetFormats).length;
+    if (count > 0) {
+      items.push({ label: "Built-in presets", value: `${count} updated` });
     }
+  }
+
+  const customPresets = p.custom_presets;
+  if (customPresets && typeof customPresets === "object") {
+    const count = Object.keys(customPresets).length;
+    if (count > 0) {
+      items.push({ label: "Custom presets", value: `${count} upserted` });
+    }
+  }
+
+  const removeCustom = p.remove_custom_presets;
+  if (Array.isArray(removeCustom) && removeCustom.length > 0) {
+    items.push({ label: "Remove presets", value: removeCustom.join(", ") });
+  }
+
+  if (p.visual_defaults) {
+    items.push({ label: "Visual defaults", value: "updated" });
+  }
+
+  if (p.color_conventions) {
+    items.push({ label: "Color conventions", value: "updated" });
+  }
+
+  if (p.header_style) {
+    items.push({ label: "Header style", value: "updated" });
   }
 
   return items;

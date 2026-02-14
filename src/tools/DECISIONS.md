@@ -81,19 +81,19 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 ## Conventions tool (`conventions`)
 - **Actions:** `get` (view current), `set` (partial update), `reset` (restore defaults).
 - **Storage:** `SettingsStore` key `conventions.v1` (user-level only for now).
-- **Schema:** `StoredConventions` — all fields optional. Omitted = hardcoded default.
-- **Configurable fields:**
-  - `currency_symbol` — default `$`
-  - `negative_style` — `parens` (default) or `minus`
-  - `zero_style` — `dash` (default), `zero`, or `blank`
-  - `thousands_separator` — `true` (default)
-  - `accounting_padding` — `true` (default)
-  - `number_dp`, `currency_dp`, `percent_dp`, `ratio_dp` — default dp per preset
-- **Resolution:** stored overrides merge over `DEFAULT_CONVENTIONS` / `DEFAULT_CURRENCY_SYMBOL` / `PRESET_DEFAULT_DP`. `format_cells` loads resolved config each call.
-- **System prompt:** non-default values injected as "Active convention overrides" section.
+- **Schema:** `StoredConventions` now stores:
+  - built-in preset format strings (`presetFormats.<preset>.format`)
+  - optional builder metadata (`builderParams`) for quick-toggle regeneration
+  - custom presets (`customPresets`)
+  - visual defaults (`visualDefaults.fontName/fontSize`)
+  - font-color conventions (`colorConventions`)
+  - header style (`headerStyle`)
+- **Format-string-first model:** `format` is the source of truth. `builderParams` are auxiliary metadata and may be absent for hand-authored/custom formats.
+- **Resolution:** stored overrides merge over defaults for preset formats, colors, header style, and default font. `format_cells` loads resolved conventions each call.
+- **System prompt:** non-default values are injected as "Active convention overrides"; configured custom preset names are listed for agent use.
 - **Execution policy:** classified as read/none (mutates local config, not workbook).
-- **Validation:** stored values are validated on read (invalid values silently dropped). dp constrained to integer 0–10.
-- **Rationale:** users shouldn't have to repeat "I use pounds" or "no parentheses" every session. Structured config is cleaner than free-text instructions for this.
+- **Validation:** nested sections are validated on read/write. Colors accept hex or `rgb(...)` input and are normalized to hex.
+- **Rationale:** power users can set exact Excel format strings while still keeping optional quick-toggle ergonomics for generated presets.
 
 ## Instructions tool (`instructions`)
 - **Scopes:** `user` (global, local machine) and `workbook` (scoped by workbook identity hash).
