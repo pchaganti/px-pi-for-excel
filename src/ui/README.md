@@ -57,7 +57,7 @@ Tailwind v4 puts all utilities inside `@layer utilities`. Unlayered CSS always b
 > Note: `theme.css` is an entrypoint; styles are split into `src/ui/theme/*.css` and imported in order:
 > - `theme/tokens.css` (1)
 > - `theme/base.css` (2)
-> - `theme/components.css` (3–10)
+> - `theme/components.css` (3–10, import-only entrypoint) → imports `theme/components/{tabs,input,empty-state,working-indicator,widgets,status-bar,toasts,menus,welcome,files,welcome-login}.css`
 > - `theme/overlays.css` (10b) → imports `theme/overlays/{primitives,extensions,integrations,provider-resume-shortcuts,recovery,experimental}.css`
 > - `theme/content-overrides.css` (11) → imports `theme/content/{messages,tool-cards,csv-table,dependency-tree,tool-card-markdown,message-components}.css`
 > - `theme/dialogs.css` (12, stable selectors)
@@ -87,7 +87,7 @@ pi-web-ui uses Light DOM (`createRenderRoot() { return this; }`), so styles leak
 | `theme-mode.ts` | — | Applies/removes `.dark` based on Office theme background (fallback: `prefers-color-scheme`) |
 | `loading.ts` | — | Splash screen shown during init |
 | `provider-login.ts` | — | API key entry rows for the welcome overlay |
-| `overlay-dialog.ts` | — | Shared overlay lifecycle helper (single-instance toggle, Escape/backdrop close, focus restore) |
+| `overlay-dialog.ts` | — | Shared overlay lifecycle helper (single-instance toggle, Escape/backdrop close, focus restore) + shared top-right close button factory (`createOverlayCloseButton`) |
 | `overlay-ids.ts` | — | Shared overlay id constants used across builtins/extensions/taskpane |
 
 ## Wiring (taskpane.ts)
