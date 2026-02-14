@@ -173,11 +173,12 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Overwrite perf guard (`python_transform_range`):** pre-write `values/formulas` reads are skipped for large `allow_overwrite: true` outputs (> `MAX_RECOVERY_CELLS`) since those snapshots would be dropped anyway.
 - **Rationale:** unblock heavier offline analysis/conversion workflows for issue #25 while keeping workbook writes explicit/auditable and adding an approval checkpoint for local execution.
 
-## External tool integrations (`web_search`, `mcp`)
+## External tool integrations (`web_search`, `fetch_page`, `mcp`)
 - **Packaging:** exposed as opt-in **integrations** instead of always-on core tools.
 - **Scopes:** integrations can be enabled per-**session** and/or per-**workbook**; effective integrations are the union (ordered by catalog).
 - **Global gate:** `external.tools.enabled` defaults to **off** and blocks all external integration tools until explicitly enabled.
-- **Web search provider:** Brave Search (`web_search`) with optional proxy routing and explicit "Sent" attribution in results.
+- **Web search providers:** Serper.dev (default), Tavily, and Brave Search (`web_search`) with optional proxy routing and explicit "Sent" attribution in results.
+- **Page retrieval companion:** `fetch_page` fetches URL content and returns extracted markdown for source grounding workflows (`web_search` → `fetch_page`).
 - **MCP integration:** configurable server registry (`mcp.servers.v1`), UI add/remove/test, and a single `mcp` gateway tool for list/search/describe/call flows.
 - **Rationale:** satisfy issue #24 with explicit consent, clear attribution, and minimal overlap with the extension system.
 
@@ -251,6 +252,9 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 
 ## Workbook backups (`workbook_history`)
 - **Goal:** prefer low-friction workflows over pre-execution approval selectors by making rollback easy and reliable.
+- **Execution mode toggle:** `/yolo` switches between:
+  - `YOLO` (default): mutate tools run without extra pre-execution confirmations.
+  - `Safe`: mutate tools require pre-execution confirmation via runtime gate.
 - **Automatic backups:** successful `write_cells`, `fill_formula`, `python_transform_range`, `format_cells`, `conditional_format`, mutating `comments` actions, and supported `modify_structure` actions (`rename_sheet`, `hide_sheet`, `unhide_sheet`, `insert_rows`, `insert_columns`, `add_sheet`, and `duplicate_sheet` when the duplicate has no value data) store pre-mutation snapshots in local `workbook.recovery-snapshots.v1`.
 - **Safety limits:** backup capture is skipped for very large writes (> `MAX_RECOVERY_CELLS`) to avoid oversized local state.
 - **Workbook identity guardrails:** append/list/delete/clear/restore paths are scoped to the active workbook identity; restore rejects identity-less or cross-workbook backups.
