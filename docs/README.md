@@ -6,6 +6,7 @@ This folder contains **current** docs that should match shipped behavior.
 - [Install Pi for Excel](./install.md)
 - [Deploy hosted build on Vercel](./deploy-vercel.md)
 - [Release smoke test checklist](./release-smoke-test-checklist.md)
+- [Release smoke run logs](./release-smoke-runs/README.md)
 
 ## Runtime features
 - [Extensions (MVP authoring guide)](./extensions.md)
