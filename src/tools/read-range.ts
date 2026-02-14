@@ -12,7 +12,8 @@ import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { excelRun, getRange, qualifiedAddress, parseCell, colToLetter } from "../excel/helpers.js";
 import { formatAsMarkdownTable, extractFormulas, findErrors } from "../utils/format.js";
 import { getErrorMessage } from "../utils/errors.js";
-import { humanizeFormat } from "../conventions/index.js";
+import { buildResolvedFormatLabels, getResolvedConventions, humanizeFormat } from "../conventions/index.js";
+import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 import type { ReadRangeCsvDetails } from "./tool-details.js";
 
 const schema = Type.Object({
@@ -134,7 +135,15 @@ export function createReadRangeTool(): AgentTool<typeof schema> {
         } else if (mode === "csv") {
           return formatCsvOutput(fullAddress, result, startCell);
         } else {
-          return formatDetailed(fullAddress, result, startCell);
+          let resolvedLabels: Map<string, string> | undefined;
+          try {
+            const conventions = await getResolvedConventions(getAppStorage().settings);
+            resolvedLabels = buildResolvedFormatLabels(conventions);
+          } catch {
+            // Ignore conventions lookup failures in read-only output.
+          }
+
+          return formatDetailed(fullAddress, result, startCell, resolvedLabels);
         }
       } catch (e: unknown) {
         return {
@@ -234,6 +243,7 @@ function formatDetailed(
   address: string,
   result: ReadRangeResult,
   startCell: string,
+  resolvedLabels?: Map<string, string>,
 ): AgentToolResult<undefined> {
   const lines: string[] = [];
 
@@ -283,7 +293,7 @@ function formatDetailed(
     lines.push("");
     lines.push("### Number Formats");
     for (const [fmt, cells] of formatMap) {
-      const label = humanizeFormat(fmt);
+      const label = humanizeFormat(fmt, resolvedLabels);
       const display = label !== fmt ? `**${label}** (\`${fmt}\`)` : `\`${fmt}\``;
       lines.push(`- ${display} → ${cells.join(", ")}`);
     }

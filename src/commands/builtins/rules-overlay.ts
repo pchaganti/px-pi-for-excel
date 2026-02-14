@@ -1,5 +1,5 @@
 /**
- * Rules editor overlay — rules (user + workbook) and number format conventions.
+ * Rules editor overlay — rules (user + workbook) and conventions.
  */
 
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
@@ -14,12 +14,22 @@ import {
 } from "../../rules/store.js";
 import {
   getStoredConventions,
-  setStoredConventions,
+  isBuiltinPresetName,
+  normalizeConventionColor,
   resolveConventions,
-  mergeStoredConventions,
+  setStoredConventions,
 } from "../../conventions/store.js";
-import { DEFAULT_CURRENCY_SYMBOL, PRESET_DEFAULT_DP } from "../../conventions/defaults.js";
-import type { StoredConventions, NumberPreset } from "../../conventions/types.js";
+import {
+  DEFAULT_CURRENCY_SYMBOL,
+  DEFAULT_PRESET_FORMATS,
+} from "../../conventions/defaults.js";
+import { buildFormatString } from "../../conventions/format-builder.js";
+import type {
+  NumberPreset,
+  StoredConventions,
+  StoredCustomPreset,
+  StoredFormatPreset,
+} from "../../conventions/types.js";
 import {
   closeOverlayById,
   createOverlayDialog,
@@ -30,6 +40,15 @@ import { showToast } from "../../ui/toast.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../../workbook/context.js";
 
 type RulesTab = "user" | "workbook" | "conventions";
+
+const BUILTIN_PRESET_NAMES: NumberPreset[] = [
+  "number",
+  "integer",
+  "currency",
+  "percent",
+  "ratio",
+  "text",
+];
 
 function setActiveTab(
   tabButtons: Record<RulesTab, HTMLButtonElement>,
@@ -52,243 +71,719 @@ function formatCounterLabel(chars: number, limit: number): string {
   return `${chars.toLocaleString()} / ${limit.toLocaleString()} chars`;
 }
 
-// ── Conventions form builder ─────────────────────────────────────────
-
-interface ConventionsFormState {
-  currencySymbol: string;
-  negativeStyle: "parens" | "minus";
-  zeroStyle: "dash" | "zero" | "blank";
-  thousandsSeparator: boolean;
-  accountingPadding: boolean;
-  numberDp: number;
-  currencyDp: number;
-  percentDp: number;
-  ratioDp: number;
-}
-
-function updateConventionsFormField<K extends keyof ConventionsFormState>(
-  state: ConventionsFormState,
-  key: K,
-  value: ConventionsFormState[K],
-): void {
-  state[key] = value;
-}
-
-function resolvedToFormState(stored: StoredConventions): ConventionsFormState {
-  const resolved = resolveConventions(stored);
-  return {
-    currencySymbol: resolved.currencySymbol,
-    negativeStyle: resolved.conventions.negativeStyle,
-    zeroStyle: resolved.conventions.zeroStyle,
-    thousandsSeparator: resolved.conventions.thousandsSeparator,
-    accountingPadding: resolved.conventions.accountingPadding,
-    numberDp: resolved.presetDp.number ?? PRESET_DEFAULT_DP.number ?? 2,
-    currencyDp: resolved.presetDp.currency ?? PRESET_DEFAULT_DP.currency ?? 2,
-    percentDp: resolved.presetDp.percent ?? PRESET_DEFAULT_DP.percent ?? 1,
-    ratioDp: resolved.presetDp.ratio ?? PRESET_DEFAULT_DP.ratio ?? 1,
-  };
-}
-
-function formStateToStored(form: ConventionsFormState): StoredConventions {
-  const presetDp: Partial<Record<NumberPreset, number>> = {
-    number: form.numberDp,
-    currency: form.currencyDp,
-    percent: form.percentDp,
-    ratio: form.ratioDp,
-  };
-
-  const stored: StoredConventions = {
-    currencySymbol: form.currencySymbol,
-    negativeStyle: form.negativeStyle,
-    zeroStyle: form.zeroStyle,
-    thousandsSeparator: form.thousandsSeparator,
-    accountingPadding: form.accountingPadding,
-    presetDp,
-  };
-
-  return stored;
-}
-
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className?: string,
 ): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  if (className) e.className = className;
-  return e;
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  return node;
 }
 
-function createSelectField(
-  label: string,
-  options: Array<{ value: string; label: string }>,
-  currentValue: string,
-  onChange: (value: string) => void,
-): HTMLElement {
-  const row = el("div", "pi-conventions-field");
+function cloneStoredConventions(value: StoredConventions): StoredConventions {
+  return structuredClone(value);
+}
 
-  const labelEl = el("label", "pi-conventions-label");
-  labelEl.textContent = label;
-
-  const select = el("select", "pi-conventions-select");
-  for (const opt of options) {
-    const optEl = document.createElement("option");
-    optEl.value = opt.value;
-    optEl.textContent = opt.label;
-    if (opt.value === currentValue) optEl.selected = true;
-    select.appendChild(optEl);
+function getPresetSection(draft: StoredConventions): Partial<Record<NumberPreset, StoredFormatPreset>> {
+  if (!draft.presetFormats) {
+    draft.presetFormats = {};
   }
-  select.addEventListener("change", () => { onChange(select.value); });
-
-  row.append(labelEl, select);
-  return row;
+  return draft.presetFormats;
 }
 
-function createTextInputField(
-  label: string,
-  currentValue: string,
-  opts: { placeholder?: string; narrow?: boolean },
-  onChange: (value: string) => void,
-): HTMLElement {
-  const row = el("div", "pi-conventions-field");
-
-  const labelEl = el("label", "pi-conventions-label");
-  labelEl.textContent = label;
-
-  const cls = opts.narrow ? "pi-conventions-input pi-conventions-input--narrow" : "pi-conventions-input";
-  const input = el("input", cls);
-  input.type = "text";
-  input.value = currentValue;
-  if (opts.placeholder) input.placeholder = opts.placeholder;
-  input.addEventListener("input", () => { onChange(input.value); });
-
-  row.append(labelEl, input);
-  return row;
+function getCustomPresetSection(draft: StoredConventions): Record<string, StoredCustomPreset> {
+  if (!draft.customPresets) {
+    draft.customPresets = {};
+  }
+  return draft.customPresets;
 }
 
-function createToggleField(
-  label: string,
-  currentValue: boolean,
-  onChange: (value: boolean) => void,
-): HTMLElement {
-  const row = el("div", "pi-conventions-field");
+function getVisualDefaults(draft: StoredConventions): NonNullable<StoredConventions["visualDefaults"]> {
+  if (!draft.visualDefaults) {
+    draft.visualDefaults = {};
+  }
+  return draft.visualDefaults;
+}
 
-  const labelEl = el("label", "pi-conventions-label");
-  labelEl.textContent = label;
+function getColorConventions(draft: StoredConventions): NonNullable<StoredConventions["colorConventions"]> {
+  if (!draft.colorConventions) {
+    draft.colorConventions = {};
+  }
+  return draft.colorConventions;
+}
 
-  const toggle = el("button", "pi-conventions-toggle");
-  toggle.type = "button";
-  toggle.setAttribute("role", "switch");
+function getHeaderStyle(draft: StoredConventions): NonNullable<StoredConventions["headerStyle"]> {
+  if (!draft.headerStyle) {
+    draft.headerStyle = {};
+  }
+  return draft.headerStyle;
+}
 
-  const updateVisual = (val: boolean) => {
-    toggle.classList.toggle("is-on", val);
-    toggle.setAttribute("aria-checked", String(val));
-    toggle.textContent = val ? "On" : "Off";
-  };
-  updateVisual(currentValue);
+function createColorSwatch(color: string): HTMLElement {
+  const swatch = el("input", "pi-conventions-color-swatch");
+  swatch.type = "color";
+  swatch.disabled = true;
+  swatch.tabIndex = -1;
+  swatch.value = normalizeConventionColor(color) ?? "#000000";
+  return swatch;
+}
 
-  let value = currentValue;
-  toggle.addEventListener("click", () => {
-    value = !value;
-    updateVisual(value);
-    onChange(value);
+function createColorLegend(labelText: string, color: string): HTMLElement {
+  const item = el("div", "pi-conventions-color-legend");
+
+  const label = el("span", "pi-conventions-color-legend-label");
+  label.textContent = labelText;
+
+  const value = el("span", "pi-conventions-color-legend-value");
+  value.textContent = normalizeConventionColor(color) ?? color;
+
+  item.append(createColorSwatch(color), label, value);
+  return item;
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function createHeaderPreview(
+  fillColor: string,
+  fontColor: string,
+  bold: boolean,
+  wrapText: boolean,
+): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", "pi-conventions-header-preview");
+  svg.setAttribute("viewBox", "0 0 360 52");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Header style preview");
+
+  const normalizedFill = normalizeConventionColor(fillColor) ?? "#4472C4";
+  const normalizedFont = normalizeConventionColor(fontColor) ?? "#FFFFFF";
+
+  const labels = ["Revenue", "Cost of Goods Sold", "Margin"];
+
+  for (const [index, label] of labels.entries()) {
+    const x = index * 120;
+
+    const rect = document.createElementNS(SVG_NS, "rect");
+    rect.setAttribute("x", String(x));
+    rect.setAttribute("y", "0");
+    rect.setAttribute("width", "120");
+    rect.setAttribute("height", "52");
+    rect.setAttribute("fill", normalizedFill);
+    rect.setAttribute("stroke", "rgba(0,0,0,0.10)");
+
+    const text = document.createElementNS(SVG_NS, "text");
+    text.setAttribute("x", String(x + 8));
+    text.setAttribute("fill", normalizedFont);
+    text.setAttribute("font-size", "12");
+    text.setAttribute("font-family", "DM Sans, sans-serif");
+    text.setAttribute("font-weight", bold ? "700" : "400");
+
+    if (wrapText && label === "Cost of Goods Sold") {
+      text.setAttribute("y", "20");
+      const line1 = document.createElementNS(SVG_NS, "tspan");
+      line1.setAttribute("x", String(x + 8));
+      line1.setAttribute("dy", "0");
+      line1.textContent = "Cost of Goods";
+      const line2 = document.createElementNS(SVG_NS, "tspan");
+      line2.setAttribute("x", String(x + 8));
+      line2.setAttribute("dy", "14");
+      line2.textContent = "Sold";
+      text.append(line1, line2);
+    } else {
+      text.setAttribute("y", "30");
+      text.textContent = label === "Cost of Goods Sold" ? "Cost of Goods…" : label;
+    }
+
+    svg.append(rect, text);
+  }
+
+  return svg;
+}
+
+function normalizePresetName(name: string): string {
+  return name.trim();
+}
+
+function createPresetPreview(presetName: string, preset: StoredFormatPreset): { positive: string; negative: string; zero: string } {
+  const params = preset.builderParams;
+  if (!params) {
+    return {
+      positive: "Custom",
+      negative: "Custom",
+      zero: "Custom",
+    };
+  }
+
+  const dp = params.dp ?? 2;
+  const formatter = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: dp,
+    maximumFractionDigits: dp,
+    useGrouping: params.thousandsSeparator ?? true,
   });
 
-  row.append(labelEl, toggle);
+  const symbol = params.currencySymbol ?? (presetName === "currency" ? DEFAULT_CURRENCY_SYMBOL : "");
+  const suffix = presetName === "percent" ? "%" : presetName === "ratio" ? "x" : "";
+
+  const positiveCore = `${symbol}${formatter.format(1234.5)}${suffix}`;
+  const negativeCore = params.negativeStyle === "minus"
+    ? `${symbol}-${formatter.format(1234.5)}${suffix}`
+    : `${symbol}(${formatter.format(1234.5)}${suffix})`;
+
+  let zeroCore = `${symbol}0${suffix}`;
+  if (params.zeroStyle === "dash") {
+    zeroCore = `${symbol}--${suffix}`;
+  } else if (params.zeroStyle === "single-dash") {
+    zeroCore = `${symbol}-${suffix}`;
+  } else if (params.zeroStyle === "blank") {
+    zeroCore = "(blank)";
+  }
+
+  return {
+    positive: positiveCore,
+    negative: negativeCore,
+    zero: zeroCore,
+  };
+}
+
+function createPreviewChip(label: string, value: string): HTMLElement {
+  const chip = el("div", "pi-conventions-preview-chip");
+  const title = el("div", "pi-conventions-preview-chip-label");
+  title.textContent = label;
+  const content = el("div", "pi-conventions-preview-chip-value");
+  content.textContent = value;
+  chip.append(title, content);
+  return chip;
+}
+
+function createLabeledInput(args: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+  placeholder?: string;
+}): HTMLElement {
+  const row = el("div", "pi-conventions-field");
+  const label = el("label", "pi-conventions-label");
+  label.textContent = args.label;
+
+  const input = el("input", args.className ?? "pi-conventions-input");
+  input.type = "text";
+  input.value = args.value;
+  if (args.placeholder) {
+    input.placeholder = args.placeholder;
+  }
+
+  input.addEventListener("change", () => {
+    args.onChange(input.value);
+  });
+
+  row.append(label, input);
   return row;
 }
 
-function createNumberField(
-  label: string,
-  currentValue: number,
-  opts: { min?: number; max?: number },
-  onChange: (value: number) => void,
-): HTMLElement {
+function createLabeledNumberInput(args: {
+  label: string;
+  value: number;
+  min?: number;
+  max?: number;
+  onChange: (value: number) => void;
+}): HTMLElement {
   const row = el("div", "pi-conventions-field");
-
-  const labelEl = el("label", "pi-conventions-label");
-  labelEl.textContent = label;
+  const label = el("label", "pi-conventions-label");
+  label.textContent = args.label;
 
   const input = el("input", "pi-conventions-input pi-conventions-input--narrow");
   input.type = "number";
-  input.value = String(currentValue);
-  if (opts.min !== undefined) input.min = String(opts.min);
-  if (opts.max !== undefined) input.max = String(opts.max);
+  input.value = String(args.value);
+  if (args.min !== undefined) input.min = String(args.min);
+  if (args.max !== undefined) input.max = String(args.max);
 
-  input.addEventListener("input", () => {
-    const n = parseInt(input.value, 10);
-    if (!Number.isNaN(n)) onChange(n);
+  input.addEventListener("change", () => {
+    const parsed = Number.parseInt(input.value, 10);
+    if (!Number.isNaN(parsed)) {
+      args.onChange(parsed);
+    }
   });
 
-  row.append(labelEl, input);
+  row.append(label, input);
   return row;
 }
 
-type ConventionsFormUpdater = <K extends keyof ConventionsFormState>(key: K, value: ConventionsFormState[K]) => void;
+function createToggleButton(args: {
+  label: string;
+  value: boolean;
+  onChange: (value: boolean) => void;
+}): HTMLElement {
+  const row = el("div", "pi-conventions-field");
+  const label = el("label", "pi-conventions-label");
+  label.textContent = args.label;
 
-function buildConventionsForm(
-  state: ConventionsFormState,
-  onUpdate: ConventionsFormUpdater,
-): HTMLElement {
-  const form = el("div", "pi-conventions-form");
+  const button = el("button", "pi-conventions-toggle");
+  button.type = "button";
+  button.setAttribute("role", "switch");
 
-  const generalSection = el("div", "pi-conventions-section");
-  const generalTitle = el("div", "pi-conventions-section-title");
-  generalTitle.textContent = "General";
-  generalSection.appendChild(generalTitle);
+  const applyVisual = (value: boolean): void => {
+    button.classList.toggle("is-on", value);
+    button.setAttribute("aria-checked", String(value));
+    button.textContent = value ? "On" : "Off";
+  };
 
-  generalSection.appendChild(
-    createTextInputField("Currency symbol", state.currencySymbol, { placeholder: DEFAULT_CURRENCY_SYMBOL, narrow: true },
-      (v) => { onUpdate("currencySymbol", v || DEFAULT_CURRENCY_SYMBOL); }),
-  );
-  generalSection.appendChild(
-    createSelectField("Negatives", [
-      { value: "parens", label: "(1,234) — parentheses" },
-      { value: "minus", label: "-1,234 — minus sign" },
-    ], state.negativeStyle, (v) => { onUpdate("negativeStyle", v as "parens" | "minus"); }),
-  );
-  generalSection.appendChild(
-    createSelectField("Zeros", [
-      { value: "dash", label: '-- — dash' },
-      { value: "zero", label: "0 — literal zero" },
-      { value: "blank", label: "(blank)" },
-    ], state.zeroStyle, (v) => { onUpdate("zeroStyle", v as "dash" | "zero" | "blank"); }),
-  );
-  generalSection.appendChild(
-    createToggleField("Thousands separator", state.thousandsSeparator,
-      (v) => { onUpdate("thousandsSeparator", v); }),
-  );
-  generalSection.appendChild(
-    createToggleField("Accounting padding", state.accountingPadding,
-      (v) => { onUpdate("accountingPadding", v); }),
-  );
+  let current = args.value;
+  applyVisual(current);
 
-  const dpSection = el("div", "pi-conventions-section");
-  const dpTitle = el("div", "pi-conventions-section-title");
-  dpTitle.textContent = "Decimal places";
-  dpSection.appendChild(dpTitle);
+  button.addEventListener("click", () => {
+    current = !current;
+    applyVisual(current);
+    args.onChange(current);
+  });
 
-  dpSection.appendChild(
-    createNumberField("Number", state.numberDp, { min: 0, max: 10 },
-      (v) => { onUpdate("numberDp", v); }),
-  );
-  dpSection.appendChild(
-    createNumberField("Currency", state.currencyDp, { min: 0, max: 10 },
-      (v) => { onUpdate("currencyDp", v); }),
-  );
-  dpSection.appendChild(
-    createNumberField("Percent", state.percentDp, { min: 0, max: 10 },
-      (v) => { onUpdate("percentDp", v); }),
-  );
-  dpSection.appendChild(
-    createNumberField("Ratio", state.ratioDp, { min: 0, max: 10 },
-      (v) => { onUpdate("ratioDp", v); }),
-  );
-
-  form.append(generalSection, dpSection);
-  return form;
+  row.append(label, button);
+  return row;
 }
 
-// ── Main overlay ─────────────────────────────────────────────────────
+function createQuickToggleSelect(args: {
+  label: string;
+  currentValue: string;
+  options: Array<{ value: string; label: string }>;
+  onChange: (value: string) => void;
+}): HTMLElement {
+  const group = el("div", "pi-conventions-quick-toggle");
+  const label = el("label", "pi-conventions-quick-toggle-label");
+  label.textContent = args.label;
+
+  const select = el("select", "pi-conventions-select");
+  for (const option of args.options) {
+    const optionNode = document.createElement("option");
+    optionNode.value = option.value;
+    optionNode.textContent = option.label;
+    optionNode.selected = option.value === args.currentValue;
+    select.appendChild(optionNode);
+  }
+
+  select.addEventListener("change", () => {
+    args.onChange(select.value);
+  });
+
+  group.append(label, select);
+  return group;
+}
+
+function addCustomPreset(draft: StoredConventions): void {
+  const customPresets = getCustomPresetSection(draft);
+
+  const existingNames = new Set(Object.keys(customPresets));
+  let index = 1;
+  let candidate = `custom-${index}`;
+  while (existingNames.has(candidate)) {
+    index += 1;
+    candidate = `custom-${index}`;
+  }
+
+  const defaultFormat = DEFAULT_PRESET_FORMATS.number.format;
+  customPresets[candidate] = {
+    format: defaultFormat,
+    description: "",
+  };
+}
+
+function renameCustomPreset(draft: StoredConventions, from: string, to: string): void {
+  if (!draft.customPresets) {
+    return;
+  }
+
+  const normalizedTo = normalizePresetName(to);
+  if (normalizedTo.length === 0 || normalizedTo === from) {
+    return;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(draft.customPresets, normalizedTo)) {
+    return;
+  }
+
+  const existing = draft.customPresets[from];
+  if (!existing) {
+    return;
+  }
+
+  delete draft.customPresets[from];
+  draft.customPresets[normalizedTo] = existing;
+}
+
+function applyQuickPresetBuilder(presetName: NumberPreset, preset: StoredFormatPreset): void {
+  const params = preset.builderParams;
+  if (!params || presetName === "text") {
+    return;
+  }
+
+  const built = buildFormatString(
+    presetName,
+    params.dp,
+    params.currencySymbol,
+    {
+      negativeStyle: params.negativeStyle ?? "parens",
+      zeroStyle: params.zeroStyle ?? "dash",
+      thousandsSeparator: params.thousandsSeparator ?? true,
+      accountingPadding: true,
+    },
+  );
+
+  preset.format = built.format;
+}
+
+function renderFormatCard(args: {
+  title: string;
+  presetName: string;
+  preset: StoredFormatPreset;
+  onChange: () => void;
+  onRemove?: () => void;
+  onRename?: (value: string) => void;
+  description?: string;
+  onDescriptionChange?: (value: string) => void;
+}): HTMLElement {
+  const details = el("details", "pi-conventions-format-card");
+  const summary = el("summary", "pi-conventions-format-card-summary");
+
+  const summaryLeft = el("div", "pi-conventions-format-card-left");
+  const titleNode = el("div", "pi-conventions-format-card-title");
+  titleNode.textContent = args.title;
+  const previewNode = el("div", "pi-conventions-format-card-preview");
+  previewNode.textContent = args.preset.format;
+  summaryLeft.append(titleNode, previewNode);
+
+  summary.append(summaryLeft);
+  details.append(summary);
+
+  const body = el("div", "pi-conventions-format-card-body");
+
+  if (args.onRename) {
+    body.appendChild(createLabeledInput({
+      label: "Name",
+      value: args.presetName,
+      onChange: (value) => {
+        args.onRename?.(value);
+        args.onChange();
+      },
+    }));
+  }
+
+  if (args.onDescriptionChange) {
+    body.appendChild(createLabeledInput({
+      label: "Description",
+      value: args.description ?? "",
+      onChange: (value) => {
+        args.onDescriptionChange?.(value);
+        args.onChange();
+      },
+      placeholder: "Optional",
+    }));
+  }
+
+  const formatInput = createLabeledInput({
+    label: "Format",
+    value: args.preset.format,
+    onChange: (value) => {
+      args.preset.format = value;
+      args.preset.builderParams = undefined;
+      args.onChange();
+    },
+    className: "pi-conventions-input pi-conventions-input--wide pi-conventions-input--mono",
+  });
+  body.append(formatInput);
+
+  const preview = createPresetPreview(args.presetName, args.preset);
+  const previewRow = el("div", "pi-conventions-preview-row");
+  previewRow.append(
+    createPreviewChip("Positive", preview.positive),
+    createPreviewChip("Negative", preview.negative),
+    createPreviewChip("Zero", preview.zero),
+  );
+  body.append(previewRow);
+
+  if (args.preset.builderParams && isBuiltinPresetName(args.presetName)) {
+    const builtinPresetName = args.presetName;
+    const quickRow = el("div", "pi-conventions-quick-toggles");
+    const params = args.preset.builderParams;
+
+    quickRow.appendChild(createQuickToggleSelect({
+      label: "dp",
+      currentValue: String(params.dp ?? 2),
+      options: [0, 1, 2, 3, 4].map((dp) => ({ value: String(dp), label: String(dp) })),
+      onChange: (value) => {
+        const parsed = Number.parseInt(value, 10);
+        if (!Number.isNaN(parsed)) {
+          params.dp = parsed;
+          applyQuickPresetBuilder(builtinPresetName, args.preset);
+          args.onChange();
+        }
+      },
+    }));
+
+    quickRow.appendChild(createQuickToggleSelect({
+      label: "neg",
+      currentValue: params.negativeStyle ?? "parens",
+      options: [
+        { value: "parens", label: "(1,234)" },
+        { value: "minus", label: "-1,234" },
+      ],
+      onChange: (value) => {
+        if (value === "parens" || value === "minus") {
+          params.negativeStyle = value;
+          applyQuickPresetBuilder(builtinPresetName, args.preset);
+          args.onChange();
+        }
+      },
+    }));
+
+    quickRow.appendChild(createQuickToggleSelect({
+      label: "zero",
+      currentValue: params.zeroStyle ?? "dash",
+      options: [
+        { value: "dash", label: "--" },
+        { value: "single-dash", label: "-" },
+        { value: "zero", label: "0" },
+        { value: "blank", label: "blank" },
+      ],
+      onChange: (value) => {
+        if (value === "dash" || value === "single-dash" || value === "zero" || value === "blank") {
+          params.zeroStyle = value;
+          applyQuickPresetBuilder(builtinPresetName, args.preset);
+          args.onChange();
+        }
+      },
+    }));
+
+    if (builtinPresetName === "currency") {
+      quickRow.appendChild(createLabeledInput({
+        label: "symbol",
+        value: params.currencySymbol ?? DEFAULT_CURRENCY_SYMBOL,
+        onChange: (value) => {
+          params.currencySymbol = value;
+          applyQuickPresetBuilder("currency", args.preset);
+          args.onChange();
+        },
+        className: "pi-conventions-input pi-conventions-input--narrow",
+      }));
+    }
+
+    body.append(quickRow);
+  } else if (isBuiltinPresetName(args.presetName)) {
+    const builtinPresetName = args.presetName;
+    const restore = el("button", "pi-conventions-link-btn");
+    restore.type = "button";
+    restore.textContent = "Custom format — use quick options to reset";
+    restore.addEventListener("click", () => {
+      const builtDefault = DEFAULT_PRESET_FORMATS[builtinPresetName];
+      args.preset.builderParams = {
+        ...(builtDefault.builderParams ?? {}),
+      };
+      applyQuickPresetBuilder(builtinPresetName, args.preset);
+      args.onChange();
+    });
+    body.append(restore);
+  }
+
+  if (args.onRemove) {
+    const removeButton = el("button", "pi-conventions-link-btn pi-conventions-link-btn--danger");
+    removeButton.type = "button";
+    removeButton.textContent = "Remove preset";
+    removeButton.addEventListener("click", () => {
+      args.onRemove?.();
+      args.onChange();
+    });
+    body.append(removeButton);
+  }
+
+  details.append(body);
+  return details;
+}
+
+function renderConventionsEditor(
+  container: HTMLElement,
+  draft: StoredConventions,
+  requestRerender: () => void,
+): void {
+  container.replaceChildren();
+
+  const resolved = resolveConventions(draft);
+
+  const formatsSection = el("section", "pi-conventions-section");
+  const formatsTitle = el("h3", "pi-conventions-section-title");
+  formatsTitle.textContent = "Number formats";
+  formatsSection.append(formatsTitle);
+
+  const presetFormats = getPresetSection(draft);
+
+  for (const presetName of BUILTIN_PRESET_NAMES) {
+    const preset = presetFormats[presetName] ?? {
+      format: resolved.presetFormats[presetName].format,
+      builderParams: resolved.presetFormats[presetName].builderParams,
+    };
+
+    presetFormats[presetName] = preset;
+
+    formatsSection.appendChild(renderFormatCard({
+      title: presetName,
+      presetName,
+      preset,
+      onChange: requestRerender,
+    }));
+  }
+
+  const customPresets = getCustomPresetSection(draft);
+
+  const customNames = Object.keys(customPresets).sort((left, right) => left.localeCompare(right));
+  for (const customName of customNames) {
+    const custom = customPresets[customName];
+    if (!custom) continue;
+
+    formatsSection.appendChild(renderFormatCard({
+      title: customName,
+      presetName: customName,
+      preset: custom,
+      description: custom.description,
+      onRename: (nextName) => renameCustomPreset(draft, customName, nextName),
+      onDescriptionChange: (value) => {
+        custom.description = value;
+      },
+      onRemove: () => {
+        delete customPresets[customName];
+      },
+      onChange: requestRerender,
+    }));
+  }
+
+  const addCustomButton = el("button", "pi-overlay-btn pi-overlay-btn--ghost");
+  addCustomButton.type = "button";
+  addCustomButton.textContent = "Add custom format";
+  addCustomButton.addEventListener("click", () => {
+    addCustomPreset(draft);
+    requestRerender();
+  });
+  formatsSection.append(addCustomButton);
+
+  const colorsSection = el("section", "pi-conventions-section");
+  const colorsTitle = el("h3", "pi-conventions-section-title");
+  colorsTitle.textContent = "Colors (font color)";
+  colorsSection.append(colorsTitle);
+
+  const colorConventions = getColorConventions(draft);
+  const hardcodedValueColor = colorConventions.hardcodedValueColor
+    ?? resolved.colorConventions.hardcodedValueColor;
+  const crossSheetColor = colorConventions.crossSheetLinkColor
+    ?? resolved.colorConventions.crossSheetLinkColor;
+
+  const colorField = (labelText: string, current: string, update: (value: string) => void): HTMLElement => {
+    const row = el("div", "pi-conventions-field");
+    const label = el("label", "pi-conventions-label");
+    label.textContent = labelText;
+
+    const right = el("div", "pi-conventions-color-field");
+    right.append(createColorSwatch(current));
+
+    const input = el("input", "pi-conventions-input");
+    input.type = "text";
+    input.value = current;
+    input.placeholder = "#RRGGBB or rgb(r,g,b)";
+    input.addEventListener("change", () => {
+      const normalized = normalizeConventionColor(input.value);
+      if (normalized) {
+        update(normalized);
+      }
+      requestRerender();
+    });
+
+    right.append(input);
+    row.append(label, right);
+    return row;
+  };
+
+  colorsSection.append(
+    colorField("Hardcoded values", hardcodedValueColor, (value) => {
+      colorConventions.hardcodedValueColor = value;
+    }),
+    colorField("Cross-sheet links", crossSheetColor, (value) => {
+      colorConventions.crossSheetLinkColor = value;
+    }),
+  );
+
+  const headerSection = el("section", "pi-conventions-section");
+  const headerTitle = el("h3", "pi-conventions-section-title");
+  headerTitle.textContent = "Header style";
+  headerSection.append(headerTitle);
+
+  const headerStyle = getHeaderStyle(draft);
+  const headerFill = headerStyle.fillColor ?? resolved.headerStyle.fillColor;
+  const headerFont = headerStyle.fontColor ?? resolved.headerStyle.fontColor;
+  const headerBold = headerStyle.bold ?? resolved.headerStyle.bold;
+  const headerWrap = headerStyle.wrapText ?? resolved.headerStyle.wrapText;
+
+  const headerColors = el("div", "pi-conventions-header-colors");
+  headerColors.append(
+    createColorLegend("Fill", headerFill),
+    createColorLegend("Font", headerFont),
+  );
+  headerSection.append(headerColors);
+
+  const previewRow = createHeaderPreview(headerFill, headerFont, headerBold, headerWrap);
+  headerSection.append(previewRow);
+
+  headerSection.append(
+    colorField("Fill color", headerFill, (value) => {
+      headerStyle.fillColor = value;
+    }),
+    colorField("Font color", headerFont, (value) => {
+      headerStyle.fontColor = value;
+    }),
+    createToggleButton({
+      label: "Bold",
+      value: headerBold,
+      onChange: (value) => {
+        headerStyle.bold = value;
+        requestRerender();
+      },
+    }),
+    createToggleButton({
+      label: "Wrap text",
+      value: headerWrap,
+      onChange: (value) => {
+        headerStyle.wrapText = value;
+        requestRerender();
+      },
+    }),
+  );
+
+  const visualSection = el("section", "pi-conventions-section");
+  const visualTitle = el("h3", "pi-conventions-section-title");
+  visualTitle.textContent = "Default font";
+  visualSection.append(visualTitle);
+
+  const visualDefaults = getVisualDefaults(draft);
+  const fontName = visualDefaults.fontName ?? resolved.visualDefaults.fontName;
+  const fontSize = visualDefaults.fontSize ?? resolved.visualDefaults.fontSize;
+
+  visualSection.append(
+    createLabeledInput({
+      label: "Font name",
+      value: fontName,
+      onChange: (value) => {
+        visualDefaults.fontName = value;
+        requestRerender();
+      },
+    }),
+    createLabeledNumberInput({
+      label: "Font size",
+      value: fontSize,
+      min: 6,
+      max: 72,
+      onChange: (value) => {
+        visualDefaults.fontSize = value;
+        requestRerender();
+      },
+    }),
+  );
+
+  container.append(formatsSection, colorsSection, headerSection, visualSection);
+}
 
 export async function showRulesDialog(opts?: {
   onSaved?: () => void | Promise<void>;
@@ -305,7 +800,7 @@ export async function showRulesDialog(opts?: {
   let userDraft = (await getUserRules(storage.settings)) ?? "";
   let workbookDraft = (await getWorkbookRules(storage.settings, workbookId)) ?? "";
   const storedConventions = await getStoredConventions(storage.settings);
-  const conventionsFormState = resolvedToFormState(storedConventions);
+  const conventionsDraft = cloneStoredConventions(storedConventions);
   let activeTab: RulesTab = "user";
 
   const dialog = createOverlayDialog({
@@ -339,7 +834,7 @@ export async function showRulesDialog(opts?: {
 
   const conventionsTab = document.createElement("button");
   conventionsTab.type = "button";
-  conventionsTab.textContent = "Number format";
+  conventionsTab.textContent = "Formats";
   conventionsTab.className = "pi-overlay-tab";
   conventionsTab.setAttribute("role", "tab");
 
@@ -391,14 +886,14 @@ export async function showRulesDialog(opts?: {
     conventions: conventionsTab,
   };
 
-  let conventionsFormEl: HTMLElement | null = null;
+  const rerenderConventions = (): void => {
+    renderConventionsEditor(conventionsContainer, conventionsDraft, rerenderConventions);
+  };
 
-  const refreshTabUi = () => {
+  const refreshTabUi = (): void => {
     setActiveTab(tabButtons, activeTab);
 
     const isConventionsTab = activeTab === "conventions";
-
-    // Toggle visibility of textarea vs conventions form
     textarea.hidden = isConventionsTab;
     conventionsContainer.hidden = !isConventionsTab;
     counter.hidden = isConventionsTab;
@@ -427,35 +922,20 @@ export async function showRulesDialog(opts?: {
       counter.textContent = formatCounterLabel(count, WORKBOOK_RULES_SOFT_LIMIT);
       counter.classList.toggle("is-warning", count > WORKBOOK_RULES_SOFT_LIMIT);
 
-      if (!workbookId) {
-        hint.textContent =
-          "Can't identify this workbook right now — try saving the file first.";
-      } else {
-        hint.textContent =
-          "Guidance given to Pi only when it reads this file.";
-      }
+      hint.textContent = !workbookId
+        ? "Can't identify this workbook right now — try saving the file first."
+        : "Guidance given to Pi only when it reads this file.";
 
       workbookTag.hidden = false;
       return;
     }
 
-    // Conventions tab
     workbookTag.hidden = true;
-    hint.textContent = "Default number formatting conventions. Pi uses these when applying styles.";
-
-    // Build the form if not yet created
-    if (!conventionsFormEl) {
-      conventionsFormEl = buildConventionsForm(
-        conventionsFormState,
-        (key, value) => {
-          updateConventionsFormField(conventionsFormState, key, value);
-        },
-      );
-      conventionsContainer.appendChild(conventionsFormEl);
-    }
+    hint.textContent = "Set preset formats, font colors, header style, and default font.";
+    rerenderConventions();
   };
 
-  const saveActiveDraft = () => {
+  const saveActiveDraft = (): void => {
     if (activeTab === "user") {
       userDraft = textarea.value;
       return;
@@ -497,17 +977,12 @@ export async function showRulesDialog(opts?: {
     void (async () => {
       saveActiveDraft();
 
-      // Save rules
       await setUserRules(storage.settings, userDraft);
       if (workbookId) {
         await setWorkbookRules(storage.settings, workbookId, workbookDraft);
       }
 
-      // Save conventions
-      const currentStored = await getStoredConventions(storage.settings);
-      const updates = formStateToStored(conventionsFormState);
-      const merged = mergeStoredConventions(currentStored, updates);
-      await setStoredConventions(storage.settings, merged);
+      await setStoredConventions(storage.settings, conventionsDraft);
 
       document.dispatchEvent(new CustomEvent("pi:rules-updated"));
       document.dispatchEvent(new CustomEvent("pi:conventions-updated"));

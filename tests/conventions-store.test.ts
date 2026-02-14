@@ -1,20 +1,29 @@
 import assert from "node:assert/strict";
-import { test, describe } from "node:test";
+import { describe, test } from "node:test";
 
 import {
-  getStoredConventions,
-  setStoredConventions,
-  resolveConventions,
-  mergeStoredConventions,
   diffFromDefaults,
+  getStoredConventions,
+  mergeStoredConventions,
+  removeCustomPresets,
+  resolveConventions,
+  setStoredConventions,
 } from "../src/conventions/store.ts";
-import { DEFAULT_CONVENTIONS, DEFAULT_CURRENCY_SYMBOL, PRESET_DEFAULT_DP } from "../src/conventions/defaults.ts";
+import {
+  DEFAULT_COLOR_CONVENTIONS,
+  DEFAULT_HEADER_STYLE,
+  DEFAULT_PRESET_FORMATS,
+  DEFAULT_VISUAL_DEFAULTS,
+} from "../src/conventions/defaults.ts";
 import type { StoredConventions } from "../src/conventions/types.ts";
 
-// ── Fake SettingsStore ───────────────────────────────────────────────
-
-function createFakeStore(): { get: (k: string) => Promise<unknown>; set: (k: string, v: unknown) => Promise<void>; data: Map<string, unknown> } {
+function createFakeStore(): {
+  get: (key: string) => Promise<unknown>;
+  set: (key: string, value: unknown) => Promise<void>;
+  data: Map<string, unknown>;
+} {
   const data = new Map<string, unknown>();
+
   return {
     data,
     get: (key: string) => Promise.resolve(data.get(key)),
@@ -25,8 +34,6 @@ function createFakeStore(): { get: (k: string) => Promise<unknown>; set: (k: str
   };
 }
 
-// ── getStoredConventions ─────────────────────────────────────────────
-
 void describe("getStoredConventions", () => {
   void test("returns empty object when nothing stored", async () => {
     const store = createFakeStore();
@@ -34,139 +41,212 @@ void describe("getStoredConventions", () => {
     assert.deepEqual(result, {});
   });
 
-  void test("returns validated stored values", async () => {
+  void test("validates nested sections and normalizes colors", async () => {
     const store = createFakeStore();
     store.data.set("conventions.v1", {
-      currencySymbol: "£",
-      negativeStyle: "minus",
-      zeroStyle: "blank",
-    });
-    const result = await getStoredConventions(store);
-    assert.equal(result.currencySymbol, "£");
-    assert.equal(result.negativeStyle, "minus");
-    assert.equal(result.zeroStyle, "blank");
-  });
-
-  void test("ignores invalid values", async () => {
-    const store = createFakeStore();
-    store.data.set("conventions.v1", {
-      currencySymbol: 42, // not a string
-      negativeStyle: "invalid", // not parens/minus
-      zeroStyle: "dash", // valid
-      thousandsSeparator: "yes", // not a boolean
-    });
-    const result = await getStoredConventions(store);
-    assert.equal(result.currencySymbol, undefined);
-    assert.equal(result.negativeStyle, undefined);
-    assert.equal(result.zeroStyle, "dash");
-    assert.equal(result.thousandsSeparator, undefined);
-  });
-
-  void test("validates presetDp values", async () => {
-    const store = createFakeStore();
-    store.data.set("conventions.v1", {
-      presetDp: {
-        number: 3, // valid
-        currency: -1, // invalid (negative)
-        percent: 11, // invalid (> 10)
-        ratio: 1.5, // invalid (not integer)
-        text: 2, // ignored (text not in overridable list)
+      presetFormats: {
+        number: { format: "#,##0.000" },
+      },
+      customPresets: {
+        bps: {
+          format: '#,##0 "bps"',
+          description: "Basis points",
+        },
+      },
+      visualDefaults: {
+        fontName: "Calibri",
+        fontSize: 11,
+      },
+      colorConventions: {
+        hardcodedValueColor: "rgb(0,0,255)",
+        crossSheetLinkColor: "#008000",
+      },
+      headerStyle: {
+        fillColor: "#002060",
+        fontColor: "#fff",
+        bold: true,
+        wrapText: false,
       },
     });
+
     const result = await getStoredConventions(store);
-    assert.deepEqual(result.presetDp, { number: 3 });
+    assert.equal(result.presetFormats?.number?.format, "#,##0.000");
+    assert.equal(result.customPresets?.bps?.description, "Basis points");
+    assert.equal(result.visualDefaults?.fontName, "Calibri");
+    assert.equal(result.colorConventions?.hardcodedValueColor, "#0000FF");
+    assert.equal(result.colorConventions?.crossSheetLinkColor, "#008000");
+    assert.equal(result.headerStyle?.fontColor, "#FFFFFF");
   });
-});
 
-// ── setStoredConventions ─────────────────────────────────────────────
-
-void describe("setStoredConventions", () => {
-  void test("persists to store", async () => {
+  void test("drops invalid nested values", async () => {
     const store = createFakeStore();
-    await setStoredConventions(store, { currencySymbol: "€" });
-    const raw = store.data.get("conventions.v1") as StoredConventions;
-    assert.equal(raw.currencySymbol, "€");
-  });
-});
-
-// ── resolveConventions ───────────────────────────────────────────────
-
-void describe("resolveConventions", () => {
-  void test("returns all defaults for empty stored", () => {
-    const resolved = resolveConventions({});
-    assert.deepEqual(resolved.conventions, DEFAULT_CONVENTIONS);
-    assert.equal(resolved.currencySymbol, DEFAULT_CURRENCY_SYMBOL);
-    assert.deepEqual(resolved.presetDp, PRESET_DEFAULT_DP);
-  });
-
-  void test("merges stored values over defaults", () => {
-    const resolved = resolveConventions({
-      currencySymbol: "£",
-      negativeStyle: "minus",
-      presetDp: { currency: 0, number: 1 },
+    store.data.set("conventions.v1", {
+      presetFormats: {
+        number: { format: "" },
+      },
+      customPresets: {
+        "": { format: "0.00" },
+      },
+      visualDefaults: {
+        fontSize: 1000,
+      },
+      colorConventions: {
+        hardcodedValueColor: "blue",
+      },
     });
 
-    assert.equal(resolved.currencySymbol, "£");
-    assert.equal(resolved.conventions.negativeStyle, "minus");
-    // Overridden
-    assert.equal(resolved.presetDp.currency, 0);
-    assert.equal(resolved.presetDp.number, 1);
-    // Kept default
-    assert.equal(resolved.conventions.thousandsSeparator, DEFAULT_CONVENTIONS.thousandsSeparator);
-    assert.equal(resolved.presetDp.percent, PRESET_DEFAULT_DP.percent);
+    const result = await getStoredConventions(store);
+    assert.equal(result.presetFormats, undefined);
+    assert.equal(result.customPresets, undefined);
+    assert.equal(result.visualDefaults, undefined);
+    assert.equal(result.colorConventions, undefined);
   });
 });
 
-// ── mergeStoredConventions ───────────────────────────────────────────
+void describe("setStoredConventions", () => {
+  void test("persists validated shape", async () => {
+    const store = createFakeStore();
+    await setStoredConventions(store, {
+      visualDefaults: { fontName: "Georgia" },
+      colorConventions: { hardcodedValueColor: "rgb(255,0,0)" },
+    });
+
+    const raw = store.data.get("conventions.v1");
+    assert.equal(typeof raw, "object");
+    assert.ok(raw !== null);
+
+    if (!raw || typeof raw !== "object") {
+      assert.fail("Expected conventions payload to be an object");
+    }
+
+    const visualDefaults = "visualDefaults" in raw ? raw.visualDefaults : undefined;
+    const colorConventions = "colorConventions" in raw ? raw.colorConventions : undefined;
+
+    const fontName = (
+      visualDefaults
+      && typeof visualDefaults === "object"
+      && "fontName" in visualDefaults
+      && typeof visualDefaults.fontName === "string"
+    )
+      ? visualDefaults.fontName
+      : undefined;
+
+    const hardcodedValueColor = (
+      colorConventions
+      && typeof colorConventions === "object"
+      && "hardcodedValueColor" in colorConventions
+      && typeof colorConventions.hardcodedValueColor === "string"
+    )
+      ? colorConventions.hardcodedValueColor
+      : undefined;
+
+    assert.equal(fontName, "Georgia");
+    assert.equal(hardcodedValueColor, "#FF0000");
+  });
+});
+
+void describe("resolveConventions", () => {
+  void test("returns defaults for empty input", () => {
+    const resolved = resolveConventions({});
+    assert.deepEqual(resolved.presetFormats, DEFAULT_PRESET_FORMATS);
+    assert.deepEqual(resolved.visualDefaults, DEFAULT_VISUAL_DEFAULTS);
+    assert.deepEqual(resolved.colorConventions, DEFAULT_COLOR_CONVENTIONS);
+    assert.deepEqual(resolved.headerStyle, DEFAULT_HEADER_STYLE);
+    assert.deepEqual(resolved.customPresets, {});
+  });
+
+  void test("returns deep-cloned preset defaults", () => {
+    const first = resolveConventions({});
+    const second = resolveConventions({});
+
+    const firstCurrencyBuilder = first.presetFormats.currency.builderParams;
+    const secondCurrencyBuilder = second.presetFormats.currency.builderParams;
+
+    assert.ok(firstCurrencyBuilder);
+    assert.ok(secondCurrencyBuilder);
+
+    if (!firstCurrencyBuilder || !secondCurrencyBuilder) {
+      assert.fail("Expected currency builder params to be defined");
+    }
+
+    firstCurrencyBuilder.dp = 4;
+    first.presetFormats.currency.format = "custom";
+
+    assert.equal(secondCurrencyBuilder.dp, DEFAULT_PRESET_FORMATS.currency.builderParams?.dp);
+    assert.equal(second.presetFormats.currency.format, DEFAULT_PRESET_FORMATS.currency.format);
+  });
+
+  void test("merges overrides over defaults", () => {
+    const resolved = resolveConventions({
+      presetFormats: {
+        currency: { format: "£#,##0.00" },
+      },
+      visualDefaults: {
+        fontName: "Times New Roman",
+      },
+    });
+
+    assert.equal(resolved.presetFormats.currency.format, "£#,##0.00");
+    assert.equal(resolved.presetFormats.number.format, DEFAULT_PRESET_FORMATS.number.format);
+    assert.equal(resolved.visualDefaults.fontName, "Times New Roman");
+    assert.equal(resolved.visualDefaults.fontSize, DEFAULT_VISUAL_DEFAULTS.fontSize);
+  });
+});
 
 void describe("mergeStoredConventions", () => {
-  void test("merges partial updates into existing", () => {
-    const current: StoredConventions = { currencySymbol: "£", negativeStyle: "parens" };
-    const updates: StoredConventions = { negativeStyle: "minus", zeroStyle: "zero" };
-    const result = mergeStoredConventions(current, updates);
+  void test("merges nested sections additively", () => {
+    const current: StoredConventions = {
+      visualDefaults: { fontName: "Calibri" },
+      customPresets: { bps: { format: '#,##0 "bps"' } },
+    };
 
-    assert.equal(result.currencySymbol, "£"); // kept
-    assert.equal(result.negativeStyle, "minus"); // updated
-    assert.equal(result.zeroStyle, "zero"); // added
+    const updates: StoredConventions = {
+      visualDefaults: { fontSize: 12 },
+      customPresets: { date: { format: "dd-mmm-yyyy" } },
+    };
+
+    const merged = mergeStoredConventions(current, updates);
+    assert.equal(merged.visualDefaults?.fontName, "Calibri");
+    assert.equal(merged.visualDefaults?.fontSize, 12);
+    assert.ok(merged.customPresets?.bps);
+    assert.ok(merged.customPresets?.date);
   });
 
-  void test("merges presetDp additively", () => {
-    const current: StoredConventions = { presetDp: { number: 1 } };
-    const updates: StoredConventions = { presetDp: { currency: 0 } };
-    const result = mergeStoredConventions(current, updates);
+  void test("removeCustomPresets removes requested preset names", () => {
+    const current: StoredConventions = {
+      customPresets: {
+        bps: { format: '#,##0 "bps"' },
+        date: { format: "dd-mmm-yyyy" },
+      },
+    };
 
-    assert.deepEqual(result.presetDp, { number: 1, currency: 0 });
+    const next = removeCustomPresets(current, ["bps"]);
+    assert.equal(next.customPresets?.bps, undefined);
+    assert.ok(next.customPresets?.date);
   });
 });
 
-// ── diffFromDefaults ─────────────────────────────────────────────────
-
 void describe("diffFromDefaults", () => {
-  void test("returns empty for all defaults", () => {
-    const resolved = resolveConventions({});
-    const diffs = diffFromDefaults(resolved);
+  void test("returns empty for default config", () => {
+    const diffs = diffFromDefaults(resolveConventions({}));
     assert.equal(diffs.length, 0);
   });
 
-  void test("detects currency symbol change", () => {
-    const resolved = resolveConventions({ currencySymbol: "€" });
-    const diffs = diffFromDefaults(resolved);
-    assert.equal(diffs.length, 1);
-    assert.equal(diffs[0].field, "currencySymbol");
-    assert.equal(diffs[0].value, "€");
-  });
+  void test("includes custom presets and visual overrides", () => {
+    const diffs = diffFromDefaults(resolveConventions({
+      customPresets: {
+        bps: {
+          format: '#,##0 "bps"',
+          description: "Basis points",
+        },
+      },
+      visualDefaults: {
+        fontName: "Calibri",
+      },
+    }));
 
-  void test("detects multiple changes", () => {
-    const resolved = resolveConventions({
-      currencySymbol: "£",
-      negativeStyle: "minus",
-      presetDp: { currency: 0 },
-    });
-    const diffs = diffFromDefaults(resolved);
-    const fields = diffs.map((d) => d.field);
-    assert.ok(fields.includes("currencySymbol"));
-    assert.ok(fields.includes("negativeStyle"));
-    assert.ok(fields.includes("presetDp.currency"));
-    assert.equal(diffs.length, 3);
+    const fields = diffs.map((diff) => diff.field);
+    assert.ok(fields.includes("customPresets.bps"));
+    assert.ok(fields.includes("visualDefaults.fontName"));
   });
 });

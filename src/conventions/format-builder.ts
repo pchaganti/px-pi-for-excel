@@ -5,8 +5,12 @@
  * Respects house-style conventions (parens, dash zeros, accounting padding).
  */
 
-import type { NumberPreset, NumberFormatConventions } from "./types.js";
-import { DEFAULT_CONVENTIONS, DEFAULT_CURRENCY_SYMBOL, PRESET_DEFAULT_DP } from "./defaults.js";
+import type { NumberFormatConventions, NumberPreset } from "./types.js";
+import {
+  DEFAULT_CURRENCY_SYMBOL,
+  DEFAULT_FORMAT_CONVENTIONS,
+  PRESET_DEFAULT_DP,
+} from "./format-defaults.js";
 
 export interface FormatBuildResult {
   /** The Excel number format string. */
@@ -21,13 +25,13 @@ export interface FormatBuildResult {
  * @param preset  - One of the 6 format presets.
  * @param dp      - Override decimal places (null = use preset default).
  * @param symbol  - Override currency symbol (only for "currency" preset).
- * @param conventions - House-style overrides (defaults to DEFAULT_CONVENTIONS).
+ * @param conventions - House-style overrides (defaults to default format conventions).
  */
 export function buildFormatString(
   preset: NumberPreset,
   dp?: number | null,
   symbol?: string | null,
-  conventions: NumberFormatConventions = DEFAULT_CONVENTIONS,
+  conventions: NumberFormatConventions = DEFAULT_FORMAT_CONVENTIONS,
 ): FormatBuildResult {
   const warnings: string[] = [];
 
@@ -91,6 +95,8 @@ export function buildFormatString(
   let zero: string;
   if (conventions.zeroStyle === "dash") {
     zero = `${currPrefix}--${suffixPad}${padChars}`;
+  } else if (conventions.zeroStyle === "single-dash") {
+    zero = `${currPrefix}-${suffixPad}${padChars}`;
   } else if (conventions.zeroStyle === "blank") {
     zero = "";
   } else {

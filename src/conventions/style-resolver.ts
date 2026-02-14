@@ -1,24 +1,25 @@
 /**
  * style-resolver — compose named styles + overrides into a flat ResolvedCellStyle.
- *
- * Resolution order:
- *   1. For each style name (left → right), merge its properties.
- *   2. Apply individual param overrides (inline > class, like CSS).
- *   3. Build the final Excel format string from preset + dp + symbol.
  */
 
-import type { CellStyle, ResolvedCellStyle, ResolvedConventions } from "./types.js";
-import { BUILTIN_STYLES, DEFAULT_CONVENTION_CONFIG } from "./defaults.js";
-import { buildFormatString, isPresetName } from "./format-builder.js";
+import type { CellStyle, NumberFormatConventions, ResolvedCellStyle, ResolvedConventions } from "./types.js";
+import { DEFAULT_CONVENTION_CONFIG, DEFAULT_CONVENTIONS, getBuiltinStyles } from "./defaults.js";
+import { buildFormatString } from "./format-builder.js";
+import { getPresetFormat, isBuiltinPresetName, isPresetName } from "./store.js";
 
-/**
- * Resolve an array of style names + individual overrides into a flat CellStyle
- * with a ready-to-use Excel format string.
- *
- * @param styles    - Style name or array of style names (left-to-right composition).
- * @param overrides - Individual param overrides (always win).
- * @param config    - Resolved conventions (defaults merged with stored overrides).
- */
+function resolveBuilderConventions(params: {
+  negativeStyle?: NumberFormatConventions["negativeStyle"];
+  zeroStyle?: NumberFormatConventions["zeroStyle"];
+  thousandsSeparator?: boolean;
+}): NumberFormatConventions {
+  return {
+    negativeStyle: params.negativeStyle ?? DEFAULT_CONVENTIONS.negativeStyle,
+    zeroStyle: params.zeroStyle ?? DEFAULT_CONVENTIONS.zeroStyle,
+    thousandsSeparator: params.thousandsSeparator ?? DEFAULT_CONVENTIONS.thousandsSeparator,
+    accountingPadding: DEFAULT_CONVENTIONS.accountingPadding,
+  };
+}
+
 export function resolveStyles(
   styles: string | string[] | undefined,
   overrides?: Partial<CellStyle>,
@@ -27,57 +28,82 @@ export function resolveStyles(
   const warnings: string[] = [];
   const merged: CellStyle = {};
 
-  // ── 1. Compose named styles (left → right) ────────────────────────
   if (styles) {
     const names = Array.isArray(styles) ? styles : [styles];
-    for (const name of names) {
-      const style = BUILTIN_STYLES.get(name);
-      if (!style) {
-        warnings.push(`Unknown style "${name}" — ignored.`);
+    const builtinStyles = getBuiltinStyles(config);
+
+    for (const styleName of names) {
+      const style = builtinStyles.get(styleName);
+      if (style) {
+        mergeCellStyle(merged, style.properties);
         continue;
       }
-      mergeCellStyle(merged, style.properties);
+
+      if (Object.prototype.hasOwnProperty.call(config.customPresets, styleName)) {
+        mergeCellStyle(merged, { numberFormat: styleName });
+        continue;
+      }
+
+      warnings.push(`Unknown style "${styleName}" — ignored.`);
     }
   }
 
-  // ── 2. Apply individual overrides ──────────────────────────────────
   if (overrides) {
     mergeCellStyle(merged, overrides);
   }
 
-  // ── 3. Resolve number format ───────────────────────────────────────
   let excelNumberFormat: string | undefined;
 
   if (merged.numberFormat) {
-    if (isPresetName(merged.numberFormat)) {
-      // It's a preset name — build the Excel format string.
-      // Resolve default dp + currency from config before calling builder.
-      const effectiveDp = merged.numberFormatDp ?? config.presetDp[merged.numberFormat] ?? null;
-      const effectiveSymbol = merged.currencySymbol ??
-        (merged.numberFormat === "currency" ? config.currencySymbol : undefined);
-      const result = buildFormatString(
-        merged.numberFormat,
-        effectiveDp,
-        effectiveSymbol,
-        config.conventions,
-      );
-      excelNumberFormat = result.format;
-      warnings.push(...result.warnings);
-    } else {
-      // It's a raw Excel format string — pass through
-      excelNumberFormat = merged.numberFormat;
+    const presetName = merged.numberFormat;
 
-      // Warn if preset-only params were set alongside a raw string
-      if (merged.numberFormatDp != null) {
+    if (isPresetName(presetName, config)) {
+      const preset = getPresetFormat(config, presetName);
+      if (!preset) {
+        warnings.push(`Unknown number format preset "${presetName}".`);
+      } else {
+        const hasDpOverride = merged.numberFormatDp !== undefined;
+        const hasCurrencyOverride = merged.currencySymbol !== undefined;
+
+        if (!hasDpOverride && !hasCurrencyOverride) {
+          excelNumberFormat = preset.format;
+        } else if (isBuiltinPresetName(presetName)) {
+          const builderParams = preset.builderParams;
+          const built = buildFormatString(
+            presetName,
+            merged.numberFormatDp ?? builderParams?.dp,
+            merged.currencySymbol ?? builderParams?.currencySymbol,
+            resolveBuilderConventions({
+              negativeStyle: builderParams?.negativeStyle,
+              zeroStyle: builderParams?.zeroStyle,
+              thousandsSeparator: builderParams?.thousandsSeparator,
+            }),
+          );
+
+          excelNumberFormat = built.format;
+          warnings.push(...built.warnings);
+        } else {
+          excelNumberFormat = preset.format;
+          if (hasDpOverride) {
+            warnings.push("number_format_dp ignored for custom presets unless quick-toggle metadata exists.");
+          }
+          if (hasCurrencyOverride) {
+            warnings.push("currency_symbol ignored for non-currency custom presets.");
+          }
+        }
+      }
+    } else {
+      excelNumberFormat = presetName;
+
+      if (merged.numberFormatDp !== undefined) {
         warnings.push("number_format_dp ignored — only applies to preset names, not raw format strings.");
       }
       if (merged.currencySymbol) {
-        warnings.push("currency_symbol ignored — only applies to currency preset, not raw format strings.");
+        warnings.push("currency_symbol ignored — only applies to currency presets, not raw format strings.");
       }
     }
   } else {
-    // No number format specified, but check for orphaned params
-    if (merged.numberFormatDp != null) {
+    if (merged.numberFormatDp !== undefined) {
       warnings.push("number_format_dp ignored — no number format or style specified.");
     }
     if (merged.currencySymbol) {
@@ -88,15 +114,26 @@ export function resolveStyles(
   return { properties: merged, excelNumberFormat, warnings };
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────
-
-/** Shallow-merge `source` into `target`, only overriding defined values. */
 function mergeCellStyle(target: CellStyle, source: Partial<CellStyle>): void {
-  for (const key of Object.keys(source) as Array<keyof CellStyle>) {
-    const value = source[key];
-    if (value !== undefined) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic merge over union-typed properties
-      (target as Record<string, any>)[key] = value;
-    }
-  }
+  if (source.numberFormat !== undefined) target.numberFormat = source.numberFormat;
+  if (source.numberFormatDp !== undefined) target.numberFormatDp = source.numberFormatDp;
+  if (source.currencySymbol !== undefined) target.currencySymbol = source.currencySymbol;
+
+  if (source.bold !== undefined) target.bold = source.bold;
+  if (source.italic !== undefined) target.italic = source.italic;
+  if (source.underline !== undefined) target.underline = source.underline;
+  if (source.fontColor !== undefined) target.fontColor = source.fontColor;
+  if (source.fontSize !== undefined) target.fontSize = source.fontSize;
+  if (source.fontName !== undefined) target.fontName = source.fontName;
+
+  if (source.fillColor !== undefined) target.fillColor = source.fillColor;
+
+  if (source.borderTop !== undefined) target.borderTop = source.borderTop;
+  if (source.borderBottom !== undefined) target.borderBottom = source.borderBottom;
+  if (source.borderLeft !== undefined) target.borderLeft = source.borderLeft;
+  if (source.borderRight !== undefined) target.borderRight = source.borderRight;
+
+  if (source.horizontalAlignment !== undefined) target.horizontalAlignment = source.horizontalAlignment;
+  if (source.verticalAlignment !== undefined) target.verticalAlignment = source.verticalAlignment;
+  if (source.wrapText !== undefined) target.wrapText = source.wrapText;
 }

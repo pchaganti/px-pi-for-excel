@@ -1,140 +1,183 @@
 /**
- * Built-in defaults — format presets, structural styles, and house-style conventions.
- *
- * This is the single source of truth. Tools, prompt, and read-back all import from here.
+ * Built-in defaults for conventions + named styles.
  */
 
-import type { NamedStyle, NumberFormatConventions, NumberPreset, ResolvedConventions } from "./types.js";
+import { buildFormatString } from "./format-builder.js";
+import {
+  DEFAULT_CURRENCY_SYMBOL,
+  DEFAULT_FORMAT_CONVENTIONS,
+  PRESET_DEFAULT_DP,
+} from "./format-defaults.js";
+import type {
+  NamedStyle,
+  NumberPreset,
+  ResolvedConventions,
+  StoredFormatPreset,
+} from "./types.js";
 
-// ── Default conventions ──────────────────────────────────────────────
+export { DEFAULT_CURRENCY_SYMBOL, PRESET_DEFAULT_DP };
 
-export const DEFAULT_CONVENTIONS: NumberFormatConventions = {
-  negativeStyle: "parens",
-  thousandsSeparator: true,
-  zeroStyle: "dash",
-  accountingPadding: true,
+/** Backward-compatible alias. */
+export const DEFAULT_CONVENTIONS = DEFAULT_FORMAT_CONVENTIONS;
+
+export const DEFAULT_VISUAL_DEFAULTS = {
+  fontName: "Arial",
+  fontSize: 10,
+} as const;
+
+export const DEFAULT_COLOR_CONVENTIONS = {
+  hardcodedValueColor: "#0000FF",
+  crossSheetLinkColor: "#008000",
+} as const;
+
+export const DEFAULT_HEADER_STYLE = {
+  fillColor: "#4472C4",
+  fontColor: "#FFFFFF",
+  bold: true,
+  wrapText: true,
+} as const;
+
+function buildDefaultPresetFormat(preset: NumberPreset): StoredFormatPreset {
+  const defaultDp = PRESET_DEFAULT_DP[preset];
+  const defaultSymbol = preset === "currency" ? DEFAULT_CURRENCY_SYMBOL : undefined;
+
+  const built = buildFormatString(
+    preset,
+    defaultDp,
+    defaultSymbol,
+    DEFAULT_FORMAT_CONVENTIONS,
+  );
+
+  return {
+    format: built.format,
+    builderParams: preset === "text"
+      ? undefined
+      : {
+        dp: defaultDp ?? undefined,
+        negativeStyle: DEFAULT_FORMAT_CONVENTIONS.negativeStyle,
+        zeroStyle: DEFAULT_FORMAT_CONVENTIONS.zeroStyle,
+        thousandsSeparator: DEFAULT_FORMAT_CONVENTIONS.thousandsSeparator,
+        currencySymbol: defaultSymbol,
+      },
+  };
+}
+
+export const DEFAULT_PRESET_FORMATS: Record<NumberPreset, StoredFormatPreset> = {
+  number: buildDefaultPresetFormat("number"),
+  integer: buildDefaultPresetFormat("integer"),
+  currency: buildDefaultPresetFormat("currency"),
+  percent: buildDefaultPresetFormat("percent"),
+  ratio: buildDefaultPresetFormat("ratio"),
+  text: buildDefaultPresetFormat("text"),
 };
 
-export const DEFAULT_CURRENCY_SYMBOL = "$";
-
-/** Default decimal places per preset. */
-export const PRESET_DEFAULT_DP: Record<NumberPreset, number | null> = {
-  number: 2,
-  integer: 0,
-  currency: 2,
-  percent: 1,
-  ratio: 1,
-  text: null,
-  // date intentionally absent — dropped from presets
-};
-
-/** Default resolved conventions (all hardcoded defaults, no overrides). */
 export const DEFAULT_CONVENTION_CONFIG: ResolvedConventions = {
-  conventions: DEFAULT_CONVENTIONS,
-  currencySymbol: DEFAULT_CURRENCY_SYMBOL,
-  presetDp: { ...PRESET_DEFAULT_DP },
+  presetFormats: { ...DEFAULT_PRESET_FORMATS },
+  customPresets: {},
+  visualDefaults: { ...DEFAULT_VISUAL_DEFAULTS },
+  colorConventions: { ...DEFAULT_COLOR_CONVENTIONS },
+  headerStyle: { ...DEFAULT_HEADER_STYLE },
 };
 
-// ── Format styles (number format only — no visual properties) ────────
+// ── Named style defaults ─────────────────────────────────────────────
 
 const FORMAT_STYLES: NamedStyle[] = [
   {
     name: "number",
-    description: "Standard number (2dp, thousands separator)",
+    description: "Standard number preset",
     properties: { numberFormat: "number" },
     builtIn: true,
   },
   {
     name: "integer",
-    description: "Whole number (0dp, thousands separator)",
+    description: "Whole number preset",
     properties: { numberFormat: "integer" },
     builtIn: true,
   },
   {
     name: "currency",
-    description: "Currency (2dp, accounting-aligned)",
+    description: "Currency preset",
     properties: { numberFormat: "currency" },
     builtIn: true,
   },
   {
     name: "percent",
-    description: "Percentage (1dp)",
+    description: "Percentage preset",
     properties: { numberFormat: "percent" },
     builtIn: true,
   },
   {
     name: "ratio",
-    description: 'Multiple / ratio with "x" suffix (1dp)',
+    description: "Ratio / multiple preset",
     properties: { numberFormat: "ratio" },
     builtIn: true,
   },
   {
     name: "text",
-    description: "Plain text (no number formatting)",
+    description: "Plain text preset",
     properties: { numberFormat: "text" },
     builtIn: true,
   },
 ];
 
-// ── Structural styles (visual only — no number format) ───────────────
+function createStructuralStyles(conventions: ResolvedConventions): NamedStyle[] {
+  return [
+    {
+      name: "header",
+      description: "Column heading style",
+      properties: {
+        bold: conventions.headerStyle.bold,
+        fillColor: conventions.headerStyle.fillColor,
+        fontColor: conventions.headerStyle.fontColor,
+        wrapText: conventions.headerStyle.wrapText,
+      },
+      builtIn: true,
+    },
+    {
+      name: "total-row",
+      description: "Total row: bold + top border",
+      properties: {
+        bold: true,
+        borderTop: "thin",
+      },
+      builtIn: true,
+    },
+    {
+      name: "subtotal",
+      description: "Subtotal row: bold",
+      properties: {
+        bold: true,
+      },
+      builtIn: true,
+    },
+    {
+      name: "input",
+      description: "User-input cell: yellow fill",
+      properties: {
+        fillColor: "#FFFD78",
+      },
+      builtIn: true,
+    },
+    {
+      name: "blank-section",
+      description: "Blank separator area",
+      properties: {
+        fillColor: "#F2F2F2",
+      },
+      builtIn: true,
+    },
+  ];
+}
 
-const STRUCTURAL_STYLES: NamedStyle[] = [
-  {
-    name: "header",
-    description: "Column heading: bold, blue fill, white font, wrap",
-    properties: {
-      bold: true,
-      fillColor: "#4472C4",
-      fontColor: "#FFFFFF",
-      wrapText: true,
-    },
-    builtIn: true,
-  },
-  {
-    name: "total-row",
-    description: "Total row: bold, thin top border",
-    properties: {
-      bold: true,
-      borderTop: "thin",
-    },
-    builtIn: true,
-  },
-  {
-    name: "subtotal",
-    description: "Subtotal row: bold",
-    properties: {
-      bold: true,
-    },
-    builtIn: true,
-  },
-  {
-    name: "input",
-    description: "User-input cell: yellow fill",
-    properties: {
-      fillColor: "#FFFD78",
-    },
-    builtIn: true,
-  },
-  {
-    name: "blank-section",
-    description: "Intentionally blank area: light grey fill",
-    properties: {
-      fillColor: "#F2F2F2",
-    },
-    builtIn: true,
-  },
-];
+export function getBuiltinStyles(conventions: ResolvedConventions = DEFAULT_CONVENTION_CONFIG): ReadonlyMap<string, NamedStyle> {
+  const styles = [...FORMAT_STYLES, ...createStructuralStyles(conventions)];
+  return new Map(styles.map((style) => [style.name, style]));
+}
 
-// ── All built-in styles ──────────────────────────────────────────────
+export const BUILTIN_STYLES: ReadonlyMap<string, NamedStyle> = getBuiltinStyles(DEFAULT_CONVENTION_CONFIG);
 
-export const BUILTIN_STYLES: ReadonlyMap<string, NamedStyle> = new Map(
-  [...FORMAT_STYLES, ...STRUCTURAL_STYLES].map((s) => [s.name, s]),
-);
-
-/** All built-in style names (for validation). */
 export const BUILTIN_STYLE_NAMES: ReadonlySet<string> = new Set(BUILTIN_STYLES.keys());
 
-/** Format preset names (for detecting preset names in number_format param). */
 export const FORMAT_PRESET_NAMES: ReadonlySet<NumberPreset> = new Set<NumberPreset>([
   "number",
   "integer",
