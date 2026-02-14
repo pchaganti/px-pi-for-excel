@@ -60,7 +60,7 @@
     <div class="narrative">
       <h3>Built for real work</h3>
       <p>
-        Multiple session tabs, conversation history, auto-context on every turn, any model you want.
+        Multiple session tabs, conversation history, auto-context on every turn, any model you want. Built-in multi-provider web search and page fetch help you cross-check assumptions quickly.
       </p>
       <p>
         Between saves, every edit gets an automatic checkpoint with one-click undo.
@@ -117,7 +117,7 @@
       <div class="section-label">Extensions</div>
       <h3>Ask it to extend itself</h3>
       <p>
-        You can ask Pi for Excel to build its own extensions — sidebar widgets, sub-agents, live data feeds, specialist tools, SaaS integrations. The agent writes the code, installs it, and you can use it immediately.
+        You can ask Pi for Excel to build its own extensions — sidebar widgets, sub-agents, live data feeds, specialist tools, SaaS integrations. Extensions can call LLMs, fetch HTTP data, persist storage, and register tools through the built-in bridge.
       </p>
     </div>
 
@@ -220,11 +220,11 @@
     <div class="connect-option">
       <h3>Login with your subscription <span class="badge">Recommended</span></h3>
       <p>
-        If you already pay for Claude, Copilot, or another provider, you can log in directly — no API key needed. You just need to run a small local helper first.
+        If you already pay for Claude, Copilot, or another provider, you can log in directly — no API key needed. Some OAuth flows need a small local helper because Office webviews can block those endpoints via CORS.
       </p>
 
       <p class="connect-option__intro">
-        <strong>One-time setup</strong> — open Terminal and run these, or just ask your agent to set it up:
+        <strong>Start the helper</strong> in Terminal (recommended if you already have Node.js):
       </p>
 
       <div class="terminal">
@@ -232,19 +232,11 @@
           <div class="terminal-dots"><span></span><span></span><span></span></div>
           <button type="button" class="terminal-copy">Copy</button>
         </div>
-        <pre><span class="comment"># Install mkcert (creates local HTTPS certificates)</span>
-<span class="prompt">$ </span>brew install mkcert
-
-<span class="comment"># Download Pi for Excel and set up the login helper</span>
-<span class="prompt">$ </span>git clone https://github.com/tmustier/pi-for-excel.git ~/.pi-for-excel
-<span class="prompt">$ </span>cd ~/.pi-for-excel
-<span class="prompt">$ </span>npm install
-<span class="prompt">$ </span>mkcert -install && mkcert localhost
-<span class="prompt">$ </span>mv localhost-key.pem key.pem && mv localhost.pem cert.pem</pre>
+        <pre><span class="prompt">$ </span>npx pi-for-excel-proxy</pre>
       </div>
 
       <p class="connect-option__start">
-        <strong>Then, whenever you use Pi</strong>, start the helper:
+        <strong>No Node.js?</strong> Use the installer script:
       </p>
 
       <div class="terminal">
@@ -252,15 +244,15 @@
           <div class="terminal-dots"><span></span><span></span><span></span></div>
           <button type="button" class="terminal-copy">Copy</button>
         </div>
-        <pre><span class="prompt">$ </span>cd ~/.pi-for-excel && npm run proxy:https</pre>
+        <pre><span class="prompt">$ </span>curl -fsSL https://piforexcel.com/proxy | sh</pre>
       </div>
 
       <p class="connect-option__note">
-        Keep it running while you use Pi. In the sidebar: <span class="path">/settings</span> → Proxy → enable, set URL to <code>https://localhost:3003</code>. Then <span class="path">/login</span> and sign in.
+        Keep it running while you use Pi. In the sidebar: <span class="path">/settings</span> → Proxy → enable, set URL to <code>https://localhost:3003</code>. Then run <span class="path">/login</span> and sign in.
       </p>
 
       <div class="callout">
-        <strong>What does this do?</strong> It runs a tiny local server on your machine (called a CORS proxy) that lets your browser connect to your AI provider. Your data goes directly between your computer and your provider — nothing passes through any third party. <a href="https://github.com/tmustier/pi-for-excel" target="_blank" rel="noopener">The code is open source.</a>
+        <strong>What does this do?</strong> It runs a tiny local CORS proxy on your machine so Excel can complete OAuth safely. No git clone or mkcert setup is required for hosted use. Your data still flows between your computer and your provider. <a href="https://github.com/tmustier/pi-for-excel" target="_blank" rel="noopener">The code is open source.</a>
       </div>
     </div>
 
