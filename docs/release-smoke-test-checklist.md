@@ -13,6 +13,11 @@ This checklist maps directly to issue [#179](https://github.com/tmustier/pi-for-
 - Install + connect flow validation
 - High-risk hardening paths (error handling, stress, storage corruption)
 
+## Run logs
+
+- Store run evidence in `docs/release-smoke-runs/`.
+- Latest preflight run: `docs/release-smoke-runs/2026-02-14-macos-preflight.md`.
+
 ## Prerequisites
 
 - Built from latest `origin/main`
