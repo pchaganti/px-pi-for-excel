@@ -197,3 +197,69 @@ void test("skills read resolves external skill when discovery is enabled", async
   assert.equal(result.details.sourceKind, "external");
   assert.equal(result.details.location, CUSTOM_EXTERNAL_SKILL.location);
 });
+
+void test("skills list/read exclude disabled skills", async () => {
+  const tool = createSkillsTool({
+    catalog: {
+      list: () => [WEB_SEARCH_SKILL],
+    },
+    isExternalDiscoveryEnabled: () => true,
+    loadExternalSkills: () => Promise.resolve([CUSTOM_EXTERNAL_SKILL]),
+    loadDisabledSkillNames: () => Promise.resolve(new Set(["custom-skill"])),
+  });
+
+  const listResult = await tool.execute("call-list-disabled", { action: "list" });
+
+  assert.ok(isSkillsListDetails(listResult.details));
+  if (!isSkillsListDetails(listResult.details)) return;
+
+  assert.deepEqual(listResult.details.names, ["web-search"]);
+
+  const readResult = await tool.execute("call-read-disabled", {
+    action: "read",
+    name: "custom-skill",
+  });
+
+  assert.ok(isSkillsErrorDetails(readResult.details));
+  if (!isSkillsErrorDetails(readResult.details)) return;
+
+  assert.match(readResult.details.message, /Skill not found: `custom-skill`/);
+});
+
+void test("skills read ignores stale cache entries when skill becomes disabled", async () => {
+  const cache = createSkillReadCache();
+  let disabled = false;
+
+  const tool = createSkillsTool({
+    getSessionId: () => "session-disable",
+    readCache: cache,
+    catalog: {
+      list: () => [WEB_SEARCH_SKILL],
+    },
+    isExternalDiscoveryEnabled: () => false,
+    loadExternalSkills: () => Promise.resolve([]),
+    loadDisabledSkillNames: () => Promise.resolve(disabled ? new Set(["web-search"]) : new Set()),
+  });
+
+  const firstRead = await tool.execute("call-read-enabled", {
+    action: "read",
+    name: "web-search",
+  });
+
+  assert.ok(isSkillsReadDetails(firstRead.details));
+  if (!isSkillsReadDetails(firstRead.details)) return;
+
+  assert.equal(firstRead.details.cacheHit, false);
+
+  disabled = true;
+
+  const secondRead = await tool.execute("call-read-disabled-after-cache", {
+    action: "read",
+    name: "web-search",
+  });
+
+  assert.ok(isSkillsErrorDetails(secondRead.details));
+  if (!isSkillsErrorDetails(secondRead.details)) return;
+
+  assert.match(secondRead.details.message, /Skill not found: `web-search`/);
+});

@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import type { AgentSkillDefinition } from "../src/skills/types.ts";
+import {
+  SKILL_ACTIVATION_STORAGE_KEY,
+  filterAgentSkillsByEnabledState,
+  loadDisabledSkillNamesFromSettings,
+  setSkillEnabledInSettings,
+} from "../src/skills/activation-store.ts";
 import {
   EXTERNAL_AGENT_SKILLS_STORAGE_KEY,
   loadExternalAgentSkillsFromSettings,
@@ -159,4 +166,79 @@ description: External custom skill.
     name: "missing-skill",
   });
   assert.equal(removedMissing, false);
+});
+
+void test("loadDisabledSkillNamesFromSettings normalizes and deduplicates names", async () => {
+  const settings = new MemorySettingsStore();
+
+  await settings.set(SKILL_ACTIVATION_STORAGE_KEY, {
+    version: 1,
+    disabledNames: [" Web-Search ", "custom-skill", "web-search", ""],
+  });
+
+  const disabled = await loadDisabledSkillNamesFromSettings(settings);
+  assert.deepEqual(Array.from(disabled).sort(), ["custom-skill", "web-search"]);
+});
+
+void test("setSkillEnabledInSettings disables and re-enables by name", async () => {
+  const settings = new MemorySettingsStore();
+
+  const disabled = await setSkillEnabledInSettings({
+    settings,
+    name: "Web-Search",
+    enabled: false,
+  });
+
+  assert.equal(disabled.changed, true);
+  assert.equal(disabled.enabled, false);
+  assert.equal(disabled.name, "web-search");
+
+  const disabledNames = await loadDisabledSkillNamesFromSettings(settings);
+  assert.deepEqual(Array.from(disabledNames), ["web-search"]);
+
+  const duplicateDisable = await setSkillEnabledInSettings({
+    settings,
+    name: "web-search",
+    enabled: false,
+  });
+  assert.equal(duplicateDisable.changed, false);
+
+  const enabled = await setSkillEnabledInSettings({
+    settings,
+    name: "web-search",
+    enabled: true,
+  });
+
+  assert.equal(enabled.changed, true);
+  assert.equal(enabled.enabled, true);
+
+  const afterEnable = await loadDisabledSkillNamesFromSettings(settings);
+  assert.deepEqual(Array.from(afterEnable), []);
+});
+
+void test("filterAgentSkillsByEnabledState excludes disabled skill names", () => {
+  const bundledSkill: AgentSkillDefinition = {
+    name: "web-search",
+    description: "Bundled web search.",
+    location: "skills/web-search/SKILL.md",
+    sourceKind: "bundled",
+    markdown: "# Web Search",
+    body: "# Web Search",
+  };
+
+  const externalSkill: AgentSkillDefinition = {
+    name: "custom-skill",
+    description: "External skill.",
+    location: "skills/external/custom-skill/SKILL.md",
+    sourceKind: "external",
+    markdown: "# Custom Skill",
+    body: "# Custom Skill",
+  };
+
+  const filtered = filterAgentSkillsByEnabledState({
+    skills: [bundledSkill, externalSkill],
+    disabledSkillNames: new Set(["custom-skill"]),
+  });
+
+  assert.deepEqual(filtered.map((skill) => skill.name), ["web-search"]);
 });

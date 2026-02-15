@@ -74,7 +74,12 @@ import {
   listAgentSkills,
   mergeAgentSkillDefinitions,
 } from "../skills/catalog.js";
+import {
+  filterAgentSkillsByEnabledState,
+  loadDisabledSkillNamesFromSettings,
+} from "../skills/activation-store.js";
 import { loadExternalAgentSkillsFromSettings } from "../skills/external-store.js";
+import { PI_SKILLS_CHANGED_EVENT } from "../skills/events.js";
 import { createSkillReadCache } from "../skills/read-cache.js";
 import { initAppStorage } from "../storage/init-app-storage.js";
 import { renderError } from "../ui/loading.js";
@@ -332,17 +337,27 @@ export async function initTaskpane(opts: {
   const resolveAvailableSkills = async () => {
     const bundledSkills = listAgentSkills();
 
-    if (!isExperimentalFeatureEnabled("external_skills_discovery")) {
-      return buildAgentSkillPromptEntries(bundledSkills);
+    let mergedSkills = bundledSkills;
+
+    if (isExperimentalFeatureEnabled("external_skills_discovery")) {
+      try {
+        const externalSkills = await loadExternalAgentSkillsFromSettings(settings);
+        mergedSkills = mergeAgentSkillDefinitions(bundledSkills, externalSkills);
+      } catch (error: unknown) {
+        console.warn("[skills] Failed to load external skills:", error);
+      }
     }
 
     try {
-      const externalSkills = await loadExternalAgentSkillsFromSettings(settings);
-      const mergedSkills = mergeAgentSkillDefinitions(bundledSkills, externalSkills);
-      return buildAgentSkillPromptEntries(mergedSkills);
+      const disabledSkillNames = await loadDisabledSkillNamesFromSettings(settings);
+      const enabledSkills = filterAgentSkillsByEnabledState({
+        skills: mergedSkills,
+        disabledSkillNames,
+      });
+      return buildAgentSkillPromptEntries(enabledSkills);
     } catch (error: unknown) {
-      console.warn("[skills] Failed to load external skills:", error);
-      return buildAgentSkillPromptEntries(bundledSkills);
+      console.warn("[skills] Failed to load skill activation state:", error);
+      return buildAgentSkillPromptEntries(mergedSkills);
     }
   };
 
@@ -594,6 +609,10 @@ export async function initTaskpane(opts: {
   });
 
   document.addEventListener(PI_INTEGRATIONS_CHANGED_EVENT, () => {
+    void refreshCapabilitiesForAllRuntimes();
+  });
+
+  document.addEventListener(PI_SKILLS_CHANGED_EVENT, () => {
     void refreshCapabilitiesForAllRuntimes();
   });
 
