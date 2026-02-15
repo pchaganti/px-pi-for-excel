@@ -463,6 +463,26 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
   listBody.className = "pi-overlay-body";
 
   const filterHost = document.createElement("div");
+
+  const filterWrap = document.createElement("div");
+  filterWrap.className = "pi-files-filter";
+
+  const filterIcon = document.createElement("span");
+  filterIcon.className = "pi-files-filter__icon";
+  filterIcon.textContent = "🔍";
+
+  const filterInput = document.createElement("input");
+  filterInput.type = "text";
+  filterInput.className = "pi-files-filter__input";
+  filterInput.placeholder = "Filter files…";
+  filterInput.addEventListener("input", () => {
+    filterText = filterInput.value;
+    renderListView();
+  });
+
+  filterWrap.append(filterIcon, filterInput);
+  filterHost.appendChild(filterWrap);
+
   const sectionsHost = document.createElement("div");
   listBody.append(filterHost, sectionsHost);
 
@@ -920,27 +940,16 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       filterText,
     }));
 
-    filterHost.replaceChildren();
     if (files.length >= 5) {
-      const filterWrap = document.createElement("div");
-      filterWrap.className = "pi-files-filter";
-
-      const icon = document.createElement("span");
-      icon.className = "pi-files-filter__icon";
-      icon.textContent = "🔍";
-
-      const input = document.createElement("input");
-      input.type = "text";
-      input.className = "pi-files-filter__input";
-      input.placeholder = "Filter files…";
-      input.value = filterText;
-      input.addEventListener("input", () => {
-        filterText = input.value;
-        renderListView();
-      });
-
-      filterWrap.append(icon, input);
-      filterHost.appendChild(filterWrap);
+      filterWrap.hidden = false;
+      if (filterInput.value !== filterText) {
+        filterInput.value = filterText;
+      }
+    } else {
+      filterWrap.hidden = true;
+      if (filterInput.value.length > 0) {
+        filterInput.value = "";
+      }
     }
 
     sectionsHost.replaceChildren();
