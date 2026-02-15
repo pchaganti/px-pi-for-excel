@@ -23,6 +23,9 @@ import {
   validateStringGrid,
 } from "../src/workbook/recovery/format-state-utils.ts";
 import {
+  ADVANCED_CONDITIONAL_FORMAT_RULE_HANDLERS,
+} from "../src/workbook/recovery/conditional-format-handlers-advanced.ts";
+import {
   BASIC_CONDITIONAL_FORMAT_RULE_HANDLERS,
 } from "../src/workbook/recovery/conditional-format-handlers-basic.ts";
 import {
@@ -150,6 +153,14 @@ void test("basic conditional-format handler registry keeps core rule coverage", 
     "preset_criteria",
     "text_comparison",
     "top_bottom",
+  ]);
+});
+
+void test("advanced conditional-format handler registry keeps extended rule coverage", () => {
+  assert.deepEqual(Object.keys(ADVANCED_CONDITIONAL_FORMAT_RULE_HANDLERS).sort(), [
+    "color_scale",
+    "data_bar",
+    "icon_set",
   ]);
 });
 
