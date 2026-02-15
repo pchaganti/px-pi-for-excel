@@ -133,6 +133,20 @@ Some OAuth token endpoints are blocked by CORS inside Office webviews. If OAuth 
 
 API-key auth generally works without the proxy.
 
+### Local bridges (Python / tmux)
+
+Use one-command local bridge helpers:
+
+- Python / LibreOffice bridge: `npx pi-for-excel-python-bridge` (default `https://localhost:3340`)
+- tmux bridge: `npx pi-for-excel-tmux-bridge` (default `https://localhost:3341`)
+
+These packages default to safe stub mode. For real execution:
+
+- `PYTHON_BRIDGE_MODE=real npx pi-for-excel-python-bridge`
+- `TMUX_BRIDGE_MODE=tmux npx pi-for-excel-tmux-bridge`
+
+Source-checkout alternatives remain available via `npm run python:bridge:https` and `npm run tmux:bridge:https`.
+
 ## Architecture
 
 Pi for Excel is a single-page Office taskpane add-in built with:
@@ -179,6 +193,8 @@ src/
 
 scripts/               # Dev helpers — CORS proxy, tmux/python bridges, manifest gen
 pkg/proxy/             # Publishable npm CLI package: `pi-for-excel-proxy`
+pkg/python-bridge/     # Publishable npm CLI package: `pi-for-excel-python-bridge`
+pkg/tmux-bridge/       # Publishable npm CLI package: `pi-for-excel-tmux-bridge`
 tests/                 # Unit + security tests (~50 test files)
 docs/                  # Current docs (install/deploy/features/policy) + archive/ for historical plans
 skills/                # Bundled Agent Skill definitions (web-search, mcp-gateway)

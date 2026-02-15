@@ -34,11 +34,14 @@ Optional bearer auth:
 ## Local bridge quickstart
 
 ```bash
-# Stub mode (safe default; deterministic fake responses)
-npm run python:bridge:https
+# One-command setup (safe stub mode by default)
+npx pi-for-excel-python-bridge
 
 # Real local execution mode
-PYTHON_BRIDGE_MODE=real npm run python:bridge:https
+PYTHON_BRIDGE_MODE=real npx pi-for-excel-python-bridge
+
+# Source checkout alternative
+npm run python:bridge:https
 ```
 
 Then configure in the add-in:

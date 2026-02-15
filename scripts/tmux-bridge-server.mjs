@@ -31,7 +31,7 @@ if (useHttps && useHttp) {
 }
 
 const HOST = process.env.HOST || (useHttps ? "localhost" : "127.0.0.1");
-const PORT = Number.parseInt(process.env.PORT || "3337", 10);
+const PORT = Number.parseInt(process.env.PORT || "3341", 10);
 
 const MODE_RAW = (process.env.TMUX_BRIDGE_MODE || "stub").trim().toLowerCase();
 const MODE = MODE_RAW === "tmux" ? "tmux" : MODE_RAW === "stub" ? "stub" : null;
@@ -40,9 +40,19 @@ if (!MODE) {
   process.exit(1);
 }
 
-const rootDir = path.resolve(process.cwd());
-const keyPath = path.join(rootDir, "key.pem");
-const certPath = path.join(rootDir, "cert.pem");
+function resolveOptionalEnvPath(name) {
+  const raw = process.env[name];
+  if (typeof raw !== "string") return null;
+
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+
+  return path.resolve(trimmed);
+}
+
+const certDir = resolveOptionalEnvPath("PI_FOR_EXCEL_CERT_DIR") ?? path.resolve(process.cwd());
+const keyPath = resolveOptionalEnvPath("PI_FOR_EXCEL_KEY_PATH") ?? path.join(certDir, "key.pem");
+const certPath = resolveOptionalEnvPath("PI_FOR_EXCEL_CERT_PATH") ?? path.join(certDir, "cert.pem");
 
 const DEFAULT_ALLOWED_ORIGINS = new Set([
   "https://localhost:3000",

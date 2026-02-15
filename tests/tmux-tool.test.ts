@@ -35,7 +35,7 @@ void test("tmux tool returns guidance when bridge URL is not configured", async 
 
 void test("tmux tool validates required session/action params", async () => {
   const tool = createTmuxTool({
-    getBridgeConfig: () => Promise.resolve({ url: "https://localhost:3337" }),
+    getBridgeConfig: () => Promise.resolve({ url: "https://localhost:3341" }),
     callBridge: () => Promise.resolve({ ok: true, action: "send_keys" }),
   });
 
@@ -54,7 +54,7 @@ void test("tmux tool sends v1 bridge contract payload for send_and_capture", asy
 
   const tool = createTmuxTool({
     getBridgeConfig: () => Promise.resolve({
-      url: "https://localhost:3337",
+      url: "https://localhost:3341",
       token: "secret-token",
     }),
     callBridge: (
@@ -95,7 +95,7 @@ void test("tmux tool sends v1 bridge contract payload for send_and_capture", asy
   assert.equal(capturedRequest?.join_wrapped, true);
 
   assert.ok(capturedConfig);
-  assert.equal(capturedConfig?.url, "https://localhost:3337");
+  assert.equal(capturedConfig?.url, "https://localhost:3341");
   assert.equal(capturedConfig?.token, "secret-token");
 
   const text = firstText(result);
@@ -108,7 +108,7 @@ void test("tmux tool sends v1 bridge contract payload for send_and_capture", asy
 
 void test("tmux list_sessions response is rendered as a bullet list", async () => {
   const tool = createTmuxTool({
-    getBridgeConfig: () => Promise.resolve({ url: "https://localhost:3337" }),
+    getBridgeConfig: () => Promise.resolve({ url: "https://localhost:3341" }),
     callBridge: () => Promise.resolve({
       ok: true,
       action: "list_sessions",
@@ -127,7 +127,7 @@ void test("tmux list_sessions response is rendered as a bullet list", async () =
 
 void test("tmux bridge errors are surfaced to the user", async () => {
   const tool = createTmuxTool({
-    getBridgeConfig: () => Promise.resolve({ url: "https://localhost:3337" }),
+    getBridgeConfig: () => Promise.resolve({ url: "https://localhost:3341" }),
     callBridge: () => Promise.reject(new Error("bridge unavailable")),
   });
 
@@ -144,7 +144,7 @@ void test("tmux bridge errors are surfaced to the user", async () => {
 
 void test("tmux tool handles explicit bridge-level rejection payloads", async () => {
   const tool = createTmuxTool({
-    getBridgeConfig: () => Promise.resolve({ url: "https://localhost:3337" }),
+    getBridgeConfig: () => Promise.resolve({ url: "https://localhost:3341" }),
     callBridge: () => Promise.resolve({
       ok: false,
       action: "kill_session",

@@ -507,7 +507,7 @@ function buildOutputPreview(output: string | undefined): string | undefined {
 function buildMissingBridgeConfigurationMessage(): string {
   return (
     "Tmux bridge URL is not configured. " +
-    "Run /experimental tmux-bridge-url https://localhost:3337 and enable /experimental on tmux-bridge."
+    "Run /experimental tmux-bridge-url https://localhost:3341 and enable /experimental on tmux-bridge."
   );
 }
 

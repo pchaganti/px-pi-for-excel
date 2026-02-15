@@ -189,13 +189,13 @@ void test("/experimental tmux-bridge-url shows configured value", async () => {
     showToast: (message) => {
       toasts.push(message);
     },
-    getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3337"),
+    getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3341"),
   });
 
   await command.execute("tmux-bridge-url");
 
   assert.equal(toasts.length, 1);
-  assert.equal(toasts[0], "Tmux bridge URL: https://localhost:3337");
+  assert.equal(toasts[0], "Tmux bridge URL: https://localhost:3341");
 });
 
 void test("/experimental tmux-bridge-url <url> validates, stores URL, and triggers tool refresh notice", async () => {
@@ -218,12 +218,12 @@ void test("/experimental tmux-bridge-url <url> validates, stores URL, and trigge
     },
   });
 
-  await command.execute("tmux-bridge-url https://localhost:3337/");
+  await command.execute("tmux-bridge-url https://localhost:3341/");
 
-  assert.deepEqual(stored, ["https://localhost:3337"]);
+  assert.deepEqual(stored, ["https://localhost:3341"]);
   assert.deepEqual(changedConfigKeys, ["tmux.bridge.url"]);
   assert.equal(toasts.length, 1);
-  assert.equal(toasts[0], "Tmux bridge URL set to https://localhost:3337");
+  assert.equal(toasts[0], "Tmux bridge URL set to https://localhost:3341");
 });
 
 void test("/experimental tmux-bridge-url clear removes stored URL and triggers tool refresh notice", async () => {
@@ -266,7 +266,7 @@ void test("/experimental tmux-bridge-url invalid URL surfaces validation error",
     },
   });
 
-  await command.execute("tmux-bridge-url ftp://localhost:3337");
+  await command.execute("tmux-bridge-url ftp://localhost:3341");
 
   assert.equal(toasts.length, 1);
   assert.equal(toasts[0], "Invalid Proxy URL");
@@ -396,7 +396,7 @@ void test("/experimental tmux-status reports healthy bridge details", async () =
       toasts.push(message);
     },
     isTmuxBridgeEnabled: () => true,
-    getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3337"),
+    getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3341"),
     getTmuxBridgeToken: () => Promise.resolve("supersecrettoken"),
     probeTmuxBridgeHealth: () => Promise.resolve({
       reachable: true,
@@ -411,7 +411,7 @@ void test("/experimental tmux-status reports healthy bridge details", async () =
 
   assert.equal(toasts.length, 1);
   assert.match(toasts[0], /feature flag \(tmux-bridge\): enabled/u);
-  assert.match(toasts[0], /bridge URL: https:\/\/localhost:3337/u);
+  assert.match(toasts[0], /bridge URL: https:\/\/localhost:3341/u);
   assert.match(toasts[0], /auth token: set \(supe\*{10}en, length 16\)/u);
   assert.match(toasts[0], /gate: pass/u);
   assert.match(toasts[0], /health: reachable \(HTTP 200, mode=tmux, backend=tmux, sessions=2\)/u);
@@ -428,7 +428,7 @@ void test("/experimental tmux-status uses a single health probe for gate + diagn
       toasts.push(message);
     },
     isTmuxBridgeEnabled: () => true,
-    getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3337"),
+    getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3341"),
     getTmuxBridgeToken: () => Promise.resolve(undefined),
     probeTmuxBridgeHealth: () => {
       probeCount += 1;

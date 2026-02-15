@@ -98,6 +98,63 @@ function describeWebSearchAvailability(args: {
   return hasWorkbook ? "Off in all scopes" : "Off";
 }
 
+const BRIDGE_SETUP_HINT = "Open Terminal · paste · press Enter · type y and Enter if prompted · leave open";
+
+function selectElementText(element: HTMLElement): void {
+  const selection = window.getSelection();
+  if (!selection) return;
+
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function createBridgeSetupCommand(command: string): HTMLDivElement {
+  const setup = document.createElement("div");
+  setup.className = "pi-hub-bridge-setup";
+
+  const commandRow = document.createElement("div");
+  commandRow.className = "pi-hub-bridge-setup__command";
+
+  const code = document.createElement("code");
+  code.className = "pi-hub-bridge-setup__code";
+  code.textContent = command;
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.className = "pi-hub-bridge-setup__copy";
+  copyButton.textContent = "📋";
+  copyButton.title = "Copy command";
+  copyButton.addEventListener("click", () => {
+    if (!navigator.clipboard?.writeText) {
+      selectElementText(code);
+      return;
+    }
+
+    void navigator.clipboard.writeText(command).then(
+      () => {
+        copyButton.textContent = "✓";
+        setTimeout(() => {
+          copyButton.textContent = "📋";
+        }, 1400);
+      },
+      () => {
+        selectElementText(code);
+      },
+    );
+  });
+
+  const hint = document.createElement("p");
+  hint.className = "pi-hub-bridge-setup__hint";
+  hint.textContent = BRIDGE_SETUP_HINT;
+
+  commandRow.append(code, copyButton);
+  setup.append(commandRow, hint);
+
+  return setup;
+}
+
 // ── Main render ─────────────────────────────────────
 
 export async function renderConnectionsTab(args: {
@@ -427,10 +484,10 @@ export async function renderConnectionsTab(args: {
         name: "Python bridge",
         description: "Execute Python code in a local environment",
         settingKey: PYTHON_BRIDGE_URL_SETTING_KEY,
-        placeholder: "http://localhost:3340",
+        setupCommand: "npx pi-for-excel-python-bridge",
+        placeholder: "https://localhost:3340",
         currentUrl: pythonUrl,
         settings,
-        isBusy,
         runMutation,
       }));
     }
@@ -441,10 +498,10 @@ export async function renderConnectionsTab(args: {
         name: "tmux bridge",
         description: "Remote shell sessions via tmux",
         settingKey: TMUX_BRIDGE_URL_SETTING_KEY,
-        placeholder: "http://localhost:3341",
+        setupCommand: "npx pi-for-excel-tmux-bridge",
+        placeholder: "https://localhost:3341",
         currentUrl: tmuxUrl,
         settings,
-        isBusy,
         runMutation,
       }));
     }
@@ -539,10 +596,10 @@ function renderBridgeCard(args: {
   name: string;
   description: string;
   settingKey: string;
+  setupCommand: string;
   placeholder: string;
   currentUrl: string;
   settings: SettingsStore;
-  isBusy: () => boolean;
   runMutation: (action: () => Promise<void>, reason: "toggle" | "scope" | "external-toggle" | "config", msg?: string) => Promise<void>;
 }): HTMLElement {
   const connected = args.currentUrl.length > 0;
@@ -552,11 +609,17 @@ function renderBridgeCard(args: {
     name: args.name,
     description: args.description,
     expandable: true,
+    expanded: !connected,
     badges: [connected
       ? { text: "Configured", tone: "ok" as const }
       : { text: "Not connected", tone: "muted" as const },
     ],
   });
+
+  const setupLabel = document.createElement("p");
+  setupLabel.className = "pi-hub-bridge-setup__label";
+  setupLabel.textContent = "Quick setup";
+  card.body.append(setupLabel, createBridgeSetupCommand(args.setupCommand));
 
   const urlInput = createConfigInput({
     value: args.currentUrl,
