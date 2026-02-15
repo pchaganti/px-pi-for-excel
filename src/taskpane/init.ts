@@ -86,7 +86,7 @@ import {
   filterAgentSkillsByEnabledState,
   loadDisabledSkillNamesFromSettings,
 } from "../skills/activation-store.js";
-import { loadExternalAgentSkillsFromSettings } from "../skills/external-store.js";
+import { loadExternalAgentSkillsFromWorkspace } from "../skills/external-store.js";
 import { PI_SKILLS_CHANGED_EVENT } from "../skills/events.js";
 import { createSkillReadCache } from "../skills/read-cache.js";
 import { initAppStorage } from "../storage/init-app-storage.js";
@@ -352,7 +352,7 @@ export async function initTaskpane(opts: {
 
     if (isExperimentalFeatureEnabled("external_skills_discovery")) {
       try {
-        const externalSkills = await loadExternalAgentSkillsFromSettings(settings);
+        const externalSkills = await loadExternalAgentSkillsFromWorkspace(getFilesWorkspace());
         mergedSkills = mergeAgentSkillDefinitions(bundledSkills, externalSkills);
       } catch (error: unknown) {
         console.warn("[skills] Failed to load external skills:", error);

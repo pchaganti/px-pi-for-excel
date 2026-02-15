@@ -1,4 +1,5 @@
 import { isExperimentalFeatureEnabled } from "../../experiments/flags.js";
+import { getFilesWorkspace } from "../../files/workspace.js";
 import {
   filterAgentSkillsByEnabledState,
   loadDisabledSkillNamesFromSettings,
@@ -7,7 +8,7 @@ import {
   listAgentSkills,
   mergeAgentSkillDefinitions,
 } from "../../skills/catalog.js";
-import { loadExternalAgentSkillsFromSettings } from "../../skills/external-store.js";
+import { loadExternalAgentSkillsFromWorkspace } from "../../skills/external-store.js";
 import {
   createOverlayBadge,
   createOverlayButton,
@@ -26,7 +27,7 @@ export async function buildSkillsSnapshot(settings: AddonsSettingsStore): Promis
   let external: AgentSkillDefinition[] = [];
   let externalLoadError: string | null = null;
   try {
-    external = await loadExternalAgentSkillsFromSettings(settings);
+    external = await loadExternalAgentSkillsFromWorkspace(getFilesWorkspace());
   } catch (error: unknown) {
     externalLoadError = error instanceof Error ? error.message : "Unknown error";
   }

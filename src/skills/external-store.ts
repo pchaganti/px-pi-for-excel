@@ -1,50 +1,39 @@
 /**
  * External Agent Skills discovery store (feature-flagged).
  *
- * This is intentionally opt-in and local-only.
+ * Source of truth: Files workspace path `skills/external/<name>/SKILL.md`.
  */
 
+import { getFilesWorkspace, type FilesWorkspace } from "../files/workspace.js";
+import type { WorkspaceFileEntry } from "../files/types.js";
 import type {
   AgentSkillDefinition,
   AgentSkillSourceKind,
 } from "./types.js";
 import { parseSkillDocument } from "./frontmatter.js";
-import { isRecord } from "../utils/type-guards.js";
 
-export const EXTERNAL_AGENT_SKILLS_STORAGE_KEY = "skills.external.v1.catalog";
+const EXTERNAL_SKILLS_ROOT_PATH = "skills/external";
+const EXTERNAL_SKILL_FILENAME = "SKILL.md";
+const MAX_EXTERNAL_SKILL_MARKDOWN_CHARS = 1_000_000;
 
-export interface ExternalSkillSettingsStore {
-  get: (key: string) => Promise<unknown>;
-}
+export type ExternalSkillWorkspace = Pick<
+  FilesWorkspace,
+  "listFiles" | "readFile" | "writeTextFile" | "deleteFile"
+>;
 
-export interface ExternalSkillMutableSettingsStore extends ExternalSkillSettingsStore {
-  set: (key: string, value: unknown) => Promise<void>;
-}
+function isWorkspaceExternalSkillFile(file: WorkspaceFileEntry): boolean {
+  if (file.sourceKind !== "workspace") {
+    return false;
+  }
 
-interface StoredExternalSkillItem {
-  location: string;
-  markdown: string;
-}
-
-function isStoredExternalSkillItem(value: unknown): value is StoredExternalSkillItem {
-  if (!isRecord(value)) return false;
-
+  const parts = file.path.split("/");
   return (
-    typeof value.location === "string"
-    && typeof value.markdown === "string"
+    parts.length === 4
+    && parts[0] === "skills"
+    && parts[1] === "external"
+    && parts[2] !== ""
+    && parts[3] === EXTERNAL_SKILL_FILENAME
   );
-}
-
-function parseStoredExternalSkillItems(raw: unknown): StoredExternalSkillItem[] {
-  if (!isRecord(raw)) return [];
-
-  const version = raw.version;
-  if (version !== 1) return [];
-
-  const items = raw.items;
-  if (!Array.isArray(items)) return [];
-
-  return items.filter((item) => isStoredExternalSkillItem(item));
 }
 
 function normalizeSkillName(name: string): string {
@@ -53,14 +42,28 @@ function normalizeSkillName(name: string): string {
     throw new Error("Skill name cannot be empty.");
   }
 
+  if (trimmed.includes("/") || trimmed.includes("\\")) {
+    throw new Error("Skill name cannot contain path separators.");
+  }
+
+  if (trimmed === "." || trimmed === "..") {
+    throw new Error("Skill name cannot be '.' or '..'.");
+  }
+
   return trimmed;
 }
 
+function getExternalSkillPath(name: string): string {
+  const normalized = normalizeSkillName(name);
+  return `${EXTERNAL_SKILLS_ROOT_PATH}/${normalized}/${EXTERNAL_SKILL_FILENAME}`;
+}
+
 function buildExternalSkillDefinition(args: {
-  item: StoredExternalSkillItem;
+  location: string;
+  markdown: string;
   sourceKind: AgentSkillSourceKind;
 }): AgentSkillDefinition | null {
-  const parsed = parseSkillDocument(args.item.markdown);
+  const parsed = parseSkillDocument(args.markdown);
   if (!parsed) {
     return null;
   }
@@ -69,46 +72,75 @@ function buildExternalSkillDefinition(args: {
     name: parsed.frontmatter.name,
     description: parsed.frontmatter.description,
     compatibility: parsed.frontmatter.compatibility,
-    location: args.item.location,
+    location: args.location,
     sourceKind: args.sourceKind,
-    markdown: args.item.markdown,
+    markdown: args.markdown,
     body: parsed.body,
   };
 }
 
 /**
- * Loads externally configured skills from settings.
- *
- * Expected shape:
- * {
- *   version: 1,
- *   items: [{ location: string, markdown: string }, ...]
- * }
+ * Loads external skills from the canonical Files workspace location:
+ * `skills/external/<name>/SKILL.md`.
  */
-export async function loadExternalAgentSkillsFromSettings(
-  settings: ExternalSkillSettingsStore,
+export async function loadExternalAgentSkillsFromWorkspace(
+  workspace: ExternalSkillWorkspace,
 ): Promise<AgentSkillDefinition[]> {
-  const raw = await settings.get(EXTERNAL_AGENT_SKILLS_STORAGE_KEY);
-  const storedItems = parseStoredExternalSkillItems(raw);
+  const files = await workspace.listFiles();
+  const externalFiles = files
+    .filter((file) => isWorkspaceExternalSkillFile(file))
+    .sort((left, right) => left.path.localeCompare(right.path));
 
-  const loaded: AgentSkillDefinition[] = [];
+  const byName = new Map<string, AgentSkillDefinition>();
 
-  for (const item of storedItems) {
+  for (const file of externalFiles) {
+    let readResult: Awaited<ReturnType<ExternalSkillWorkspace["readFile"]>>;
+
+    try {
+      readResult = await workspace.readFile(file.path, {
+        mode: "text",
+        maxChars: MAX_EXTERNAL_SKILL_MARKDOWN_CHARS,
+      });
+    } catch (error: unknown) {
+      console.warn(`[skills] Failed reading external skill file: ${file.path}`, error);
+      continue;
+    }
+
+    if (typeof readResult.text !== "string") {
+      console.warn(`[skills] External skill file is not readable text: ${file.path}`);
+      continue;
+    }
+
+    if (readResult.truncated) {
+      console.warn(`[skills] External skill file is too large to load fully: ${file.path}`);
+      continue;
+    }
+
     const skill = buildExternalSkillDefinition({
-      item,
+      location: file.path,
+      markdown: readResult.text,
       sourceKind: "external",
     });
 
     if (!skill) {
-      console.warn(`[skills] Invalid external SKILL.md frontmatter: ${item.location}`);
+      console.warn(`[skills] Invalid external SKILL.md frontmatter: ${file.path}`);
       continue;
     }
 
-    loaded.push(skill);
+    const normalizedName = skill.name.toLowerCase();
+    if (byName.has(normalizedName)) {
+      console.warn(`[skills] Duplicate external skill ignored: ${skill.name} (${file.path})`);
+      continue;
+    }
+
+    byName.set(normalizedName, skill);
   }
 
-  loaded.sort((left, right) => left.name.localeCompare(right.name));
-  return loaded;
+  return Array.from(byName.values()).sort((left, right) => left.name.localeCompare(right.name));
+}
+
+export async function loadExternalAgentSkills(): Promise<AgentSkillDefinition[]> {
+  return loadExternalAgentSkillsFromWorkspace(getFilesWorkspace());
 }
 
 export interface UpsertExternalAgentSkillResult {
@@ -116,8 +148,8 @@ export interface UpsertExternalAgentSkillResult {
   location: string;
 }
 
-export async function upsertExternalAgentSkillInSettings(args: {
-  settings: ExternalSkillMutableSettingsStore;
+export async function upsertExternalAgentSkillInWorkspace(args: {
+  workspace: ExternalSkillWorkspace;
   markdown: string;
   expectedName?: string;
 }): Promise<UpsertExternalAgentSkillResult> {
@@ -135,28 +167,8 @@ export async function upsertExternalAgentSkillInSettings(args: {
     }
   }
 
-  const existing = parseStoredExternalSkillItems(await args.settings.get(EXTERNAL_AGENT_SKILLS_STORAGE_KEY));
-  const targetName = parsed.frontmatter.name.toLowerCase();
-
-  const nextItems = existing.filter((item) => {
-    const itemParsed = parseSkillDocument(item.markdown);
-    if (!itemParsed) {
-      return true;
-    }
-
-    return itemParsed.frontmatter.name.toLowerCase() !== targetName;
-  });
-
-  const location = `skills/external/${parsed.frontmatter.name}/SKILL.md`;
-  nextItems.push({
-    location,
-    markdown: args.markdown,
-  });
-
-  await args.settings.set(EXTERNAL_AGENT_SKILLS_STORAGE_KEY, {
-    version: 1,
-    items: nextItems,
-  });
+  const location = getExternalSkillPath(parsed.frontmatter.name);
+  await args.workspace.writeTextFile(location, args.markdown, "text/markdown");
 
   return {
     name: parsed.frontmatter.name,
@@ -164,32 +176,38 @@ export async function upsertExternalAgentSkillInSettings(args: {
   };
 }
 
-export async function removeExternalAgentSkillFromSettings(args: {
-  settings: ExternalSkillMutableSettingsStore;
+export async function upsertExternalAgentSkill(args: {
+  markdown: string;
+  expectedName?: string;
+}): Promise<UpsertExternalAgentSkillResult> {
+  return upsertExternalAgentSkillInWorkspace({
+    workspace: getFilesWorkspace(),
+    markdown: args.markdown,
+    expectedName: args.expectedName,
+  });
+}
+
+export async function removeExternalAgentSkillFromWorkspace(args: {
+  workspace: ExternalSkillWorkspace;
   name: string;
 }): Promise<boolean> {
   const normalizedName = normalizeSkillName(args.name).toLowerCase();
-  const existing = parseStoredExternalSkillItems(await args.settings.get(EXTERNAL_AGENT_SKILLS_STORAGE_KEY));
+  const externalSkills = await loadExternalAgentSkillsFromWorkspace(args.workspace);
 
-  let removed = false;
-  const nextItems = existing.filter((item) => {
-    const itemParsed = parseSkillDocument(item.markdown);
-    if (!itemParsed) {
-      return true;
-    }
+  const match = externalSkills.find((skill) => skill.name.toLowerCase() === normalizedName);
+  if (!match) {
+    return false;
+  }
 
-    const keep = itemParsed.frontmatter.name.toLowerCase() !== normalizedName;
-    if (!keep) {
-      removed = true;
-    }
+  await args.workspace.deleteFile(match.location);
+  return true;
+}
 
-    return keep;
+export async function removeExternalAgentSkill(args: {
+  name: string;
+}): Promise<boolean> {
+  return removeExternalAgentSkillFromWorkspace({
+    workspace: getFilesWorkspace(),
+    name: args.name,
   });
-
-  await args.settings.set(EXTERNAL_AGENT_SKILLS_STORAGE_KEY, {
-    version: 1,
-    items: nextItems,
-  });
-
-  return removed;
 }

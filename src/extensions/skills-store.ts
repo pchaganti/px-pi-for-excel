@@ -1,14 +1,9 @@
 import { mergeAgentSkillDefinitions, listAgentSkills } from "../skills/catalog.js";
 import {
-  loadExternalAgentSkillsFromSettings,
-  removeExternalAgentSkillFromSettings,
-  upsertExternalAgentSkillInSettings,
+  loadExternalAgentSkills,
+  removeExternalAgentSkill,
+  upsertExternalAgentSkill,
 } from "../skills/external-store.js";
-
-export interface SkillsStoreSettings {
-  get(key: string): Promise<unknown>;
-  set(key: string, value: unknown): Promise<void>;
-}
 
 export interface SkillSummaryItem {
   name: string;
@@ -16,9 +11,9 @@ export interface SkillSummaryItem {
   sourceKind: string;
 }
 
-async function loadMergedSkills(settings: SkillsStoreSettings) {
+async function loadMergedSkills() {
   const bundled = listAgentSkills();
-  const external = await loadExternalAgentSkillsFromSettings(settings);
+  const external = await loadExternalAgentSkills();
   return mergeAgentSkillDefinitions(external, bundled);
 }
 
@@ -31,8 +26,8 @@ function normalizeSkillName(name: string): string {
   return trimmed;
 }
 
-export async function listExtensionSkillSummaries(settings: SkillsStoreSettings): Promise<SkillSummaryItem[]> {
-  const merged = await loadMergedSkills(settings);
+export async function listExtensionSkillSummaries(): Promise<SkillSummaryItem[]> {
+  const merged = await loadMergedSkills();
 
   return merged.map((skill) => ({
     name: skill.name,
@@ -41,9 +36,9 @@ export async function listExtensionSkillSummaries(settings: SkillsStoreSettings)
   }));
 }
 
-export async function readExtensionSkill(settings: SkillsStoreSettings, name: string): Promise<string> {
+export async function readExtensionSkill(name: string): Promise<string> {
   const normalizedName = normalizeSkillName(name).toLowerCase();
-  const merged = await loadMergedSkills(settings);
+  const merged = await loadMergedSkills();
 
   const match = merged.find((skill) => skill.name.toLowerCase() === normalizedName);
   if (!match) {
@@ -54,20 +49,17 @@ export async function readExtensionSkill(settings: SkillsStoreSettings, name: st
 }
 
 export async function installExternalExtensionSkill(
-  settings: SkillsStoreSettings,
   requestedName: string,
   markdown: string,
 ): Promise<void> {
-  await upsertExternalAgentSkillInSettings({
-    settings,
+  await upsertExternalAgentSkill({
     markdown,
     expectedName: requestedName,
   });
 }
 
-export async function uninstallExternalExtensionSkill(settings: SkillsStoreSettings, name: string): Promise<void> {
-  await removeExternalAgentSkillFromSettings({
-    settings,
+export async function uninstallExternalExtensionSkill(name: string): Promise<void> {
+  await removeExternalAgentSkill({
     name,
   });
 }

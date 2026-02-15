@@ -132,10 +132,10 @@ export function buildRuntimeManagerActivationBridge(
     agent.followUp(buildExtensionMessage("agent.followUp content", content));
   };
 
-  const listSkills = () => listExtensionSkillSummaries(settings);
-  const readSkill = (name: string) => readExtensionSkill(settings, name);
-  const installSkill = (name: string, markdown: string) => installExternalExtensionSkill(settings, name, markdown);
-  const uninstallSkill = (name: string) => uninstallExternalExtensionSkill(settings, name);
+  const listSkills = () => listExtensionSkillSummaries();
+  const readSkill = (name: string) => readExtensionSkill(name);
+  const installSkill = (name: string, markdown: string) => installExternalExtensionSkill(name, markdown);
+  const uninstallSkill = (name: string) => uninstallExternalExtensionSkill(name);
 
   const downloadFile = (filename: string, content: string, mimeType?: string): void => {
     triggerExtensionDownload(filename, content, mimeType);
