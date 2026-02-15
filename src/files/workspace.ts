@@ -948,6 +948,7 @@ export class FilesWorkspace {
   private async resolveMutationTarget(args: {
     requestedLocationKind?: WorkspaceFileLocationKind;
     defaultToWorkspace: boolean;
+    path?: string;
   }): Promise<{
     backend: WorkspaceBackend;
     locationKind: WorkspaceFileLocationKind;
@@ -974,6 +975,34 @@ export class FilesWorkspace {
 
     if (args.requestedLocationKind === "builtin-doc") {
       throw new Error("Built-in docs are read-only.");
+    }
+
+    if (args.path) {
+      const workspaceHasPath = await this.workspacePathExists(args.path, workspaceBackend);
+      const nativeHasPath = nativeBackend
+        ? await this.workspacePathExists(args.path, nativeBackend)
+        : false;
+
+      if (workspaceHasPath && nativeHasPath) {
+        throw new Error(
+          `File '${args.path}' exists in both uploaded files and the connected folder. ` +
+          "Select the file from Files and run the action there.",
+        );
+      }
+
+      if (workspaceHasPath) {
+        return {
+          backend: workspaceBackend,
+          locationKind: "workspace",
+        };
+      }
+
+      if (nativeHasPath && nativeBackend) {
+        return {
+          backend: nativeBackend,
+          locationKind: "native-directory",
+        };
+      }
     }
 
     if (args.defaultToWorkspace) {
@@ -1291,6 +1320,7 @@ export class FilesWorkspace {
     const target = await this.resolveMutationTarget({
       requestedLocationKind: options.locationKind,
       defaultToWorkspace: false,
+      path: normalizedPath,
     });
 
     if (isBuiltinWorkspacePath(normalizedPath)) {
@@ -1333,6 +1363,7 @@ export class FilesWorkspace {
     const target = await this.resolveMutationTarget({
       requestedLocationKind: options.locationKind,
       defaultToWorkspace: false,
+      path: normalizedPath,
     });
 
     if (isBuiltinWorkspacePath(normalizedPath)) {
@@ -1370,6 +1401,7 @@ export class FilesWorkspace {
     const target = await this.resolveMutationTarget({
       requestedLocationKind: options.locationKind,
       defaultToWorkspace: false,
+      path: normalizedPath,
     });
 
     if (isBuiltinWorkspacePath(normalizedPath)) {
@@ -1405,6 +1437,7 @@ export class FilesWorkspace {
     const target = await this.resolveMutationTarget({
       requestedLocationKind: options.locationKind,
       defaultToWorkspace: false,
+      path: normalizedOldPath,
     });
 
     if (isBuiltinWorkspacePath(normalizedOldPath)) {

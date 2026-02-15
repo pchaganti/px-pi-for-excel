@@ -495,6 +495,67 @@ void test("workspace read/rename/delete can target a specific source when paths 
   assert.equal(nativeOriginal, undefined);
 });
 
+void test("path-only mutations follow the file's source when native is connected", async () => {
+  const workspaceBackend = new SourceBackend({
+    kind: "opfs",
+    label: "Sandboxed workspace",
+    files: [
+      { path: "workspace-only.txt", text: "workspace", modifiedAt: 10 },
+    ],
+  });
+
+  const nativeBackend = new SourceBackend({
+    kind: "native-directory",
+    label: "Local folder",
+    files: [
+      { path: "native-only.txt", text: "native", modifiedAt: 20 },
+    ],
+  });
+
+  const workspace = new FilesWorkspace({
+    initialBackend: nativeBackend,
+    initialWorkspaceBackend: workspaceBackend,
+  });
+
+  await workspace.deleteFile("workspace-only.txt");
+
+  const files = await workspace.listFiles();
+  assert.equal(files.some((file) => file.path === "workspace-only.txt"), false);
+  assert.equal(files.some((file) => file.path === "native-only.txt" && file.locationKind === "native-directory"), true);
+});
+
+void test("path-only mutation rejects ambiguous duplicates across workspace and native", async () => {
+  const workspaceBackend = new SourceBackend({
+    kind: "opfs",
+    label: "Sandboxed workspace",
+    files: [
+      { path: "shared.txt", text: "workspace", modifiedAt: 10 },
+    ],
+  });
+
+  const nativeBackend = new SourceBackend({
+    kind: "native-directory",
+    label: "Local folder",
+    files: [
+      { path: "shared.txt", text: "native", modifiedAt: 20 },
+    ],
+  });
+
+  const workspace = new FilesWorkspace({
+    initialBackend: nativeBackend,
+    initialWorkspaceBackend: workspaceBackend,
+  });
+
+  await assert.rejects(
+    () => workspace.deleteFile("shared.txt"),
+    /exists in both uploaded files and the connected folder/i,
+  );
+
+  const files = await workspace.listFiles();
+  assert.equal(files.some((file) => file.path === "shared.txt" && file.locationKind === "workspace"), true);
+  assert.equal(files.some((file) => file.path === "shared.txt" && file.locationKind === "native-directory"), true);
+});
+
 void test("importFiles defaults to workspace source when native folder is connected", async () => {
   const workspaceBackend = new SourceBackend({
     kind: "opfs",
