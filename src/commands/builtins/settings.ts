@@ -6,7 +6,7 @@ import type { ExecutionMode } from "../../execution/mode.js";
 import { formatExecutionModeLabel, toggleExecutionMode } from "../../execution/mode.js";
 import { showToast } from "../../ui/toast.js";
 import type { SlashCommand } from "../types.js";
-import { showProviderPicker, showSettingsDialog } from "./overlays.js";
+import { showSettingsDialog } from "./overlays.js";
 
 export interface SettingsCommandActions {
   openInstructionsEditor: () => Promise<void>;
@@ -53,7 +53,7 @@ export function createSettingsCommands(actions: SettingsCommandActions): SlashCo
   return [
     {
       name: "settings",
-      description: "Settings (providers, proxy, experiments)",
+      description: "Settings (logins, extensions, more)",
       source: "builtin",
       execute: () => {
         void showSettingsDialog();
@@ -61,10 +61,10 @@ export function createSettingsCommands(actions: SettingsCommandActions): SlashCo
     },
     {
       name: "login",
-      description: "Add or change provider API keys",
+      description: "Open logins settings (proxy + providers)",
       source: "builtin",
       execute: async () => {
-        await showProviderPicker();
+        await showSettingsDialog({ section: "logins" });
       },
     },
     {

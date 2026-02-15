@@ -1,10 +1,10 @@
 /**
  * Unified settings overlay.
  *
- * Sections:
- * - Providers
- * - Proxy
- * - Experimental
+ * Tabs:
+ * - Logins (Proxy, Providers)
+ * - Extensions (opens unified Add-ons manager)
+ * - More (Advanced, Experimental)
  */
 
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
@@ -29,8 +29,17 @@ import {
   buildExperimentalFeatureContent,
   buildExperimentalFeatureFooter,
 } from "./experimental-overlay.js";
+import type { AddonsSection } from "./addons-overlay.js";
 
-export type SettingsOverlaySection = "providers" | "proxy" | "experimental";
+type SettingsPrimaryTab = "logins" | "extensions" | "more";
+
+export type SettingsOverlaySection =
+  | SettingsPrimaryTab
+  | "providers"
+  | "proxy"
+  | "advanced"
+  | "experimental"
+  | AddonsSection;
 
 export interface ShowSettingsDialogOptions {
   section?: SettingsOverlaySection;
@@ -41,15 +50,109 @@ interface SettingsStore {
   set(key: string, value: unknown): Promise<void>;
 }
 
-let settingsDialogOpenInFlight: Promise<void> | null = null;
-let pendingSectionFocus: SettingsOverlaySection | null = null;
-
-function sectionSelector(section: SettingsOverlaySection): string {
-  return `[data-settings-section=\"${section}\"]`;
+interface SettingsDialogDependencies {
+  openAddonsHub?: (section?: AddonsSection) => void;
+  openRulesDialog?: () => Promise<void> | void;
+  openRecoveryDialog?: () => Promise<void> | void;
+  openShortcutsDialog?: () => void;
 }
 
-function focusSettingsSection(overlay: HTMLElement, section: SettingsOverlaySection): void {
-  const target = overlay.querySelector<HTMLElement>(sectionSelector(section));
+interface ResolvedSectionFocus {
+  tab: SettingsPrimaryTab;
+  anchor?: "proxy" | "providers" | "advanced" | "experimental";
+  addonsSection?: AddonsSection;
+}
+
+const SETTINGS_TABS: ReadonlyArray<{ id: SettingsPrimaryTab; label: string }> = [
+  { id: "logins", label: "Logins" },
+  { id: "extensions", label: "Extensions" },
+  { id: "more", label: "More" },
+];
+
+const EXTENSIONS_LINKS: ReadonlyArray<{
+  section: AddonsSection;
+  label: string;
+  description: string;
+}> = [
+  {
+    section: "connections",
+    label: "Connections",
+    description: "Web search, MCP, and bridge setup",
+  },
+  {
+    section: "extensions",
+    label: "Extensions",
+    description: "Installed extensions and enable/disable state",
+  },
+  {
+    section: "skills",
+    label: "Skills",
+    description: "Bundled + external skill catalog",
+  },
+];
+
+let settingsDialogOpenInFlight: Promise<void> | null = null;
+let pendingSectionFocus: SettingsOverlaySection | null = null;
+let dependencies: SettingsDialogDependencies = {};
+
+export function configureSettingsDialogDependencies(next: SettingsDialogDependencies): void {
+  dependencies = { ...next };
+}
+
+function resolveSectionFocus(section: SettingsOverlaySection | undefined): ResolvedSectionFocus {
+  switch (section) {
+    case "providers":
+      return { tab: "logins", anchor: "providers" };
+    case "proxy":
+      return { tab: "logins", anchor: "proxy" };
+    case "connections":
+    case "extensions":
+    case "skills":
+      return { tab: "extensions", addonsSection: section };
+    case "advanced":
+      return { tab: "more", anchor: "advanced" };
+    case "experimental":
+      return { tab: "more", anchor: "experimental" };
+    case "more":
+      return { tab: "more" };
+    case "logins":
+    default:
+      return { tab: "logins" };
+  }
+}
+
+function activateSettingsTab(overlay: HTMLElement, tab: SettingsPrimaryTab): void {
+  const tabButtons = overlay.querySelectorAll<HTMLButtonElement>("[data-settings-tab]");
+  for (const button of tabButtons) {
+    const isActive = button.dataset.settingsTab === tab;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+  }
+
+  const tabPanels = overlay.querySelectorAll<HTMLElement>("[data-settings-panel]");
+  for (const panel of tabPanels) {
+    panel.hidden = panel.dataset.settingsPanel !== tab;
+  }
+}
+
+function applySectionFocus(overlay: HTMLElement, section: SettingsOverlaySection): void {
+  const resolved = resolveSectionFocus(section);
+  activateSettingsTab(overlay, resolved.tab);
+
+  if (resolved.addonsSection) {
+    const preferred = overlay.querySelector<HTMLButtonElement>(
+      `[data-settings-addons-link="${resolved.addonsSection}"]`,
+    );
+    if (preferred) {
+      preferred.click();
+    }
+  }
+
+  if (!resolved.anchor) {
+    return;
+  }
+
+  const target = overlay.querySelector<HTMLElement>(`[data-settings-anchor="${resolved.anchor}"]`);
   if (!target) {
     return;
   }
@@ -57,13 +160,13 @@ function focusSettingsSection(overlay: HTMLElement, section: SettingsOverlaySect
   target.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function createSectionShell(titleText: string, section: SettingsOverlaySection, hintText?: string): {
+function createSectionShell(titleText: string, anchor: string, hintText?: string): {
   section: HTMLElement;
   content: HTMLDivElement;
 } {
   const sectionEl = document.createElement("section");
   sectionEl.className = "pi-overlay-section pi-settings-section";
-  sectionEl.dataset.settingsSection = section;
+  sectionEl.dataset.settingsAnchor = anchor;
 
   const title = createOverlaySectionTitle(titleText);
   sectionEl.appendChild(title);
@@ -256,25 +359,136 @@ function buildProxySection(settingsStore: SettingsStore): HTMLElement {
   return shell.section;
 }
 
-function buildExperimentalSection(): HTMLElement {
+function buildExtensionsSection(closeDialog: () => void): HTMLElement {
   const shell = createSectionShell(
+    "Extensions",
+    "extensions",
+    "Connections, extensions, and skills live in one place.",
+  );
+
+  const tabs = document.createElement("div");
+  tabs.className = "pi-overlay-tabs";
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", "Extensions sections");
+
+  const description = document.createElement("p");
+  description.className = "pi-overlay-hint";
+
+  let selectedSection: AddonsSection = "connections";
+
+  const applySelection = (section: AddonsSection): void => {
+    selectedSection = section;
+    for (const button of tabs.querySelectorAll<HTMLButtonElement>("[data-settings-addons-link]")) {
+      const isActive = button.dataset.settingsAddonsLink === selectedSection;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-selected", isActive ? "true" : "false");
+    }
+
+    const selected = EXTENSIONS_LINKS.find((item) => item.section === section);
+    description.textContent = selected ? selected.description : "";
+  };
+
+  for (const item of EXTENSIONS_LINKS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "pi-overlay-tab";
+    button.textContent = item.label;
+    button.dataset.settingsAddonsLink = item.section;
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-selected", "false");
+    button.addEventListener("click", () => {
+      applySelection(item.section);
+    });
+    tabs.appendChild(button);
+  }
+
+  applySelection(selectedSection);
+
+  const actionRow = document.createElement("div");
+  actionRow.className = "pi-overlay-actions pi-settings-extensions-actions";
+
+  const openButton = createOverlayButton({
+    text: "Open Add-ons manager…",
+    className: "pi-overlay-btn--primary",
+  });
+
+  if (dependencies.openAddonsHub) {
+    openButton.addEventListener("click", () => {
+      closeDialog();
+      dependencies.openAddonsHub?.(selectedSection);
+    });
+  } else {
+    openButton.disabled = true;
+  }
+
+  const aliasHint = document.createElement("p");
+  aliasHint.className = "pi-overlay-hint";
+  aliasHint.textContent = "Slash commands: /addons, /extensions, /tools, /integrations, /skills";
+
+  shell.content.append(tabs, description, actionRow, aliasHint);
+  actionRow.appendChild(openButton);
+
+  if (!dependencies.openAddonsHub) {
+    const warning = document.createElement("p");
+    warning.className = "pi-overlay-hint pi-overlay-text-warning";
+    warning.textContent = "Add-ons manager is unavailable in this context.";
+    shell.content.appendChild(warning);
+  }
+
+  return shell.section;
+}
+
+function buildMoreSection(): HTMLElement {
+  const panel = document.createElement("div");
+  panel.className = "pi-settings-more";
+
+  const advanced = createSectionShell(
+    "Advanced",
+    "advanced",
+    "Power-user shortcuts for rules, backups, and keyboard shortcuts.",
+  );
+
+  const advancedActions = document.createElement("div");
+  advancedActions.className = "pi-overlay-actions pi-settings-advanced-actions";
+
+  const rulesButton = createOverlayButton({ text: "Rules & conventions…" });
+  const backupsButton = createOverlayButton({ text: "Backups…" });
+  const shortcutsButton = createOverlayButton({ text: "Keyboard shortcuts…" });
+
+  rulesButton.disabled = !dependencies.openRulesDialog;
+  backupsButton.disabled = !dependencies.openRecoveryDialog;
+  shortcutsButton.disabled = !dependencies.openShortcutsDialog;
+
+  rulesButton.addEventListener("click", () => {
+    void dependencies.openRulesDialog?.();
+  });
+  backupsButton.addEventListener("click", () => {
+    void dependencies.openRecoveryDialog?.();
+  });
+  shortcutsButton.addEventListener("click", () => {
+    dependencies.openShortcutsDialog?.();
+  });
+
+  advancedActions.append(rulesButton, backupsButton, shortcutsButton);
+  advanced.content.appendChild(advancedActions);
+
+  const experimental = createSectionShell(
     "Experimental",
     "experimental",
     "Advanced and in-progress capabilities.",
   );
+  experimental.content.appendChild(buildExperimentalFeatureContent());
+  experimental.content.appendChild(buildExperimentalFeatureFooter());
 
-  const content = buildExperimentalFeatureContent();
-  shell.content.appendChild(content);
-  shell.content.appendChild(buildExperimentalFeatureFooter());
-
-  return shell.section;
+  panel.append(advanced.section, experimental.section);
+  return panel;
 }
 
 export async function showSettingsDialog(options: ShowSettingsDialogOptions = {}): Promise<void> {
   const existing = document.getElementById(SETTINGS_OVERLAY_ID);
   if (existing instanceof HTMLElement) {
     if (options.section) {
-      focusSettingsSection(existing, options.section);
+      applySectionFocus(existing, options.section);
       return;
     }
 
@@ -291,7 +505,7 @@ export async function showSettingsDialog(options: ShowSettingsDialogOptions = {}
 
     const mounted = document.getElementById(SETTINGS_OVERLAY_ID);
     if (mounted instanceof HTMLElement && options.section) {
-      focusSettingsSection(mounted, options.section);
+      applySectionFocus(mounted, options.section);
     }
     return;
   }
@@ -310,30 +524,66 @@ export async function showSettingsDialog(options: ShowSettingsDialogOptions = {}
       onClose: dialog.close,
       closeLabel: "Close settings",
       title: "Settings",
-      subtitle: "Providers, proxy, and experimental features.",
+      subtitle: "Logins, extensions, and advanced options.",
     });
 
     const body = document.createElement("div");
     body.className = "pi-overlay-body pi-settings-body";
 
-    const providersSection = await buildProvidersSection();
-    const proxySection = buildProxySection(appStorage.settings);
-    const experimentalSection = buildExperimentalSection();
+    const tabs = document.createElement("div");
+    tabs.className = "pi-overlay-tabs";
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "Settings tabs");
 
-    body.append(providersSection, proxySection, experimentalSection);
+    const panels = document.createElement("div");
+    panels.className = "pi-settings-panels";
+
+    const loginsPanel = document.createElement("div");
+    loginsPanel.className = "pi-settings-panel";
+    loginsPanel.dataset.settingsPanel = "logins";
+    loginsPanel.append(
+      buildProxySection(appStorage.settings),
+      await buildProvidersSection(),
+    );
+
+    const extensionsPanel = document.createElement("div");
+    extensionsPanel.className = "pi-settings-panel";
+    extensionsPanel.dataset.settingsPanel = "extensions";
+    extensionsPanel.appendChild(buildExtensionsSection(dialog.close));
+
+    const morePanel = document.createElement("div");
+    morePanel.className = "pi-settings-panel";
+    morePanel.dataset.settingsPanel = "more";
+    morePanel.appendChild(buildMoreSection());
+
+    panels.append(loginsPanel, extensionsPanel, morePanel);
+
+    for (const tab of SETTINGS_TABS) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "pi-overlay-tab";
+      button.textContent = tab.label;
+      button.dataset.settingsTab = tab.id;
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-selected", "false");
+      button.addEventListener("click", () => {
+        activateSettingsTab(dialog.overlay, tab.id);
+      });
+      tabs.appendChild(button);
+    }
+
+    body.append(tabs, panels);
     dialog.card.append(header, body);
     dialog.mount();
 
-    if (pendingSectionFocus) {
-      const section = pendingSectionFocus;
-      pendingSectionFocus = null;
-      requestAnimationFrame(() => {
-        const mounted = document.getElementById(SETTINGS_OVERLAY_ID);
-        if (mounted instanceof HTMLElement) {
-          focusSettingsSection(mounted, section);
-        }
-      });
-    }
+    const initialSection = pendingSectionFocus ?? "logins";
+    pendingSectionFocus = null;
+    requestAnimationFrame(() => {
+      const mounted = document.getElementById(SETTINGS_OVERLAY_ID);
+      if (mounted instanceof HTMLElement) {
+        applySectionFocus(mounted, initialSection);
+      }
+    });
   })();
 
   try {
