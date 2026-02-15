@@ -186,6 +186,8 @@ void test("taskpane init wires gear settings to unified settings overlay", async
     initSource,
     /sidebar\.onOpenSettings\s*=\s*\(\)\s*=>\s*\{\s*void showSettingsDialog\(\);\s*\};/,
   );
+  assert.match(initSource, /configureSettingsDialogDependencies\([\s\S]*getExecutionMode/);
+  assert.match(initSource, /configureSettingsDialogDependencies\([\s\S]*setExecutionMode/);
 });
 
 void test("taskpane init mounts proxy banner and reacts to proxy state changes", async () => {
@@ -214,6 +216,13 @@ void test("sidebar utilities menu includes extensions label", async () => {
   assert.match(sidebarSource, /Extensions…/);
   assert.match(sidebarSource, /Files…/);
   assert.doesNotMatch(sidebarSource, /Add-ons…/);
+});
+
+void test("disclosure bar reuses shared toggle rows", async () => {
+  const disclosureSource = await readFile(new URL("../src/ui/disclosure-bar.ts", import.meta.url), "utf8");
+
+  assert.match(disclosureSource, /createToggleRow/);
+  assert.doesNotMatch(disclosureSource, /pi-toggle__track/);
 });
 
 void test("extensions hub groups connections, plugins, and skills with tabs", async () => {
@@ -305,6 +314,7 @@ void test("provider and experimental overlays are aliases into settings sections
   assert.match(providerSource, /showSettingsDialog\(\{ section: "providers" \}\)/);
   assert.match(experimentalSource, /showSettingsDialog\(\{ section: "experimental" \}\)/);
   assert.match(experimentalSource, /buildExperimentalFeatureContent/);
+  assert.match(experimentalSource, /createToggleRow/);
 });
 
 void test("extensions and alias commands deep-link to hub tabs", async () => {
@@ -322,7 +332,7 @@ void test("extensions and alias commands deep-link to hub tabs", async () => {
   assert.match(skillsSource, /openExtensionsHub\("skills"\)/);
 });
 
-void test("settings overlay serializes open flow and tolerates provider storage lookup failure", async () => {
+void test("settings overlay serializes open flow and adopts shared proxy + execution controls", async () => {
   const settingsOverlaySource = await readFile(
     new URL("../src/commands/builtins/settings-overlay.ts", import.meta.url),
     "utf8",
@@ -332,6 +342,11 @@ void test("settings overlay serializes open flow and tolerates provider storage 
   assert.match(settingsOverlaySource, /pendingSectionFocus/);
   assert.match(settingsOverlaySource, /await settingsDialogOpenInFlight/);
   assert.match(settingsOverlaySource, /Saved provider state is temporarily unavailable/);
+  assert.match(settingsOverlaySource, /createToggleRow/);
+  assert.match(settingsOverlaySource, /createConfigRow/);
+  assert.match(settingsOverlaySource, /createCallout/);
+  assert.match(settingsOverlaySource, /"Auto mode"/);
+  assert.doesNotMatch(settingsOverlaySource, /text:\s*"Save"/);
 });
 
 void test("slash-command busy policy is centralized and includes /yolo and /addons", async () => {

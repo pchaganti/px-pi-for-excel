@@ -74,7 +74,7 @@ export function createToggleRow(opts: ToggleRowOptions): {
   row.className = "pi-toggle-row";
 
   const labels = document.createElement("div");
-  labels.className = "pi-toggle-row__labels";
+  labels.className = "pi-toggle-row__meta pi-toggle-row__labels";
 
   const labelEl = document.createElement("div");
   labelEl.className = "pi-toggle-row__label";

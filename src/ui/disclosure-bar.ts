@@ -5,6 +5,8 @@
  * MCP, skills) and lets them acknowledge or customize before using the agent.
  */
 
+import { createToggleRow } from "./extensions-hub-components.js";
+
 const ACKNOWLEDGED_KEY = "pi.onboarding.disclosure.acknowledged";
 
 function isAcknowledged(): boolean {
@@ -62,39 +64,12 @@ export function createDisclosureBar(options: DisclosureBarOptions): HTMLElement 
   ];
 
   for (const row of toggleRows) {
-    const toggleRow = document.createElement("label");
-    toggleRow.className = "pi-toggle-row";
-
-    const labelWrap = document.createElement("div");
-    labelWrap.className = "pi-toggle-row__labels";
-
-    const labelEl = document.createElement("span");
-    labelEl.className = "pi-toggle-row__label";
-    labelEl.textContent = row.label;
-    labelWrap.appendChild(labelEl);
-
-    const sublabel = document.createElement("span");
-    sublabel.className = "pi-toggle-row__sublabel";
-    sublabel.textContent = row.sublabel;
-    labelWrap.appendChild(sublabel);
-
-    toggleRow.appendChild(labelWrap);
-
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = true;
-    checkbox.className = "pi-toggle__input";
-
-    const track = document.createElement("span");
-    track.className = "pi-toggle__track";
-
-    const toggle = document.createElement("span");
-    toggle.className = "pi-toggle";
-    toggle.appendChild(checkbox);
-    toggle.appendChild(track);
-
-    toggleRow.appendChild(toggle);
-    picker.appendChild(toggleRow);
+    const toggleRow = createToggleRow({
+      label: row.label,
+      sublabel: row.sublabel,
+      checked: true,
+    });
+    picker.appendChild(toggleRow.root);
   }
 
   // --- Actions row ---

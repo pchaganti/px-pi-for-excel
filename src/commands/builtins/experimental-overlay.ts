@@ -4,10 +4,10 @@
 
 import {
   getExperimentalFeatureSnapshots,
-  isExperimentalFeatureEnabled,
   setExperimentalFeatureEnabled,
   type ExperimentalFeatureSnapshot,
 } from "../../experiments/flags.js";
+import { createToggleRow } from "../../ui/extensions-hub-components.js";
 import { showToast } from "../../ui/toast.js";
 
 const ADVANCED_SECURITY_FEATURE_IDS = new Set<ExperimentalFeatureSnapshot["id"]>([
@@ -22,40 +22,28 @@ interface FeatureSectionSpec {
   features: ExperimentalFeatureSnapshot[];
 }
 
-
 function isAdvancedSecurityFeature(feature: ExperimentalFeatureSnapshot): boolean {
   return ADVANCED_SECURITY_FEATURE_IDS.has(feature.id);
-}
-
-function applyStatusVisual(statusEl: HTMLSpanElement, enabled: boolean): void {
-  statusEl.textContent = enabled ? "Enabled" : "Disabled";
-  statusEl.classList.toggle("is-enabled", enabled);
-}
-
-function applyToggleButtonVisual(button: HTMLButtonElement, enabled: boolean): void {
-  button.textContent = enabled ? "Disable" : "Enable";
-  button.classList.toggle("is-enabled", enabled);
 }
 
 function buildFeatureRow(feature: ExperimentalFeatureSnapshot): HTMLElement {
   const row = document.createElement("div");
   row.className = "pi-experimental-row";
 
-  const header = document.createElement("div");
-  header.className = "pi-experimental-row__header";
+  const toggleRow = createToggleRow({
+    label: feature.title,
+    sublabel: feature.description,
+    checked: feature.enabled,
+    onChange: (checked) => {
+      setExperimentalFeatureEnabled(feature.id, checked);
 
-  const title = document.createElement("div");
-  title.className = "pi-experimental-row__title";
-  title.textContent = feature.title;
-
-  const status = document.createElement("span");
-  status.className = "pi-experimental-row__status";
-
-  header.append(title, status);
-
-  const description = document.createElement("div");
-  description.className = "pi-experimental-row__description";
-  description.textContent = feature.description;
+      const suffix = feature.wiring === "flag-only"
+        ? " (flag saved; feature not wired yet)"
+        : "";
+      showToast(`${feature.title}: ${checked ? "enabled" : "disabled"}${suffix}`);
+    },
+  });
+  toggleRow.root.classList.add("pi-experimental-row__toggle-row");
 
   const meta = document.createElement("div");
   meta.className = "pi-experimental-row__meta";
@@ -64,11 +52,7 @@ function buildFeatureRow(feature: ExperimentalFeatureSnapshot): HTMLElement {
   commandHint.className = "pi-experimental-row__command";
   commandHint.textContent = `/experimental toggle ${feature.slug}`;
 
-  const toggleBtn = document.createElement("button");
-  toggleBtn.type = "button";
-  toggleBtn.className = "pi-overlay-btn pi-experimental-row__toggle";
-
-  meta.append(commandHint, toggleBtn);
+  meta.appendChild(commandHint);
 
   const warning = document.createElement("div");
   warning.className = "pi-experimental-row__warning";
@@ -81,24 +65,7 @@ function buildFeatureRow(feature: ExperimentalFeatureSnapshot): HTMLElement {
     ? "Ready now"
     : "Flag only for now — this capability is planned but not wired yet.";
 
-  const applyState = (enabled: boolean): void => {
-    applyStatusVisual(status, enabled);
-    applyToggleButtonVisual(toggleBtn, enabled);
-  };
-
-  toggleBtn.addEventListener("click", () => {
-    const next = !isExperimentalFeatureEnabled(feature.id);
-    setExperimentalFeatureEnabled(feature.id, next);
-    applyState(next);
-
-    const suffix = feature.wiring === "flag-only"
-      ? " (flag saved; feature not wired yet)"
-      : "";
-    showToast(`${feature.title}: ${next ? "enabled" : "disabled"}${suffix}`);
-  });
-
-  applyState(feature.enabled);
-  row.append(header, description, meta, warning, readiness);
+  row.append(toggleRow.root, meta, warning, readiness);
   return row;
 }
 
