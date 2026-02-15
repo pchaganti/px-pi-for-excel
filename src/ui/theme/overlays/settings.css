@@ -14,6 +14,18 @@
   padding-right: 2px;
 }
 
+.pi-settings-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pi-settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .pi-settings-section {
   display: flex;
   flex-direction: column;
@@ -60,6 +72,18 @@
 
 .pi-settings-proxy-status {
   margin: 0;
+}
+
+.pi-settings-extensions-actions,
+.pi-settings-advanced-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.pi-settings-more {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 @media (max-width: 520px) {

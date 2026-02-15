@@ -54,6 +54,7 @@ import {
   showShortcutsDialog,
   type RecoveryCheckpointSummary,
 } from "../commands/builtins/overlays.js";
+import { configureSettingsDialogDependencies } from "../commands/builtins/settings-overlay.js";
 import { wireCommandMenu } from "../commands/command-menu.js";
 import { isBusyAllowedCommand } from "../commands/busy-command-policy.js";
 import { commandRegistry } from "../commands/types.js";
@@ -1349,6 +1350,15 @@ export async function initTaskpane(opts: {
       },
     });
   };
+
+  configureSettingsDialogDependencies({
+    openAddonsHub: (section?: AddonsSection) => {
+      openAddonsManager(section);
+    },
+    openRulesDialog: openRulesEditor,
+    openRecoveryDialog,
+    openShortcutsDialog: showShortcutsDialog,
+  });
 
   registerBuiltins({
     getActiveAgent,

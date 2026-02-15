@@ -187,6 +187,8 @@ void test("taskpane init wires add-ons menu opener", async () => {
   assert.match(initSource, /openIntegrationsManager/);
   assert.match(initSource, /openSkillsManager/);
   assert.match(initSource, /openExtensionsManager/);
+  assert.match(initSource, /configureSettingsDialogDependencies/);
+  assert.match(initSource, /openAddonsHub:\s*\(section\?: AddonsSection\)\s*=>\s*\{\s*openAddonsManager\(section\);\s*\}/);
   assert.match(initSource, /registerBuiltins\([\s\S]*openAddonsManager/);
   assert.match(initSource, /sidebar\.onOpenAddons\s*=\s*\(\)\s*=>\s*\{\s*openAddonsManager\(\);\s*\};/);
 });
@@ -286,7 +288,7 @@ void test("settings builtins route to unified settings overlay", async () => {
   assert.match(settingsSource, /name:\s*"settings"/);
   assert.match(settingsSource, /showSettingsDialog/);
   assert.match(settingsSource, /name:\s*"login"/);
-  assert.match(settingsSource, /showProviderPicker/);
+  assert.match(settingsSource, /showSettingsDialog\(\{ section: "logins" \}\)/);
 
   assert.match(settingsSource, /name:\s*"yolo"/);
   assert.match(settingsSource, /Toggle execution mode \(Auto vs Confirm\)/);
@@ -326,6 +328,10 @@ void test("settings overlay serializes open flow and tolerates provider storage 
   assert.match(settingsOverlaySource, /pendingSectionFocus/);
   assert.match(settingsOverlaySource, /await settingsDialogOpenInFlight/);
   assert.match(settingsOverlaySource, /Saved provider state is temporarily unavailable/);
+  assert.match(settingsOverlaySource, /SETTINGS_TABS/);
+  assert.match(settingsOverlaySource, /configureSettingsDialogDependencies/);
+  assert.match(settingsOverlaySource, /buildExtensionsSection/);
+  assert.match(settingsOverlaySource, /buildMoreSection/);
 });
 
 void test("slash-command busy policy is centralized and includes /yolo and /addons", async () => {
