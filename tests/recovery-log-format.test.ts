@@ -10,6 +10,14 @@ import {
   type RecoveryFormatRangeState,
 } from "../src/workbook/recovery-states.ts";
 import {
+  isRecoveryHorizontalAlignment,
+  isRecoveryUnderlineStyle,
+  isRecoveryVerticalAlignment,
+  normalizeOptionalBoolean,
+  normalizeOptionalNumber,
+  normalizeOptionalString,
+} from "../src/workbook/recovery/format-state-normalization.ts";
+import {
   createInMemorySettingsStore,
   findSnapshotById,
   withoutUndefined,
@@ -53,6 +61,33 @@ void test("estimateFormatCaptureCellCount scales by serialized checkpoint shape"
     2_621_440,
   );
 });
+
+void test("format-state normalization guards accept only supported values", () => {
+  assert.equal(isRecoveryUnderlineStyle("Single"), true);
+  assert.equal(isRecoveryUnderlineStyle("DoubleAccountant"), true);
+  assert.equal(isRecoveryUnderlineStyle("Wave"), false);
+
+  assert.equal(isRecoveryHorizontalAlignment("General"), true);
+  assert.equal(isRecoveryHorizontalAlignment("CenterAcrossSelection"), true);
+  assert.equal(isRecoveryHorizontalAlignment("DistributedAcrossSelection"), false);
+
+  assert.equal(isRecoveryVerticalAlignment("Top"), true);
+  assert.equal(isRecoveryVerticalAlignment("Distributed"), true);
+  assert.equal(isRecoveryVerticalAlignment("Middle"), false);
+});
+
+void test("format-state normalization keeps only optional scalar values", () => {
+  assert.equal(normalizeOptionalString("abc"), "abc");
+  assert.equal(normalizeOptionalString(123), undefined);
+
+  assert.equal(normalizeOptionalBoolean(true), true);
+  assert.equal(normalizeOptionalBoolean("true"), undefined);
+
+  assert.equal(normalizeOptionalNumber(12.5), 12.5);
+  assert.equal(normalizeOptionalNumber(Number.NaN), undefined);
+  assert.equal(normalizeOptionalNumber(Infinity), undefined);
+});
+
 void test("persisted format checkpoints retain dimension state", async () => {
   const settingsStore = createInMemorySettingsStore();
 
