@@ -1532,6 +1532,19 @@ export async function initTaskpane(opts: {
   tabLayoutPersistence.enable();
   maybePersistTabLayout();
 
+  // ── Disclosure bar (onboarding banner) ──
+  // Must run after runtime bootstrap so the sidebar has rendered .pi-messages.
+  {
+    const { createDisclosureBar } = await import("../ui/disclosure-bar.js");
+    const disclosureEl = createDisclosureBar({ providerCount: availableProviders.length });
+    if (disclosureEl) {
+      const messagesContainer = sidebar.querySelector(".pi-messages");
+      if (messagesContainer) {
+        messagesContainer.parentElement?.insertBefore(disclosureEl, messagesContainer);
+      }
+    }
+  }
+
   // ── Register extensions ──
   await extensionManager.initialize();
 
