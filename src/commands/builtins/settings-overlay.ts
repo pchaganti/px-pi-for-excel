@@ -373,6 +373,16 @@ function buildProxySection(
     }, 140);
   };
 
+  const flushPendingProxyUrlSave = (): void => {
+    if (urlSaveTimer === null) {
+      return;
+    }
+
+    clearTimeout(urlSaveTimer);
+    urlSaveTimer = null;
+    void saveProxyUrl();
+  };
+
   proxyUrlInput.addEventListener("blur", scheduleProxyUrlSave);
   proxyUrlInput.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") {
@@ -402,10 +412,7 @@ function buildProxySection(
     document.removeEventListener("pi:proxy-state-changed", onProxyStateChanged);
   });
   registerCleanup?.(() => {
-    if (urlSaveTimer !== null) {
-      clearTimeout(urlSaveTimer);
-      urlSaveTimer = null;
-    }
+    flushPendingProxyUrlSave();
   });
 
   const helper = document.createElement("p");
