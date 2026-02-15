@@ -46,9 +46,19 @@ const LIBREOFFICE_CANDIDATES = LIBREOFFICE_BIN_RAW.length > 0
   ? [LIBREOFFICE_BIN_RAW]
   : ["soffice", "libreoffice"];
 
-const rootDir = path.resolve(process.cwd());
-const keyPath = path.join(rootDir, "key.pem");
-const certPath = path.join(rootDir, "cert.pem");
+function resolveOptionalEnvPath(name) {
+  const raw = process.env[name];
+  if (typeof raw !== "string") return null;
+
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+
+  return path.resolve(trimmed);
+}
+
+const certDir = resolveOptionalEnvPath("PI_FOR_EXCEL_CERT_DIR") ?? path.resolve(process.cwd());
+const keyPath = resolveOptionalEnvPath("PI_FOR_EXCEL_KEY_PATH") ?? path.join(certDir, "key.pem");
+const certPath = resolveOptionalEnvPath("PI_FOR_EXCEL_CERT_PATH") ?? path.join(certDir, "cert.pem");
 
 const DEFAULT_ALLOWED_ORIGINS = new Set([
   "https://localhost:3000",

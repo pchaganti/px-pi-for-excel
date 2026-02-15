@@ -181,8 +181,11 @@ function startBridge(bridgeArgs) {
   const childEnv = { ...process.env };
   applyDefaultPort(childEnv);
 
+  if (typeof childEnv.PI_FOR_EXCEL_CERT_DIR !== "string" || childEnv.PI_FOR_EXCEL_CERT_DIR.trim().length === 0) {
+    childEnv.PI_FOR_EXCEL_CERT_DIR = certDir;
+  }
+
   const child = spawn(process.execPath, [bridgeScriptPath, ...bridgeArgs], {
-    cwd: certDir,
     env: childEnv,
     stdio: "inherit",
   });
