@@ -7,7 +7,8 @@
  *
  * Workbook scope that has never been configured (null in storage) inherits
  * catalog defaults (e.g. web_search is enabled by default). Session scope
- * stays explicit, so workbook-level disable persists across new sessions.
+ * stays explicit by default, with an opt-in runtime fallback when workbook
+ * identity is unavailable.
  */
 
 import { getDefaultEnabledIntegrationIds } from "./catalog.js";
@@ -17,6 +18,14 @@ export type IntegrationScope = "session" | "workbook";
 export interface IntegrationSettingsStore {
   get(key: string): Promise<unknown>;
   set(key: string, value: unknown): Promise<void>;
+}
+
+export interface SessionIntegrationIdsOptions {
+  /**
+   * When true and the session scope has never been configured, return
+   * catalog defaults instead of an empty set.
+   */
+  applyDefaultsWhenUnconfigured?: boolean;
 }
 
 const SESSION_INTEGRATIONS_PREFIX = "integrations.session.v1.";
@@ -79,6 +88,7 @@ async function getScopeIntegrationIds(
   scope: IntegrationScope,
   identifier: string,
   knownIntegrationIds: readonly string[],
+  applyDefaultsWhenUnconfigured: boolean,
 ): Promise<string[]> {
   const key = scope === "session"
     ? sessionIntegrationsKey(identifier)
@@ -86,9 +96,9 @@ async function getScopeIntegrationIds(
   const raw = await settings.get(key);
 
   // Never configured workbook scope inherits defaults (web search).
-  // Session scope stays explicit (empty until user toggles).
+  // Session scope stays explicit unless the caller opts into fallback defaults.
   if (raw == null) {
-    if (scope === "workbook") {
+    if (scope === "workbook" || applyDefaultsWhenUnconfigured) {
       return normalizeIntegrationIds(getDefaultEnabledIntegrationIds(), knownIntegrationIds);
     }
     return [];
@@ -116,8 +126,15 @@ export async function getSessionIntegrationIds(
   settings: IntegrationSettingsStore,
   sessionId: string,
   knownIntegrationIds: readonly string[],
+  options?: SessionIntegrationIdsOptions,
 ): Promise<string[]> {
-  return getScopeIntegrationIds(settings, "session", sessionId, knownIntegrationIds);
+  return getScopeIntegrationIds(
+    settings,
+    "session",
+    sessionId,
+    knownIntegrationIds,
+    options?.applyDefaultsWhenUnconfigured === true,
+  );
 }
 
 export async function setSessionIntegrationIds(
@@ -134,7 +151,7 @@ export async function getWorkbookIntegrationIds(
   workbookId: string,
   knownIntegrationIds: readonly string[],
 ): Promise<string[]> {
-  return getScopeIntegrationIds(settings, "workbook", workbookId, knownIntegrationIds);
+  return getScopeIntegrationIds(settings, "workbook", workbookId, knownIntegrationIds, false);
 }
 
 export async function setWorkbookIntegrationIds(
@@ -155,7 +172,7 @@ export async function setIntegrationEnabledInScope(args: {
   knownIntegrationIds: readonly string[];
 }): Promise<void> {
   const { settings, scope, identifier, integrationId, enabled, knownIntegrationIds } = args;
-  const existing = await getScopeIntegrationIds(settings, scope, identifier, knownIntegrationIds);
+  const existing = await getScopeIntegrationIds(settings, scope, identifier, knownIntegrationIds, false);
 
   const nextSet = new Set<string>(existing);
   if (enabled) {
@@ -176,7 +193,12 @@ export async function resolveConfiguredIntegrationIds(args: {
 }): Promise<string[]> {
   const { settings, sessionId, workbookId, knownIntegrationIds } = args;
 
-  const sessionIntegrationIds = await getSessionIntegrationIds(settings, sessionId, knownIntegrationIds);
+  const sessionIntegrationIds = await getSessionIntegrationIds(
+    settings,
+    sessionId,
+    knownIntegrationIds,
+    { applyDefaultsWhenUnconfigured: workbookId === null },
+  );
   const workbookIntegrationIds = workbookId
     ? await getWorkbookIntegrationIds(settings, workbookId, knownIntegrationIds)
     : [];

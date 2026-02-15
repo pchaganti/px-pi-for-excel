@@ -107,6 +107,15 @@ void test("unconfigured session scope is explicit empty", async () => {
   assert.deepEqual(ids, []);
 });
 
+void test("session scope can opt into defaults when unconfigured", async () => {
+  const settings = new MemorySettingsStore();
+
+  const ids = await getSessionIntegrationIds(settings, "new-session", KNOWN_INTEGRATIONS, {
+    applyDefaultsWhenUnconfigured: true,
+  });
+  assert.deepEqual(ids, ["web_search"]);
+});
+
 void test("explicitly cleared session scope returns empty", async () => {
   const settings = new MemorySettingsStore();
 
@@ -130,6 +139,11 @@ void test("explicitly cleared session scope returns empty", async () => {
 
   const ids = await getSessionIntegrationIds(settings, "session-x", KNOWN_INTEGRATIONS);
   assert.deepEqual(ids, []);
+
+  const fallbackIds = await getSessionIntegrationIds(settings, "session-x", KNOWN_INTEGRATIONS, {
+    applyDefaultsWhenUnconfigured: true,
+  });
+  assert.deepEqual(fallbackIds, []);
 });
 
 void test("unconfigured workbook scope returns default-enabled integrations", async () => {
@@ -146,6 +160,19 @@ void test("resolveConfiguredIntegrationIds includes defaults for fresh session+w
     settings,
     sessionId: "fresh-session",
     workbookId: "fresh-workbook",
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
+  });
+
+  assert.deepEqual(ids, ["web_search"]);
+});
+
+void test("resolveConfiguredIntegrationIds includes defaults when workbook identity is unavailable", async () => {
+  const settings = new MemorySettingsStore();
+
+  const ids = await resolveConfiguredIntegrationIds({
+    settings,
+    sessionId: "fresh-session-no-workbook",
+    workbookId: null,
     knownIntegrationIds: KNOWN_INTEGRATIONS,
   });
 

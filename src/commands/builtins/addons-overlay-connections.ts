@@ -62,7 +62,9 @@ export async function buildConnectionsSnapshot(
   ] = await Promise.all([
     getExternalToolsEnabled(settings),
     sessionId
-      ? getSessionIntegrationIds(settings, sessionId, INTEGRATION_IDS)
+      ? getSessionIntegrationIds(settings, sessionId, INTEGRATION_IDS, {
+        applyDefaultsWhenUnconfigured: workbookContext.workbookId === null,
+      })
       : Promise.resolve([]),
     workbookContext.workbookId
       ? getWorkbookIntegrationIds(settings, workbookContext.workbookId, INTEGRATION_IDS)
