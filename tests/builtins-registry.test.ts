@@ -62,6 +62,8 @@ void test("builtins registry wires /addons, /experimental, /extensions, and /int
   );
 
   assert.match(extensionModuleImportSource, /glob\("\.\.\/extensions\/\*\.\{ts,js\}"\)/);
+  assert.match(extensionModuleImportSource, /return import\.meta\.env\.DEV === true/);
+  assert.doesNotMatch(extensionModuleImportSource, /typeof \(import\.meta.*\)\.glob !== "function"/);
   assert.match(extensionModuleImportSource, /Local extension module/);
 
   assert.match(extensionApiSource, /isCapabilityEnabled/);
@@ -96,7 +98,12 @@ void test("builtins registry wires /addons, /experimental, /extensions, and /int
   assert.match(extensionsOverlaySource, /Host-runtime fallback is enabled: this untrusted extension runs in host runtime/);
   assert.match(extensionsOverlaySource, /higher-risk permissions/);
   assert.match(extensionsOverlaySource, /Updated permissions for/);
-  assert.match(extensionsOverlaySource, /reload failed \(see Last error\)/);
+  assert.match(extensionsOverlaySource, /Permissions \(\$\{grantedCapabilities\.size\}\)/);
+  assert.match(extensionsOverlaySource, /createOverlayBadge\("all permissions", "muted"\)/);
+  assert.match(extensionsOverlaySource, /addExtensionSummary\.textContent = "Add extension"/);
+  assert.match(extensionsOverlaySource, /advancedSummary\.textContent = "Advanced"/);
+  assert.match(extensionsOverlaySource, /errorSummary\.textContent = "Failed to load"/);
+  assert.match(extensionsOverlaySource, /reload failed \(see Failed to load\)/);
 
   const extensionsDocsSource = await readFile(new URL("../docs/extensions.md", import.meta.url), "utf8");
   assert.match(extensionsDocsSource, /## Permission review\/revoke/);

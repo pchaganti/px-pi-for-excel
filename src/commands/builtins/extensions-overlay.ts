@@ -57,10 +57,6 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-function formatCapabilityList(capabilities: readonly string[]): string {
-  return capabilities.length > 0 ? capabilities.join(", ") : "(none)";
-}
-
 function getCapabilityRiskLabel(capability: ExtensionCapability): string | null {
   if (!HIGH_RISK_CAPABILITIES.has(capability)) {
     return null;
@@ -201,7 +197,7 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
   const { header } = createOverlayHeader({
     onClose: closeOverlay,
     closeLabel: "Close extensions manager",
-    title: "Extensions Manager",
+    title: "Extensions",
     subtitle: "Extensions can read/write workbook data. Only enable code you trust.",
   });
 
@@ -289,6 +285,13 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
   localBridgeCard.append(localBridgeStatusRow, localBridgeUrlRow, localBridgeHint);
   localBridgeSection.appendChild(localBridgeCard);
 
+  const advancedSection = document.createElement("details");
+  advancedSection.className = "pi-overlay-section";
+  const advancedSummary = document.createElement("summary");
+  advancedSummary.className = "pi-overlay-section-title pi-overlay-section-title--collapsible";
+  advancedSummary.textContent = "Advanced";
+  advancedSection.append(advancedSummary, sandboxSection, localBridgeSection);
+
   const installUrlSection = document.createElement("section");
   installUrlSection.className = "pi-overlay-section";
   installUrlSection.appendChild(createOverlaySectionTitle("Install from URL"));
@@ -336,14 +339,14 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
 
   templateSection.append(templateCode, templateActions);
 
-  body.append(
-    installedSection,
-    sandboxSection,
-    localBridgeSection,
-    installUrlSection,
-    installCodeSection,
-    templateSection,
-  );
+  const addExtensionSection = document.createElement("details");
+  addExtensionSection.className = "pi-overlay-section";
+  const addExtensionSummary = document.createElement("summary");
+  addExtensionSummary.className = "pi-overlay-section-title pi-overlay-section-title--collapsible";
+  addExtensionSummary.textContent = "Add extension";
+  addExtensionSection.append(addExtensionSummary, installUrlSection, installCodeSection, templateSection);
+
+  body.append(installedSection, addExtensionSection, advancedSection);
 
   dialog.card.append(header, body);
 
@@ -422,6 +425,7 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
 
     const allCapabilities = listAllExtensionCapabilities();
     const grantedCapabilities = new Set(status.grantedCapabilities);
+    const isBuiltin = status.trust === "builtin";
 
     const top = document.createElement("div");
     top.className = "pi-ext-installed-row__top";
@@ -453,22 +457,24 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
     }
 
     const trustIsUntrusted = status.trust === "remote-url" || status.trust === "inline-code";
-    const trustBadgeColor = trustIsUntrusted ? "warn" : "muted";
-    badges.appendChild(createOverlayBadge(status.trustLabel, trustBadgeColor));
+    if (!isBuiltin) {
+      const trustBadgeColor = trustIsUntrusted ? "warn" : "muted";
+      badges.appendChild(createOverlayBadge(status.trustLabel, trustBadgeColor));
 
-    const runtimeBadgeColor = status.runtimeMode === "sandbox-iframe"
-      ? "ok"
-      : trustIsUntrusted
-        ? "warn"
-        : "muted";
-    badges.appendChild(createOverlayBadge(status.runtimeLabel, runtimeBadgeColor));
+      const runtimeBadgeColor = status.runtimeMode === "sandbox-iframe"
+        ? "ok"
+        : trustIsUntrusted
+          ? "warn"
+          : "muted";
+      badges.appendChild(createOverlayBadge(status.runtimeLabel, runtimeBadgeColor));
+    }
 
     badges.appendChild(
       createOverlayBadge(`${status.effectiveCapabilities.length} permission${status.effectiveCapabilities.length === 1 ? "" : "s"}`, "muted"),
     );
 
     if (!status.permissionsEnforced) {
-      badges.appendChild(createOverlayBadge("gates off", "warn"));
+      badges.appendChild(createOverlayBadge("all permissions", "muted"));
     }
 
     if (status.toolNames.length > 0) {
@@ -498,20 +504,6 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
       details.appendChild(tools);
     }
 
-    const permissions = document.createElement("div");
-    if (status.permissionsEnforced) {
-      permissions.textContent = `Permissions: ${formatCapabilityList(status.effectiveCapabilities)}`;
-    } else {
-      permissions.textContent = "Permissions: all capabilities active (extension-permissions experiment is off)";
-    }
-    permissions.className = "pi-ext-installed-row__line";
-    details.appendChild(permissions);
-
-    const runtime = document.createElement("div");
-    runtime.textContent = `Runtime: ${status.runtimeLabel}`;
-    runtime.className = "pi-ext-installed-row__line";
-    details.appendChild(runtime);
-
     if ((status.trust === "inline-code" || status.trust === "remote-url") && status.runtimeMode === "host") {
       const runtimeWarning = document.createElement("div");
       runtimeWarning.textContent =
@@ -520,12 +512,12 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
       details.appendChild(runtimeWarning);
     }
 
-    if (!status.permissionsEnforced) {
-      const configuredPermissions = document.createElement("div");
-      configuredPermissions.textContent = `Configured (inactive): ${formatCapabilityList(status.grantedCapabilities)}`;
-      configuredPermissions.className = "pi-ext-installed-row__line";
-      details.appendChild(configuredPermissions);
-    }
+    const permissionsDisclosure = document.createElement("details");
+    permissionsDisclosure.className = "pi-ext-permissions-disclosure";
+
+    const permissionsSummary = document.createElement("summary");
+    permissionsSummary.textContent = `Permissions (${grantedCapabilities.size})`;
+    permissionsDisclosure.appendChild(permissionsSummary);
 
     const permissionsEditor = document.createElement("div");
     permissionsEditor.className = "pi-ext-installed-row__permissions-editor";
@@ -572,7 +564,7 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
           }
 
           if (updated.lastError) {
-            showToast(`Updated permissions for ${status.name}; reload failed (see Last error).`);
+            showToast(`Updated permissions for ${status.name}; reload failed (see Failed to load).`);
             return;
           }
 
@@ -586,13 +578,23 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
       });
     }
 
-    details.appendChild(permissionsEditor);
+    permissionsDisclosure.appendChild(permissionsEditor);
+    details.appendChild(permissionsDisclosure);
 
-    if (status.lastError) {
-      const errorLine = document.createElement("div");
-      errorLine.textContent = `Last error: ${status.lastError}`;
-      errorLine.className = "pi-ext-installed-row__error pi-overlay-text-warning";
-      details.appendChild(errorLine);
+    if (status.enabled && status.lastError) {
+      const errorDisclosure = document.createElement("details");
+      errorDisclosure.className = "pi-ext-installed-row__error-disclosure";
+
+      const errorSummary = document.createElement("summary");
+      errorSummary.textContent = "Failed to load";
+      errorSummary.className = "pi-overlay-text-warning";
+
+      const errorDetail = document.createElement("p");
+      errorDetail.textContent = status.lastError;
+      errorDetail.className = "pi-ext-installed-row__error-detail";
+
+      errorDisclosure.append(errorSummary, errorDetail);
+      details.appendChild(errorDisclosure);
     }
 
     const actions = document.createElement("div");
