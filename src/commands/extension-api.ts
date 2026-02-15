@@ -35,8 +35,11 @@ import type { Static, TSchema } from "@sinclair/typebox";
 import {
   ALLOW_REMOTE_EXTENSION_URLS_STORAGE_KEY,
   classifyExtensionSource,
-  isRemoteExtensionOptIn,
 } from "./extension-source-policy.js";
+import {
+  importExtensionModule,
+  readRemoteExtensionOptInFromStorage,
+} from "./extension-module-import.js";
 import {
   collectActivationCleanups,
   createLoadedExtensionHandle,
@@ -58,7 +61,6 @@ import {
 } from "../extensions/internal/widget-surface.js";
 import { EXTENSION_OVERLAY_ID } from "../ui/overlay-ids.js";
 import { createOverlayDialogManager } from "../ui/overlay-dialog.js";
-import { isRecord } from "../utils/type-guards.js";
 
 export interface ExtensionCommand {
   description: string;
@@ -279,82 +281,6 @@ function defaultToast(message: string): void {
   toast.classList.add("visible");
   const toastEl = toast;
   setTimeout(() => toastEl.classList.remove("visible"), 2000);
-}
-
-type ExtensionModuleImporter = () => Promise<unknown>;
-
-function isExtensionModuleImporter(value: unknown): value is ExtensionModuleImporter {
-  return typeof value === "function";
-}
-
-function resolveBundledLocalExtensionImporters(): Record<string, ExtensionModuleImporter> {
-  try {
-    const rawImporters = (import.meta as ImportMeta & {
-      glob: (pattern: string) => unknown;
-    }).glob("../extensions/*.{ts,js}");
-
-    if (!isRecord(rawImporters)) {
-      return {};
-    }
-
-    const importers: Record<string, ExtensionModuleImporter> = {};
-    for (const [path, importer] of Object.entries(rawImporters)) {
-      if (!isExtensionModuleImporter(importer)) {
-        continue;
-      }
-
-      importers[path] = importer;
-    }
-
-    return importers;
-  } catch {
-    return {};
-  }
-}
-
-const BUNDLED_LOCAL_EXTENSION_IMPORTERS = resolveBundledLocalExtensionImporters();
-
-function getLocalExtensionImportCandidates(specifier: string): string[] {
-  const normalized = specifier.trim();
-  const candidates = new Set<string>([normalized]);
-
-  if (normalized.endsWith(".js")) {
-    candidates.add(`${normalized.slice(0, -3)}.ts`);
-  } else if (normalized.endsWith(".ts")) {
-    candidates.add(`${normalized.slice(0, -3)}.js`);
-  } else {
-    candidates.add(`${normalized}.ts`);
-    candidates.add(`${normalized}.js`);
-  }
-
-  return Array.from(candidates);
-}
-
-async function importExtensionModule(
-  specifier: string,
-  sourceKind: ReturnType<typeof classifyExtensionSource>,
-): Promise<unknown> {
-  if (sourceKind === "local-module") {
-    for (const candidate of getLocalExtensionImportCandidates(specifier)) {
-      const importer = BUNDLED_LOCAL_EXTENSION_IMPORTERS[candidate];
-      if (!importer) {
-        continue;
-      }
-
-      return importer();
-    }
-
-    if (import.meta.env.DEV) {
-      return import(/* @vite-ignore */ specifier);
-    }
-
-    throw new Error(
-      `Local extension module "${specifier}" was not bundled. `
-      + "Use a bundled module under src/extensions, paste code, or a remote URL (with explicit opt-in).",
-    );
-  }
-
-  return import(/* @vite-ignore */ specifier);
 }
 
 function getDefaultCapabilityErrorMessage(capability: ExtensionCapability): string {
@@ -761,17 +687,6 @@ export function createExtensionAPI(options: CreateExtensionAPIOptions): ExcelExt
   };
 }
 
-function getRemoteExtensionOptInFromStorage(): boolean {
-  if (typeof localStorage === "undefined") return false;
-
-  try {
-    const raw = localStorage.getItem(ALLOW_REMOTE_EXTENSION_URLS_STORAGE_KEY);
-    return isRemoteExtensionOptIn(raw);
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Load and activate an extension from an inline function or module specifier.
  *
@@ -797,7 +712,7 @@ export async function loadExtension(
     );
   }
 
-  if (sourceKind === "remote-url" && !getRemoteExtensionOptInFromStorage()) {
+  if (sourceKind === "remote-url" && !readRemoteExtensionOptInFromStorage(globalThis.localStorage)) {
     throw new Error(
       "Remote extension URL imports are disabled by default. "
       + `Set localStorage['${ALLOW_REMOTE_EXTENSION_URLS_STORAGE_KEY}']='1' to opt in (unsafe).`,
