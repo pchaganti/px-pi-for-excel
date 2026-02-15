@@ -29,6 +29,10 @@
   text-wrap: balance;
 }
 
+.pi-overlay-title--sm {
+  font-size: var(--text-base);
+}
+
 .pi-overlay-tabs {
   display: flex;
   align-items: center;
@@ -411,6 +415,12 @@
   background: var(--alpha-3);
   color: var(--muted-foreground);
   border-color: var(--alpha-8);
+}
+
+.pi-overlay-badge--info {
+  background: oklch(0.55 0.12 250 / 0.10);
+  color: oklch(0.45 0.10 250);
+  border-color: oklch(0.55 0.12 250 / 0.30);
 }
 
 .pi-overlay-code {
