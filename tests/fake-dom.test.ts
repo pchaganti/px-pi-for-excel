@@ -67,6 +67,16 @@ class FakeElement extends FakeNode {
     return child;
   }
 
+  append(...nodes: Array<FakeElement | string>): void {
+    for (const node of nodes) {
+      if (typeof node === "string") {
+        continue;
+      }
+
+      this.appendChild(node);
+    }
+  }
+
   replaceChildren(...nodes: FakeElement[]): void {
     for (const child of this.children) {
       child.parentElement = null;

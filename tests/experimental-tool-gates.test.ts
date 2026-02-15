@@ -33,6 +33,25 @@ function createTestTool(
   };
 }
 
+function installWindowMock(value: unknown): () => void {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "window");
+
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    writable: true,
+    value,
+  });
+
+  return () => {
+    if (previous) {
+      Object.defineProperty(globalThis, "window", previous);
+      return;
+    }
+
+    Reflect.deleteProperty(globalThis, "window");
+  };
+}
+
 void test("keeps tmux tool registered when experiment is disabled", async () => {
   let probeCalled = false;
 
@@ -182,6 +201,32 @@ void test("execute_office_js requires explicit user approval", async () => {
   assert.equal(executeCount, 0);
 });
 
+void test("execute_office_js aborts if cancellation happens during approval", async () => {
+  let executeCount = 0;
+
+  const abortController = new AbortController();
+  const [officeTool] = await applyExperimentalToolGates([
+    createTestTool("execute_office_js", () => {
+      executeCount += 1;
+    }),
+  ], {
+    requestOfficeJsExecuteApproval: () => {
+      abortController.abort();
+      return Promise.resolve(true);
+    },
+  });
+
+  await assert.rejects(
+    () => officeTool.execute("call-office", {
+      explanation: "Rebuild totals",
+      code: "return { ok: true };",
+    }, abortController.signal),
+    /aborted/i,
+  );
+
+  assert.equal(executeCount, 0);
+});
+
 void test("execute_office_js fails closed when confirmation UI is unavailable", async () => {
   let executeCount = 0;
 
@@ -200,6 +245,66 @@ void test("execute_office_js fails closed when confirmation UI is unavailable", 
   );
 
   assert.equal(executeCount, 0);
+});
+
+void test("execute_office_js maps unsupported window.confirm errors to unavailable UI error", async () => {
+  let executeCount = 0;
+
+  const restoreWindow = installWindowMock({
+    confirm: () => {
+      throw new Error("Function window.confirm is not supported.");
+    },
+  });
+
+  try {
+    const [officeTool] = await applyExperimentalToolGates([
+      createTestTool("execute_office_js", () => {
+        executeCount += 1;
+      }),
+    ], {});
+
+    await assert.rejects(
+      () => officeTool.execute("call-office", {
+        explanation: "Rebuild totals",
+        code: "return { ok: true };",
+      }),
+      /approval.*unavailable|confirmation UI is unavailable/i,
+    );
+  } finally {
+    restoreWindow();
+  }
+
+  assert.equal(executeCount, 0);
+});
+
+void test("python bridge approvals fail open when window.confirm is unsupported", async () => {
+  let executeCount = 0;
+
+  const restoreWindow = installWindowMock({
+    confirm: () => {
+      throw new Error("Function window.confirm is not supported.");
+    },
+  });
+
+  try {
+    const [pythonTool] = await applyExperimentalToolGates([
+      createTestTool("python_run", () => {
+        executeCount += 1;
+      }),
+    ], {
+      getPythonBridgeUrl: () => Promise.resolve("https://localhost:3340"),
+      validatePythonBridgeUrl: (url) => url,
+      probePythonBridge: () => Promise.resolve(true),
+    });
+
+    await pythonTool.execute("call-python-unsupported-confirm", {
+      code: "print('hello')",
+    });
+  } finally {
+    restoreWindow();
+  }
+
+  assert.equal(executeCount, 1);
 });
 
 void test("python fallback tools execute even when bridge gate fails", async () => {

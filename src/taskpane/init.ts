@@ -31,8 +31,15 @@ import { isExperimentalFeatureEnabled } from "../experiments/flags.js";
 import { convertToLlm } from "../messages/convert-to-llm.js";
 import { getFilesWorkspace } from "../files/workspace.js";
 import { createAllTools } from "../tools/index.js";
-import { applyExperimentalToolGates } from "../tools/experimental-tool-gates.js";
-import { withWorkbookCoordinator } from "../tools/with-workbook-coordinator.js";
+import {
+  applyExperimentalToolGates,
+  buildOfficeJsExecuteApprovalMessage,
+  buildPythonBridgeApprovalMessage,
+} from "../tools/experimental-tool-gates.js";
+import {
+  buildMutationApprovalMessage,
+  withWorkbookCoordinator,
+} from "../tools/with-workbook-coordinator.js";
 import { registerBuiltins } from "../commands/builtins.js";
 import { showExtensionsDialog } from "../commands/builtins/extensions-overlay.js";
 import { showIntegrationsDialog } from "../commands/builtins/integrations-overlay.js";
@@ -134,6 +141,7 @@ import {
   isRuntimeAgentTool,
   normalizeRuntimeTools,
 } from "./runtime-utils.js";
+import { requestToolApprovalDialog } from "./tool-approval-dialog.js";
 import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
 import { isRecord } from "../utils/type-guards.js";
 
@@ -620,6 +628,36 @@ export async function initTaskpane(opts: {
     void refreshCapabilitiesForAllRuntimes();
   });
 
+  const normalizeApprovalMessage = (title: string, message: string): string => {
+    const lines = message.split("\n");
+    const firstLine = lines[0]?.trim() ?? "";
+
+    if (firstLine !== title.trim()) {
+      return message;
+    }
+
+    let startIndex = 1;
+    while (startIndex < lines.length && lines[startIndex]?.trim().length === 0) {
+      startIndex += 1;
+    }
+
+    const body = lines.slice(startIndex).join("\n").trim();
+    return body.length > 0 ? body : message;
+  };
+
+  const requestRuntimeToolApproval = (args: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+  }): Promise<boolean> => {
+    return requestToolApprovalDialog({
+      title: args.title,
+      message: normalizeApprovalMessage(args.title, args.message),
+      confirmLabel: args.confirmLabel,
+      cancelLabel: "Cancel",
+    });
+  };
+
   const createRuntime = async (optsForRuntime: {
     activate: boolean;
     autoRestoreLatest: boolean;
@@ -647,7 +685,28 @@ export async function initTaskpane(opts: {
         getSessionId: () => runtimeAgent?.sessionId ?? runtimeSessionId,
         skillReadCache: runtimeSkillReadCache,
       }).filter(isRuntimeAgentTool);
-      const gatedCoreTools = await applyExperimentalToolGates(coreTools);
+
+      const gatedCoreTools = await applyExperimentalToolGates(coreTools, {
+        requestOfficeJsExecuteApproval: (request) => {
+          return requestRuntimeToolApproval({
+            title: "Allow direct Office.js execution?",
+            message: buildOfficeJsExecuteApprovalMessage(request),
+            confirmLabel: "Allow once",
+          });
+        },
+        requestPythonBridgeApproval: (request) => {
+          return requestRuntimeToolApproval({
+            title: "Allow local Python / LibreOffice execution?",
+            message: buildPythonBridgeApprovalMessage(
+              request.toolName,
+              request.bridgeUrl,
+              request.params,
+            ),
+            confirmLabel: "Allow bridge",
+          });
+        },
+      });
+
       const runtimeTools = normalizeRuntimeTools([
         ...gatedCoreTools,
         ...createToolsForIntegrations(activeIntegrationIds),
@@ -669,6 +728,13 @@ export async function initTaskpane(opts: {
         },
         {
           getExecutionMode: () => Promise.resolve(getExecutionMode()),
+          requestMutationApproval: (request) => {
+            return requestRuntimeToolApproval({
+              title: "Allow workbook mutation in Safe mode?",
+              message: buildMutationApprovalMessage(request),
+              confirmLabel: "Allow once",
+            });
+          },
         },
       );
 

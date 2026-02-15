@@ -7,6 +7,8 @@ import {
   createOverlayDialog,
   createOverlayDialogManager,
 } from "../src/ui/overlay-dialog.ts";
+import { TOOL_APPROVAL_OVERLAY_ID } from "../src/ui/overlay-ids.ts";
+import { requestToolApprovalDialog } from "../src/taskpane/tool-approval-dialog.ts";
 import { installFakeDom } from "./fake-dom.test.ts";
 
 void test("closeOverlayById returns false when overlay does not exist", () => {
@@ -131,6 +133,48 @@ void test("overlay dialog manager reuses mounted dialog and resets after dismiss
 
     const third = manager.ensure();
     assert.notEqual(third, first);
+  } finally {
+    restore();
+  }
+});
+
+void test("tool approval dialog resolves true when approval button is clicked", async () => {
+  const { document, restore } = installFakeDom();
+
+  try {
+    const pendingApproval = requestToolApprovalDialog({
+      title: "Allow workbook mutation in Safe mode?",
+      message: "Tool: write_cells",
+      confirmLabel: "Allow once",
+    });
+
+    const overlay = document.getElementById(TOOL_APPROVAL_OVERLAY_ID);
+    assert.ok(overlay);
+
+    const buttons = overlay.querySelectorAll("button");
+
+    let approveButton: HTMLElement | null = null;
+    for (const button of buttons) {
+      if (!(button instanceof HTMLElement) || button.tagName !== "BUTTON") {
+        continue;
+      }
+
+      if (button.textContent === "Allow once") {
+        approveButton = button;
+        break;
+      }
+    }
+
+    assert.ok(approveButton);
+    if (!approveButton) {
+      throw new Error("Approval button not found");
+    }
+
+    approveButton.dispatchEvent(new Event("click"));
+
+    const approved = await pendingApproval;
+    assert.equal(approved, true);
+    assert.equal(document.getElementById(TOOL_APPROVAL_OVERLAY_ID), null);
   } finally {
     restore();
   }

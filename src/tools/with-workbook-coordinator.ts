@@ -84,7 +84,7 @@ function getRangeParam(params: unknown): string | null {
   return typeof range === "string" && range.trim().length > 0 ? range.trim() : null;
 }
 
-function buildMutationApprovalMessage(request: MutationApprovalRequest): string {
+export function buildMutationApprovalMessage(request: MutationApprovalRequest): string {
   const modeLabel = formatExecutionModeLabel(request.executionMode);
   const action = getActionParam(request.params);
   const range = getRangeParam(request.params);
@@ -115,7 +115,13 @@ function defaultRequestMutationApproval(request: MutationApprovalRequest): Promi
     ));
   }
 
-  return Promise.resolve(window.confirm(buildMutationApprovalMessage(request)));
+  try {
+    return Promise.resolve(window.confirm(buildMutationApprovalMessage(request)));
+  } catch {
+    return Promise.reject(new Error(
+      "Safe mode requires explicit user approval, but confirmation UI is unavailable.",
+    ));
+  }
 }
 
 async function requireMutationApprovalIfNeeded(args: {
@@ -176,6 +182,8 @@ function wrapTool<TParameters extends TSchema, TDetails>(
         toolName: tool.name,
         params,
       });
+
+      throwIfAborted(signal);
 
       const out = await coordinator.runWrite(
         context,
