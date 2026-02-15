@@ -27,4 +27,8 @@ export {
   evaluateTmuxBridgeGate,
 } from "./experimental-tool-gates/evaluation.js";
 
-export { applyExperimentalToolGates } from "./experimental-tool-gates/wrappers.js";
+export {
+  applyExperimentalToolGates,
+  buildOfficeJsExecuteApprovalMessage,
+  buildPythonBridgeApprovalMessage,
+} from "./experimental-tool-gates/wrappers.js";

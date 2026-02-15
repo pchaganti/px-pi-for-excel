@@ -27,7 +27,7 @@ function getRecordValue(record: Record<string, unknown>, key: string): string | 
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-function getPythonApprovalMessage(
+export function buildPythonBridgeApprovalMessage(
   toolName: string,
   bridgeUrl: string,
   params: unknown,
@@ -64,12 +64,20 @@ function defaultRequestPythonBridgeApproval(
     return Promise.resolve(true);
   }
 
-  return Promise.resolve(
-    window.confirm(getPythonApprovalMessage(request.toolName, request.bridgeUrl, request.params)),
-  );
+  try {
+    return Promise.resolve(
+      window.confirm(
+        buildPythonBridgeApprovalMessage(request.toolName, request.bridgeUrl, request.params),
+      ),
+    );
+  } catch {
+    return Promise.resolve(true);
+  }
 }
 
-function getOfficeJsApprovalMessage(request: OfficeJsExecuteApprovalRequest): string {
+export function buildOfficeJsExecuteApprovalMessage(
+  request: OfficeJsExecuteApprovalRequest,
+): string {
   const explanation = request.explanation.trim().length > 0
     ? request.explanation.trim()
     : "(no explanation provided)";
@@ -97,7 +105,13 @@ function defaultRequestOfficeJsExecuteApproval(
     ));
   }
 
-  return Promise.resolve(window.confirm(getOfficeJsApprovalMessage(request)));
+  try {
+    return Promise.resolve(window.confirm(buildOfficeJsExecuteApprovalMessage(request)));
+  } catch {
+    return Promise.reject(new Error(
+      "Office.js execution requires explicit user approval, but confirmation UI is unavailable.",
+    ));
+  }
 }
 
 function getOfficeJsExecuteApprovalRequest(params: unknown): OfficeJsExecuteApprovalRequest {

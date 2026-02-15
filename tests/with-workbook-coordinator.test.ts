@@ -65,6 +65,25 @@ function createContextProvider(workbookId: string | null, sessionId = "session-1
   };
 }
 
+function installWindowMock(value: unknown): () => void {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "window");
+
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    writable: true,
+    value,
+  });
+
+  return () => {
+    if (previous) {
+      Object.defineProperty(globalThis, "window", previous);
+      return;
+    }
+
+    Reflect.deleteProperty(globalThis, "window");
+  };
+}
+
 function makeTool(
   name: string,
   executeImpl?: () => Promise<AgentToolResult<TestDetails>>,
@@ -173,6 +192,42 @@ void test("safe execution mode blocks mutate calls when approval is denied", asy
 
   assert.equal(approvalCalls, 1);
   assert.equal(coordinator.readCalls.length, 0);
+  assert.equal(coordinator.writeCalls.length, 0);
+  assert.equal(mutationEvents.length, 0);
+  assert.deepEqual(invalidatedWorkbookIds, []);
+});
+
+void test("safe execution mode maps unsupported window.confirm to unavailable UI error", async () => {
+  const coordinator = new FakeCoordinator();
+  const mutationEvents: WorkbookMutationEvent[] = [];
+  const invalidatedWorkbookIds: Array<string | null> = [];
+
+  const restoreWindow = installWindowMock({
+    confirm: () => {
+      throw new Error("Function window.confirm is not supported.");
+    },
+  });
+
+  try {
+    const wrapped = wrapSingleTool({
+      tool: makeTool("write_cells"),
+      coordinator,
+      contextProvider: createContextProvider("url_sha256:safe-confirm"),
+      mutationEvents,
+      invalidatedWorkbookIds,
+      executionPolicy: {
+        getExecutionMode: () => Promise.resolve("safe"),
+      },
+    });
+
+    await assert.rejects(
+      () => wrapped.execute("tc-safe-confirm", { range: "Sheet1!A1", values: [[1]] }),
+      /confirmation UI is unavailable/i,
+    );
+  } finally {
+    restoreWindow();
+  }
+
   assert.equal(coordinator.writeCalls.length, 0);
   assert.equal(mutationEvents.length, 0);
   assert.deepEqual(invalidatedWorkbookIds, []);
