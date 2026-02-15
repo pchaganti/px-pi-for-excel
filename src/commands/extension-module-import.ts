@@ -7,23 +7,12 @@ import { isRecord } from "../utils/type-guards.js";
 
 export type ExtensionModuleImporter = () => Promise<unknown>;
 
-type ImportMetaWithGlob = {
-  glob?: (pattern: string) => unknown;
-  env?: {
-    DEV?: boolean;
-  };
-};
-
 function isExtensionModuleImporter(value: unknown): value is ExtensionModuleImporter {
   return typeof value === "function";
 }
 
 function readBundledImportersFromGlob(): unknown {
   try {
-    if (typeof (import.meta as ImportMetaWithGlob).glob !== "function") {
-      return null;
-    }
-
     return import.meta.glob("../extensions/*.{ts,js}");
   } catch {
     return null;
@@ -77,8 +66,11 @@ function getDefaultDynamicImport(): (specifier: string) => Promise<unknown> {
 }
 
 function readIsDevDefault(): boolean {
-  const meta = import.meta as ImportMetaWithGlob;
-  return meta.env?.DEV === true;
+  try {
+    return import.meta.env.DEV === true;
+  } catch {
+    return false;
+  }
 }
 
 export async function importExtensionModule(
