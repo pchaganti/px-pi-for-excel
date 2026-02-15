@@ -42,10 +42,12 @@ export class SessionRuntimeManager {
   private readonly sidebar: PiSidebar;
   private readonly runtimes = new Map<string, SessionRuntime>();
   private readonly runtimeOrder: string[] = [];
+  private readonly runtimeDefaultTabNumbers = new Map<string, number>();
   private readonly runtimeListeners = new Map<string, RuntimeListeners>();
   private readonly listeners = new Set<RuntimeSnapshotListener>();
 
   private activeRuntimeId: string | null = null;
+  private nextDefaultTabNumber = 1;
 
   constructor(sidebar: PiSidebar) {
     this.sidebar = sidebar;
@@ -54,6 +56,8 @@ export class SessionRuntimeManager {
   createRuntime(runtime: SessionRuntime, opts?: { activate?: boolean }): SessionRuntime {
     this.runtimes.set(runtime.runtimeId, runtime);
     this.runtimeOrder.push(runtime.runtimeId);
+    this.runtimeDefaultTabNumbers.set(runtime.runtimeId, this.nextDefaultTabNumber);
+    this.nextDefaultTabNumber += 1;
 
     const unsubscribeAgent = runtime.agent.subscribe(() => {
       this.emit();
@@ -123,6 +127,7 @@ export class SessionRuntimeManager {
 
     this.runtimes.delete(runtimeId);
     this.runtimeOrder.splice(index, 1);
+    this.runtimeDefaultTabNumbers.delete(runtimeId);
 
     if (wasActive) {
       const fallbackId = this.runtimeOrder[Math.max(0, index - 1)] ?? this.runtimeOrder[0] ?? null;
@@ -196,7 +201,7 @@ export class SessionRuntimeManager {
       title: resolveTabTitle({
         hasExplicitTitle: runtime.persistence.hasExplicitTitle(),
         sessionTitle: runtime.persistence.getSessionTitle(),
-        tabIndex: index,
+        defaultTabNumber: this.runtimeDefaultTabNumbers.get(runtime.runtimeId) ?? (index + 1),
       }),
       isActive: runtime.runtimeId === this.activeRuntimeId,
       isStreaming: runtime.agent.state.isStreaming,

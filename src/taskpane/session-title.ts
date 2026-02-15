@@ -5,16 +5,16 @@
 export interface ResolveTabTitleArgs {
   hasExplicitTitle: boolean;
   sessionTitle: string;
-  /** Zero-based tab index in current runtime order. */
-  tabIndex: number;
+  /** Stable, one-based number assigned when the tab/runtime is created. */
+  defaultTabNumber: number;
 }
 
-function normalizeTabNumber(tabIndex: number): number {
-  if (!Number.isFinite(tabIndex) || tabIndex < 0) {
+function normalizeTabNumber(defaultTabNumber: number): number {
+  if (!Number.isFinite(defaultTabNumber) || defaultTabNumber < 1) {
     return 1;
   }
 
-  return Math.floor(tabIndex) + 1;
+  return Math.floor(defaultTabNumber);
 }
 
 export function resolveTabTitle(args: ResolveTabTitleArgs): string {
@@ -25,5 +25,5 @@ export function resolveTabTitle(args: ResolveTabTitleArgs): string {
     }
   }
 
-  return `Chat ${normalizeTabNumber(args.tabIndex)}`;
+  return `Chat ${normalizeTabNumber(args.defaultTabNumber)}`;
 }

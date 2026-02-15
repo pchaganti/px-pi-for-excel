@@ -735,13 +735,14 @@ export async function initTaskpane(opts: {
       };
     };
 
+    const initialModel = getActiveRuntime()?.agent.state.model ?? defaultModel;
     const initialCapabilities = await buildRuntimeCapabilities(runtimeSessionId);
 
     const agent = new Agent({
       initialState: {
         systemPrompt: initialCapabilities.systemPrompt,
-        model: defaultModel,
-        thinkingLevel: defaultModel.reasoning ? "high" : "off",
+        model: initialModel,
+        thinkingLevel: initialModel.reasoning ? "high" : "off",
         messages: [],
         tools: initialCapabilities.tools,
       },
