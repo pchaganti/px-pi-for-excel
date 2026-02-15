@@ -4,6 +4,7 @@
 
 import type { SlashCommand } from "../types.js";
 import type { ResumeDialogTarget } from "./resume-target.js";
+import { requestConfirmationDialog } from "../../ui/confirm-dialog.js";
 import { showToast } from "../../ui/toast.js";
 
 export interface ManualFullBackupSummary {
@@ -175,7 +176,14 @@ export function createSessionLifecycleCommands(actions: SessionCommandActions): 
           }
 
           if (action === "clear") {
-            const proceed = window.confirm("Delete all manual full-workbook backups for this workbook?");
+            const proceed = await requestConfirmationDialog({
+              title: "Delete all manual full-workbook backups?",
+              message: "This will remove all manual full-workbook backups for the active workbook.",
+              confirmLabel: "Delete all",
+              cancelLabel: "Cancel",
+              confirmButtonTone: "danger",
+              restoreFocusOnClose: true,
+            });
             if (!proceed) {
               return;
             }

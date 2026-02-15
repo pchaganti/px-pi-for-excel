@@ -108,20 +108,10 @@ function defaultGetExecutionMode(): Promise<ExecutionMode> {
   return Promise.resolve("yolo");
 }
 
-function defaultRequestMutationApproval(request: MutationApprovalRequest): Promise<boolean> {
-  if (typeof window === "undefined" || typeof window.confirm !== "function") {
-    return Promise.reject(new Error(
-      "Confirm mode requires explicit user approval, but confirmation UI is unavailable.",
-    ));
-  }
-
-  try {
-    return Promise.resolve(window.confirm(buildMutationApprovalMessage(request)));
-  } catch {
-    return Promise.reject(new Error(
-      "Safe mode requires explicit user approval, but confirmation UI is unavailable.",
-    ));
-  }
+function defaultRequestMutationApproval(_request: MutationApprovalRequest): Promise<boolean> {
+  return Promise.reject(new Error(
+    "Confirm mode requires explicit user approval, but confirmation UI is unavailable.",
+  ));
 }
 
 async function requireMutationApprovalIfNeeded(args: {

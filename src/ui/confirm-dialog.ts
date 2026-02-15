@@ -3,35 +3,26 @@ import {
   createOverlayButton,
   createOverlayDialog,
   createOverlayHeader,
-} from "../ui/overlay-dialog.js";
-import { TOOL_APPROVAL_OVERLAY_ID } from "../ui/overlay-ids.js";
+} from "./overlay-dialog.js";
+import { CONFIRM_DIALOG_OVERLAY_ID } from "./overlay-ids.js";
 
 const CONFIRMATION_UI_UNAVAILABLE_ERROR =
-  "Tool execution requires explicit user approval, but confirmation UI is unavailable.";
+  "Confirmation UI is unavailable in this environment.";
 
-type ConfirmButtonTone = "primary" | "danger";
+export type ConfirmButtonTone = "primary" | "danger";
 
-export interface ToolApprovalDialogOptions {
+export interface ConfirmDialogOptions {
   title: string;
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
   confirmButtonTone?: ConfirmButtonTone;
+  overlayId?: string;
+  restoreFocusOnClose?: boolean;
+  cardClassName?: string;
 }
 
-function tryWindowConfirm(message: string): boolean | null {
-  if (typeof window === "undefined" || typeof window.confirm !== "function") {
-    return null;
-  }
-
-  try {
-    return window.confirm(message);
-  } catch {
-    return null;
-  }
-}
-
-function canRenderToolApprovalDialog(): boolean {
+function canRenderConfirmationDialog(): boolean {
   if (typeof document === "undefined") {
     return false;
   }
@@ -43,33 +34,30 @@ function getConfirmButtonClassName(tone: ConfirmButtonTone | undefined): string 
   return tone === "danger" ? "pi-overlay-btn--danger" : "pi-overlay-btn--primary";
 }
 
-export function requestToolApprovalDialog(options: ToolApprovalDialogOptions): Promise<boolean> {
-  if (!canRenderToolApprovalDialog()) {
-    const fallbackResult = tryWindowConfirm(options.message);
-    if (fallbackResult === null) {
-      return Promise.reject(new Error(CONFIRMATION_UI_UNAVAILABLE_ERROR));
-    }
-
-    return Promise.resolve(fallbackResult);
+export function requestConfirmationDialog(options: ConfirmDialogOptions): Promise<boolean> {
+  if (!canRenderConfirmationDialog()) {
+    return Promise.reject(new Error(CONFIRMATION_UI_UNAVAILABLE_ERROR));
   }
 
-  closeOverlayById(TOOL_APPROVAL_OVERLAY_ID);
+  const overlayId = options.overlayId ?? CONFIRM_DIALOG_OVERLAY_ID;
+  closeOverlayById(overlayId);
 
   return new Promise((resolve) => {
     const dialog = createOverlayDialog({
-      overlayId: TOOL_APPROVAL_OVERLAY_ID,
-      cardClassName: "pi-welcome-card pi-overlay-card pi-overlay-card--s",
+      overlayId,
+      cardClassName: options.cardClassName ?? "pi-welcome-card pi-overlay-card pi-overlay-card--s",
+      restoreFocusOnClose: options.restoreFocusOnClose,
     });
 
     let settled = false;
 
-    const settle = (approved: boolean): void => {
+    const settle = (confirmed: boolean): void => {
       if (settled) {
         return;
       }
 
       settled = true;
-      resolve(approved);
+      resolve(confirmed);
     };
 
     const cancel = (): void => {
@@ -77,14 +65,14 @@ export function requestToolApprovalDialog(options: ToolApprovalDialogOptions): P
       dialog.close();
     };
 
-    const approve = (): void => {
+    const confirm = (): void => {
       settle(true);
       dialog.close();
     };
 
     const { header } = createOverlayHeader({
       onClose: cancel,
-      closeLabel: options.cancelLabel ?? "Cancel approval",
+      closeLabel: options.cancelLabel ?? "Cancel",
       title: options.title,
     });
 
@@ -92,10 +80,8 @@ export function requestToolApprovalDialog(options: ToolApprovalDialogOptions): P
     body.className = "pi-overlay-body";
 
     const message = document.createElement("p");
-    message.className = "pi-overlay-subtitle";
+    message.className = "pi-overlay-subtitle pi-confirm-dialog__message";
     message.textContent = options.message;
-    message.style.marginBottom = "0";
-    message.style.whiteSpace = "pre-wrap";
 
     const actions = document.createElement("div");
     actions.className = "pi-overlay-actions";
@@ -104,22 +90,21 @@ export function requestToolApprovalDialog(options: ToolApprovalDialogOptions): P
       text: options.cancelLabel ?? "Cancel",
     });
 
-    const approveButton = createOverlayButton({
-      text: options.confirmLabel ?? "Allow",
+    const confirmButton = createOverlayButton({
+      text: options.confirmLabel ?? "Confirm",
       className: getConfirmButtonClassName(options.confirmButtonTone),
     });
 
     cancelButton.addEventListener("click", cancel);
-    approveButton.addEventListener("click", approve);
+    confirmButton.addEventListener("click", confirm);
 
     dialog.addCleanup(() => {
       cancelButton.removeEventListener("click", cancel);
-      approveButton.removeEventListener("click", approve);
-
+      confirmButton.removeEventListener("click", confirm);
       settle(false);
     });
 
-    actions.append(cancelButton, approveButton);
+    actions.append(cancelButton, confirmButton);
     body.appendChild(message);
     dialog.card.append(header, body, actions);
     dialog.mount();

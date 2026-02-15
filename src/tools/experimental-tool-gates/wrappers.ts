@@ -66,21 +66,10 @@ export function buildPythonBridgeApprovalMessage(
 }
 
 function defaultRequestPythonBridgeApproval(
-  request: PythonBridgeApprovalRequest,
+  _request: PythonBridgeApprovalRequest,
 ): Promise<boolean> {
-  if (typeof window === "undefined" || typeof window.confirm !== "function") {
-    return Promise.resolve(true);
-  }
-
-  try {
-    return Promise.resolve(
-      window.confirm(
-        buildPythonBridgeApprovalMessage(request.toolName, request.bridgeUrl, request.params),
-      ),
-    );
-  } catch {
-    return Promise.resolve(true);
-  }
+  // Fails open when no UI approval handler is injected.
+  return Promise.resolve(true);
 }
 
 export function buildOfficeJsExecuteApprovalMessage(
@@ -105,21 +94,11 @@ export function buildOfficeJsExecuteApprovalMessage(
 }
 
 function defaultRequestOfficeJsExecuteApproval(
-  request: OfficeJsExecuteApprovalRequest,
+  _request: OfficeJsExecuteApprovalRequest,
 ): Promise<boolean> {
-  if (typeof window === "undefined" || typeof window.confirm !== "function") {
-    return Promise.reject(new Error(
-      "Office.js execution requires explicit user approval, but confirmation UI is unavailable.",
-    ));
-  }
-
-  try {
-    return Promise.resolve(window.confirm(buildOfficeJsExecuteApprovalMessage(request)));
-  } catch {
-    return Promise.reject(new Error(
-      "Office.js execution requires explicit user approval, but confirmation UI is unavailable.",
-    ));
-  }
+  return Promise.reject(new Error(
+    "Office.js execution requires explicit user approval, but confirmation UI is unavailable.",
+  ));
 }
 
 function getOfficeJsExecuteApprovalRequest(params: unknown): OfficeJsExecuteApprovalRequest {

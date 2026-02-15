@@ -97,6 +97,8 @@ import {
   PI_REQUEST_INPUT_FOCUS_EVENT,
   moveCursorToEnd,
 } from "../ui/input-focus.js";
+import { requestConfirmationDialog } from "../ui/confirm-dialog.js";
+import { TOOL_APPROVAL_OVERLAY_ID } from "../ui/overlay-ids.js";
 import { showActionToast, showToast } from "../ui/toast.js";
 import { PiSidebar } from "../ui/pi-sidebar.js";
 import { setActiveProviders } from "../compat/model-selector-patch.js";
@@ -143,7 +145,6 @@ import {
   isRuntimeAgentTool,
   normalizeRuntimeTools,
 } from "./runtime-utils.js";
-import { requestToolApprovalDialog } from "./tool-approval-dialog.js";
 import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
 import { isRecord } from "../utils/type-guards.js";
 
@@ -633,11 +634,13 @@ export async function initTaskpane(opts: {
     message: string;
     confirmLabel?: string;
   }): Promise<boolean> => {
-    return requestToolApprovalDialog({
+    return requestConfirmationDialog({
+      overlayId: TOOL_APPROVAL_OVERLAY_ID,
       title: args.title,
       message: normalizeApprovalMessage(args.title, args.message),
       confirmLabel: args.confirmLabel,
       cancelLabel: "Cancel",
+      restoreFocusOnClose: true,
     });
   };
 
@@ -1069,7 +1072,13 @@ export async function initTaskpane(opts: {
     }
 
     if (runtime.agent.state.isStreaming) {
-      const proceed = window.confirm("Pi is still responding in this tab. Stop and close it?");
+      const proceed = await requestConfirmationDialog({
+        title: "Stop and close this tab?",
+        message: "Pi is still responding in this tab. Stop and close it?",
+        confirmLabel: "Stop and close",
+        cancelLabel: "Keep open",
+        confirmButtonTone: "danger",
+      });
       if (!proceed) return false;
 
       abortedAgents.add(runtime.agent);

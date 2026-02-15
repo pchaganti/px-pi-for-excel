@@ -266,6 +266,11 @@
   color: var(--muted-foreground);
 }
 
+.pi-confirm-dialog__message {
+  margin-bottom: 0;
+  white-space: pre-wrap;
+}
+
 .pi-overlay-header {
   display: flex;
   align-items: flex-start;
