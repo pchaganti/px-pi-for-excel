@@ -18,6 +18,7 @@
   cursor: pointer;
 }
 
+.pi-toggle-row__meta,
 .pi-toggle-row__labels {
   display: flex;
   flex-direction: column;

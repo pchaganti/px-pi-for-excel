@@ -1326,6 +1326,8 @@ export async function initTaskpane(opts: {
     openRulesDialog: openRulesEditor,
     openRecoveryDialog,
     openShortcutsDialog: showShortcutsDialog,
+    getExecutionMode,
+    setExecutionMode,
   });
 
   registerBuiltins({

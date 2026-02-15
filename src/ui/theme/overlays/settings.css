@@ -49,29 +49,29 @@
   gap: 10px;
 }
 
-.pi-settings-proxy-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
+.pi-settings-proxy-toggle {
+  min-height: 28px;
 }
 
-.pi-settings-proxy-enabled {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  color: var(--foreground);
-  white-space: nowrap;
+.pi-settings-proxy-url-row {
+  padding: 0 2px;
 }
 
-.pi-settings-proxy-url {
-  min-width: 0;
+.pi-settings-proxy-url-row .pi-item-card__config-input {
+  max-width: 240px;
+  width: 100%;
 }
 
-.pi-settings-proxy-status {
+.pi-settings-proxy-status,
+.pi-settings-proxy-helper,
+.pi-settings-execution-hint {
   margin: 0;
+}
+
+.pi-settings-execution-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .pi-settings-extensions-actions,
@@ -84,10 +84,4 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-@media (max-width: 520px) {
-  .pi-settings-proxy-row {
-    grid-template-columns: 1fr;
-  }
 }

@@ -3,7 +3,7 @@
  *
  * Tabs:
  * - Providers (API keys, proxy)
- * - More (Advanced, Experimental)
+ * - More (execution mode, advanced, experimental)
  */
 
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
@@ -13,29 +13,42 @@ import {
   PROXY_HELPER_DOCS_URL,
   validateOfficeProxyUrl,
 } from "../../auth/proxy-validation.js";
+import { PI_EXECUTION_MODE_CHANGED_EVENT, type ExecutionMode } from "../../execution/mode.js";
+import { getProxyState, type ProxyState } from "../../taskpane/proxy-status.js";
+import {
+  createCallout,
+  createConfigInput,
+  createConfigRow,
+  createToggleRow,
+} from "../../ui/extensions-hub-components.js";
 import {
   closeOverlayById,
   createOverlayButton,
   createOverlayDialog,
   createOverlayHeader,
-  createOverlayInput,
   createOverlaySectionTitle,
 } from "../../ui/overlay-dialog.js";
 import { SETTINGS_OVERLAY_ID } from "../../ui/overlay-ids.js";
 import { ALL_PROVIDERS, buildProviderRow } from "../../ui/provider-login.js";
 import { showToast } from "../../ui/toast.js";
+import { isRecord } from "../../utils/type-guards.js";
 import {
   buildExperimentalFeatureContent,
   buildExperimentalFeatureFooter,
 } from "./experimental-overlay.js";
 
 type LegacyExtensionsSection = "connections" | "plugins" | "skills";
-type SettingsPrimaryTab = "logins" | "extensions" | "more";
+type SettingsPrimaryTab = "logins" | "more";
+
+type SettingsAnchor = "proxy" | "providers" | "execution-mode" | "advanced" | "experimental";
+
+type SettingsCleanupRegistrar = (cleanup: () => void) => void;
 
 export type SettingsOverlaySection =
   | SettingsPrimaryTab
   | "providers"
   | "proxy"
+  | "execution-mode"
   | "advanced"
   | "experimental"
   | LegacyExtensionsSection;
@@ -53,19 +66,19 @@ interface SettingsDialogDependencies {
   openRulesDialog?: () => Promise<void> | void;
   openRecoveryDialog?: () => Promise<void> | void;
   openShortcutsDialog?: () => void;
+  getExecutionMode?: () => ExecutionMode;
+  setExecutionMode?: (mode: ExecutionMode) => Promise<void>;
 }
 
 interface ResolvedSectionFocus {
   tab: SettingsPrimaryTab;
-  anchor?: "proxy" | "providers" | "advanced" | "experimental";
+  anchor?: SettingsAnchor;
 }
 
 const SETTINGS_TABS: ReadonlyArray<{ id: SettingsPrimaryTab; label: string }> = [
   { id: "logins", label: "Providers" },
   { id: "more", label: "More" },
 ];
-
-
 
 let settingsDialogOpenInFlight: Promise<void> | null = null;
 let pendingSectionFocus: SettingsOverlaySection | null = null;
@@ -81,6 +94,8 @@ function resolveSectionFocus(section: SettingsOverlaySection | undefined): Resol
       return { tab: "logins", anchor: "providers" };
     case "proxy":
       return { tab: "logins", anchor: "proxy" };
+    case "execution-mode":
+      return { tab: "more", anchor: "execution-mode" };
     case "advanced":
       return { tab: "more", anchor: "advanced" };
     case "experimental":
@@ -90,7 +105,6 @@ function resolveSectionFocus(section: SettingsOverlaySection | undefined): Resol
     case "connections":
     case "plugins":
     case "skills":
-    case "extensions":
     case "logins":
     default:
       return { tab: "logins" };
@@ -127,7 +141,7 @@ function applySectionFocus(overlay: HTMLElement, section: SettingsOverlaySection
   target.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function createSectionShell(titleText: string, anchor: string, hintText?: string): {
+function createSectionShell(titleText: string, anchor: SettingsAnchor, hintText?: string): {
   section: HTMLElement;
   content: HTMLDivElement;
 } {
@@ -198,135 +212,325 @@ async function buildProvidersSection(): Promise<HTMLElement> {
   return shell.section;
 }
 
-function buildProxySection(settingsStore: SettingsStore): HTMLElement {
-  const shell = createSectionShell(
-    "Proxy",
-    "proxy",
-    "Route API calls through a local proxy.",
-  );
+function resolveProxyCallout(args: {
+  enabled: boolean;
+  state: ProxyState;
+  proxyUrl: string;
+  validationError: string | null;
+}): {
+  tone: "info" | "warn" | "success";
+  icon: string;
+  message: string;
+} {
+  if (args.validationError) {
+    return {
+      tone: "warn",
+      icon: "⚠",
+      message: args.validationError,
+    };
+  }
+
+  if (!args.enabled) {
+    return {
+      tone: "info",
+      icon: "ℹ",
+      message: "Proxy disabled.",
+    };
+  }
+
+  if (args.state === "detected") {
+    return {
+      tone: "success",
+      icon: "✓",
+      message: `Proxy connected at ${args.proxyUrl}`,
+    };
+  }
+
+  if (args.state === "not-detected") {
+    return {
+      tone: "warn",
+      icon: "⚠",
+      message: `Proxy enabled at ${args.proxyUrl}, but it is not reachable right now.`,
+    };
+  }
+
+  return {
+    tone: "info",
+    icon: "…",
+    message: `Checking proxy at ${args.proxyUrl}…`,
+  };
+}
+
+function buildProxySection(
+  settingsStore: SettingsStore,
+  registerCleanup?: SettingsCleanupRegistrar,
+): HTMLElement {
+  const shell = createSectionShell("Proxy", "proxy");
 
   const card = document.createElement("div");
   card.className = "pi-overlay-surface pi-settings-proxy-card";
 
-  const controlsRow = document.createElement("div");
-  controlsRow.className = "pi-settings-proxy-row";
+  let enabled = false;
+  let proxyUrl = DEFAULT_LOCAL_PROXY_URL;
+  let proxyState: ProxyState = getProxyState();
+  let validationError: string | null = null;
+  let urlSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const enabledLabel = document.createElement("label");
-  enabledLabel.className = "pi-settings-proxy-enabled";
+  const proxyToggle = createToggleRow({
+    label: "Proxy",
+    sublabel: "Route API calls through a local proxy",
+    checked: enabled,
+    onChange: (checked) => {
+      void saveProxyEnabled(checked);
+    },
+  });
+  proxyToggle.root.classList.add("pi-settings-proxy-toggle");
 
-  const enabledInput = document.createElement("input");
-  enabledInput.type = "checkbox";
-
-  const enabledText = document.createElement("span");
-  enabledText.textContent = "Route API calls through a local proxy";
-
-  enabledLabel.append(enabledInput, enabledText);
-
-  const urlInput = createOverlayInput({
+  const proxyUrlInput = createConfigInput({
+    value: proxyUrl,
     placeholder: DEFAULT_LOCAL_PROXY_URL,
-    className: "pi-settings-proxy-url",
   });
-  urlInput.type = "text";
-  urlInput.spellcheck = false;
+  proxyUrlInput.classList.add("pi-settings-proxy-url");
+  proxyUrlInput.spellcheck = false;
 
-  const saveButton = createOverlayButton({
-    text: "Save",
-    className: "pi-overlay-btn--primary",
-  });
+  const proxyUrlRow = createConfigRow("URL", proxyUrlInput);
+  proxyUrlRow.classList.add("pi-settings-proxy-url-row");
 
-  controlsRow.append(enabledLabel, urlInput, saveButton);
+  const statusHost = document.createElement("div");
+  statusHost.className = "pi-settings-proxy-status";
 
-  const status = document.createElement("p");
-  status.className = "pi-overlay-hint pi-settings-proxy-status";
+  const updateStatus = (): void => {
+    const status = resolveProxyCallout({
+      enabled,
+      state: proxyState,
+      proxyUrl,
+      validationError,
+    });
 
-  const helper = document.createElement("p");
-  helper.className = "pi-overlay-hint";
+    statusHost.replaceChildren(createCallout(status.tone, status.icon, status.message, { compact: true }));
+  };
 
-  const guideLink = document.createElement("a");
-  guideLink.href = PROXY_HELPER_DOCS_URL;
-  guideLink.target = "_blank";
-  guideLink.rel = "noopener noreferrer";
-  guideLink.textContent = "Step-by-step guide";
+  const saveProxyEnabled = async (nextEnabled: boolean): Promise<void> => {
+    enabled = nextEnabled;
+    updateStatus();
 
-  helper.append(
-    "Recommended URL: ",
-    (() => {
-      const code = document.createElement("code");
-      code.textContent = DEFAULT_LOCAL_PROXY_URL;
-      return code;
-    })(),
-    ". Keep this on localhost. ",
-    guideLink,
-    ".",
-  );
-
-  const save = async (): Promise<void> => {
-    const rawUrl = urlInput.value.trim();
-    const candidateUrl = rawUrl.length > 0 ? rawUrl : DEFAULT_LOCAL_PROXY_URL;
-
-    let normalizedUrl: string;
     try {
-      normalizedUrl = validateOfficeProxyUrl(candidateUrl);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Invalid proxy URL";
-      status.textContent = message;
-      status.classList.add("pi-overlay-text-warning");
-      showToast(`Proxy not saved: ${message}`);
+      await settingsStore.set("proxy.enabled", enabled);
+    } catch {
+      enabled = !nextEnabled;
+      proxyToggle.input.checked = enabled;
+      updateStatus();
+      showToast("Failed to save proxy setting.");
       return;
     }
 
-    await settingsStore.set("proxy.enabled", enabledInput.checked);
-    await settingsStore.set("proxy.url", normalizedUrl);
-
-    urlInput.value = normalizedUrl;
-    status.textContent = enabledInput.checked
-      ? `Proxy enabled at ${normalizedUrl}`
-      : `Proxy saved at ${normalizedUrl} (currently disabled)`;
-    status.classList.remove("pi-overlay-text-warning");
-    showToast("Proxy settings saved");
+    showToast(enabled ? "Proxy enabled." : "Proxy disabled.");
   };
 
-  saveButton.addEventListener("click", () => {
-    void save();
-  });
-  enabledInput.addEventListener("change", () => {
-    void save();
-  });
-  urlInput.addEventListener("keydown", (event) => {
+  const saveProxyUrl = async (): Promise<void> => {
+    const raw = proxyUrlInput.value.trim();
+    const candidate = raw.length > 0 ? raw : DEFAULT_LOCAL_PROXY_URL;
+
+    let normalizedUrl: string;
+    try {
+      normalizedUrl = validateOfficeProxyUrl(candidate);
+    } catch (error: unknown) {
+      validationError = error instanceof Error ? error.message : "Invalid proxy URL.";
+      updateStatus();
+      showToast(`Proxy URL not saved: ${validationError}`);
+      return;
+    }
+
+    validationError = null;
+
+    if (normalizedUrl === proxyUrl) {
+      proxyUrlInput.value = normalizedUrl;
+      updateStatus();
+      return;
+    }
+
+    try {
+      await settingsStore.set("proxy.url", normalizedUrl);
+    } catch {
+      showToast("Failed to save proxy URL.");
+      return;
+    }
+
+    proxyUrl = normalizedUrl;
+    proxyUrlInput.value = normalizedUrl;
+    updateStatus();
+    showToast("Proxy URL saved.");
+  };
+
+  const scheduleProxyUrlSave = (): void => {
+    if (urlSaveTimer !== null) {
+      clearTimeout(urlSaveTimer);
+    }
+
+    urlSaveTimer = setTimeout(() => {
+      urlSaveTimer = null;
+      void saveProxyUrl();
+    }, 140);
+  };
+
+  proxyUrlInput.addEventListener("blur", scheduleProxyUrlSave);
+  proxyUrlInput.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") {
       return;
     }
 
     event.preventDefault();
-    void save();
+    scheduleProxyUrlSave();
+    proxyUrlInput.blur();
   });
+
+  const onProxyStateChanged = (event: Event): void => {
+    if (!(event instanceof CustomEvent)) return;
+
+    const detail: unknown = event.detail;
+    if (!isRecord(detail)) return;
+
+    const state = detail.state;
+    if (state === "detected" || state === "not-detected" || state === "unknown") {
+      proxyState = state;
+      updateStatus();
+    }
+  };
+
+  document.addEventListener("pi:proxy-state-changed", onProxyStateChanged);
+  registerCleanup?.(() => {
+    document.removeEventListener("pi:proxy-state-changed", onProxyStateChanged);
+  });
+  registerCleanup?.(() => {
+    if (urlSaveTimer !== null) {
+      clearTimeout(urlSaveTimer);
+      urlSaveTimer = null;
+    }
+  });
+
+  const helper = document.createElement("p");
+  helper.className = "pi-overlay-hint pi-settings-proxy-helper";
+
+  const recommendedUrl = document.createElement("code");
+  recommendedUrl.textContent = DEFAULT_LOCAL_PROXY_URL;
+
+  const guideLink = document.createElement("a");
+  guideLink.href = PROXY_HELPER_DOCS_URL;
+  guideLink.target = "_blank";
+  guideLink.rel = "noopener noreferrer";
+  guideLink.textContent = "Install and setup guide";
+
+  helper.append(
+    "Recommended URL: ",
+    recommendedUrl,
+    ". Keep this on localhost. ",
+    guideLink,
+    ".",
+  );
 
   void (async () => {
     try {
-      const enabled = await settingsStore.get<boolean>("proxy.enabled");
+      const storedEnabled = await settingsStore.get<boolean>("proxy.enabled");
       const storedUrl = await settingsStore.get<string>("proxy.url");
 
-      enabledInput.checked = enabled === true;
-      urlInput.value = typeof storedUrl === "string" && storedUrl.trim().length > 0
+      enabled = storedEnabled === true;
+      proxyUrl = typeof storedUrl === "string" && storedUrl.trim().length > 0
         ? storedUrl.trim()
         : DEFAULT_LOCAL_PROXY_URL;
-
-      status.textContent = enabledInput.checked
-        ? `Proxy enabled at ${urlInput.value}`
-        : "Proxy disabled";
     } catch {
-      enabledInput.checked = false;
-      urlInput.value = DEFAULT_LOCAL_PROXY_URL;
-      status.textContent = "Proxy disabled";
+      enabled = false;
+      proxyUrl = DEFAULT_LOCAL_PROXY_URL;
     }
+
+    proxyToggle.input.checked = enabled;
+    proxyUrlInput.value = proxyUrl;
+    updateStatus();
   })();
 
-  card.append(controlsRow, status, helper);
+  card.append(proxyToggle.root, proxyUrlRow, statusHost, helper);
   shell.content.appendChild(card);
   return shell.section;
 }
 
-function buildMoreSection(): HTMLElement {
+function buildExecutionModeSection(registerCleanup?: SettingsCleanupRegistrar): HTMLElement {
+  const shell = createSectionShell("Execution mode", "execution-mode");
+
+  const card = document.createElement("div");
+  card.className = "pi-overlay-surface pi-settings-execution-card";
+
+  const autoModeToggle = createToggleRow({
+    label: "Auto mode",
+    sublabel: "Pi applies changes immediately without asking",
+  });
+
+  const hint = document.createElement("p");
+  hint.className = "pi-overlay-hint pi-settings-execution-hint";
+  hint.textContent = "When off, Pi asks before each change (Confirm mode).";
+
+  card.append(autoModeToggle.root, hint);
+  shell.content.appendChild(card);
+
+  const getExecutionMode = dependencies.getExecutionMode;
+  const setExecutionMode = dependencies.setExecutionMode;
+
+  if (!getExecutionMode || !setExecutionMode) {
+    autoModeToggle.input.disabled = true;
+    return shell.section;
+  }
+
+  let currentMode = getExecutionMode();
+  autoModeToggle.input.checked = currentMode === "yolo";
+
+  autoModeToggle.input.addEventListener("change", () => {
+    const nextMode: ExecutionMode = autoModeToggle.input.checked ? "yolo" : "safe";
+    if (nextMode === currentMode) {
+      return;
+    }
+
+    autoModeToggle.input.disabled = true;
+
+    void setExecutionMode(nextMode).then(
+      () => {
+        currentMode = nextMode;
+        showToast(nextMode === "yolo" ? "Auto mode." : "Confirm mode.");
+      },
+      () => {
+        autoModeToggle.input.checked = currentMode === "yolo";
+        showToast("Couldn't update execution mode.");
+      },
+    ).finally(() => {
+      autoModeToggle.input.disabled = false;
+    });
+  });
+
+  const onExecutionModeChanged = (event: Event): void => {
+    if (!(event instanceof CustomEvent)) {
+      return;
+    }
+
+    const detail: unknown = event.detail;
+    if (!isRecord(detail)) {
+      return;
+    }
+
+    const mode = detail.mode;
+    if (mode !== "yolo" && mode !== "safe") {
+      return;
+    }
+
+    currentMode = mode;
+    autoModeToggle.input.checked = mode === "yolo";
+  };
+
+  document.addEventListener(PI_EXECUTION_MODE_CHANGED_EVENT, onExecutionModeChanged);
+  registerCleanup?.(() => {
+    document.removeEventListener(PI_EXECUTION_MODE_CHANGED_EVENT, onExecutionModeChanged);
+  });
+
+  return shell.section;
+}
+
+function buildMoreSection(registerCleanup?: SettingsCleanupRegistrar): HTMLElement {
   const panel = document.createElement("div");
   panel.className = "pi-settings-more";
 
@@ -368,7 +572,7 @@ function buildMoreSection(): HTMLElement {
   experimental.content.appendChild(buildExperimentalFeatureContent());
   experimental.content.appendChild(buildExperimentalFeatureFooter());
 
-  panel.append(advanced.section, experimental.section);
+  panel.append(buildExecutionModeSection(registerCleanup), advanced.section, experimental.section);
   return panel;
 }
 
@@ -430,14 +634,14 @@ export async function showSettingsDialog(options: ShowSettingsDialogOptions = {}
     loginsPanel.className = "pi-settings-panel";
     loginsPanel.dataset.settingsPanel = "logins";
     loginsPanel.append(
-      buildProxySection(appStorage.settings),
+      buildProxySection(appStorage.settings, dialog.addCleanup),
       await buildProvidersSection(),
     );
 
     const morePanel = document.createElement("div");
     morePanel.className = "pi-settings-panel";
     morePanel.dataset.settingsPanel = "more";
-    morePanel.appendChild(buildMoreSection());
+    morePanel.appendChild(buildMoreSection(dialog.addCleanup));
 
     panels.append(loginsPanel, morePanel);
 
