@@ -110,6 +110,7 @@ import {
   saveWorkbookTabLayout,
   type WorkbookTabLayout,
 } from "./tab-layout.js";
+import { createTabLayoutPersistence } from "./tab-layout-persistence.js";
 import { injectStatusBar } from "./status-bar.js";
 import {
   closeStatusPopover,
@@ -467,35 +468,21 @@ export async function initTaskpane(opts: {
     };
   };
 
-  const tabLayoutSignature = (layout: WorkbookTabLayout): string => JSON.stringify(layout);
+  const tabLayoutPersistence = createTabLayoutPersistence({
+    resolveWorkbookId,
+    saveLayout: async (workbookId, layout) => {
+      await saveWorkbookTabLayout(settings, workbookId, layout);
+    },
+    warn: (message, error) => {
+      console.warn(message, error);
+    },
+  });
 
   let previousActiveRuntimeId: string | null = null;
   let suppressNextInputAutofocus = false;
-  let tabLayoutPersistenceEnabled = false;
-  let lastPersistedTabLayoutSignature: string | null = null;
-  let tabLayoutPersistChain: Promise<void> = Promise.resolve();
 
   const maybePersistTabLayout = (): void => {
-    if (!tabLayoutPersistenceEnabled) return;
-
-    const layout = snapshotRuntimeTabLayout();
-    const layoutSignature = tabLayoutSignature(layout);
-
-    tabLayoutPersistChain = tabLayoutPersistChain
-      .then(
-        async () => {
-          const workbookId = await resolveWorkbookId();
-          const persistSignature = `${workbookId ?? "__global__"}|${layoutSignature}`;
-          if (persistSignature === lastPersistedTabLayoutSignature) return;
-
-          await saveWorkbookTabLayout(settings, workbookId, layout);
-          lastPersistedTabLayoutSignature = persistSignature;
-        },
-        () => undefined,
-      )
-      .catch((error: unknown) => {
-        console.warn("[pi] Failed to persist tab layout:", error);
-      });
+    tabLayoutPersistence.persist(snapshotRuntimeTabLayout());
   };
 
   const focusChatInput = (): void => {
@@ -1417,7 +1404,7 @@ export async function initTaskpane(opts: {
     await createRuntime({ activate: true, autoRestoreLatest: true });
   }
 
-  tabLayoutPersistenceEnabled = true;
+  tabLayoutPersistence.enable();
   maybePersistTabLayout();
 
   // ── Register extensions ──
