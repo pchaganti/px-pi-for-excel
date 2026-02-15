@@ -633,7 +633,7 @@ export function createExperimentalCommands(
             await handleBridgeUrlCommand(tokens.slice(1), {
               bridgeLabel: "Tmux bridge",
               commandLabel: "tmux-bridge-url",
-              exampleUrl: "https://localhost:3337",
+              exampleUrl: "https://localhost:3341",
               configKey: TMUX_BRIDGE_URL_SETTING_KEY,
               getValue: resolved.getTmuxBridgeUrl,
               setValue: resolved.setTmuxBridgeUrl,

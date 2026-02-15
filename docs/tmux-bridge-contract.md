@@ -21,25 +21,28 @@ The gate is checked on each tool execution (defense in depth).
 ## Local bridge quickstart
 
 ```bash
-# Stub mode (safe default)
-npm run tmux:bridge:https
+# One-command setup (safe stub mode by default)
+npx pi-for-excel-tmux-bridge
 
 # Real tmux mode
-TMUX_BRIDGE_MODE=tmux npm run tmux:bridge:https
+TMUX_BRIDGE_MODE=tmux npx pi-for-excel-tmux-bridge
+
+# Source checkout alternative
+npm run tmux:bridge:https
 ```
 
 Then in the add-in:
 
 ```bash
 /experimental on tmux-bridge
-/experimental tmux-bridge-url https://localhost:3337
+/experimental tmux-bridge-url https://localhost:3341
 /experimental tmux-status
 ```
 
 Optional auth token:
 
 ```bash
-TMUX_BRIDGE_TOKEN=your-secret npm run tmux:bridge:https
+TMUX_BRIDGE_TOKEN=your-secret npx pi-for-excel-tmux-bridge
 ```
 
 Store the same token for the tool adapter:

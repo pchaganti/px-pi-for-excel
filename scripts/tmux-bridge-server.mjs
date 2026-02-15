@@ -31,7 +31,7 @@ if (useHttps && useHttp) {
 }
 
 const HOST = process.env.HOST || (useHttps ? "localhost" : "127.0.0.1");
-const PORT = Number.parseInt(process.env.PORT || "3337", 10);
+const PORT = Number.parseInt(process.env.PORT || "3341", 10);
 
 const MODE_RAW = (process.env.TMUX_BRIDGE_MODE || "stub").trim().toLowerCase();
 const MODE = MODE_RAW === "tmux" ? "tmux" : MODE_RAW === "stub" ? "stub" : null;
