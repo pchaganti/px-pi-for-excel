@@ -1043,7 +1043,7 @@ export class PiSidebar extends LitElement {
         <div class="pi-empty__content">
           <div class="pi-empty__logo">π</div>
           <p class="pi-empty__tagline">
-            Understands your spreadsheet. Remembers how you like things. Builds its own tools.
+            Understands and acts in Excel. Remembers how you like things.<br />Builds its own tools.
           </p>
           <div class="pi-empty__hints">
             ${this.emptyHints.map((hint) => html`
