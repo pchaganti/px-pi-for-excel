@@ -230,7 +230,7 @@ void test("extensions hub plugins tab renders installed/extensions sections", ()
     const texts = collectTextContent(container);
     assert.equal(texts.includes("Installed"), true);
     assert.equal(texts.includes("Install"), true);
-    assert.equal(texts.includes("Advanced"), true);
+    assert.equal(texts.includes("Advanced"), false, "Advanced section should be removed");
     assert.equal(texts.includes("Snake"), true);
     assert.equal(texts.includes("Broken Inline"), true);
   } finally {

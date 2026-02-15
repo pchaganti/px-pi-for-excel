@@ -27,7 +27,7 @@ void test("tmux tool returns guidance when bridge URL is not configured", async 
   const result = await tool.execute("tc-missing", { action: "list_sessions" });
 
   assert.match(firstText(result), /tmux-bridge-url/u);
-  assert.match(firstText(result), /\/experimental on tmux-bridge/u);
+  assert.match(firstText(result), /https:\/\/localhost:3341/u);
   assert.equal(result.details?.kind, "tmux_bridge");
   assert.equal(result.details?.ok, false);
   assert.equal(result.details?.error, "missing_bridge_url");

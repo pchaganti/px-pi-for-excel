@@ -285,7 +285,7 @@ function wrapPythonBridgeOnlyToolWithApprovalGate(
  * Apply execution gates to tool calls.
  *
  * Current rules:
- * - `tmux` requires an experiment flag, bridge URL, and health check.
+ * - `tmux` requires a configured bridge URL and successful health check.
  * - `python_run` and `python_transform_range` can run with Pyodide fallback
  *   when bridge URL is missing/invalid; bridge approval is required when a
  *   reachable bridge is present.

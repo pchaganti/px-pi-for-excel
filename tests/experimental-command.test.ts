@@ -7,14 +7,14 @@ import type {
   ExperimentalFeatureId,
 } from "../src/experiments/flags.ts";
 
-const tmuxFeature: ExperimentalFeatureDefinition = {
-  id: "tmux_bridge",
-  slug: "tmux-bridge",
-  aliases: ["tmux"],
-  title: "Tmux local bridge",
-  description: "Allow local tmux bridge integration.",
-  wiring: "flag-only",
-  storageKey: "pi.experimental.tmuxBridge",
+const extensionPermissionsFeature: ExperimentalFeatureDefinition = {
+  id: "extension_permission_gates",
+  slug: "extension-permissions",
+  aliases: ["extensions-permissions"],
+  title: "Extension permission gates",
+  description: "Enforce per-extension capability permissions when extensions activate.",
+  wiring: "wired",
+  storageKey: "pi.experimental.extensionPermissionGates",
 };
 
 function getExperimentalCommand(dependencies: Parameters<typeof createExperimentalCommands>[0]) {
@@ -45,14 +45,14 @@ void test("/experimental help shows usage and feature list", async () => {
     showToast: (message) => {
       toasts.push(message);
     },
-    getFeatureSlugs: () => ["tmux-bridge", "remote-extension-urls"],
+    getFeatureSlugs: () => ["remote-extension-urls", "extension-permissions"],
   });
 
   await command.execute("help");
 
   assert.equal(toasts.length, 1);
   assert.match(toasts[0], /Usage:\s*\/experimental/u);
-  assert.match(toasts[0], /tmux-bridge/u);
+  assert.match(toasts[0], /extension-permissions/u);
   assert.match(toasts[0], /remote-extension-urls/u);
   assert.match(toasts[0], /tmux-bridge-url/u);
   assert.match(toasts[0], /tmux-bridge-token/u);
@@ -61,7 +61,7 @@ void test("/experimental help shows usage and feature list", async () => {
   assert.match(toasts[0], /python-bridge-token/u);
 });
 
-void test("/experimental on <feature> enables feature and reports flag-only suffix", async () => {
+void test("/experimental on <feature> enables feature", async () => {
   const toasts: string[] = [];
   let setCall: [ExperimentalFeatureId, boolean] | null = null;
 
@@ -70,18 +70,17 @@ void test("/experimental on <feature> enables feature and reports flag-only suff
     showToast: (message) => {
       toasts.push(message);
     },
-    resolveFeature: (input) => (input === "tmux-bridge" ? tmuxFeature : null),
+    resolveFeature: (input) => (input === "extension-permissions" ? extensionPermissionsFeature : null),
     setFeatureEnabled: (featureId, enabled) => {
       setCall = [featureId, enabled];
     },
   });
 
-  await command.execute("on tmux-bridge");
+  await command.execute("on extension-permissions");
 
-  assert.deepEqual(setCall, ["tmux_bridge", true]);
+  assert.deepEqual(setCall, ["extension_permission_gates", true]);
   assert.equal(toasts.length, 1);
-  assert.match(toasts[0], /Tmux local bridge:\s*enabled/u);
-  assert.match(toasts[0], /flag saved; feature not wired yet/u);
+  assert.match(toasts[0], /Extension permission gates:\s*enabled/u);
 });
 
 void test("/experimental off <feature> disables feature", async () => {
@@ -93,17 +92,17 @@ void test("/experimental off <feature> disables feature", async () => {
     showToast: (message) => {
       toasts.push(message);
     },
-    resolveFeature: (input) => (input === "tmux-bridge" ? tmuxFeature : null),
+    resolveFeature: (input) => (input === "extension-permissions" ? extensionPermissionsFeature : null),
     setFeatureEnabled: (featureId, enabled) => {
       setCall = [featureId, enabled];
     },
   });
 
-  await command.execute("off tmux-bridge");
+  await command.execute("off extension-permissions");
 
-  assert.deepEqual(setCall, ["tmux_bridge", false]);
+  assert.deepEqual(setCall, ["extension_permission_gates", false]);
   assert.equal(toasts.length, 1);
-  assert.match(toasts[0], /Tmux local bridge:\s*disabled/u);
+  assert.match(toasts[0], /Extension permission gates:\s*disabled/u);
 });
 
 void test("/experimental toggle <feature> uses toggle result", async () => {
@@ -115,18 +114,18 @@ void test("/experimental toggle <feature> uses toggle result", async () => {
     showToast: (message) => {
       toasts.push(message);
     },
-    resolveFeature: (input) => (input === "tmux-bridge" ? tmuxFeature : null),
+    resolveFeature: (input) => (input === "extension-permissions" ? extensionPermissionsFeature : null),
     toggleFeature: (featureId) => {
       toggledFeatureId = featureId;
       return true;
     },
   });
 
-  await command.execute("toggle tmux-bridge");
+  await command.execute("toggle extension-permissions");
 
-  assert.equal(toggledFeatureId, "tmux_bridge");
+  assert.equal(toggledFeatureId, "extension_permission_gates");
   assert.equal(toasts.length, 1);
-  assert.match(toasts[0], /Tmux local bridge:\s*enabled/u);
+  assert.match(toasts[0], /Extension permission gates:\s*enabled/u);
 });
 
 void test("/experimental unknown action returns usage", async () => {
@@ -153,7 +152,7 @@ void test("/experimental on with unknown feature reports available slugs", async
     showToast: (message) => {
       toasts.push(message);
     },
-    getFeatureSlugs: () => ["tmux-bridge", "remote-extension-urls"],
+    getFeatureSlugs: () => ["remote-extension-urls", "extension-permissions"],
     resolveFeature: () => null,
   });
 
@@ -161,7 +160,7 @@ void test("/experimental on with unknown feature reports available slugs", async
 
   assert.equal(toasts.length, 1);
   assert.match(toasts[0], /Unknown feature:\s*does-not-exist/u);
-  assert.match(toasts[0], /tmux-bridge/u);
+  assert.match(toasts[0], /extension-permissions/u);
 });
 
 void test("/experimental on mcp-tools redirects to /tools alias", async () => {
@@ -373,7 +372,6 @@ void test("/experimental tmux-status reports blocked state with hint", async () 
     showToast: (message) => {
       toasts.push(message);
     },
-    isTmuxBridgeEnabled: () => false,
     getTmuxBridgeUrl: () => Promise.resolve(undefined),
     getTmuxBridgeToken: () => Promise.resolve(undefined),
   });
@@ -381,9 +379,8 @@ void test("/experimental tmux-status reports blocked state with hint", async () 
   await command.execute("tmux-status");
 
   assert.equal(toasts.length, 1);
-  assert.match(toasts[0], /feature flag \(tmux-bridge\): disabled/u);
-  assert.match(toasts[0], /gate: blocked \(tmux_experiment_disabled\)/u);
-  assert.match(toasts[0], /Enable it with \/experimental on tmux-bridge/u);
+  assert.match(toasts[0], /bridge URL: not set/u);
+  assert.match(toasts[0], /gate: blocked \(missing_bridge_url\)/u);
   assert.match(toasts[0], /health: not checked/u);
 });
 
@@ -395,7 +392,6 @@ void test("/experimental tmux-status reports healthy bridge details", async () =
     showToast: (message) => {
       toasts.push(message);
     },
-    isTmuxBridgeEnabled: () => true,
     getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3341"),
     getTmuxBridgeToken: () => Promise.resolve("supersecrettoken"),
     probeTmuxBridgeHealth: () => Promise.resolve({
@@ -410,7 +406,6 @@ void test("/experimental tmux-status reports healthy bridge details", async () =
   await command.execute("tmux-status");
 
   assert.equal(toasts.length, 1);
-  assert.match(toasts[0], /feature flag \(tmux-bridge\): enabled/u);
   assert.match(toasts[0], /bridge URL: https:\/\/localhost:3341/u);
   assert.match(toasts[0], /auth token: set \(supe\*{10}en, length 16\)/u);
   assert.match(toasts[0], /gate: pass/u);
@@ -427,7 +422,6 @@ void test("/experimental tmux-status uses a single health probe for gate + diagn
     showToast: (message) => {
       toasts.push(message);
     },
-    isTmuxBridgeEnabled: () => true,
     getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3341"),
     getTmuxBridgeToken: () => Promise.resolve(undefined),
     probeTmuxBridgeHealth: () => {

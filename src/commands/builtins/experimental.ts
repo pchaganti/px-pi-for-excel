@@ -5,7 +5,6 @@
 import type { SlashCommand } from "../types.js";
 import {
   getExperimentalFeatureSlugs,
-  isExperimentalFeatureEnabled,
   resolveExperimentalFeature,
   setExperimentalFeatureEnabled,
   toggleExperimentalFeature,
@@ -76,7 +75,6 @@ export interface ExperimentalCommandDependencies {
   setTmuxBridgeToken?: (token: string) => Promise<void>;
   clearTmuxBridgeToken?: () => Promise<void>;
   validateTmuxBridgeToken?: (token: string) => string;
-  isTmuxBridgeEnabled?: () => boolean;
   probeTmuxBridgeHealth?: (bridgeUrl: string) => Promise<TmuxBridgeHealthStatus>;
 
   getPythonBridgeUrl?: () => Promise<string | undefined>;
@@ -109,7 +107,6 @@ interface ResolvedExperimentalCommandDependencies {
   setTmuxBridgeToken: (token: string) => Promise<void>;
   clearTmuxBridgeToken: () => Promise<void>;
   validateTmuxBridgeToken: (token: string) => string;
-  isTmuxBridgeEnabled: () => boolean;
   probeTmuxBridgeHealth: (bridgeUrl: string) => Promise<TmuxBridgeHealthStatus>;
 
   getPythonBridgeUrl: () => Promise<string | undefined>;
@@ -252,10 +249,6 @@ function maskToken(token: string): string {
   return `${token.slice(0, 4)}${"*".repeat(hiddenLength)}${token.slice(-2)}`;
 }
 
-function defaultIsTmuxBridgeEnabled(): boolean {
-  return isExperimentalFeatureEnabled("tmux_bridge");
-}
-
 function normalizeOptionalString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -313,7 +306,6 @@ function resolveDependencies(
       dependencies.clearTmuxBridgeToken
       ?? (() => defaultClearSettingValue(TMUX_BRIDGE_TOKEN_SETTING_KEY)),
     validateTmuxBridgeToken: dependencies.validateTmuxBridgeToken ?? defaultValidateTmuxBridgeToken,
-    isTmuxBridgeEnabled: dependencies.isTmuxBridgeEnabled ?? defaultIsTmuxBridgeEnabled,
     probeTmuxBridgeHealth: dependencies.probeTmuxBridgeHealth ?? defaultProbeTmuxBridgeHealth,
 
     getPythonBridgeUrl:
@@ -510,7 +502,6 @@ async function handleBridgeTokenCommand(
 async function handleTmuxStatusCommand(
   dependencies: ResolvedExperimentalCommandDependencies,
 ): Promise<void> {
-  const featureEnabled = dependencies.isTmuxBridgeEnabled();
   const configuredBridgeUrl = await dependencies.getTmuxBridgeUrl();
   const configuredToken = await dependencies.getTmuxBridgeToken();
 
@@ -530,9 +521,7 @@ async function handleTmuxStatusCommand(
     : undefined;
 
   let gateReason: TmuxBridgeGateReason | undefined;
-  if (!featureEnabled) {
-    gateReason = "tmux_experiment_disabled";
-  } else if (!configuredBridgeUrl) {
+  if (!configuredBridgeUrl) {
     gateReason = "missing_bridge_url";
   } else if (!normalizedBridgeUrl) {
     gateReason = "invalid_bridge_url";
@@ -552,7 +541,6 @@ async function handleTmuxStatusCommand(
     };
 
   const lines: string[] = ["Tmux bridge status:"];
-  lines.push(`- feature flag (tmux-bridge): ${featureEnabled ? "enabled" : "disabled"}`);
 
   if (!configuredBridgeUrl) {
     lines.push("- bridge URL: not set");

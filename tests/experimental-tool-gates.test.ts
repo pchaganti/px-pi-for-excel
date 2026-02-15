@@ -33,14 +33,13 @@ function createTestTool(
   };
 }
 
-void test("keeps tmux tool registered when experiment is disabled", async () => {
+void test("keeps tmux tool registered but rejects when no URL configured", async () => {
   let probeCalled = false;
 
   const tools = [createTestTool("tmux"), createTestTool("read_range")];
   const gated = await applyExperimentalToolGates(tools, {
-    isTmuxExperimentEnabled: () => false,
-    getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3341"),
-    validateBridgeUrl: () => "https://localhost:3341",
+    getTmuxBridgeUrl: () => Promise.resolve(undefined),
+    validateBridgeUrl: () => null,
     probeTmuxBridge: () => {
       probeCalled = true;
       return Promise.resolve(true);
@@ -55,23 +54,22 @@ void test("keeps tmux tool registered when experiment is disabled", async () => 
 
   await assert.rejects(
     () => tmuxTool.execute("call-1", {}),
-    /\/experimental on tmux-bridge/,
+    /not configured/i,
   );
 
   assert.equal(probeCalled, false);
 });
 
 void test("tmux hard gate re-checks execution on every call", async () => {
-  let enabled = true;
+  let bridgeUrl: string | undefined = "https://localhost:3341";
   let bridgeHealthy = true;
   let executeCount = 0;
 
   const [gatedTmux] = await applyExperimentalToolGates([createTestTool("tmux", () => {
     executeCount += 1;
   })], {
-    isTmuxExperimentEnabled: () => enabled,
-    getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3341"),
-    validateBridgeUrl: () => "https://localhost:3341",
+    getTmuxBridgeUrl: () => Promise.resolve(bridgeUrl),
+    validateBridgeUrl: (url) => url,
     probeTmuxBridge: () => Promise.resolve(bridgeHealthy),
   });
 
@@ -80,15 +78,15 @@ void test("tmux hard gate re-checks execution on every call", async () => {
   await gatedTmux.execute("call-1", {});
   assert.equal(executeCount, 1);
 
-  enabled = false;
+  bridgeUrl = undefined;
 
   await assert.rejects(
     () => gatedTmux.execute("call-2", {}),
-    /\/experimental on tmux-bridge/,
+    /not configured/i,
   );
   assert.equal(executeCount, 1);
 
-  enabled = true;
+  bridgeUrl = "https://localhost:3341";
   bridgeHealthy = false;
 
   await assert.rejects(
@@ -100,7 +98,6 @@ void test("tmux hard gate re-checks execution on every call", async () => {
 
 void test("evaluateTmuxBridgeGate reports explicit reason codes", async () => {
   const missingUrl = await evaluateTmuxBridgeGate({
-    isTmuxExperimentEnabled: () => true,
     getTmuxBridgeUrl: () => Promise.resolve(undefined),
   });
 
@@ -108,7 +105,6 @@ void test("evaluateTmuxBridgeGate reports explicit reason codes", async () => {
   assert.equal(missingUrl.reason, "missing_bridge_url");
 
   const unreachable = await evaluateTmuxBridgeGate({
-    isTmuxExperimentEnabled: () => true,
     getTmuxBridgeUrl: () => Promise.resolve("https://localhost:3341"),
     validateBridgeUrl: () => "https://localhost:3341",
     probeTmuxBridge: () => Promise.resolve(false),

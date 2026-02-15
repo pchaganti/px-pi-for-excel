@@ -97,10 +97,6 @@ void test("builtins registry wires /addons, /experimental, /extensions, /integra
   assert.match(extensionsHubPluginsSource, /higher-risk permissions/);
   assert.match(extensionsHubPluginsSource, /createSectionHeader\(\{ label: "Permissions" \}\)/);
   assert.match(extensionsHubPluginsSource, /installFromUrl\(/);
-  assert.match(extensionsHubPluginsSource, /installFromCode\(/);
-  assert.match(extensionsHubPluginsSource, /pi-hub-code-toggle-row/);
-  assert.match(extensionsHubPluginsSource, /aria-expanded/);
-  assert.match(extensionsHubPluginsSource, /summary\.textContent = "Advanced"/);
 
   const extensionsDocsSource = await readFile(new URL("../docs/extensions.md", import.meta.url), "utf8");
   assert.match(extensionsDocsSource, /## Permission review\/revoke/);

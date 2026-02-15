@@ -139,9 +139,9 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **UI:** explanation card renders clickable reference citations with value previews.
 - **Rationale:** users need plain-English interpretation without losing inspectability; bounded reference previews preserve responsiveness on dense workbooks.
 
-## Feature-flagged tmux bridge tool (`tmux`)
-- **Availability:** non-core feature-flagged tool, always registered via `createAllTools()`; execution is gated by `applyExperimentalToolGates()`.
-- **Gate model:** requires `tmux-bridge` experiment enabled, configured `tmux.bridge.url`, and successful bridge `/health` probe.
+## Tmux bridge tool (`tmux`)
+- **Availability:** non-core tool, always registered via `createAllTools()`; execution is gated by `applyExperimentalToolGates()`.
+- **Gate model:** requires a configured `tmux.bridge.url` and successful bridge `/health` probe.
 - **Execution policy:** classified as `read/none` in workbook coordinator (no workbook lock writes or blueprint invalidation).
 - **Bridge implementation:** local helper script `scripts/tmux-bridge-server.mjs`.
   - default mode: `stub` (in-memory simulator)
@@ -154,7 +154,7 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
   - `send_and_capture`
   - `kill_session`
 - **Security posture:** local opt-in only; bridge URL validated via `validateOfficeProxyUrl`; tool execution re-checks gate before every call; bridge enforces loopback+origin checks and optional bearer token (`TMUX_BRIDGE_TOKEN` / setting `tmux.bridge.token`, managed via `/experimental tmux-bridge-token ...`).
-- **Diagnostics UX:** `/experimental tmux-status` reports feature flag, URL/token config, gate result, and bridge health details for quick troubleshooting.
+- **Diagnostics UX:** `/experimental tmux-status` reports URL/token config, gate result, and bridge health details for quick troubleshooting.
 - **Rationale:** stable local adapter contract now (issue #3) with safe stub-first rollout and incremental hardening.
 
 ## Python / LibreOffice execution tools (`python_run`, `libreoffice_convert`, `python_transform_range`)

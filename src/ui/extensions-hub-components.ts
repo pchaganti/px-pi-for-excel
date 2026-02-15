@@ -232,7 +232,14 @@ export function createItemCard(opts: ItemCardOptions): ItemCardResult {
   // Expand/collapse
   if (opts.expandable) {
     header.addEventListener("click", () => {
+      const wasExpanded = card.hasAttribute("data-expanded");
       card.toggleAttribute("data-expanded");
+      if (!wasExpanded) {
+        // Ensure the expanded body is visible, especially near the bottom of a scrollable overlay.
+        requestAnimationFrame(() => {
+          body.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        });
+      }
     });
   }
 
