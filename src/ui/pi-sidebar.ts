@@ -829,34 +829,34 @@ export class PiSidebar extends LitElement {
     return html`
       <div class="pi-utilities-menu" id=${this._utilitiesMenuId} role="menu" aria-label="Settings and tools">
         <button role="menuitem" class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenSettings?.(); }}>
-          Settings…
+          <span class="pi-utilities-menu__item-icon">⚙</span> Settings…
         </button>
         <button role="menuitem" class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenExtensions?.(); }}>
-          Extensions…
+          <span class="pi-utilities-menu__item-icon">⚡</span> Extensions…
         </button>
 
         <div class="pi-utilities-menu__divider" role="separator"></div>
 
         <button role="menuitem" class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this._onOpenFilesWorkspace(); }}>
-          Files…
+          <span class="pi-utilities-menu__item-icon">📄</span> Files…
         </button>
         <button role="menuitem" class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenRules?.(); }}>
-          Rules & conventions…
+          <span class="pi-utilities-menu__item-icon">📐</span> Rules & conventions…
         </button>
 
         <div class="pi-utilities-menu__divider" role="separator"></div>
 
         <button role="menuitem" class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenResumePicker?.(); }}>
-          Resume session…
+          <span class="pi-utilities-menu__item-icon">↻</span> Resume session…
         </button>
         <button role="menuitem" class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenRecovery?.(); }}>
-          Backups…
+          <span class="pi-utilities-menu__item-icon">💾</span> Backups…
         </button>
 
         <div class="pi-utilities-menu__divider" role="separator"></div>
 
         <button role="menuitem" class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenShortcuts?.(); }}>
-          Keyboard shortcuts…
+          <span class="pi-utilities-menu__item-icon">⌨</span> Keyboard shortcuts…
         </button>
       </div>
     `;
