@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -8,6 +10,7 @@ import {
   providerPriority,
 } from "../src/models/model-ordering.ts";
 import { BROWSER_OAUTH_PROVIDERS, mapToApiProvider } from "../src/auth/provider-map.ts";
+import { installProcessEnvShim } from "../src/compat/process-env-shim.ts";
 
 void test("parseMajorMinor packs Claude-style -major-minor as major*10+minor", () => {
   assert.equal(parseMajorMinor("claude-opus-4-5"), 45);
@@ -86,4 +89,45 @@ void test("browser oauth providers include OpenAI + Google OAuth providers", () 
   assert.equal(BROWSER_OAUTH_PROVIDERS.includes("openai-codex"), true);
   assert.equal(BROWSER_OAUTH_PROVIDERS.includes("google-gemini-cli"), true);
   assert.equal(BROWSER_OAUTH_PROVIDERS.includes("google-antigravity"), true);
+});
+
+void test("process-env shim adds process.env for browser-like runtimes", () => {
+  const runtime: { process?: unknown } = {};
+  installProcessEnvShim(runtime);
+
+  assert.ok(runtime.process && typeof runtime.process === "object" && !Array.isArray(runtime.process));
+
+  if (!runtime.process || typeof runtime.process !== "object" || Array.isArray(runtime.process)) {
+    assert.fail("expected process shim object");
+  }
+
+  assert.equal("env" in runtime.process, true);
+  if (!("env" in runtime.process)) {
+    assert.fail("expected process.env to exist");
+  }
+
+  const envValue = runtime.process.env;
+  assert.ok(envValue && typeof envValue === "object" && !Array.isArray(envValue));
+});
+
+void test("vite proxy orders Google routes from most specific to least specific", () => {
+  const viteConfigPath = path.resolve(process.cwd(), "vite.config.ts");
+  const content = readFileSync(viteConfigPath, "utf8");
+
+  const sandboxIndex = content.indexOf('"/api-proxy/google-cloudcode-sandbox"');
+  const cloudcodeIndex = content.indexOf('"/api-proxy/google-cloudcode"');
+  const googleIndex = content.indexOf('"/api-proxy/google"');
+
+  assert.notEqual(sandboxIndex, -1, "expected sandbox proxy route");
+  assert.notEqual(cloudcodeIndex, -1, "expected cloudcode proxy route");
+  assert.notEqual(googleIndex, -1, "expected generic google proxy route");
+
+  assert.ok(
+    sandboxIndex < cloudcodeIndex,
+    "sandbox route must come before cloudcode route",
+  );
+  assert.ok(
+    cloudcodeIndex < googleIndex,
+    "cloudcode route must come before generic google route",
+  );
 });

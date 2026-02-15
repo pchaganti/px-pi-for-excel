@@ -182,7 +182,10 @@ function stubPiWebUiBuiltinToolsPlugin(): Plugin {
 // ============================================================================
 
 /** Common proxy config: strip Origin/Referer so the target sees a server request */
-type ProxyReqLike = { removeHeader(name: string): void };
+type ProxyReqLike = {
+  removeHeader(name: string): void;
+  path?: string;
+};
 type ProxyServerLike = { on(event: "proxyReq", handler: (proxyReq: ProxyReqLike) => void): void };
 
 function stripBrowserHeaders(proxy: ProxyServerLike) {
@@ -193,6 +196,13 @@ function stripBrowserHeaders(proxy: ProxyServerLike) {
     proxyReq.removeHeader("sec-fetch-site");
     proxyReq.removeHeader("sec-fetch-dest");
     proxyReq.removeHeader("anthropic-dangerous-direct-browser-access");
+
+    // Cloud Code Assist endpoints use a colon in the path
+    // (e.g. /v1internal:streamGenerateContent). Some proxy stacks encode
+    // this as %3A, which Google treats as a different path and returns 404.
+    if (typeof proxyReq.path === "string" && /%3a/i.test(proxyReq.path)) {
+      proxyReq.path = proxyReq.path.replaceAll("%3A", ":").replaceAll("%3a", ":");
+    }
   });
 }
 
@@ -251,15 +261,27 @@ export default defineConfig({
       "/api-proxy/openai": proxyEntry("https://api.openai.com", "/api-proxy/openai"),
       "/api-proxy/chatgpt": proxyEntry("https://chatgpt.com", "/api-proxy/chatgpt"),
       "/api-proxy/google-oauth": proxyEntry("https://oauth2.googleapis.com", "/api-proxy/google-oauth"),
-      "/api-proxy/google": proxyEntry("https://generativelanguage.googleapis.com", "/api-proxy/google"),
-      "/api-proxy/google-cloudcode": proxyEntry("https://cloudcode-pa.googleapis.com", "/api-proxy/google-cloudcode"),
+      // Keep more specific Google prefixes before /api-proxy/google to avoid prefix collisions.
       "/api-proxy/google-cloudcode-sandbox": proxyEntry("https://daily-cloudcode-pa.sandbox.googleapis.com", "/api-proxy/google-cloudcode-sandbox"),
+      "/api-proxy/google-cloudcode": proxyEntry("https://cloudcode-pa.googleapis.com", "/api-proxy/google-cloudcode"),
+      "/api-proxy/google": proxyEntry("https://generativelanguage.googleapis.com", "/api-proxy/google"),
     },
+  },
+
+  // Replace Node-style process.env reads in browser bundles.
+  // Some upstream provider code still references process.env directly.
+  define: {
+    "process.env": "{}",
   },
 
   // Prevent esbuild from downleveling class fields (breaks Lit's @state/@property)
   optimizeDeps: {
-    esbuildOptions: { target: "esnext" },
+    esbuildOptions: {
+      target: "esnext",
+      define: {
+        "process.env": "{}",
+      },
+    },
   },
   esbuild: { target: "esnext" },
 
