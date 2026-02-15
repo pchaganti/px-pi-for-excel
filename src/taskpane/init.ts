@@ -1402,6 +1402,9 @@ export async function initTaskpane(opts: {
     getExecutionMode: () => Promise.resolve(getExecutionMode()),
     setExecutionMode,
     openAddonsManager,
+    openFilesWorkspace: () => {
+      void showFilesWorkspaceDialog();
+    },
   });
 
   // Slash commands chosen from the popup menu dispatch this event.
