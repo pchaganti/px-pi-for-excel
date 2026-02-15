@@ -141,7 +141,19 @@
 .pi-utilities-menu__item-icon {
   flex-shrink: 0;
   width: 16px;
-  text-align: center;
-  font-size: var(--text-sm);
-  line-height: 1;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  transition: color var(--duration-fast);
+}
+
+.pi-utilities-menu__item-icon > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.pi-utilities-menu__item:hover .pi-utilities-menu__item-icon {
+  color: var(--foreground);
 }
