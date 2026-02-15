@@ -303,21 +303,44 @@ function buildProviderRequest(
   };
 }
 
-function parseBraveHits(payload: unknown): WebSearchHit[] {
-  if (!isRecord(payload)) return [];
-  if (!isRecord(payload.web)) return [];
-  const results = payload.web.results;
-  if (!Array.isArray(results)) return [];
+interface HitParsingShape {
+  titleKey: string;
+  urlKey: string;
+  snippetKeys: readonly string[];
+}
 
+function readArrayPath(payload: unknown, path: readonly string[]): unknown[] {
+  let cursor: unknown = payload;
+
+  for (const key of path) {
+    if (!isRecord(cursor)) {
+      return [];
+    }
+
+    cursor = cursor[key];
+  }
+
+  return Array.isArray(cursor) ? cursor : [];
+}
+
+function parseHitsFromEntries(entries: readonly unknown[], shape: HitParsingShape): WebSearchHit[] {
   const hits: WebSearchHit[] = [];
-  for (const entry of results) {
+
+  for (const entry of entries) {
     if (!isRecord(entry)) continue;
 
-    const title = normalizeOptionalString(entry.title);
-    const url = normalizeOptionalString(entry.url);
-    const snippet = normalizeOptionalString(entry.description) ?? normalizeOptionalString(entry.snippet) ?? "";
+    const title = normalizeOptionalString(entry[shape.titleKey]);
+    const url = normalizeOptionalString(entry[shape.urlKey]);
 
     if (!title || !url) continue;
+
+    let snippet = "";
+    for (const snippetKey of shape.snippetKeys) {
+      const candidate = normalizeOptionalString(entry[snippetKey]);
+      if (!candidate) continue;
+      snippet = candidate;
+      break;
+    }
 
     hits.push({
       title,
@@ -327,62 +350,49 @@ function parseBraveHits(payload: unknown): WebSearchHit[] {
   }
 
   return hits;
+}
+
+function parseBraveHits(payload: unknown): WebSearchHit[] {
+  return parseHitsFromEntries(
+    readArrayPath(payload, ["web", "results"]),
+    {
+      titleKey: "title",
+      urlKey: "url",
+      snippetKeys: ["description", "snippet"],
+    },
+  );
 }
 
 function parseSerperHits(payload: unknown): WebSearchHit[] {
-  if (!isRecord(payload)) return [];
-  const organic = payload.organic;
-  if (!Array.isArray(organic)) return [];
-
-  const hits: WebSearchHit[] = [];
-  for (const entry of organic) {
-    if (!isRecord(entry)) continue;
-
-    const title = normalizeOptionalString(entry.title);
-    const url = normalizeOptionalString(entry.link);
-    const snippet = normalizeOptionalString(entry.snippet) ?? "";
-
-    if (!title || !url) continue;
-
-    hits.push({
-      title,
-      url,
-      snippet,
-    });
-  }
-
-  return hits;
+  return parseHitsFromEntries(
+    readArrayPath(payload, ["organic"]),
+    {
+      titleKey: "title",
+      urlKey: "link",
+      snippetKeys: ["snippet"],
+    },
+  );
 }
 
 function parseTavilyHits(payload: unknown): WebSearchHit[] {
-  if (!isRecord(payload)) return [];
-  const results = payload.results;
-  if (!Array.isArray(results)) return [];
-
-  const hits: WebSearchHit[] = [];
-  for (const entry of results) {
-    if (!isRecord(entry)) continue;
-
-    const title = normalizeOptionalString(entry.title);
-    const url = normalizeOptionalString(entry.url);
-    const snippet = normalizeOptionalString(entry.content) ?? "";
-
-    if (!title || !url) continue;
-
-    hits.push({
-      title,
-      url,
-      snippet,
-    });
-  }
-
-  return hits;
+  return parseHitsFromEntries(
+    readArrayPath(payload, ["results"]),
+    {
+      titleKey: "title",
+      urlKey: "url",
+      snippetKeys: ["content"],
+    },
+  );
 }
 
+const SEARCH_HIT_PARSERS: Record<WebSearchProvider, (payload: unknown) => WebSearchHit[]> = {
+  brave: parseBraveHits,
+  serper: parseSerperHits,
+  tavily: parseTavilyHits,
+};
+
 function parseSearchHits(provider: WebSearchProvider, payload: unknown): WebSearchHit[] {
-  if (provider === "brave") return parseBraveHits(payload);
-  if (provider === "serper") return parseSerperHits(payload);
-  return parseTavilyHits(payload);
+  return SEARCH_HIT_PARSERS[provider](payload);
 }
 
 function buildResultMarkdown(args: {
