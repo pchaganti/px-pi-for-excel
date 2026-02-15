@@ -118,7 +118,7 @@ export function renderPluginsTab(args: {
   }));
 
   if (statuses.length === 0) {
-    container.appendChild(createEmptyInline("🧩", "No plugins installed.\nInstall from a URL or paste code."));
+    container.appendChild(createEmptyInline("🧩", "No plugins installed.\nPi can build plugins, or install one from a URL."));
   } else {
     const list = document.createElement("div");
     list.className = "pi-hub-stack";
@@ -131,14 +131,12 @@ export function renderPluginsTab(args: {
     container.appendChild(list);
   }
 
-  // ── Install section ───────────────────────────
+  // ── Install from URL ───────────────────────────
   container.appendChild(createSectionHeader({ label: "Install" }));
 
   const installForm = createAddForm();
-
-  // URL install
   const urlRow = createAddFormRow();
-  const urlInput = createAddFormInput("Extension URL (https://… or file:///…)");
+  const urlInput = createAddFormInput("Paste a plugin URL…");
   urlRow.append(
     urlInput,
     createButton("Install", {
@@ -154,81 +152,7 @@ export function renderPluginsTab(args: {
     }),
   );
   installForm.appendChild(urlRow);
-
-  // Code install toggle
-  const codeArea = document.createElement("textarea");
-  codeArea.className = "pi-overlay-input pi-hub-textarea";
-  codeArea.placeholder = "// Paste extension source code…";
-  codeArea.hidden = true;
-
-  const codeActions = document.createElement("div");
-  codeActions.className = "pi-hub-actions-end";
-  codeActions.hidden = true;
-
-  codeActions.appendChild(createButton("Install from code", {
-    primary: true,
-    compact: true,
-    onClick: () => {
-      if (isBusy()) return;
-      const code = codeArea.value.trim();
-      if (!code) { showToast("Paste code first."); return; }
-      void installFromCode(code, manager, onChanged, () => renderPluginsTab(args));
-      codeArea.value = "";
-    },
-  }));
-
-  const codeAreaId = "pi-plugin-install-code";
-  codeArea.id = codeAreaId;
-
-  const toggleCodeLink = document.createElement("button");
-  toggleCodeLink.type = "button";
-  toggleCodeLink.className = "pi-section-header__action pi-hub-code-toggle";
-  toggleCodeLink.textContent = "Or paste code directly…";
-  toggleCodeLink.setAttribute("aria-controls", codeAreaId);
-  toggleCodeLink.setAttribute("aria-expanded", "false");
-  toggleCodeLink.addEventListener("click", () => {
-    const show = codeArea.hidden;
-    codeArea.hidden = !show;
-    codeActions.hidden = !show;
-    toggleCodeLink.textContent = show ? "Hide code editor" : "Or paste code directly…";
-    toggleCodeLink.setAttribute("aria-expanded", show ? "true" : "false");
-    if (show) {
-      codeArea.focus();
-    }
-  });
-
-  const codeToggleRow = document.createElement("div");
-  codeToggleRow.className = "pi-hub-code-toggle-row";
-  codeToggleRow.appendChild(toggleCodeLink);
-
-  installForm.append(codeToggleRow, codeArea, codeActions);
   container.appendChild(installForm);
-
-  // ── Advanced section ──────────────────────────
-  const details = document.createElement("details");
-  
-
-  const summary = document.createElement("summary");
-  summary.className = "pi-hub-advanced-summary";
-  summary.textContent = "Advanced";
-
-  const advancedBody = document.createElement("div");
-  advancedBody.className = "pi-hub-advanced-body";
-
-  advancedBody.appendChild(createToggleRow({
-    label: "Allow remote URLs",
-    sublabel: "Install extensions from external URLs (requires trust)",
-    checked: false, // Read from settings if available
-  }).root);
-
-  advancedBody.appendChild(createToggleRow({
-    label: "LLM prompt template",
-    sublabel: "Custom system prompt preamble",
-    checked: false,
-  }).root);
-
-  details.append(summary, advancedBody);
-  container.appendChild(details);
 }
 
 // ── Plugin card ─────────────────────────────────────
@@ -379,23 +303,4 @@ async function installFromUrl(
   }
 }
 
-async function installFromCode(
-  code: string,
-  manager: ExtensionRuntimeManager,
-  onChanged: () => Promise<void>,
-  refresh: () => void,
-): Promise<void> {
-  try {
-    const name = window.prompt("Extension name:", "my-extension") ?? "";
-    if (!name.trim()) return;
-    const perms = getDefaultPermissionsForTrust("inline-code");
-    const caps = listGrantedExtensionCapabilities(perms);
-    if (!(await confirmInstall(name, "inline code", caps))) return;
-    await manager.installFromCode(name, code);
-    await onChanged();
-    showToast(`Installed: ${name}`);
-    refresh();
-  } catch (err: unknown) {
-    showToast(`Install failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
+
