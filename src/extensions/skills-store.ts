@@ -14,7 +14,7 @@ export interface SkillSummaryItem {
 async function loadMergedSkills() {
   const bundled = listAgentSkills();
   const external = await loadExternalAgentSkills();
-  return mergeAgentSkillDefinitions(external, bundled);
+  return mergeAgentSkillDefinitions(bundled, external);
 }
 
 function normalizeSkillName(name: string): string {
