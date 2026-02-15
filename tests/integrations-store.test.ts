@@ -88,23 +88,23 @@ void test("setIntegrationEnabledInScope toggles session/workbook flags", async (
   );
 });
 
-void test("external tools gate defaults on and can be disabled", async () => {
+void test("external tools gate defaults off and can be enabled", async () => {
   const settings = new MemorySettingsStore();
 
-  assert.equal(await getExternalToolsEnabled(settings), true);
-
-  await setExternalToolsEnabled(settings, false);
   assert.equal(await getExternalToolsEnabled(settings), false);
 
   await setExternalToolsEnabled(settings, true);
   assert.equal(await getExternalToolsEnabled(settings), true);
+
+  await setExternalToolsEnabled(settings, false);
+  assert.equal(await getExternalToolsEnabled(settings), false);
 });
 
-void test("unconfigured session scope returns default-enabled integrations", async () => {
+void test("unconfigured session scope is explicit empty", async () => {
   const settings = new MemorySettingsStore();
 
   const ids = await getSessionIntegrationIds(settings, "new-session", KNOWN_INTEGRATIONS);
-  assert.deepEqual(ids, ["web_search"]);
+  assert.deepEqual(ids, []);
 });
 
 void test("explicitly cleared session scope returns empty", async () => {
@@ -150,4 +150,31 @@ void test("resolveConfiguredIntegrationIds includes defaults for fresh session+w
   });
 
   assert.deepEqual(ids, ["web_search"]);
+});
+
+void test("workbook-level disable persists across new sessions", async () => {
+  const settings = new MemorySettingsStore();
+
+  await setIntegrationEnabledInScope({
+    settings,
+    scope: "workbook",
+    identifier: "workbook-off",
+    integrationId: "web_search",
+    enabled: false,
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
+  });
+
+  assert.deepEqual(
+    await getWorkbookIntegrationIds(settings, "workbook-off", KNOWN_INTEGRATIONS),
+    [],
+  );
+
+  const resolved = await resolveConfiguredIntegrationIds({
+    settings,
+    sessionId: "brand-new-session",
+    workbookId: "workbook-off",
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
+  });
+
+  assert.deepEqual(resolved, []);
 });
