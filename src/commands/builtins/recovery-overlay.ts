@@ -29,6 +29,10 @@ import {
   createButton,
   createActionsRow,
 } from "../../ui/extensions-hub-components.js";
+import {
+  MAX_RECOVERY_ENTRIES,
+  MIN_RETENTION_LIMIT,
+} from "../../workbook/recovery/constants.js";
 
 export type RecoveryCheckpointToolName =
   | "write_cells"
@@ -279,8 +283,8 @@ export async function showRecoveryDialog(opts: {
 
   const retentionInput = document.createElement("input");
   retentionInput.type = "number";
-  retentionInput.min = "5";
-  retentionInput.max = "500";
+  retentionInput.min = String(MIN_RETENTION_LIMIT);
+  retentionInput.max = String(MAX_RECOVERY_ENTRIES);
   retentionInput.className = "pi-recovery-retention__input pi-overlay-inline-control";
 
   const retentionSuffix = document.createElement("span");
@@ -294,8 +298,8 @@ export async function showRecoveryDialog(opts: {
       const setConfig = opts.setRetentionConfig;
       if (!setConfig) return;
       const value = parseInt(retentionInput.value, 10);
-      if (!Number.isFinite(value) || value < 5 || value > 500) {
-        showToast("Retention limit must be between 5 and 500");
+      if (!Number.isFinite(value) || value < MIN_RETENTION_LIMIT || value > MAX_RECOVERY_ENTRIES) {
+        showToast(`Retention limit must be between ${MIN_RETENTION_LIMIT} and ${MAX_RECOVERY_ENTRIES}`);
         return;
       }
       void (async () => {
@@ -545,7 +549,7 @@ export async function showRecoveryDialog(opts: {
         const config = await opts.getRetentionConfig();
         retentionInput.value = String(config.maxSnapshots);
       } catch {
-        retentionInput.value = "120";
+        retentionInput.value = String(MAX_RECOVERY_ENTRIES);
       }
     }
 

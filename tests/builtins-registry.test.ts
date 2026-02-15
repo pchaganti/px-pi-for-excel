@@ -385,8 +385,9 @@ void test("recovery overlay includes manual full-backup action", async () => {
   const overlaySource = await readFile(new URL("../src/commands/builtins/recovery-overlay.ts", import.meta.url), "utf8");
 
   assert.match(overlaySource, /onCreateManualFullBackup\?: \(\) => Promise<ManualFullBackupSummary>/);
-  assert.match(overlaySource, /fullBackupButton\.textContent = "Full backup"/);
-  assert.match(overlaySource, /Full backup downloaded:/);
+  assert.match(overlaySource, /createButton\("Download backup"/);
+  assert.match(overlaySource, /Backup downloaded:/);
+  assert.match(overlaySource, /retentionInput\.max = String\(MAX_RECOVERY_ENTRIES\)/);
 });
 
 void test("permission helper updates one capability without mutating others", () => {
