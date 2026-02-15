@@ -8,6 +8,8 @@ export type WorkspaceFileKind = "text" | "binary";
 
 export type WorkspaceFileSourceKind = "workspace" | "builtin-doc";
 
+export type WorkspaceFileLocationKind = "workspace" | "native-directory" | "builtin-doc";
+
 export interface WorkspaceFileWorkbookTag {
   workbookId: string;
   workbookLabel: string;
@@ -22,6 +24,7 @@ export interface WorkspaceFileEntry {
   mimeType: string;
   kind: WorkspaceFileKind;
   sourceKind: WorkspaceFileSourceKind;
+  locationKind?: WorkspaceFileLocationKind;
   readOnly: boolean;
   workbookTag?: WorkspaceFileWorkbookTag;
 }

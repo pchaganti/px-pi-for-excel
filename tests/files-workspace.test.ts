@@ -9,6 +9,7 @@ import {
   getFilesWorkspace,
 } from "../src/files/workspace.ts";
 import type {
+  WorkspaceBackendKind,
   WorkspaceFileEntry,
   WorkspaceFileReadResult,
   WorkspaceSnapshot,
@@ -57,7 +58,9 @@ async function resetWorkspace(): Promise<void> {
       continue;
     }
 
-    await workspace.deleteFile(file.path);
+    await workspace.deleteFile(file.path, {
+      locationKind: file.locationKind ?? "workspace",
+    });
   }
 
   await workspace.clearAuditTrail();
@@ -198,6 +201,101 @@ class CleanupTestBackend implements WorkspaceBackend {
   }
 }
 
+class SourceBackend implements WorkspaceBackend {
+  readonly kind: WorkspaceBackendKind;
+  readonly label: string;
+
+  private readonly files = new Map<string, { bytes: Uint8Array; modifiedAt: number }>();
+
+  constructor(args: {
+    kind: WorkspaceBackendKind;
+    label: string;
+    files: Array<{ path: string; text: string; modifiedAt: number }>;
+  }) {
+    this.kind = args.kind;
+    this.label = args.label;
+
+    for (const file of args.files) {
+      const normalizedPath = normalizeWorkspacePath(file.path);
+      this.files.set(normalizedPath, {
+        bytes: new TextEncoder().encode(file.text),
+        modifiedAt: file.modifiedAt,
+      });
+    }
+  }
+
+  listFiles(): Promise<WorkspaceFileEntry[]> {
+    const out: WorkspaceFileEntry[] = Array.from(this.files.entries()).map(([path, file]) => ({
+      path,
+      name: path.split("/").pop() ?? path,
+      size: file.bytes.byteLength,
+      modifiedAt: file.modifiedAt,
+      mimeType: "text/plain",
+      kind: "text",
+      sourceKind: "workspace",
+      readOnly: false,
+    }));
+
+    return Promise.resolve(out.sort((left, right) => left.path.localeCompare(right.path)));
+  }
+
+  readFile(path: string): Promise<WorkspaceFileReadResult> {
+    const normalizedPath = normalizeWorkspacePath(path);
+    const file = this.files.get(normalizedPath);
+    if (!file) {
+      return Promise.reject(new Error(`File not found: ${normalizedPath}`));
+    }
+
+    const text = new TextDecoder().decode(file.bytes);
+
+    return Promise.resolve({
+      path: normalizedPath,
+      name: normalizedPath.split("/").pop() ?? normalizedPath,
+      size: file.bytes.byteLength,
+      modifiedAt: file.modifiedAt,
+      mimeType: "text/plain",
+      kind: "text",
+      sourceKind: "workspace",
+      readOnly: false,
+      text,
+    });
+  }
+
+  writeBytes(path: string, bytes: Uint8Array): Promise<void> {
+    const normalizedPath = normalizeWorkspacePath(path);
+    this.files.set(normalizedPath, {
+      bytes,
+      modifiedAt: Date.now(),
+    });
+
+    return Promise.resolve();
+  }
+
+  deleteFile(path: string): Promise<void> {
+    const normalizedPath = normalizeWorkspacePath(path);
+    this.files.delete(normalizedPath);
+    return Promise.resolve();
+  }
+
+  renameFile(oldPath: string, newPath: string): Promise<void> {
+    const normalizedOldPath = normalizeWorkspacePath(oldPath);
+    const normalizedNewPath = normalizeWorkspacePath(newPath);
+    const existing = this.files.get(normalizedOldPath);
+
+    if (!existing) {
+      return Promise.reject(new Error(`File not found: ${normalizedOldPath}`));
+    }
+
+    this.files.delete(normalizedOldPath);
+    this.files.set(normalizedNewPath, {
+      bytes: existing.bytes,
+      modifiedAt: Date.now(),
+    });
+
+    return Promise.resolve();
+  }
+}
+
 void test("files workspace tags files with active workbook metadata", async () => {
   await resetWorkspace();
   const workspace = getFilesWorkspace();
@@ -305,6 +403,194 @@ void test("legacy workspace collisions on assistant-docs paths stay reachable", 
   });
   assert.equal(readBuiltinAfterDelete.sourceKind, "builtin-doc");
   assert.match(readBuiltinAfterDelete.text ?? "", /Extensions \(MVP authoring guide\)/i);
+});
+
+void test("workspace lists uploaded and connected-folder sources together when native is active", async () => {
+  const workspaceBackend = new SourceBackend({
+    kind: "opfs",
+    label: "Sandboxed workspace",
+    files: [
+      { path: "uploads/plan.md", text: "workspace", modifiedAt: 50 },
+    ],
+  });
+
+  const nativeBackend = new SourceBackend({
+    kind: "native-directory",
+    label: "Local folder",
+    files: [
+      { path: "folder/model-spec.md", text: "native", modifiedAt: 100 },
+    ],
+  });
+
+  const workspace = new FilesWorkspace({
+    initialBackend: nativeBackend,
+    initialWorkspaceBackend: workspaceBackend,
+  });
+
+  const files = await workspace.listFiles();
+
+  const uploaded = files.find((file) => file.path === "uploads/plan.md");
+  assert.ok(uploaded);
+  assert.equal(uploaded?.locationKind, "workspace");
+
+  const connected = files.find((file) => file.path === "folder/model-spec.md");
+  assert.ok(connected);
+  assert.equal(connected?.locationKind, "native-directory");
+
+  const builtin = files.find((file) => file.path === "assistant-docs/docs/extensions.md");
+  assert.ok(builtin);
+  assert.equal(builtin?.locationKind, "builtin-doc");
+});
+
+void test("workspace read/rename/delete can target a specific source when paths collide", async () => {
+  const workspaceBackend = new SourceBackend({
+    kind: "opfs",
+    label: "Sandboxed workspace",
+    files: [
+      { path: "shared.txt", text: "workspace copy", modifiedAt: 10 },
+    ],
+  });
+
+  const nativeBackend = new SourceBackend({
+    kind: "native-directory",
+    label: "Local folder",
+    files: [
+      { path: "shared.txt", text: "native copy", modifiedAt: 20 },
+    ],
+  });
+
+  const workspace = new FilesWorkspace({
+    initialBackend: nativeBackend,
+    initialWorkspaceBackend: workspaceBackend,
+  });
+
+  const defaultRead = await workspace.readFile("shared.txt", {
+    mode: "text",
+  });
+  assert.equal(defaultRead.text, "native copy");
+  assert.equal(defaultRead.locationKind, "native-directory");
+
+  const explicitWorkspaceRead = await workspace.readFile("shared.txt", {
+    mode: "text",
+    locationKind: "workspace",
+  });
+  assert.equal(explicitWorkspaceRead.text, "workspace copy");
+  assert.equal(explicitWorkspaceRead.locationKind, "workspace");
+
+  await workspace.renameFile("shared.txt", "workspace-renamed.txt", {
+    locationKind: "workspace",
+  });
+
+  await workspace.deleteFile("shared.txt", {
+    locationKind: "native-directory",
+  });
+
+  const files = await workspace.listFiles();
+
+  const workspaceRenamed = files.find((file) => file.path === "workspace-renamed.txt");
+  assert.ok(workspaceRenamed);
+  assert.equal(workspaceRenamed?.locationKind, "workspace");
+
+  const nativeOriginal = files.find((file) => file.path === "shared.txt" && file.locationKind === "native-directory");
+  assert.equal(nativeOriginal, undefined);
+});
+
+void test("path-only mutations follow the file's source when native is connected", async () => {
+  const workspaceBackend = new SourceBackend({
+    kind: "opfs",
+    label: "Sandboxed workspace",
+    files: [
+      { path: "workspace-only.txt", text: "workspace", modifiedAt: 10 },
+    ],
+  });
+
+  const nativeBackend = new SourceBackend({
+    kind: "native-directory",
+    label: "Local folder",
+    files: [
+      { path: "native-only.txt", text: "native", modifiedAt: 20 },
+    ],
+  });
+
+  const workspace = new FilesWorkspace({
+    initialBackend: nativeBackend,
+    initialWorkspaceBackend: workspaceBackend,
+  });
+
+  await workspace.deleteFile("workspace-only.txt");
+
+  const files = await workspace.listFiles();
+  assert.equal(files.some((file) => file.path === "workspace-only.txt"), false);
+  assert.equal(files.some((file) => file.path === "native-only.txt" && file.locationKind === "native-directory"), true);
+});
+
+void test("path-only mutation rejects ambiguous duplicates across workspace and native", async () => {
+  const workspaceBackend = new SourceBackend({
+    kind: "opfs",
+    label: "Sandboxed workspace",
+    files: [
+      { path: "shared.txt", text: "workspace", modifiedAt: 10 },
+    ],
+  });
+
+  const nativeBackend = new SourceBackend({
+    kind: "native-directory",
+    label: "Local folder",
+    files: [
+      { path: "shared.txt", text: "native", modifiedAt: 20 },
+    ],
+  });
+
+  const workspace = new FilesWorkspace({
+    initialBackend: nativeBackend,
+    initialWorkspaceBackend: workspaceBackend,
+  });
+
+  await assert.rejects(
+    () => workspace.deleteFile("shared.txt"),
+    /exists in both uploaded files and the connected folder/i,
+  );
+
+  const files = await workspace.listFiles();
+  assert.equal(files.some((file) => file.path === "shared.txt" && file.locationKind === "workspace"), true);
+  assert.equal(files.some((file) => file.path === "shared.txt" && file.locationKind === "native-directory"), true);
+});
+
+void test("importFiles defaults to workspace source when native folder is connected", async () => {
+  const workspaceBackend = new SourceBackend({
+    kind: "opfs",
+    label: "Sandboxed workspace",
+    files: [],
+  });
+
+  const nativeBackend = new SourceBackend({
+    kind: "native-directory",
+    label: "Local folder",
+    files: [],
+  });
+
+  const workspace = new FilesWorkspace({
+    initialBackend: nativeBackend,
+    initialWorkspaceBackend: workspaceBackend,
+  });
+
+  const file = new File(["uploaded content"], "uploaded.txt", {
+    type: "text/plain",
+  });
+
+  const importedCount = await workspace.importFiles([file]);
+  assert.equal(importedCount, 1);
+
+  const files = await workspace.listFiles();
+  const uploaded = files.find((entry) => entry.path === "uploaded.txt");
+  assert.ok(uploaded);
+  assert.equal(uploaded?.locationKind, "workspace");
+
+  const uploadedRead = await workspace.readFile("uploaded.txt", {
+    mode: "text",
+    locationKind: "workspace",
+  });
+  assert.equal(uploadedRead.text, "uploaded content");
 });
 
 void test("workspace context summary includes only relevant folders and current workbook artifacts", () => {

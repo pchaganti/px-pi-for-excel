@@ -8,11 +8,22 @@ import {
   FILES_WORKSPACE_CHANGED_EVENT,
   type WorkspaceBackendStatus,
   type WorkspaceFileEntry,
+  type WorkspaceFileLocationKind,
   type WorkspaceFileWorkbookTag,
 } from "../files/types.js";
 import { type FilesWorkspaceAuditContext, getFilesWorkspace } from "../files/workspace.js";
 import { getErrorMessage } from "../utils/errors.js";
 import { requestConfirmationDialog } from "./confirm-dialog.js";
+import {
+  buildFilesDialogSections,
+  isAgentWrittenNotesFilePath,
+  isFilesDialogBuiltInDoc,
+  normalizeFilesDialogFilterText,
+  resolveFilesDialogBadge,
+  resolveFilesDialogConnectFolderButtonState,
+  resolveFilesDialogSourceLabel,
+} from "./files-dialog-filtering.js";
+import { buildFilesDialogStatusMessage } from "./files-dialog-status.js";
 import {
   closeOverlayById,
   createOverlayCloseButton,
@@ -20,13 +31,10 @@ import {
   createOverlayHeader,
 } from "./overlay-dialog.js";
 import { FILES_WORKSPACE_OVERLAY_ID } from "./overlay-ids.js";
-import { filterFilesDialogEntries } from "./files-dialog-filtering.js";
-import { buildFilesDialogStatusMessage } from "./files-dialog-status.js";
 import { requestTextInputDialog } from "./text-input-dialog.js";
 import { showToast } from "./toast.js";
 
 const OVERLAY_ID = FILES_WORKSPACE_OVERLAY_ID;
-const YOUR_FILES_SECTION_KEY = "your-files";
 const TEXT_PREVIEW_MAX_LINES = 50;
 
 const DIALOG_AUDIT_CONTEXT: FilesWorkspaceAuditContext = {
@@ -34,17 +42,38 @@ const DIALOG_AUDIT_CONTEXT: FilesWorkspaceAuditContext = {
   source: "files-dialog",
 };
 
-type FileBadgeTone = "ok" | "muted" | "info";
-
-interface FileBadge {
-  tone: FileBadgeTone;
-  label: string;
-}
-
 interface DetailPreviewResult {
   element: HTMLElement;
   previewTruncated: boolean;
   objectUrl: string | null;
+}
+
+interface FilesDialogFileRef {
+  path: string;
+  locationKind: WorkspaceFileLocationKind;
+}
+
+function resolveFileLocationKind(file: WorkspaceFileEntry): WorkspaceFileLocationKind {
+  if (file.locationKind) {
+    return file.locationKind;
+  }
+
+  if (isFilesDialogBuiltInDoc(file)) {
+    return "builtin-doc";
+  }
+
+  return "workspace";
+}
+
+function toFileRef(file: WorkspaceFileEntry): FilesDialogFileRef {
+  return {
+    path: file.path,
+    locationKind: resolveFileLocationKind(file),
+  };
+}
+
+function fileMatchesRef(file: WorkspaceFileEntry, ref: FilesDialogFileRef): boolean {
+  return file.path === ref.path && resolveFileLocationKind(file) === ref.locationKind;
 }
 
 function formatRelativeDate(timestamp: number): string {
@@ -71,11 +100,6 @@ function hasOneOfExtensions(path: string, extensions: readonly string[]): boolea
   return extensions.some((extension) => lowerPath.endsWith(extension));
 }
 
-function isAgentWrittenNotesFile(path: string): boolean {
-  const lowerPath = path.toLowerCase();
-  return lowerPath.startsWith("notes/") && lowerPath.endsWith(".md");
-}
-
 function resolveRenameDestinationPath(currentPath: string, inputPath: string): string {
   const normalizedInput = inputPath.trim().replaceAll("\\", "/");
   if (normalizedInput.length === 0) {
@@ -95,7 +119,7 @@ function resolveRenameDestinationPath(currentPath: string, inputPath: string): s
 }
 
 function resolveFileIcon(file: WorkspaceFileEntry): string {
-  if (file.sourceKind === "builtin-doc") {
+  if (isFilesDialogBuiltInDoc(file)) {
     return "📋";
   }
 
@@ -107,44 +131,16 @@ function resolveFileIcon(file: WorkspaceFileEntry): string {
     return "📊";
   }
 
-  if (isAgentWrittenNotesFile(file.path)) {
+  if (isAgentWrittenNotesFilePath(file.path)) {
     return "📝";
   }
 
   return "📄";
 }
 
-function resolveFileBadge(file: WorkspaceFileEntry): FileBadge | null {
-  if (file.sourceKind === "builtin-doc") {
-    return { tone: "muted", label: "Read only" };
-  }
-
-  if (file.workbookTag) {
-    return { tone: "ok", label: file.workbookTag.workbookLabel };
-  }
-
-  if (isAgentWrittenNotesFile(file.path)) {
-    return { tone: "muted", label: "Agent" };
-  }
-
-  return null;
-}
-
-function resolveFileSourceLabel(file: WorkspaceFileEntry): string {
-  if (file.sourceKind === "builtin-doc") {
-    return "Pi documentation";
-  }
-
-  if (isAgentWrittenNotesFile(file.path)) {
-    return "Written by agent";
-  }
-
-  return "Uploaded";
-}
-
 function buildFileMetaLine(file: WorkspaceFileEntry): string {
-  const sourceLabel = resolveFileSourceLabel(file);
-  if (file.sourceKind === "builtin-doc") {
+  const sourceLabel = resolveFilesDialogSourceLabel(file);
+  if (isFilesDialogBuiltInDoc(file)) {
     return `${sourceLabel} · ${formatBytes(file.size)}`;
   }
 
@@ -175,14 +171,14 @@ function buildDetailSubtitle(args: {
   file: WorkspaceFileEntry;
   previewTruncated: boolean;
 }): string {
-  const sourceLabel = resolveFileSourceLabel(args.file);
+  const sourceLabel = resolveFilesDialogSourceLabel(args.file);
   const pieces = [
     resolveDetailTypeName(args.file),
     formatBytes(args.file.size),
     sourceLabel,
   ];
 
-  if (args.file.sourceKind !== "builtin-doc") {
+  if (!isFilesDialogBuiltInDoc(args.file)) {
     pieces.push(formatRelativeDate(args.file.modifiedAt));
   }
 
@@ -364,16 +360,6 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return out;
 }
 
-function sortByModifiedAtDescending(files: readonly WorkspaceFileEntry[]): WorkspaceFileEntry[] {
-  return [...files].sort((left, right) => {
-    if (left.modifiedAt !== right.modifiedAt) {
-      return right.modifiedAt - left.modifiedAt;
-    }
-
-    return left.path.localeCompare(right.path);
-  });
-}
-
 function createWorkbookTagCallout(workbookTag: WorkspaceFileWorkbookTag): HTMLDivElement {
   const strong = document.createElement("strong");
   strong.textContent = workbookTag.workbookLabel;
@@ -506,7 +492,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
   let backendStatus: WorkspaceBackendStatus | null = null;
   let allFiles: WorkspaceFileEntry[] = [];
   let currentView: "list" | "detail" = "list";
-  let detailPath: string | null = null;
+  let detailFileRef: FilesDialogFileRef | null = null;
   let filterText = "";
   let activePreviewObjectUrl: string | null = null;
   let detailRenderVersion = 0;
@@ -521,12 +507,8 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     activePreviewObjectUrl = null;
   };
 
-  const workspaceFiles = (): WorkspaceFileEntry[] => {
-    return allFiles.filter((file) => file.sourceKind === "workspace");
-  };
-
-  const findWorkspaceFile = (path: string): WorkspaceFileEntry | null => {
-    return workspaceFiles().find((file) => file.path === path) ?? null;
+  const findFileByRef = (ref: FilesDialogFileRef): WorkspaceFileEntry | null => {
+    return allFiles.find((file) => fileMatchesRef(file, ref)) ?? null;
   };
 
   const refreshWorkspaceState = async (): Promise<void> => {
@@ -553,7 +535,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
   };
 
   const showListView = (): void => {
-    detailPath = null;
+    detailFileRef = null;
     detailRenderVersion += 1;
     revokePreviewObjectUrl();
     setView("list");
@@ -580,11 +562,14 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
   };
 
   const openFileInBrowser = async (file: WorkspaceFileEntry): Promise<void> => {
+    const fileRef = toFileRef(file);
+
     if (file.kind === "text") {
       const result = await workspace.readFile(file.path, {
         mode: "text",
         maxChars: 16_000_000,
         audit: DIALOG_AUDIT_CONTEXT,
+        locationKind: fileRef.locationKind,
       });
 
       if (result.text === undefined || result.truncated) {
@@ -603,6 +588,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       mode: "base64",
       maxChars: 16_000_000,
       audit: DIALOG_AUDIT_CONTEXT,
+      locationKind: fileRef.locationKind,
     });
 
     if (!result.base64 || result.truncated) {
@@ -618,6 +604,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
   };
 
   const createDetailActions = (file: WorkspaceFileEntry): HTMLDivElement => {
+    const fileRef = toFileRef(file);
     const actions = document.createElement("div");
     actions.className = "pi-files-detail-actions";
 
@@ -638,14 +625,16 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     downloadButton.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--compact";
     downloadButton.textContent = "Download";
     downloadButton.addEventListener("click", () => {
-      void workspace.downloadFile(file.path).catch((error: unknown) => {
+      void workspace.downloadFile(file.path, {
+        locationKind: fileRef.locationKind,
+      }).catch((error: unknown) => {
         showToast(`Download failed: ${getErrorMessage(error)}`);
       });
     });
 
     actions.append(openButton, downloadButton);
 
-    const isReadOnly = file.readOnly || file.sourceKind === "builtin-doc";
+    const isReadOnly = file.readOnly || isFilesDialogBuiltInDoc(file);
     if (isReadOnly) {
       return actions;
     }
@@ -677,13 +666,17 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
         await workspace.renameFile(file.path, nextPath, {
           audit: DIALOG_AUDIT_CONTEXT,
+          locationKind: fileRef.locationKind,
         });
 
         showToast(`Renamed to ${nextPath}.`);
 
         await refreshWorkspaceState();
         renderListView();
-        await showDetailView(nextPath);
+        await showDetailView({
+          path: nextPath,
+          locationKind: fileRef.locationKind,
+        });
       })().catch((error: unknown) => {
         showToast(`Rename failed: ${getErrorMessage(error)}`);
       });
@@ -713,6 +706,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
         await workspace.deleteFile(file.path, {
           audit: DIALOG_AUDIT_CONTEXT,
+          locationKind: fileRef.locationKind,
         });
 
         showToast(`Deleted ${file.name}.`);
@@ -730,11 +724,14 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
   };
 
   const buildDetailPreview = async (file: WorkspaceFileEntry): Promise<DetailPreviewResult> => {
+    const fileRef = toFileRef(file);
+
     if (file.kind === "text") {
       const result = await workspace.readFile(file.path, {
         mode: "text",
         maxChars: 50_000,
         audit: DIALOG_AUDIT_CONTEXT,
+        locationKind: fileRef.locationKind,
       });
 
       const preview = createTextPreview(result.text ?? "", result.truncated === true);
@@ -750,6 +747,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
         mode: "base64",
         maxChars: 8_000_000,
         audit: DIALOG_AUDIT_CONTEXT,
+        locationKind: fileRef.locationKind,
       });
 
       if (!result.base64 || result.truncated) {
@@ -805,8 +803,8 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     };
   };
 
-  const renderDetailView = async (path: string): Promise<void> => {
-    const file = findWorkspaceFile(path);
+  const renderDetailView = async (fileRef: FilesDialogFileRef): Promise<void> => {
+    const file = findFileByRef(fileRef);
     if (!file) {
       showListView();
       renderListView();
@@ -828,7 +826,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       nodes.push(createWorkbookTagCallout(file.workbookTag));
     }
 
-    if (file.sourceKind === "builtin-doc") {
+    if (isFilesDialogBuiltInDoc(file)) {
       nodes.push(createInfoCallout({
         icon: "📋",
         body: ["Built-in documentation — read only. Pi references this automatically."],
@@ -853,7 +851,9 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     if (
       renderVersion !== detailRenderVersion ||
       currentView !== "detail" ||
-      detailPath !== path
+      !detailFileRef ||
+      detailFileRef.path !== fileRef.path ||
+      detailFileRef.locationKind !== fileRef.locationKind
     ) {
       if (previewResult.objectUrl) {
         URL.revokeObjectURL(previewResult.objectUrl);
@@ -875,16 +875,16 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     detailBody.replaceChildren(...nodes);
   };
 
-  const showDetailView = async (path: string): Promise<void> => {
-    detailPath = path;
+  const showDetailView = async (fileRef: FilesDialogFileRef): Promise<void> => {
+    detailFileRef = fileRef;
     setView("detail");
-    await renderDetailView(path);
+    await renderDetailView(fileRef);
   };
 
   const createFileItem = (file: WorkspaceFileEntry): HTMLButtonElement => {
     const row = document.createElement("button");
     row.type = "button";
-    row.className = `pi-files-item${file.sourceKind === "builtin-doc" ? " pi-files-item--muted" : ""}`;
+    row.className = `pi-files-item${isFilesDialogBuiltInDoc(file) ? " pi-files-item--muted" : ""}`;
 
     const icon = document.createElement("span");
     icon.className = "pi-files-item__icon";
@@ -902,7 +902,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     name.title = file.path;
     nameRow.appendChild(name);
 
-    const badge = resolveFileBadge(file);
+    const badge = resolveFilesDialogBadge(file);
     if (badge) {
       const badgeElement = document.createElement("span");
       badgeElement.className = `pi-overlay-badge pi-overlay-badge--${badge.tone}`;
@@ -922,23 +922,34 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
     row.append(icon, info, arrow);
     row.addEventListener("click", () => {
-      void showDetailView(file.path);
+      void showDetailView(toFileRef(file));
     });
 
     return row;
   };
 
   const renderListView = (): void => {
-    const files = workspaceFiles();
+    const files = allFiles;
+
+    const connectState = resolveFilesDialogConnectFolderButtonState(backendStatus);
+    connectFolderButton.hidden = connectState.hidden;
+    connectFolderButton.disabled = connectState.disabled;
+    if (connectState.label === "Connected ✓") {
+      connectFolderButton.title = "Folder already connected";
+    } else if (connectState.label === "Folder unavailable") {
+      connectFolderButton.title = "Native folder picker is not available in this environment";
+    } else {
+      connectFolderButton.title = "Connect local folder";
+    }
+    connectFolderButton.setAttribute("aria-label", connectState.label);
+
+    if (connectFolderButton.lastChild) {
+      connectFolderButton.lastChild.textContent = ` ${connectState.label}`;
+    }
 
     if (files.length < 5 && filterText.length > 0) {
       filterText = "";
     }
-
-    const filteredFiles = sortByModifiedAtDescending(filterFilesDialogEntries({
-      files,
-      filterText,
-    }));
 
     if (files.length >= 5) {
       filterWrap.hidden = false;
@@ -952,70 +963,85 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       }
     }
 
+    const sections = buildFilesDialogSections({
+      files,
+      filterText,
+      backendStatus,
+    });
+
+    const hasNonBuiltInFiles = files.some((file) => !isFilesDialogBuiltInDoc(file));
+    const hasFilterQuery = normalizeFilesDialogFilterText(filterText).length > 0;
+
     sectionsHost.replaceChildren();
 
-    if (files.length === 0) {
+    if (!hasNonBuiltInFiles && !hasFilterQuery) {
       sectionsHost.appendChild(createEmptyState(() => {
         hiddenInput.click();
       }));
-    } else if (filteredFiles.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "pi-files-empty";
+    }
 
-      const title = document.createElement("div");
-      title.className = "pi-files-empty__title";
-      title.textContent = "No matching files";
+    if (sections.length === 0) {
+      if (hasFilterQuery) {
+        const empty = document.createElement("div");
+        empty.className = "pi-files-empty";
 
-      const description = document.createElement("p");
-      description.className = "pi-files-empty__desc";
-      description.textContent = "Try a different filter term.";
+        const title = document.createElement("div");
+        title.className = "pi-files-empty__title";
+        title.textContent = "No matching files";
 
-      empty.append(title, description);
-      sectionsHost.appendChild(empty);
+        const description = document.createElement("p");
+        description.className = "pi-files-empty__desc";
+        description.textContent = "Try a different filter term.";
+
+        empty.append(title, description);
+        sectionsHost.appendChild(empty);
+      }
     } else {
-      const sectionGroup = document.createElement("div");
-      sectionGroup.className = "pi-files-section-group";
+      sections.forEach((section) => {
+        const sectionGroup = document.createElement("div");
+        sectionGroup.className = "pi-files-section-group";
 
-      const sectionHead = document.createElement("button");
-      sectionHead.type = "button";
-      sectionHead.className = "pi-files-section-head";
+        const sectionHead = document.createElement("button");
+        sectionHead.type = "button";
+        sectionHead.className = "pi-files-section-head";
 
-      const sectionLabel = document.createElement("span");
-      sectionLabel.className = "pi-files-section-head__label";
-      sectionLabel.textContent = "YOUR FILES";
+        const sectionLabel = document.createElement("span");
+        sectionLabel.className = "pi-files-section-head__label";
+        sectionLabel.textContent = section.label;
 
-      const sectionCount = document.createElement("span");
-      sectionCount.className = "pi-files-section-head__count";
-      sectionCount.textContent = String(filteredFiles.length);
+        const sectionCount = document.createElement("span");
+        sectionCount.className = "pi-files-section-head__count";
+        sectionCount.textContent = String(section.files.length);
 
-      sectionHead.append(sectionLabel, sectionCount, createChevronIcon());
+        sectionHead.append(sectionLabel, sectionCount, createChevronIcon());
 
-      const sectionList = document.createElement("div");
-      sectionList.className = "pi-files-section-list";
-      filteredFiles.forEach((file) => {
-        sectionList.appendChild(createFileItem(file));
+        const sectionList = document.createElement("div");
+        sectionList.className = "pi-files-section-list";
+        section.files.forEach((file) => {
+          sectionList.appendChild(createFileItem(file));
+        });
+
+        const applyCollapsedState = (collapsed: boolean): void => {
+          sectionHead.setAttribute("aria-expanded", collapsed ? "false" : "true");
+          sectionList.hidden = collapsed;
+        };
+
+        applyCollapsedState(collapsedSections.has(section.key));
+
+        sectionHead.addEventListener("click", () => {
+          const currentlyCollapsed = collapsedSections.has(section.key);
+          if (currentlyCollapsed) {
+            collapsedSections.delete(section.key);
+          } else {
+            collapsedSections.add(section.key);
+          }
+
+          applyCollapsedState(!currentlyCollapsed);
+        });
+
+        sectionGroup.append(sectionHead, sectionList);
+        sectionsHost.appendChild(sectionGroup);
       });
-
-      const applyCollapsedState = (collapsed: boolean): void => {
-        sectionHead.setAttribute("aria-expanded", collapsed ? "false" : "true");
-        sectionList.hidden = collapsed;
-      };
-
-      applyCollapsedState(collapsedSections.has(YOUR_FILES_SECTION_KEY));
-
-      sectionHead.addEventListener("click", () => {
-        const currentlyCollapsed = collapsedSections.has(YOUR_FILES_SECTION_KEY);
-        if (currentlyCollapsed) {
-          collapsedSections.delete(YOUR_FILES_SECTION_KEY);
-        } else {
-          collapsedSections.add(YOUR_FILES_SECTION_KEY);
-        }
-
-        applyCollapsedState(!currentlyCollapsed);
-      });
-
-      sectionGroup.append(sectionHead, sectionList);
-      sectionsHost.appendChild(sectionGroup);
     }
 
     const totalSize = files.reduce((sum, file) => sum + file.size, 0);
@@ -1034,18 +1060,18 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
         await refreshWorkspaceState();
         renderListView();
 
-        if (currentView !== "detail" || !detailPath) {
+        if (currentView !== "detail" || !detailFileRef) {
           return;
         }
 
-        const file = findWorkspaceFile(detailPath);
+        const file = findFileByRef(detailFileRef);
         if (!file) {
           showToast("That file is no longer available.");
           showListView();
           return;
         }
 
-        await renderDetailView(detailPath);
+        await renderDetailView(detailFileRef);
       } catch (error: unknown) {
         showToast(`Could not refresh files: ${getErrorMessage(error)}`);
       }
@@ -1059,6 +1085,18 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
   uploadButton.addEventListener("click", () => {
     hiddenInput.click();
+  });
+
+  connectFolderButton.addEventListener("click", () => {
+    if (connectFolderButton.disabled) {
+      return;
+    }
+
+    void workspace.connectNativeDirectory({
+      audit: DIALOG_AUDIT_CONTEXT,
+    }).catch((error: unknown) => {
+      showToast(`Connect folder failed: ${getErrorMessage(error)}`);
+    });
   });
 
   hiddenInput.addEventListener("change", () => {
