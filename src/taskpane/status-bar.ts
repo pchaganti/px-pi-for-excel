@@ -66,7 +66,7 @@ function renderStatusBar(
 
   // Context health: color + tooltip based on usage
   let ctxColor = "";
-  const ctxBaseTooltip = `How much of Pi's memory (context window) the conversation is using — ${totalTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tokens. As this fills up, Pi may lose track of earlier details — start a new chat if quality drops.`;
+  const ctxBaseTooltip = `How much of Pi's memory (context window) the conversation is using — ${totalTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tokens. as this fills up, Pi may get confused. Free up context with /compact or start a fresh chat with /new`;
   let ctxWarning = "";
   let ctxWarningText = "";
   if (pct > 100) {
@@ -131,7 +131,7 @@ function renderStatusBar(
   );
 
   el.innerHTML = `
-    <button type="button" class="pi-status-ctx pi-status-ctx--trigger pi-status-clickable has-tooltip" data-status-popover="${ctxPopoverText}" aria-label="Context usage ${pct}% of ${ctxLabel}"><span class="${ctxColor}">${pct}%</span> / ${ctxLabel}${usageDebug}<span class="pi-status-affordance" aria-hidden="true">${affordanceChevronSvg}</span><span class="pi-tooltip pi-tooltip--left">${ctxBaseTooltip}${ctxWarning}</span></button>
+    <button type="button" class="pi-status-ctx pi-status-ctx--trigger pi-status-clickable has-tooltip" data-status-popover="${ctxPopoverText}" aria-label="Context usage ${pct}% of ${ctxLabel}"><span class="${ctxColor}">${pct}%</span> / ${ctxLabel}${usageDebug}<span class="pi-status-affordance" aria-hidden="true">${affordanceChevronSvg}</span><span class="pi-tooltip pi-tooltip--left">${ctxBaseTooltip}${ctxWarning.length > 0 ? ` ${ctxWarning}` : ""}</span></button>
     ${lockBadge}
     ${rulesBadge}
     ${modeBadge}

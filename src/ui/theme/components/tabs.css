@@ -312,33 +312,63 @@
 }
 
 .pi-utilities-btn {
-  border: 1px solid var(--alpha-10);
-  background: var(--white-alpha-35);
-  color: var(--foreground);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--alpha-12);
+  background:
+    linear-gradient(170deg, var(--white-alpha-70), var(--white-alpha-35));
+  color: var(--muted-foreground);
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
   flex-shrink: 0;
-  box-shadow: var(--glass-highlight), var(--glass-inner-shadow);
-  transition: background var(--duration-fast), color var(--duration-fast), box-shadow var(--duration-fast), border-color var(--duration-fast);
+  box-shadow: var(--glass-shadow), var(--glass-highlight), var(--glass-inner-shadow);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast),
+    box-shadow var(--duration-fast),
+    border-color var(--duration-fast),
+    transform var(--duration-fast);
+}
+
+.pi-utilities-btn__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pi-utilities-btn__icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.15;
 }
 
 .pi-utilities-btn:hover {
-  background: var(--white-alpha-55);
+  background: linear-gradient(170deg, var(--white-alpha-80), var(--white-alpha-50));
   color: var(--foreground);
-  box-shadow: var(--glass-shadow), var(--glass-highlight), var(--glass-inner-shadow);
+  border-color: var(--alpha-20);
+  box-shadow: var(--glass-shadow-lg), var(--glass-highlight), var(--glass-inner-shadow);
+  transform: translateY(-1px);
+}
+
+.pi-utilities-btn:active {
+  transform: translateY(0);
+}
+
+.pi-utilities-btn:focus-visible {
+  outline: none;
+  border-color: var(--green-alpha-30);
+  box-shadow: 0 0 0 2px var(--green-alpha-14), var(--glass-shadow), var(--glass-highlight), var(--glass-inner-shadow);
 }
 
 .pi-utilities-btn[aria-expanded="true"] {
-  background: var(--white-alpha-55);
-  border-color: var(--green-alpha-25);
+  background: linear-gradient(170deg, var(--white-alpha-80), var(--white-alpha-55));
+  color: var(--foreground);
+  border-color: var(--green-alpha-30);
+  box-shadow: 0 0 0 1px var(--green-alpha-20), var(--glass-shadow), var(--glass-highlight), var(--glass-inner-shadow);
 }
 
 

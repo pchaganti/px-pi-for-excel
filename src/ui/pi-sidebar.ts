@@ -12,7 +12,7 @@ import { customElement, property, query, state } from "lit/decorators.js";
 import type { Agent, AgentEvent } from "@mariozechner/pi-agent-core";
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
 import type { StreamingMessageContainer } from "@mariozechner/pi-web-ui/dist/components/StreamingMessageContainer.js";
-import { ChevronRight } from "lucide";
+import { ChevronRight, Cog } from "lucide";
 import "./pi-input.js";
 import "./working-indicator.js";
 import { initToolGrouping } from "./tool-grouping.js";
@@ -693,7 +693,9 @@ export class PiSidebar extends LitElement {
             aria-haspopup="menu"
             aria-controls=${this._utilitiesMenuId}
             aria-expanded=${this._utilitiesMenuOpen ? "true" : "false"}
-          >⚙</button>
+          >
+            <span class="pi-utilities-btn__icon" aria-hidden="true">${icon(Cog, "sm")}</span>
+          </button>
           ${this._utilitiesMenuOpen ? this._renderUtilitiesMenu() : nothing}
         </div>
       </div>
