@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { MemoryBackend } from "../src/files/backend.ts";
+import { MemoryBackend, type WorkspaceBackend } from "../src/files/backend.ts";
+import { normalizeWorkspacePath } from "../src/files/path.ts";
 import {
   buildWorkspaceContextSummary,
   FilesWorkspace,
   getFilesWorkspace,
 } from "../src/files/workspace.ts";
-import type { WorkspaceSnapshot } from "../src/files/types.ts";
+import type {
+  WorkspaceFileEntry,
+  WorkspaceFileReadResult,
+  WorkspaceSnapshot,
+} from "../src/files/types.ts";
 
 function getOfficeGlobal(): unknown {
   return Reflect.get(globalThis, "Office");
@@ -87,6 +92,110 @@ function createWorkspaceSnapshot(paths: Array<{ path: string; workbookId?: strin
     files,
     signature: "test",
   };
+}
+
+interface CleanupTestFile {
+  path: string;
+  modifiedAt: number;
+  content?: string;
+}
+
+class CleanupTestBackend implements WorkspaceBackend {
+  readonly kind = "memory";
+  readonly label = "Session memory";
+
+  private readonly files = new Map<string, CleanupTestFile>();
+  private readonly failDeletePaths: Set<string>;
+
+  constructor(files: readonly CleanupTestFile[], failDeletePaths: readonly string[] = []) {
+    for (const file of files) {
+      const normalizedPath = normalizeWorkspacePath(file.path);
+      this.files.set(normalizedPath, {
+        path: normalizedPath,
+        modifiedAt: file.modifiedAt,
+        content: file.content,
+      });
+    }
+
+    this.failDeletePaths = new Set(failDeletePaths.map((path) => normalizeWorkspacePath(path)));
+  }
+
+  listFiles(): Promise<WorkspaceFileEntry[]> {
+    const entries: WorkspaceFileEntry[] = Array.from(this.files.values()).map((file) => ({
+      path: file.path,
+      name: file.path.split("/").pop() ?? file.path,
+      size: (file.content ?? "").length,
+      modifiedAt: file.modifiedAt,
+      mimeType: "text/plain",
+      kind: "text",
+      sourceKind: "workspace",
+      readOnly: false,
+    }));
+
+    return Promise.resolve(entries.sort((left, right) => left.path.localeCompare(right.path)));
+  }
+
+  readFile(path: string): Promise<WorkspaceFileReadResult> {
+    const normalizedPath = normalizeWorkspacePath(path);
+    const file = this.files.get(normalizedPath);
+
+    if (!file) {
+      return Promise.reject(new Error(`File not found: ${normalizedPath}`));
+    }
+
+    return Promise.resolve({
+      path: file.path,
+      name: file.path.split("/").pop() ?? file.path,
+      size: (file.content ?? "").length,
+      modifiedAt: file.modifiedAt,
+      mimeType: "text/plain",
+      kind: "text",
+      sourceKind: "workspace",
+      readOnly: false,
+      text: file.content ?? "",
+    });
+  }
+
+  writeBytes(path: string, bytes: Uint8Array): Promise<void> {
+    const normalizedPath = normalizeWorkspacePath(path);
+    this.files.set(normalizedPath, {
+      path: normalizedPath,
+      modifiedAt: Date.now(),
+      content: new TextDecoder().decode(bytes),
+    });
+
+    return Promise.resolve();
+  }
+
+  deleteFile(path: string): Promise<void> {
+    const normalizedPath = normalizeWorkspacePath(path);
+
+    if (this.failDeletePaths.has(normalizedPath)) {
+      return Promise.reject(new Error(`forced delete failure: ${normalizedPath}`));
+    }
+
+    this.files.delete(normalizedPath);
+    return Promise.resolve();
+  }
+
+  renameFile(oldPath: string, newPath: string): Promise<void> {
+    const normalizedOldPath = normalizeWorkspacePath(oldPath);
+    const normalizedNewPath = normalizeWorkspacePath(newPath);
+
+    const existing = this.files.get(normalizedOldPath);
+    if (!existing) {
+      return Promise.reject(new Error(`File not found: ${normalizedOldPath}`));
+    }
+
+    this.files.delete(normalizedOldPath);
+    this.files.set(normalizedNewPath, {
+      path: normalizedNewPath,
+      modifiedAt: existing.modifiedAt,
+      content: existing.content,
+    });
+
+    return Promise.resolve();
+  }
 }
 
 void test("files workspace tags files with active workbook metadata", async () => {
@@ -279,4 +388,47 @@ void test("workspace context relevance signature ignores scratch-only changes", 
   assert.equal(scratchChanged.relevantSignature, base.relevantSignature);
   assert.notEqual(importChanged.relevantSignature, base.relevantSignature);
   assert.notEqual(noteChanged.relevantSignature, base.relevantSignature);
+});
+
+void test("workspace removes stale scratch files older than 24h", async () => {
+  const now = Date.now();
+  const staleTimestamp = now - (24 * 60 * 60 * 1000) - 1000;
+  const freshTimestamp = now - (60 * 1000);
+
+  const backend = new CleanupTestBackend([
+    { path: "scratch/stale.txt", modifiedAt: staleTimestamp, content: "old" },
+    { path: "scratch/fresh.txt", modifiedAt: freshTimestamp, content: "new" },
+    { path: "notes/keep.md", modifiedAt: staleTimestamp, content: "keep" },
+  ]);
+
+  const workspace = new FilesWorkspace({ initialBackend: backend });
+  const files = await workspace.listFiles();
+  const workspacePaths = files
+    .filter((file) => file.sourceKind === "workspace")
+    .map((file) => file.path);
+
+  assert.ok(!workspacePaths.includes("scratch/stale.txt"));
+  assert.ok(workspacePaths.includes("scratch/fresh.txt"));
+  assert.ok(workspacePaths.includes("notes/keep.md"));
+});
+
+void test("workspace scratch cleanup fails open when delete throws", async () => {
+  const staleTimestamp = Date.now() - (24 * 60 * 60 * 1000) - 1000;
+
+  const backend = new CleanupTestBackend(
+    [
+      { path: "scratch/stale.txt", modifiedAt: staleTimestamp, content: "old" },
+      { path: "notes/keep.md", modifiedAt: staleTimestamp, content: "keep" },
+    ],
+    ["scratch/stale.txt"],
+  );
+
+  const workspace = new FilesWorkspace({ initialBackend: backend });
+  const files = await workspace.listFiles();
+  const workspacePaths = files
+    .filter((file) => file.sourceKind === "workspace")
+    .map((file) => file.path);
+
+  assert.ok(workspacePaths.includes("notes/keep.md"));
+  assert.ok(workspacePaths.includes("scratch/stale.txt"));
 });

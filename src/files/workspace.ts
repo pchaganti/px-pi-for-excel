@@ -383,6 +383,7 @@ const IMPORTS_PREFIX = "imports/";
 const SCRATCH_PREFIX = "scratch/";
 const ASSISTANT_DOCS_PREFIX = "assistant-docs/";
 const DEFAULT_CONTEXT_PREVIEW_LIMIT = 3;
+const SCRATCH_CLEANUP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export interface WorkspaceContextSummary {
   summary: string;
@@ -507,6 +508,8 @@ export class FilesWorkspace {
   private auditLoaded = false;
   private auditEntries: FilesWorkspaceAuditEntry[] = [];
 
+  private readonly scratchCleanupByBackend = new WeakMap<WorkspaceBackend, Promise<void>>();
+
   constructor(options: FilesWorkspaceOptions = {}) {
     if (options.initialBackend) {
       this.backend = options.initialBackend;
@@ -530,8 +533,70 @@ export class FilesWorkspace {
     return new MemoryBackend();
   }
 
+  private async removeWorkbookTags(paths: readonly string[]): Promise<void> {
+    await this.ensureMetadataLoaded();
+
+    let changed = false;
+    for (const path of paths) {
+      if (this.metadataByPath.delete(path)) {
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      await this.persistMetadata();
+    }
+  }
+
+  private async cleanupExpiredScratchFiles(backend: WorkspaceBackend): Promise<void> {
+    const expirationCutoff = Date.now() - SCRATCH_CLEANUP_MAX_AGE_MS;
+
+    const files = await backend.listFiles();
+    const staleScratchPaths = files
+      .filter((file) => file.path.startsWith(SCRATCH_PREFIX) && file.modifiedAt < expirationCutoff)
+      .map((file) => file.path);
+
+    if (staleScratchPaths.length === 0) {
+      return;
+    }
+
+    const deletedPaths: string[] = [];
+
+    for (const path of staleScratchPaths) {
+      try {
+        await backend.deleteFile(path);
+        deletedPaths.push(path);
+      } catch {
+        // best-effort cleanup: ignore per-file delete failures
+      }
+    }
+
+    if (deletedPaths.length === 0) {
+      return;
+    }
+
+    await this.removeWorkbookTags(deletedPaths);
+    dispatchWorkspaceChanged({ reason: "delete" });
+  }
+
+  private async ensureScratchCleanupAttempted(backend: WorkspaceBackend): Promise<void> {
+    let cleanupPromise = this.scratchCleanupByBackend.get(backend);
+
+    if (!cleanupPromise) {
+      cleanupPromise = this.cleanupExpiredScratchFiles(backend).catch(() => {
+        // best-effort cleanup: fail open on startup/first interaction
+      });
+      this.scratchCleanupByBackend.set(backend, cleanupPromise);
+    }
+
+    await cleanupPromise;
+  }
+
   private async getBackend(): Promise<WorkspaceBackend> {
-    if (this.backend) return this.backend;
+    if (this.backend) {
+      await this.ensureScratchCleanupAttempted(this.backend);
+      return this.backend;
+    }
 
     if (!this.backendPromise) {
       this.backendPromise = this.initializeBackend();
@@ -540,6 +605,8 @@ export class FilesWorkspace {
     const backend = await this.backendPromise;
     this.backend = backend;
     this.backendPromise = null;
+
+    await this.ensureScratchCleanupAttempted(backend);
     return backend;
   }
 
