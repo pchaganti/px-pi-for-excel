@@ -6,7 +6,7 @@
  */
 
 import { html, render } from "lit";
-import { Agent, type AgentTool } from "@mariozechner/pi-agent-core";
+import { Agent } from "@mariozechner/pi-agent-core";
 import { ApiKeyPromptDialog } from "@mariozechner/pi-web-ui/dist/dialogs/ApiKeyPromptDialog.js";
 import { ModelSelector } from "@mariozechner/pi-web-ui/dist/dialogs/ModelSelector.js";
 import { ApiKeysTab, ProxyTab, SettingsDialog } from "@mariozechner/pi-web-ui/dist/dialogs/SettingsDialog.js";
@@ -121,6 +121,12 @@ import {
   SessionRuntimeManager,
   type SessionRuntime,
 } from "./session-runtime-manager.js";
+import {
+  awaitWithTimeout,
+  isLikelyCorsErrorMessage,
+  isRuntimeAgentTool,
+  normalizeRuntimeTools,
+} from "./runtime-utils.js";
 import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
 import { isRecord } from "../utils/type-guards.js";
 
@@ -130,73 +136,6 @@ function showErrorBanner(errorRoot: HTMLElement, message: string): void {
 
 function clearErrorBanner(errorRoot: HTMLElement): void {
   render(html``, errorRoot);
-}
-
-function isRuntimeAgentTool(value: unknown): value is AgentTool {
-  if (!isRecord(value)) return false;
-
-  return typeof value.name === "string"
-    && typeof value.label === "string"
-    && typeof value.description === "string"
-    && "parameters" in value
-    && typeof value.execute === "function";
-}
-
-function normalizeRuntimeTools(candidates: unknown[]): AgentTool[] {
-  const seen = new Set<string>();
-  const out: AgentTool[] = [];
-
-  for (const candidate of candidates) {
-    if (!isRuntimeAgentTool(candidate)) {
-      console.warn("[pi] Ignoring invalid runtime tool payload", candidate);
-      continue;
-    }
-
-    if (seen.has(candidate.name)) {
-      console.warn(`[pi] Ignoring duplicate runtime tool name: ${candidate.name}`);
-      continue;
-    }
-
-    seen.add(candidate.name);
-    out.push(candidate);
-  }
-
-  return out;
-}
-
-function isLikelyCorsErrorMessage(msg: string): boolean {
-  const m = msg.toLowerCase();
-
-  // Browser/network errors
-  if (m.includes("failed to fetch")) return true;
-  if (m.includes("load failed")) return true; // WebKit/Safari
-  if (m.includes("networkerror")) return true;
-
-  // Explicit CORS wording
-  if (m.includes("cors") || m.includes("cross-origin")) return true;
-
-  // Anthropic sometimes returns a JSON 401 with a CORS-specific message when direct browser access is disabled.
-  if (m.includes("cors requests are not allowed")) return true;
-
-  return false;
-}
-
-async function awaitWithTimeout<T>(label: string, timeoutMs: number, task: Promise<T>): Promise<T> {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  try {
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        reject(new Error(`${label} timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-    });
-
-    return await Promise.race([task, timeoutPromise]);
-  } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-  }
 }
 
 interface ProxySettingsStore {
@@ -959,6 +898,26 @@ export async function initTaskpane(opts: {
     return runtime;
   };
 
+  const openResumePicker = async (defaultTarget: ResumeDialogTarget = "new_tab"): Promise<void> => {
+    await showResumeDialog({
+      defaultTarget,
+      onOpenInNewTab: async (sessionData: SessionData) => {
+        await openSessionInNewTab(sessionData);
+      },
+      onReplaceCurrent: async (sessionData: SessionData) => {
+        await replaceActiveRuntimeSession(sessionData);
+      },
+    });
+  };
+
+  const openRulesEditor = async (): Promise<void> => {
+    await showRulesDialog({
+      onSaved: async () => {
+        await refreshWorkbookState();
+      },
+    });
+  };
+
   const reopenRecentlyClosedItem = async (item: RecentlyClosedItem): Promise<boolean> => {
     try {
       const sessionData = await sessions.loadSession(item.sessionId);
@@ -1297,15 +1256,7 @@ export async function initTaskpane(opts: {
       await createRuntimeFromUi();
     },
     openResumeDialog: async (defaultTarget: ResumeDialogTarget = "new_tab") => {
-      await showResumeDialog({
-        defaultTarget,
-        onOpenInNewTab: async (sessionData: SessionData) => {
-          await openSessionInNewTab(sessionData);
-        },
-        onReplaceCurrent: async (sessionData: SessionData) => {
-          await replaceActiveRuntimeSession(sessionData);
-        },
-      });
+      await openResumePicker(defaultTarget);
     },
     openRecoveryDialog,
     reopenLastClosed,
@@ -1330,11 +1281,7 @@ export async function initTaskpane(opts: {
       return clearManualFullBackups();
     },
     openInstructionsEditor: async () => {
-      await showRulesDialog({
-        onSaved: async () => {
-          await refreshWorkbookState();
-        },
-      });
+      await openRulesEditor();
     },
     getExecutionMode: () => Promise.resolve(getExecutionMode()),
     setExecutionMode,
@@ -1417,11 +1364,7 @@ export async function initTaskpane(opts: {
     void closeOtherRuntimes(runtimeId);
   };
   sidebar.onOpenRules = () => {
-    void showRulesDialog({
-      onSaved: async () => {
-        await refreshWorkbookState();
-      },
-    });
+    void openRulesEditor();
   };
   sidebar.onOpenIntegrations = () => {
     openIntegrationsManager();
@@ -1455,15 +1398,7 @@ export async function initTaskpane(opts: {
       });
   };
   sidebar.onOpenResumePicker = () => {
-    void showResumeDialog({
-      defaultTarget: "new_tab",
-      onOpenInNewTab: async (sessionData: SessionData) => {
-        await openSessionInNewTab(sessionData);
-      },
-      onReplaceCurrent: async (sessionData: SessionData) => {
-        await replaceActiveRuntimeSession(sessionData);
-      },
-    });
+    void openResumePicker("new_tab");
   };
   sidebar.onReopenLastClosed = () => {
     void reopenLastClosed();
@@ -1643,11 +1578,7 @@ export async function initTaskpane(opts: {
     // Rules editor
     if (el.closest(".pi-status-rules")) {
       closeStatusPopover();
-      void showRulesDialog({
-        onSaved: async () => {
-          await refreshWorkbookState();
-        },
-      });
+      void openRulesEditor();
       return;
     }
 
