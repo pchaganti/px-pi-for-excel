@@ -407,8 +407,8 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     const row = document.createElement("div");
     row.className = "pi-files-row";
     row.tabIndex = 0;
-    row.setAttribute("role", "button");
-    row.setAttribute("aria-label", `Open ${file.path}`);
+    row.setAttribute("role", "listitem");
+    row.setAttribute("aria-label", `${file.path} — press Enter to open`);
 
     const fileIcon = file.kind === "text" ? "📄" : isImageMimeType(file.mimeType) ? "🖼" : "📎";
 
@@ -444,7 +444,9 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
     const meta = document.createElement("div");
     meta.className = "pi-files-row__meta";
-    meta.textContent = `${formatBytes(file.size)} · ${file.kind} · ${formatRelativeDate(file.modifiedAt)}`;
+    const metaText = document.createElement("span");
+    metaText.textContent = `${formatBytes(file.size)} · ${file.kind} · ${formatRelativeDate(file.modifiedAt)}`;
+    meta.appendChild(metaText);
 
     info.append(nameRow, meta);
 
@@ -535,7 +537,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
         }, "danger");
       }
 
-      row.appendChild(menu);
+      meta.appendChild(menu);
 
       const closeOnOutsideClick = (e: MouseEvent) => {
         if (!menu.contains(e.target as Node)) {
@@ -549,7 +551,8 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       });
     });
 
-    row.append(info, overflowBtn);
+    meta.appendChild(overflowBtn);
+    row.appendChild(info);
 
     return row;
   };
