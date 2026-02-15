@@ -20,13 +20,11 @@ function isExtensionModuleImporter(value: unknown): value is ExtensionModuleImpo
 
 function readBundledImportersFromGlob(): unknown {
   try {
-    const meta = import.meta as ImportMetaWithGlob;
-    const glob = meta.glob;
-    if (typeof glob !== "function") {
+    if (typeof (import.meta as ImportMetaWithGlob).glob !== "function") {
       return null;
     }
 
-    return glob("../extensions/*.{ts,js}");
+    return import.meta.glob("../extensions/*.{ts,js}");
   } catch {
     return null;
   }
