@@ -290,25 +290,31 @@ export function createSkillsTool(
       if (!refresh && sessionId && readCache) {
         const cached = readCache.get(sessionId, requestedName);
         if (cached) {
-          const cachedSkill: AgentSkillDefinition = {
-            name: cached.skillName,
-            description: "",
-            location: cached.location,
-            sourceKind: cached.sourceKind,
-            markdown: cached.markdown,
-            body: cached.markdown,
-          };
+          const cachedSkillStillAvailable = skills.some(
+            (entry) => entry.name.toLowerCase() === cached.skillName.toLowerCase(),
+          );
 
-          return {
-            content: [{ type: "text", text: cached.markdown }],
-            details: buildSkillsReadDetails({
-              skill: cachedSkill,
-              cacheHit: true,
-              refreshed: false,
-              sessionScoped,
-              readCount: cached.readCount,
-            }),
-          };
+          if (cachedSkillStillAvailable) {
+            const cachedSkill: AgentSkillDefinition = {
+              name: cached.skillName,
+              description: "",
+              location: cached.location,
+              sourceKind: cached.sourceKind,
+              markdown: cached.markdown,
+              body: cached.markdown,
+            };
+
+            return {
+              content: [{ type: "text", text: cached.markdown }],
+              details: buildSkillsReadDetails({
+                skill: cachedSkill,
+                cacheHit: true,
+                refreshed: false,
+                sessionScoped,
+                readCount: cached.readCount,
+              }),
+            };
+          }
         }
       }
 

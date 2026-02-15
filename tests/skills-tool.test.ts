@@ -225,3 +225,41 @@ void test("skills list/read exclude disabled skills", async () => {
 
   assert.match(readResult.details.message, /Skill not found: `custom-skill`/);
 });
+
+void test("skills read ignores stale cache entries when skill becomes disabled", async () => {
+  const cache = createSkillReadCache();
+  let disabled = false;
+
+  const tool = createSkillsTool({
+    getSessionId: () => "session-disable",
+    readCache: cache,
+    catalog: {
+      list: () => [WEB_SEARCH_SKILL],
+    },
+    isExternalDiscoveryEnabled: () => false,
+    loadExternalSkills: () => Promise.resolve([]),
+    loadDisabledSkillNames: () => Promise.resolve(disabled ? new Set(["web-search"]) : new Set()),
+  });
+
+  const firstRead = await tool.execute("call-read-enabled", {
+    action: "read",
+    name: "web-search",
+  });
+
+  assert.ok(isSkillsReadDetails(firstRead.details));
+  if (!isSkillsReadDetails(firstRead.details)) return;
+
+  assert.equal(firstRead.details.cacheHit, false);
+
+  disabled = true;
+
+  const secondRead = await tool.execute("call-read-disabled-after-cache", {
+    action: "read",
+    name: "web-search",
+  });
+
+  assert.ok(isSkillsErrorDetails(secondRead.details));
+  if (!isSkillsErrorDetails(secondRead.details)) return;
+
+  assert.match(secondRead.details.message, /Skill not found: `web-search`/);
+});
