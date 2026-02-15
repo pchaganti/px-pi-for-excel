@@ -6,6 +6,20 @@
  * tab builders compose them and wire event listeners.
  */
 
+// ── Icon type (emoji string or pre-built SVG element) ───
+
+/** Accepts either an emoji string or a pre-built SVG/HTMLElement. */
+export type IconContent = string | Element;
+
+/** Set element content to either text or an SVG child node. */
+function applyIcon(el: HTMLElement, content: IconContent): void {
+  if (typeof content === "string") {
+    el.textContent = content;
+  } else {
+    el.appendChild(content);
+  }
+}
+
 // ── Chevron SVG (shared across item cards) ──────────
 
 const CHEVRON_SVG = `<svg class="pi-item-card__chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 4l4 4-4 4"/></svg>`;
@@ -139,7 +153,7 @@ export function createSectionHeader(opts: SectionHeaderOptions): HTMLDivElement 
 export type ItemCardIconColor = "green" | "blue" | "purple" | "amber";
 
 export interface ItemCardOptions {
-  icon: string;
+  icon: IconContent;
   iconColor?: ItemCardIconColor;
   name: string;
   description?: string;
@@ -172,7 +186,7 @@ export function createItemCard(opts: ItemCardOptions): ItemCardResult {
 
   const iconEl = document.createElement("div");
   iconEl.className = `pi-item-card__icon${opts.iconColor ? ` pi-item-card__icon--${opts.iconColor}` : ""}`;
-  iconEl.textContent = opts.icon;
+  applyIcon(iconEl, opts.icon);
 
   const text = document.createElement("div");
   text.className = "pi-item-card__text";
@@ -303,7 +317,7 @@ export function createConfigInput(opts: {
 
 export function createCallout(
   tone: "info" | "warn" | "success",
-  icon: string,
+  calloutIcon: IconContent,
   message: string,
   opts?: { compact?: boolean },
 ): HTMLDivElement {
@@ -312,7 +326,7 @@ export function createCallout(
 
   const iconEl = document.createElement("span");
   iconEl.className = "pi-callout__icon";
-  iconEl.textContent = icon;
+  applyIcon(iconEl, calloutIcon);
 
   const body = document.createElement("div");
   body.className = "pi-callout__body";
@@ -345,13 +359,13 @@ export function createAddFormInput(placeholder: string): HTMLInputElement {
 
 // ── Empty inline ────────────────────────────────────
 
-export function createEmptyInline(icon: string, text: string): HTMLDivElement {
+export function createEmptyInline(emptyIcon: IconContent, text: string): HTMLDivElement {
   const el = document.createElement("div");
   el.className = "pi-empty-inline";
 
   const iconEl = document.createElement("span");
   iconEl.className = "pi-empty-inline__icon";
-  iconEl.textContent = icon;
+  applyIcon(iconEl, emptyIcon);
 
   const textEl = document.createElement("span");
   textEl.className = "pi-empty-inline__text";

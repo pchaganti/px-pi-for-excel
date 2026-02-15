@@ -54,9 +54,11 @@ import {
   createAddFormInput,
   createEmptyInline,
   createActionsRow,
+  type IconContent,
   createButton,
   createToggle,
 } from "../../ui/extensions-hub-components.js";
+import { lucide, Search, Terminal, Zap } from "../../ui/lucide-icons.js";
 import type { ExtensionsHubDependencies } from "./extensions-hub-overlay.js";
 
 type SettingsStore = IntegrationSettingsStore & WebSearchConfigStore & McpConfigStore & {
@@ -237,7 +239,7 @@ export async function renderConnectionsTab(args: {
     : (apiKey || !isApiKeyRequired(selectedProvider) ? "ok" : "warn");
 
   const webCard = createItemCard({
-    icon: "🔍",
+    icon: lucide(Search),
     iconColor: "green",
     name: providerInfo.title,
     description: providerInfo.shortDescription,
@@ -424,7 +426,7 @@ export async function renderConnectionsTab(args: {
   mcpList.className = "pi-hub-stack";
 
   if (mcpServers.length === 0) {
-    mcpList.appendChild(createEmptyInline("⚡", "No MCP servers configured.\nAdd one to connect external tools."));
+    mcpList.appendChild(createEmptyInline(lucide(Zap), "No MCP servers configured.\nAdd one to connect external tools."));
   } else {
     for (const server of mcpServers) {
       mcpList.appendChild(renderMcpServerCard(server, settings, isBusy, runMutation));
@@ -478,7 +480,7 @@ export async function renderConnectionsTab(args: {
 
     if (showPython) {
       bridgeList.appendChild(renderBridgeCard({
-        icon: "🐍",
+        icon: lucide(Terminal),
         name: "Python bridge",
         description: "Execute Python code in a local environment",
         settingKey: PYTHON_BRIDGE_URL_SETTING_KEY,
@@ -492,7 +494,7 @@ export async function renderConnectionsTab(args: {
 
     if (showTmux) {
       bridgeList.appendChild(renderBridgeCard({
-        icon: "🖥",
+        icon: lucide(Terminal),
         name: "tmux bridge",
         description: "Remote shell sessions via tmux",
         settingKey: TMUX_BRIDGE_URL_SETTING_KEY,
@@ -518,7 +520,7 @@ function renderMcpServerCard(
 ): HTMLElement {
   const toolLabel = server.enabled ? "Enabled" : "Disabled";
   const card = createItemCard({
-    icon: "⚡",
+    icon: lucide(Zap),
     iconColor: "blue",
     name: server.name,
     meta: server.url,
@@ -590,7 +592,7 @@ function renderMcpServerCard(
 // ── Bridge card ─────────────────────────────────────
 
 function renderBridgeCard(args: {
-  icon: string;
+  icon: IconContent;
   name: string;
   description: string;
   settingKey: string;

@@ -33,6 +33,21 @@ import {
 import { FILES_WORKSPACE_OVERLAY_ID } from "./overlay-ids.js";
 import { requestTextInputDialog } from "./text-input-dialog.js";
 import { showToast } from "./toast.js";
+import type { IconContent } from "./extensions-hub-components.js";
+import {
+  lucide,
+  AlertTriangle,
+  ClipboardList,
+  FileSpreadsheet,
+  FileText,
+  FolderOpen,
+  Image,
+  Link,
+  NotebookPen,
+  Paperclip,
+  Search,
+  Upload,
+} from "./lucide-icons.js";
 
 const OVERLAY_ID = FILES_WORKSPACE_OVERLAY_ID;
 const TEXT_PREVIEW_MAX_LINES = 50;
@@ -118,24 +133,24 @@ function resolveRenameDestinationPath(currentPath: string, inputPath: string): s
   return `${currentPath.slice(0, lastSlash + 1)}${normalizedInput}`;
 }
 
-function resolveFileIcon(file: WorkspaceFileEntry): string {
+function resolveFileIcon(file: WorkspaceFileEntry): SVGElement {
   if (isFilesDialogBuiltInDoc(file)) {
-    return "📋";
+    return lucide(ClipboardList);
   }
 
   if (isImageMimeType(file.mimeType)) {
-    return "🖼";
+    return lucide(Image);
   }
 
   if (hasOneOfExtensions(file.path, [".csv", ".xlsx", ".xls"])) {
-    return "📊";
+    return lucide(FileSpreadsheet);
   }
 
   if (isAgentWrittenNotesFilePath(file.path)) {
-    return "📝";
+    return lucide(NotebookPen);
   }
 
-  return "📄";
+  return lucide(FileText);
 }
 
 function buildFileMetaLine(file: WorkspaceFileEntry): string {
@@ -206,15 +221,19 @@ function createChevronIcon(): SVGSVGElement {
 }
 
 function createInfoCallout(args: {
-  icon: string;
+  icon: IconContent;
   body: Array<HTMLElement | string>;
 }): HTMLDivElement {
   const callout = document.createElement("div");
   callout.className = "pi-callout pi-callout--info";
 
-  const icon = document.createElement("span");
-  icon.className = "pi-callout__icon";
-  icon.textContent = args.icon;
+  const iconEl = document.createElement("span");
+  iconEl.className = "pi-callout__icon";
+  if (typeof args.icon === "string") {
+    iconEl.textContent = args.icon;
+  } else {
+    iconEl.appendChild(args.icon);
+  }
 
   const body = document.createElement("div");
   body.className = "pi-callout__body";
@@ -228,13 +247,13 @@ function createInfoCallout(args: {
     body.appendChild(item);
   }
 
-  callout.append(icon, body);
+  callout.append(iconEl, body);
   return callout;
 }
 
 function createBinaryPreview(args: {
   file: WorkspaceFileEntry;
-  icon: string;
+  icon: IconContent;
   label: string;
 }): HTMLDivElement {
   const preview = document.createElement("div");
@@ -243,9 +262,13 @@ function createBinaryPreview(args: {
   const placeholder = document.createElement("div");
   placeholder.className = "pi-files-detail-preview__placeholder";
 
-  const icon = document.createElement("span");
-  icon.className = "pi-files-detail-preview__placeholder-icon";
-  icon.textContent = args.icon;
+  const iconEl = document.createElement("span");
+  iconEl.className = "pi-files-detail-preview__placeholder-icon";
+  if (typeof args.icon === "string") {
+    iconEl.textContent = args.icon;
+  } else {
+    iconEl.appendChild(args.icon);
+  }
 
   const label = document.createElement("span");
   label.className = "pi-files-detail-preview__placeholder-label";
@@ -255,7 +278,7 @@ function createBinaryPreview(args: {
   size.className = "pi-files-detail-preview__placeholder-size";
   size.textContent = formatBytes(args.file.size);
 
-  placeholder.append(icon, label, size);
+  placeholder.append(iconEl, label, size);
   preview.appendChild(placeholder);
   return preview;
 }
@@ -309,18 +332,22 @@ function createTextPreview(text: string, truncated: boolean): {
 }
 
 function createUploadActionButton(args: {
-  icon: string;
+  icon: IconContent;
   label: string;
 }): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--compact";
 
-  const icon = document.createElement("span");
-  icon.className = "pi-files-actions__icon";
-  icon.textContent = args.icon;
+  const iconEl = document.createElement("span");
+  iconEl.className = "pi-files-actions__icon";
+  if (typeof args.icon === "string") {
+    iconEl.textContent = args.icon;
+  } else {
+    iconEl.appendChild(args.icon);
+  }
 
-  button.append(icon, ` ${args.label}`);
+  button.append(iconEl, ` ${args.label}`);
   return button;
 }
 
@@ -328,9 +355,9 @@ function createEmptyState(onUpload: () => void): HTMLDivElement {
   const empty = document.createElement("div");
   empty.className = "pi-files-empty";
 
-  const icon = document.createElement("div");
-  icon.className = "pi-files-empty__icon";
-  icon.textContent = "📄";
+  const emptyIcon = document.createElement("div");
+  emptyIcon.className = "pi-files-empty__icon";
+  emptyIcon.appendChild(lucide(FileText));
 
   const title = document.createElement("div");
   title.className = "pi-files-empty__title";
@@ -350,7 +377,7 @@ function createEmptyState(onUpload: () => void): HTMLDivElement {
   hint.className = "pi-files-empty__hint";
   hint.textContent = "Files are stored locally in your browser.";
 
-  empty.append(icon, title, description, uploadButton, hint);
+  empty.append(emptyIcon, title, description, uploadButton, hint);
   return empty;
 }
 
@@ -365,7 +392,7 @@ function createWorkbookTagCallout(workbookTag: WorkspaceFileWorkbookTag): HTMLDi
   strong.textContent = workbookTag.workbookLabel;
 
   return createInfoCallout({
-    icon: "🔗",
+    icon: lucide(Link),
     body: ["Tagged to ", strong, " — included when that workbook is open."],
   });
 }
@@ -427,12 +454,12 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
   actionsRow.className = "pi-files-actions";
 
   const uploadButton = createUploadActionButton({
-    icon: "⬆",
+    icon: lucide(Upload),
     label: "Upload",
   });
 
   const connectFolderButton = createUploadActionButton({
-    icon: "📁",
+    icon: lucide(FolderOpen),
     label: "Connect folder",
   });
   connectFolderButton.hidden = true;
@@ -455,7 +482,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
   const filterIcon = document.createElement("span");
   filterIcon.className = "pi-files-filter__icon";
-  filterIcon.textContent = "🔍";
+  filterIcon.appendChild(lucide(Search));
 
   const filterInput = document.createElement("input");
   filterInput.type = "text";
@@ -754,7 +781,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
         return {
           element: createBinaryPreview({
             file,
-            icon: "🖼",
+            icon: lucide(Image),
             label: "Image preview unavailable",
           }),
           previewTruncated: false,
@@ -784,7 +811,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       return {
         element: createBinaryPreview({
           file,
-          icon: "📄",
+          icon: lucide(FileText),
           label: "PDF document",
         }),
         previewTruncated: false,
@@ -795,7 +822,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     return {
       element: createBinaryPreview({
         file,
-        icon: "📎",
+        icon: lucide(Paperclip),
         label: "Binary file",
       }),
       previewTruncated: false,
@@ -828,7 +855,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
     if (isFilesDialogBuiltInDoc(file)) {
       nodes.push(createInfoCallout({
-        icon: "📋",
+        icon: lucide(ClipboardList),
         body: ["Built-in documentation — read only. Pi references this automatically."],
       }));
     }
@@ -840,7 +867,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       previewResult = {
         element: createBinaryPreview({
           file,
-          icon: "⚠",
+          icon: lucide(AlertTriangle),
           label: `Preview unavailable: ${getErrorMessage(error)}`,
         }),
         previewTruncated: false,
@@ -888,7 +915,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
     const icon = document.createElement("span");
     icon.className = "pi-files-item__icon";
-    icon.textContent = resolveFileIcon(file);
+    icon.appendChild(resolveFileIcon(file));
 
     const info = document.createElement("div");
     info.className = "pi-files-item__info";

@@ -12,7 +12,7 @@ import { customElement, property, query, state } from "lit/decorators.js";
 import type { Agent, AgentEvent } from "@mariozechner/pi-agent-core";
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
 import type { StreamingMessageContainer } from "@mariozechner/pi-web-ui/dist/components/StreamingMessageContainer.js";
-import { Archive, ChevronRight, Cog, FileText, Keyboard, Puzzle, RotateCcw, Ruler, Settings } from "lucide";
+import { Archive, ChevronRight, FileText, Keyboard, Puzzle, RotateCcw, Ruler, Settings, Wrench } from "lucide";
 import "./pi-input.js";
 import "./working-indicator.js";
 import { initToolGrouping } from "./tool-grouping.js";
@@ -671,7 +671,7 @@ export class PiSidebar extends LitElement {
             aria-controls=${this._utilitiesMenuId}
             aria-expanded=${this._utilitiesMenuOpen ? "true" : "false"}
           >
-            <span class="pi-utilities-btn__icon" aria-hidden="true">${icon(Cog, "sm")}</span>
+            <span class="pi-utilities-btn__icon" aria-hidden="true">${icon(Settings, "sm")}</span>
           </button>
           ${this._utilitiesMenuOpen ? this._renderUtilitiesMenu() : nothing}
         </div>
@@ -829,34 +829,34 @@ export class PiSidebar extends LitElement {
     return html`
       <div class="pi-utilities-menu" id=${this._utilitiesMenuId} role="menu" aria-label="Settings and tools">
         <button role="menuitem" class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenSettings?.(); }}>
-          <span class="pi-utilities-menu__item-icon" aria-hidden="true">${icon(Settings, "sm")}</span> Settings…
+          <span class="pi-utilities-menu__item-icon" aria-hidden="true">${icon(Wrench, "sm")}</span> Setup
         </button>
         <button role="menuitem" class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenExtensions?.(); }}>
-          <span class="pi-utilities-menu__item-icon" aria-hidden="true">${icon(Puzzle, "sm")}</span> Extensions…
+          <span class="pi-utilities-menu__item-icon" aria-hidden="true">${icon(Puzzle, "sm")}</span> Extensions
         </button>
 
         <div class="pi-utilities-menu__divider" role="separator"></div>
 
         <button role="menuitem" class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this._onOpenFilesWorkspace(); }}>
-          <span class="pi-utilities-menu__item-icon" aria-hidden="true">${icon(FileText, "sm")}</span> Files…
+          <span class="pi-utilities-menu__item-icon" aria-hidden="true">${icon(FileText, "sm")}</span> Files
         </button>
         <button role="menuitem" class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenRules?.(); }}>
-          <span class="pi-utilities-menu__item-icon" aria-hidden="true">${icon(Ruler, "sm")}</span> Rules & conventions…
+          <span class="pi-utilities-menu__item-icon" aria-hidden="true">${icon(Ruler, "sm")}</span> Rules
         </button>
 
         <div class="pi-utilities-menu__divider" role="separator"></div>
 
         <button role="menuitem" class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenResumePicker?.(); }}>
-          <span class="pi-utilities-menu__item-icon" aria-hidden="true">${icon(RotateCcw, "sm")}</span> Resume session…
+          <span class="pi-utilities-menu__item-icon" aria-hidden="true">${icon(RotateCcw, "sm")}</span> Resume session
         </button>
         <button role="menuitem" class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenRecovery?.(); }}>
-          <span class="pi-utilities-menu__item-icon" aria-hidden="true">${icon(Archive, "sm")}</span> Backups…
+          <span class="pi-utilities-menu__item-icon" aria-hidden="true">${icon(Archive, "sm")}</span> Backups
         </button>
 
         <div class="pi-utilities-menu__divider" role="separator"></div>
 
         <button role="menuitem" class="pi-utilities-menu__item" @click=${() => { this._closeUtilitiesMenu(); this.onOpenShortcuts?.(); }}>
-          <span class="pi-utilities-menu__item-icon" aria-hidden="true">${icon(Keyboard, "sm")}</span> Keyboard shortcuts…
+          <span class="pi-utilities-menu__item-icon" aria-hidden="true">${icon(Keyboard, "sm")}</span> Keyboard shortcuts
         </button>
       </div>
     `;

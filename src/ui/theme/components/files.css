@@ -15,6 +15,13 @@
 .pi-files-actions__icon {
   font-size: 11px;
   margin-right: 2px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.pi-files-actions__icon > svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* ── Filter input ────────────────────────────────── */
@@ -38,6 +45,13 @@
   font-size: 11px;
   flex-shrink: 0;
   opacity: 0.5;
+  display: flex;
+  align-items: center;
+}
+
+.pi-files-filter__icon > svg {
+  width: 12px;
+  height: 12px;
 }
 
 .pi-files-filter__input {
@@ -143,10 +157,16 @@
 
 .pi-files-item__icon {
   flex-shrink: 0;
-  font-size: 15px;
   width: 24px;
-  text-align: center;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+}
+
+.pi-files-item__icon > svg {
+  width: 16px;
+  height: 16px;
 }
 
 .pi-files-item__info {
@@ -221,6 +241,15 @@
   font-size: 32px;
   opacity: 0.4;
   margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+}
+
+.pi-files-empty__icon > svg {
+  width: 32px;
+  height: 32px;
 }
 
 .pi-files-empty__title {
@@ -356,6 +385,15 @@
 .pi-files-detail-preview__placeholder-icon {
   font-size: 36px;
   opacity: 0.3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+}
+
+.pi-files-detail-preview__placeholder-icon > svg {
+  width: 36px;
+  height: 36px;
 }
 
 .pi-files-detail-preview__placeholder-label {

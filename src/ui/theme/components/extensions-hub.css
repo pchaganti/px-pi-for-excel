@@ -54,6 +54,11 @@
   line-height: 1;
 }
 
+.pi-item-card__icon > svg {
+  width: 16px;
+  height: 16px;
+}
+
 .pi-item-card__icon--green {
   background: var(--green-alpha-12);
   color: var(--pi-green);
@@ -276,6 +281,13 @@
   flex-shrink: 0;
   font-size: 14px;
   line-height: 1.45;
+  display: flex;
+  align-items: center;
+}
+
+.pi-callout__icon > svg {
+  width: 14px;
+  height: 14px;
 }
 
 .pi-callout__body {
@@ -338,6 +350,14 @@
 .pi-empty-inline__icon {
   font-size: 20px;
   opacity: 0.4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pi-empty-inline__icon > svg {
+  width: 20px;
+  height: 20px;
 }
 
 .pi-empty-inline__text {
