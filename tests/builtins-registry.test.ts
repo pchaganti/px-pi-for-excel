@@ -262,6 +262,22 @@ void test("session builtins include recovery and manual-backup commands", async 
   assert.match(sessionSource, /restoreManualFullBackup/);
 });
 
+void test("resume overlay surfaces recently closed tabs and taskpane wires reopen callback", async () => {
+  const resumeSource = await readFile(new URL("../src/commands/builtins/resume-overlay.ts", import.meta.url), "utf8");
+  const initSource = await readFile(new URL("../src/taskpane/init.ts", import.meta.url), "utf8");
+
+  assert.match(resumeSource, /Recently closed/);
+  assert.match(resumeSource, /getRecentlyClosedItems\?: \(\) => readonly ResumeRecentlyClosedItem\[]/);
+  assert.match(resumeSource, /onReopenRecentlyClosed\?: \(item: ResumeRecentlyClosedItem\) => Promise<boolean>/);
+  assert.match(resumeSource, /REOPENS in new tab/i);
+
+  assert.match(initSource, /getRecentlyClosedItems:\s*\(\)\s*=>\s*recentlyClosed\.snapshot\(\)/);
+  assert.match(initSource, /onReopenRecentlyClosed:\s*async \(item\) =>/);
+  assert.match(initSource, /const reopenRecentlyClosedById = async \(recentlyClosedId: string\): Promise<boolean> =>/);
+  assert.match(initSource, /recentlyClosed\.removeById\(recentlyClosedId\)/);
+  assert.match(initSource, /if \(reopenResult === "failed"\) \{\s*recentlyClosed\.push\(item\);\s*\}/);
+});
+
 void test("settings builtins route to unified settings overlay", async () => {
   const settingsSource = await readFile(new URL("../src/commands/builtins/settings.ts", import.meta.url), "utf8");
 

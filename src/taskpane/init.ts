@@ -967,6 +967,10 @@ export async function initTaskpane(opts: {
       onReplaceCurrent: async (sessionData: SessionData) => {
         await replaceActiveRuntimeSession(sessionData);
       },
+      getRecentlyClosedItems: () => recentlyClosed.snapshot(),
+      onReopenRecentlyClosed: async (item) => {
+        return reopenRecentlyClosedById(item.id);
+      },
     });
   };
 
@@ -978,21 +982,38 @@ export async function initTaskpane(opts: {
     });
   };
 
-  const reopenRecentlyClosedItem = async (item: RecentlyClosedItem): Promise<boolean> => {
+  type ReopenRecentlyClosedResult = "reopened" | "missing" | "failed";
+
+  const reopenRecentlyClosedItem = async (item: RecentlyClosedItem): Promise<ReopenRecentlyClosedResult> => {
     try {
       const sessionData = await sessions.loadSession(item.sessionId);
       if (!sessionData) {
         showToast("Couldn't reopen session");
-        return false;
+        return "missing";
       }
 
       await openSessionInNewTab(sessionData);
       showToast(`Reopened: ${formatSessionTitle(item.title)}`);
-      return true;
+      return "reopened";
     } catch {
       showToast("Couldn't reopen session");
+      return "failed";
+    }
+  };
+
+  const reopenRecentlyClosedById = async (recentlyClosedId: string): Promise<boolean> => {
+    const item = recentlyClosed.removeById(recentlyClosedId);
+    if (!item) {
+      showToast("Session is no longer in recently closed");
       return false;
     }
+
+    const reopenResult = await reopenRecentlyClosedItem(item);
+    if (reopenResult === "failed") {
+      recentlyClosed.push(item);
+    }
+
+    return reopenResult === "reopened";
   };
 
   const reopenLastClosed = async (): Promise<void> => {
@@ -1002,7 +1023,10 @@ export async function initTaskpane(opts: {
       return;
     }
 
-    await reopenRecentlyClosedItem(item);
+    const reopenResult = await reopenRecentlyClosedItem(item);
+    if (reopenResult === "failed") {
+      recentlyClosed.push(item);
+    }
   };
 
   const revertLatestCheckpoint = async (): Promise<void> => {
@@ -1092,6 +1116,7 @@ export async function initTaskpane(opts: {
       ?? formatSessionTitle(runtime.persistence.getSessionTitle());
 
     const closedItem: RecentlyClosedItem = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
       sessionId: runtime.persistence.getSessionId(),
       title: closeTitle,
       closedAt: new Date().toISOString(),
@@ -1108,9 +1133,7 @@ export async function initTaskpane(opts: {
         actionLabel: "Undo",
         duration: 9000,
         onAction: () => {
-          const itemToRestore = recentlyClosed.removeBySessionId(closedItem.sessionId);
-          if (!itemToRestore) return;
-          void reopenRecentlyClosedItem(itemToRestore);
+          void reopenRecentlyClosedById(closedItem.id);
         },
       });
     }

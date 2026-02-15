@@ -25,10 +25,24 @@ import {
   partitionSessionIdsByWorkbook,
 } from "../../workbook/session-association.js";
 
+const RESUME_ITEM_KIND_SESSION = "session";
+const RESUME_ITEM_KIND_RECENTLY_CLOSED = "recently_closed";
+
+type ResumeItemKind = typeof RESUME_ITEM_KIND_SESSION | typeof RESUME_ITEM_KIND_RECENTLY_CLOSED;
+
+export interface ResumeRecentlyClosedItem {
+  id: string;
+  sessionId: string;
+  title: string;
+  closedAt: string;
+  workbookId: string | null;
+}
+
 function buildResumeListItem(session: SessionMetadata): HTMLButtonElement {
   const button = document.createElement("button");
   button.className = "pi-welcome-provider pi-resume-item";
   button.dataset.id = session.id;
+  button.dataset.resumeKind = RESUME_ITEM_KIND_SESSION;
 
   const title = document.createElement("span");
   title.className = "pi-resume-item__title";
@@ -37,6 +51,25 @@ function buildResumeListItem(session: SessionMetadata): HTMLButtonElement {
   const meta = document.createElement("span");
   meta.className = "pi-resume-item__meta";
   meta.textContent = `${session.messageCount || 0} messages · ${formatRelativeDate(session.lastModified)}`;
+
+  button.append(title, meta);
+  return button;
+}
+
+function buildRecentlyClosedListItem(item: ResumeRecentlyClosedItem): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.className = "pi-welcome-provider pi-resume-item pi-resume-item--recent";
+  button.dataset.id = item.sessionId;
+  button.dataset.recentId = item.id;
+  button.dataset.resumeKind = RESUME_ITEM_KIND_RECENTLY_CLOSED;
+
+  const title = document.createElement("span");
+  title.className = "pi-resume-item__title";
+  title.textContent = item.title || "Untitled";
+
+  const meta = document.createElement("span");
+  meta.className = "pi-resume-item__meta";
+  meta.textContent = `Closed ${formatRelativeDate(item.closedAt)} · Reopens in new tab`;
 
   button.append(title, meta);
   return button;
@@ -73,11 +106,21 @@ export async function showResumeDialog(opts: {
   defaultTarget?: ResumeDialogTarget;
   onOpenInNewTab: (sessionData: SessionData) => Promise<void>;
   onReplaceCurrent: (sessionData: SessionData) => Promise<void>;
+  getRecentlyClosedItems?: () => readonly ResumeRecentlyClosedItem[];
+  onReopenRecentlyClosed?: (item: ResumeRecentlyClosedItem) => Promise<boolean>;
 }): Promise<void> {
   const storage = getAppStorage();
   const allSessions = await storage.sessions.getAllMetadata();
 
-  if (allSessions.length === 0) {
+  const getRecentlyClosedItems = (): ResumeRecentlyClosedItem[] => {
+    if (!opts.getRecentlyClosedItems) {
+      return [];
+    }
+
+    return [...opts.getRecentlyClosedItems()];
+  };
+
+  if (allSessions.length === 0 && getRecentlyClosedItems().length === 0) {
     showToast("No previous sessions");
     return;
   }
@@ -134,6 +177,40 @@ export async function showResumeDialog(opts: {
   const targetHint = document.createElement("div");
   targetHint.className = "pi-resume-target-hint";
 
+  const body = document.createElement("div");
+  body.className = "pi-overlay-body pi-resume-body";
+
+  const recentSection = document.createElement("section");
+  recentSection.className = "pi-overlay-section pi-resume-section";
+  recentSection.dataset.resumeSection = "recently-closed";
+
+  const recentTitle = document.createElement("h3");
+  recentTitle.className = "pi-overlay-section-title";
+  recentTitle.textContent = "Recently closed";
+
+  const recentHint = document.createElement("p");
+  recentHint.className = "pi-overlay-hint pi-resume-section-hint";
+  recentHint.textContent = "Reopen a recently closed tab directly in a new tab.";
+
+  const recentList = document.createElement("div");
+  recentList.className = "pi-resume-list pi-resume-list--recent";
+
+  recentSection.append(recentTitle, recentHint, recentList);
+
+  const savedSection = document.createElement("section");
+  savedSection.className = "pi-overlay-section pi-resume-section";
+  savedSection.dataset.resumeSection = "saved";
+
+  const savedTitle = document.createElement("h3");
+  savedTitle.className = "pi-overlay-section-title";
+  savedTitle.textContent = "Saved sessions";
+
+  const list = document.createElement("div");
+  list.className = "pi-resume-list";
+
+  savedSection.append(savedTitle, list);
+  body.append(recentSection, savedSection);
+
   const syncTargetButtons = () => {
     const isNewTab = selectedTarget === "new_tab";
 
@@ -157,9 +234,6 @@ export async function showResumeDialog(opts: {
 
   targetControls.append(openInNewTabButton, replaceCurrentButton);
 
-  const list = document.createElement("div");
-  list.className = "pi-resume-list";
-
   dialog.card.append(header, targetControls, targetHint);
   syncTargetButtons();
 
@@ -170,13 +244,13 @@ export async function showResumeDialog(opts: {
         checked: showAllWorkbooks,
         onToggle(checked) {
           showAllWorkbooks = checked;
-          renderList();
+          renderLists();
         },
       }),
     );
   }
 
-  dialog.card.appendChild(list);
+  dialog.card.appendChild(body);
 
   const getVisibleSessions = (): SessionMetadata[] => {
     if (showAllWorkbooks || workbookId === null) {
@@ -191,10 +265,46 @@ export async function showResumeDialog(opts: {
     return visible;
   };
 
-  const renderList = (): void => {
-    const sessions = getVisibleSessions().slice(0, 30);
+  const getVisibleRecentlyClosed = (): ResumeRecentlyClosedItem[] => {
+    const items = getRecentlyClosedItems();
+    if (showAllWorkbooks || workbookId === null) {
+      return items;
+    }
 
+    return items.filter((item) => item.workbookId === workbookId || item.workbookId === null);
+  };
+
+  let recentlyClosedById = new Map<string, ResumeRecentlyClosedItem>();
+
+  const reopenRecentlyClosedEntry = async (item: ResumeRecentlyClosedItem): Promise<boolean> => {
+    if (opts.onReopenRecentlyClosed) {
+      return opts.onReopenRecentlyClosed(item);
+    }
+
+    const sessionData = await storage.sessions.loadSession(item.sessionId);
+    if (!sessionData) {
+      showToast("Couldn't reopen session");
+      return false;
+    }
+
+    await opts.onOpenInNewTab(sessionData);
+    showToast(`Reopened: ${sessionData.title || "Untitled"}`);
+    return true;
+  };
+
+  const renderLists = (): void => {
+    const sessions = getVisibleSessions().slice(0, 30);
+    const recentlyClosedItems = getVisibleRecentlyClosed().slice(0, 6);
+
+    recentlyClosedById = new Map(recentlyClosedItems.map((item) => [item.id, item]));
+
+    recentList.replaceChildren();
     list.replaceChildren();
+
+    recentSection.hidden = recentlyClosedItems.length === 0;
+    for (const item of recentlyClosedItems) {
+      recentList.appendChild(buildRecentlyClosedListItem(item));
+    }
 
     if (sessions.length === 0) {
       const empty = document.createElement("div");
@@ -209,7 +319,7 @@ export async function showResumeDialog(opts: {
     }
   };
 
-  renderList();
+  renderLists();
 
   dialog.overlay.addEventListener("click", (event) => {
     const target = event.target;
@@ -221,7 +331,37 @@ export async function showResumeDialog(opts: {
     const id = item.dataset.id;
     if (!id) return;
 
+    const kindRaw = item.dataset.resumeKind;
+    const kind: ResumeItemKind = kindRaw === RESUME_ITEM_KIND_RECENTLY_CLOSED
+      ? RESUME_ITEM_KIND_RECENTLY_CLOSED
+      : RESUME_ITEM_KIND_SESSION;
+
     void (async () => {
+      if (kind === RESUME_ITEM_KIND_RECENTLY_CLOSED) {
+        const recentId = item.dataset.recentId;
+        if (!recentId) {
+          showToast("Session is no longer in recently closed");
+          renderLists();
+          return;
+        }
+
+        const recentEntry = recentlyClosedById.get(recentId);
+        if (!recentEntry) {
+          showToast("Session is no longer in recently closed");
+          renderLists();
+          return;
+        }
+
+        const reopened = await reopenRecentlyClosedEntry(recentEntry);
+        if (reopened) {
+          closeOverlay();
+          return;
+        }
+
+        renderLists();
+        return;
+      }
+
       const targetMode = selectedTarget;
 
       if (workbookId) {
