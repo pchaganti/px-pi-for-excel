@@ -37,6 +37,10 @@ class MemoryExternalSkillWorkspace {
     });
   }
 
+  listPaths(): string[] {
+    return Array.from(this.files.keys()).sort((left, right) => left.localeCompare(right));
+  }
+
   listFiles(): Promise<WorkspaceFileEntry[]> {
     const entries = Array.from(this.files.entries())
       .sort((left, right) => left[0].localeCompare(right[0]))
@@ -164,16 +168,16 @@ description: Wrong path depth.
 void test("upsertExternalAgentSkillInWorkspace installs and overwrites by skill name", async () => {
   const workspace = new MemoryExternalSkillWorkspace();
 
-  await upsertExternalAgentSkillInWorkspace({
-    workspace,
-    markdown: `---
+  workspace.seedTextFile(
+    "skills/external/legacy-copy/SKILL.md",
+    `---
 name: custom-skill
-description: First description.
+description: Legacy duplicate.
 ---
 
-# First
+# Legacy
 `,
-  });
+  );
 
   await upsertExternalAgentSkillInWorkspace({
     workspace,
@@ -191,6 +195,7 @@ description: Updated description.
   assert.equal(skills[0].name, "custom-skill");
   assert.equal(skills[0].description, "Updated description.");
   assert.equal(skills[0].location, "skills/external/custom-skill/SKILL.md");
+  assert.deepEqual(workspace.listPaths(), ["skills/external/custom-skill/SKILL.md"]);
 });
 
 void test("upsertExternalAgentSkillInWorkspace enforces expectedName when provided", async () => {
@@ -215,16 +220,26 @@ description: External custom skill.
 void test("removeExternalAgentSkillFromWorkspace removes by name and reports whether removed", async () => {
   const workspace = new MemoryExternalSkillWorkspace();
 
-  await upsertExternalAgentSkillInWorkspace({
-    workspace,
-    markdown: `---
+  workspace.seedTextFile(
+    "skills/external/custom-skill/SKILL.md",
+    `---
 name: custom-skill
-description: External custom skill.
+description: Canonical copy.
 ---
 
-# Custom
+# Canonical
 `,
-  });
+  );
+  workspace.seedTextFile(
+    "skills/external/legacy-copy/SKILL.md",
+    `---
+name: custom-skill
+description: Duplicate copy.
+---
+
+# Duplicate
+`,
+  );
 
   const removed = await removeExternalAgentSkillFromWorkspace({
     workspace,
@@ -234,6 +249,7 @@ description: External custom skill.
 
   const skillsAfterRemove = await loadExternalAgentSkillsFromWorkspace(workspace);
   assert.deepEqual(skillsAfterRemove, []);
+  assert.deepEqual(workspace.listPaths(), []);
 
   const removedMissing = await removeExternalAgentSkillFromWorkspace({
     workspace,

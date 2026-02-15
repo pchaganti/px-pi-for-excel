@@ -79,11 +79,7 @@ function buildExternalSkillDefinition(args: {
   };
 }
 
-/**
- * Loads external skills from the canonical Files workspace location:
- * `skills/external/<name>/SKILL.md`.
- */
-export async function loadExternalAgentSkillsFromWorkspace(
+async function loadAllExternalAgentSkillDefinitions(
   workspace: ExternalSkillWorkspace,
 ): Promise<AgentSkillDefinition[]> {
   const files = await workspace.listFiles();
@@ -91,7 +87,7 @@ export async function loadExternalAgentSkillsFromWorkspace(
     .filter((file) => isWorkspaceExternalSkillFile(file))
     .sort((left, right) => left.path.localeCompare(right.path));
 
-  const byName = new Map<string, AgentSkillDefinition>();
+  const loaded: AgentSkillDefinition[] = [];
 
   for (const file of externalFiles) {
     let readResult: Awaited<ReturnType<ExternalSkillWorkspace["readFile"]>>;
@@ -127,9 +123,26 @@ export async function loadExternalAgentSkillsFromWorkspace(
       continue;
     }
 
+    loaded.push(skill);
+  }
+
+  return loaded;
+}
+
+/**
+ * Loads external skills from the canonical Files workspace location:
+ * `skills/external/<name>/SKILL.md`.
+ */
+export async function loadExternalAgentSkillsFromWorkspace(
+  workspace: ExternalSkillWorkspace,
+): Promise<AgentSkillDefinition[]> {
+  const loaded = await loadAllExternalAgentSkillDefinitions(workspace);
+  const byName = new Map<string, AgentSkillDefinition>();
+
+  for (const skill of loaded) {
     const normalizedName = skill.name.toLowerCase();
     if (byName.has(normalizedName)) {
-      console.warn(`[skills] Duplicate external skill ignored: ${skill.name} (${file.path})`);
+      console.warn(`[skills] Duplicate external skill ignored: ${skill.name} (${skill.location})`);
       continue;
     }
 
@@ -170,6 +183,15 @@ export async function upsertExternalAgentSkillInWorkspace(args: {
   const location = getExternalSkillPath(parsed.frontmatter.name);
   await args.workspace.writeTextFile(location, args.markdown, "text/markdown");
 
+  const normalizedName = parsed.frontmatter.name.toLowerCase();
+  const duplicates = (await loadAllExternalAgentSkillDefinitions(args.workspace)).filter((skill) => {
+    return skill.name.toLowerCase() === normalizedName && skill.location !== location;
+  });
+
+  for (const duplicate of duplicates) {
+    await args.workspace.deleteFile(duplicate.location);
+  }
+
   return {
     name: parsed.frontmatter.name,
     location,
@@ -192,14 +214,19 @@ export async function removeExternalAgentSkillFromWorkspace(args: {
   name: string;
 }): Promise<boolean> {
   const normalizedName = normalizeSkillName(args.name).toLowerCase();
-  const externalSkills = await loadExternalAgentSkillsFromWorkspace(args.workspace);
+  const matches = (await loadAllExternalAgentSkillDefinitions(args.workspace)).filter((skill) => {
+    return skill.name.toLowerCase() === normalizedName;
+  });
 
-  const match = externalSkills.find((skill) => skill.name.toLowerCase() === normalizedName);
-  if (!match) {
+  if (matches.length === 0) {
     return false;
   }
 
-  await args.workspace.deleteFile(match.location);
+  const uniqueLocations = Array.from(new Set(matches.map((skill) => skill.location)));
+  for (const location of uniqueLocations) {
+    await args.workspace.deleteFile(location);
+  }
+
   return true;
 }
 
