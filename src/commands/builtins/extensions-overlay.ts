@@ -24,6 +24,7 @@ import {
   createOverlayInput,
   createOverlaySectionTitle,
 } from "../../ui/overlay-dialog.js";
+import { requestConfirmationDialog } from "../../ui/confirm-dialog.js";
 import { EXTENSIONS_OVERLAY_ID } from "../../ui/overlay-ids.js";
 import { showToast } from "../../ui/toast.js";
 
@@ -84,7 +85,7 @@ function getHighRiskGrantedCapabilities(status: ExtensionRuntimeStatus): Extensi
   return capabilities;
 }
 
-function confirmExtensionEnable(status: ExtensionRuntimeStatus): boolean {
+async function confirmExtensionEnable(status: ExtensionRuntimeStatus): Promise<boolean> {
   if (status.trust === "builtin") {
     return true;
   }
@@ -95,8 +96,6 @@ function confirmExtensionEnable(status: ExtensionRuntimeStatus): boolean {
   }
 
   const lines = [
-    `Enable extension "${status.name}" with higher-risk permissions?`,
-    "",
     "Granted higher-risk permissions:",
     ...highRiskCapabilities.map((capability) => `- ${describeExtensionCapability(capability)}`),
     "",
@@ -105,19 +104,24 @@ function confirmExtensionEnable(status: ExtensionRuntimeStatus): boolean {
     "You can edit permissions later in /extensions.",
   ];
 
-  return window.confirm(lines.join("\n"));
+  return requestConfirmationDialog({
+    title: `Enable extension \"${status.name}\"?`,
+    message: lines.join("\n"),
+    confirmLabel: "Enable",
+    cancelLabel: "Cancel",
+    confirmButtonTone: "danger",
+    restoreFocusOnClose: false,
+  });
 }
 
-function confirmExtensionInstall(args: {
+async function confirmExtensionInstall(args: {
   name: string;
   sourceLabel: string;
   capabilities: readonly ExtensionCapability[];
-}): boolean {
+}): Promise<boolean> {
   const highRiskCapabilities = args.capabilities.filter((capability) => HIGH_RISK_CAPABILITIES.has(capability));
 
   const lines = [
-    `Install extension "${args.name}" from ${args.sourceLabel}?`,
-    "",
     "Default granted permissions:",
     ...(args.capabilities.length > 0
       ? args.capabilities.map((capability) => `- ${describeExtensionCapability(capability)}`)
@@ -136,7 +140,14 @@ function confirmExtensionInstall(args: {
 
   lines.push("", "You can review/edit permissions later in /extensions.");
 
-  return window.confirm(lines.join("\n"));
+  return requestConfirmationDialog({
+    title: `Install extension \"${args.name}\"?`,
+    message: [`Source: ${args.sourceLabel}`, "", ...lines].join("\n"),
+    confirmLabel: "Install",
+    cancelLabel: "Cancel",
+    confirmButtonTone: highRiskCapabilities.length > 0 ? "danger" : "primary",
+    restoreFocusOnClose: false,
+  });
 }
 
 function createReadOnlyCodeBlock(text: string): HTMLTextAreaElement {
@@ -589,15 +600,20 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
 
     const toggleButton = createOverlayButton({ text: status.enabled ? "Disable" : "Enable" });
     toggleButton.addEventListener("click", () => {
-      const nextEnabled = !status.enabled;
+      void (async () => {
+        const nextEnabled = !status.enabled;
 
-      if (nextEnabled && !confirmExtensionEnable(status)) {
-        return;
-      }
+        if (nextEnabled) {
+          const confirmed = await confirmExtensionEnable(status);
+          if (!confirmed) {
+            return;
+          }
+        }
 
-      void runAction(async () => {
-        await manager.setExtensionEnabled(status.id, nextEnabled);
-      });
+        await runAction(async () => {
+          await manager.setExtensionEnabled(status.id, nextEnabled);
+        });
+      })();
     });
 
     const reloadButton = createOverlayButton({ text: "Reload" });
@@ -613,14 +629,23 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
       className: "pi-overlay-btn--danger",
     });
     uninstallButton.addEventListener("click", () => {
-      const confirmed = window.confirm(`Uninstall extension "${status.name}"?`);
-      if (!confirmed) {
-        return;
-      }
+      void (async () => {
+        const confirmed = await requestConfirmationDialog({
+          title: `Uninstall extension \"${status.name}\"?`,
+          message: "This extension and its local storage data will be removed.",
+          confirmLabel: "Uninstall",
+          cancelLabel: "Cancel",
+          confirmButtonTone: "danger",
+          restoreFocusOnClose: false,
+        });
+        if (!confirmed) {
+          return;
+        }
 
-      void runAction(async () => {
-        await manager.uninstallExtension(status.id);
-      });
+        await runAction(async () => {
+          await manager.uninstallExtension(status.id);
+        });
+      })();
     });
 
     actions.append(toggleButton, reloadButton, uninstallButton);
@@ -674,17 +699,25 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
   });
 
   sandboxEnableButton.addEventListener("click", () => {
-    const confirmed = window.confirm(
-      "Enable host-runtime fallback? Untrusted extensions will run in host runtime until fallback is disabled.",
-    );
-    if (!confirmed) {
-      return;
-    }
+    void (async () => {
+      const confirmed = await requestConfirmationDialog({
+        title: "Enable host-runtime fallback?",
+        message: "Untrusted extensions will run in host runtime until fallback is disabled.",
+        confirmLabel: "Enable fallback",
+        cancelLabel: "Cancel",
+        confirmButtonTone: "danger",
+        restoreFocusOnClose: false,
+      });
+      if (!confirmed) {
+        return;
+      }
 
-    void runAction(() => {
-      setExperimentalFeatureEnabled("extension_sandbox_runtime", true);
-      showToast("Extension host-runtime fallback enabled.");
-    });
+      await runAction(() => {
+        setExperimentalFeatureEnabled("extension_sandbox_runtime", true);
+        showToast("Extension host-runtime fallback enabled.");
+        return Promise.resolve();
+      });
+    })();
   });
 
   sandboxDisableButton.addEventListener("click", () => {
@@ -695,55 +728,59 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
   });
 
   installUrlButton.addEventListener("click", () => {
-    const name = installUrlName.value.trim();
-    const url = installUrlInput.value.trim();
-    if (name.length === 0 || url.length === 0) {
-      showToast("Extensions: Provide both name and URL");
-      return;
-    }
+    void (async () => {
+      const name = installUrlName.value.trim();
+      const url = installUrlInput.value.trim();
+      if (name.length === 0 || url.length === 0) {
+        showToast("Extensions: Provide both name and URL");
+        return;
+      }
 
-    const defaultPermissions = getDefaultPermissionsForTrust("remote-url");
-    const defaultCapabilities = listGrantedExtensionCapabilities(defaultPermissions);
-    const confirmed = confirmExtensionInstall({
-      name,
-      sourceLabel: `remote URL (${url})`,
-      capabilities: defaultCapabilities,
-    });
-    if (!confirmed) {
-      return;
-    }
+      const defaultPermissions = getDefaultPermissionsForTrust("remote-url");
+      const defaultCapabilities = listGrantedExtensionCapabilities(defaultPermissions);
+      const confirmed = await confirmExtensionInstall({
+        name,
+        sourceLabel: `remote URL (${url})`,
+        capabilities: defaultCapabilities,
+      });
+      if (!confirmed) {
+        return;
+      }
 
-    void runAction(async () => {
-      await manager.installFromUrl(name, url);
-      installUrlInput.value = "";
-      showToast(`Installed extension: ${name}`);
-    });
+      await runAction(async () => {
+        await manager.installFromUrl(name, url);
+        installUrlInput.value = "";
+        showToast(`Installed extension: ${name}`);
+      });
+    })();
   });
 
   installCodeButton.addEventListener("click", () => {
-    const name = installCodeName.value.trim();
-    const code = installCodeText.value;
-    if (name.length === 0) {
-      showToast("Extensions: Provide an extension name");
-      return;
-    }
+    void (async () => {
+      const name = installCodeName.value.trim();
+      const code = installCodeText.value;
+      if (name.length === 0) {
+        showToast("Extensions: Provide an extension name");
+        return;
+      }
 
-    const defaultPermissions = getDefaultPermissionsForTrust("inline-code");
-    const defaultCapabilities = listGrantedExtensionCapabilities(defaultPermissions);
-    const confirmed = confirmExtensionInstall({
-      name,
-      sourceLabel: "pasted code",
-      capabilities: defaultCapabilities,
-    });
-    if (!confirmed) {
-      return;
-    }
+      const defaultPermissions = getDefaultPermissionsForTrust("inline-code");
+      const defaultCapabilities = listGrantedExtensionCapabilities(defaultPermissions);
+      const confirmed = await confirmExtensionInstall({
+        name,
+        sourceLabel: "pasted code",
+        capabilities: defaultCapabilities,
+      });
+      if (!confirmed) {
+        return;
+      }
 
-    void runAction(async () => {
-      await manager.installFromCode(name, code);
-      installCodeText.value = "";
-      showToast(`Installed extension: ${name}`);
-    });
+      await runAction(async () => {
+        await manager.installFromCode(name, code);
+        installCodeText.value = "";
+        showToast(`Installed extension: ${name}`);
+      });
+    })();
   });
 
   copyTemplateButton.addEventListener("click", () => {

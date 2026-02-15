@@ -16,6 +16,7 @@ import {
   createOverlayDialog,
   createOverlayHeader,
 } from "../../ui/overlay-dialog.js";
+import { requestConfirmationDialog } from "../../ui/confirm-dialog.js";
 import { RESUME_OVERLAY_ID } from "../../ui/overlay-ids.js";
 import { showToast } from "../../ui/toast.js";
 import { formatWorkbookLabel, getWorkbookContext } from "../../workbook/context.js";
@@ -226,7 +227,13 @@ export async function showResumeDialog(opts: {
       if (workbookId) {
         const linkedWorkbookId = await getSessionWorkbookId(storage.settings, id);
         if (linkedWorkbookId && linkedWorkbookId !== workbookId) {
-          const proceed = window.confirm(getCrossWorkbookResumeConfirmMessage(targetMode));
+          const proceed = await requestConfirmationDialog({
+            title: "Resume session from another workbook?",
+            message: getCrossWorkbookResumeConfirmMessage(targetMode),
+            confirmLabel: "Resume anyway",
+            cancelLabel: "Cancel",
+            restoreFocusOnClose: false,
+          });
           if (!proceed) return;
         }
       }

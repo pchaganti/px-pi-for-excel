@@ -16,6 +16,7 @@ import {
   createOverlayDialog,
   createOverlayHeader,
 } from "../../ui/overlay-dialog.js";
+import { requestConfirmationDialog } from "../../ui/confirm-dialog.js";
 import { RECOVERY_OVERLAY_ID } from "../../ui/overlay-ids.js";
 import { showToast } from "../../ui/toast.js";
 
@@ -389,10 +390,19 @@ export async function showRecoveryDialog(opts: {
       deleteButton.addEventListener("click", () => {
         if (busy) return;
 
-        const proceed = window.confirm("Delete this backup?");
-        if (!proceed) return;
-
         void (async () => {
+          const proceed = await requestConfirmationDialog({
+            title: "Delete this backup?",
+            message: `Backup: ${checkpoint.address} (#${shortId(checkpoint.id)})`,
+            confirmLabel: "Delete",
+            cancelLabel: "Cancel",
+            confirmButtonTone: "danger",
+            restoreFocusOnClose: false,
+          });
+          if (!proceed || busy) {
+            return;
+          }
+
           setBusy(true);
           statusText.textContent = "Deleting…";
 
@@ -517,10 +527,19 @@ export async function showRecoveryDialog(opts: {
   clearButton.addEventListener("click", () => {
     if (busy || allCheckpoints.length === 0) return;
 
-    const proceed = window.confirm(`Delete all ${allCheckpoints.length} backups for this workbook?`);
-    if (!proceed) return;
-
     void (async () => {
+      const proceed = await requestConfirmationDialog({
+        title: "Delete all backups for this workbook?",
+        message: `This will delete ${allCheckpoints.length} backup${allCheckpoints.length === 1 ? "" : "s"}.`,
+        confirmLabel: "Delete all",
+        cancelLabel: "Cancel",
+        confirmButtonTone: "danger",
+        restoreFocusOnClose: false,
+      });
+      if (!proceed || busy) {
+        return;
+      }
+
       setBusy(true);
       statusText.textContent = "Clearing…";
       try {

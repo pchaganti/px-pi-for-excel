@@ -7,8 +7,8 @@ import {
   createOverlayDialog,
   createOverlayDialogManager,
 } from "../src/ui/overlay-dialog.ts";
-import { TOOL_APPROVAL_OVERLAY_ID } from "../src/ui/overlay-ids.ts";
-import { requestToolApprovalDialog } from "../src/taskpane/tool-approval-dialog.ts";
+import { CONFIRM_DIALOG_OVERLAY_ID } from "../src/ui/overlay-ids.ts";
+import { requestConfirmationDialog } from "../src/ui/confirm-dialog.ts";
 import { installFakeDom } from "./fake-dom.test.ts";
 
 void test("closeOverlayById returns false when overlay does not exist", () => {
@@ -138,17 +138,18 @@ void test("overlay dialog manager reuses mounted dialog and resets after dismiss
   }
 });
 
-void test("tool approval dialog resolves true when approval button is clicked", async () => {
+void test("confirmation dialog resolves true when confirm button is clicked", async () => {
   const { document, restore } = installFakeDom();
 
   try {
-    const pendingApproval = requestToolApprovalDialog({
-      title: "Allow workbook mutation in Safe mode?",
+    const pendingApproval = requestConfirmationDialog({
+      title: "Allow workbook mutation in Confirm mode?",
       message: "Tool: write_cells",
       confirmLabel: "Allow once",
+      restoreFocusOnClose: false,
     });
 
-    const overlay = document.getElementById(TOOL_APPROVAL_OVERLAY_ID);
+    const overlay = document.getElementById(CONFIRM_DIALOG_OVERLAY_ID);
     assert.ok(overlay);
 
     const buttons = overlay.querySelectorAll("button");
@@ -174,7 +175,7 @@ void test("tool approval dialog resolves true when approval button is clicked", 
 
     const approved = await pendingApproval;
     assert.equal(approved, true);
-    assert.equal(document.getElementById(TOOL_APPROVAL_OVERLAY_ID), null);
+    assert.equal(document.getElementById(CONFIRM_DIALOG_OVERLAY_ID), null);
   } finally {
     restore();
   }

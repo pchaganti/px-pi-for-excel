@@ -16,6 +16,7 @@ import {
   createOverlayDialog,
   createOverlayHeader,
 } from "./overlay-dialog.js";
+import { requestConfirmationDialog } from "./confirm-dialog.js";
 import { FILES_WORKSPACE_OVERLAY_ID } from "./overlay-ids.js";
 import {
   buildFilesDialogFilterOptions,
@@ -498,14 +499,25 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       deleteButton.title = "Built-in docs are read-only.";
     }
     deleteButton.addEventListener("click", () => {
-      const ok = window.confirm(`Delete '${file.path}'?`);
-      if (!ok) return;
+      void (async () => {
+        const ok = await requestConfirmationDialog({
+          title: "Delete file?",
+          message: file.path,
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+          confirmButtonTone: "danger",
+          restoreFocusOnClose: false,
+        });
+        if (!ok) {
+          return;
+        }
 
-      void workspace.deleteFile(file.path, {
-        audit: DIALOG_AUDIT_CONTEXT,
-      }).catch((error: unknown) => {
-        showToast(`Delete failed: ${getErrorMessage(error)}`);
-      });
+        await workspace.deleteFile(file.path, {
+          audit: DIALOG_AUDIT_CONTEXT,
+        }).catch((error: unknown) => {
+          showToast(`Delete failed: ${getErrorMessage(error)}`);
+        });
+      })();
     });
 
     actions.append(openButton, downloadButton, renameButton, deleteButton);
