@@ -88,16 +88,16 @@ void test("setIntegrationEnabledInScope toggles session/workbook flags", async (
   );
 });
 
-void test("external tools gate defaults off and can be enabled", async () => {
+void test("external tools gate defaults on and can be disabled", async () => {
   const settings = new MemorySettingsStore();
 
-  assert.equal(await getExternalToolsEnabled(settings), false);
-
-  await setExternalToolsEnabled(settings, true);
   assert.equal(await getExternalToolsEnabled(settings), true);
 
   await setExternalToolsEnabled(settings, false);
   assert.equal(await getExternalToolsEnabled(settings), false);
+
+  await setExternalToolsEnabled(settings, true);
+  assert.equal(await getExternalToolsEnabled(settings), true);
 });
 
 void test("unconfigured session scope is explicit empty", async () => {

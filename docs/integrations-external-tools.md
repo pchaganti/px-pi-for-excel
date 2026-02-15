@@ -12,11 +12,11 @@ Issue: [#24](https://github.com/tmustier/pi-for-excel/issues/24)
   - clear warnings for network/tool access
   - active integrations shown in the status bar
 - **Global safety gate**: `external.tools.enabled`
-  - default: **off**
-  - blocks all external integration tools until user enables it
+  - default: **on**
+  - when disabled, blocks all external integration tools
 - **Web Search integration**
   - tools: `web_search`, `fetch_page`
-  - providers: Serper.dev (default), Tavily, Brave Search
+  - providers: Jina (default, no key required), Serper.dev, Tavily, Brave Search
   - configurable provider + provider-specific API key in `/tools` (or `/integrations`)
   - result output includes explicit `Sent:` attribution and provider/transport metadata
 - **MCP integration**
