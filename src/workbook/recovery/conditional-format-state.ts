@@ -5,33 +5,33 @@ import { isRecord } from "../../utils/type-guards.js";
 import { cloneRecoveryConditionalFormatRules } from "./clone.js";
 import type {
   RecoveryConditionalColorScaleCriterion,
-  RecoveryConditionalDataBarRule,
   RecoveryConditionalFormatCaptureResult,
   RecoveryConditionalFormatRule,
   RecoveryConditionalFormatRuleType,
-  RecoveryConditionalIcon,
-  RecoveryConditionalIconCriterion,
 } from "./types.js";
 
 import {
+  captureColorScaleCriterion,
+  captureDataBarRule,
+  captureIconCriterion,
   isRecoveryConditionalCellValueOperator,
-  isRecoveryConditionalColorCriterionType,
   isRecoveryConditionalColorScaleState,
   isRecoveryConditionalDataBarAxisFormat,
   isRecoveryConditionalDataBarDirection,
-  isRecoveryConditionalDataBarRuleType,
   isRecoveryConditionalDataBarState,
-  isRecoveryConditionalIconCriterionOperator,
-  isRecoveryConditionalIconCriterionType,
   isRecoveryConditionalIconSet,
   isRecoveryConditionalIconSetState,
   isRecoveryConditionalPresetCriterion,
   isRecoveryConditionalTextOperator,
   isRecoveryConditionalTopBottomCriterionType,
+  normalizeConditionalFormatAddress,
   normalizeConditionalFormatType,
   normalizeOptionalBoolean,
   normalizeOptionalString,
   normalizeUnderline,
+  toColorScaleCriterion,
+  toDataBarRule,
+  toIconCriterion,
 } from "./conditional-format-normalization.js";
 
 function captureRuleFormatting(format: Excel.ConditionalRangeFormat): {
@@ -102,176 +102,6 @@ interface ConditionalFormatRuleHandler {
     captureContext: ConditionalFormatRuleCaptureContext,
   ) => ConditionalFormatRuleCaptureResult;
   apply: (range: Excel.Range, targetAddress: string, rule: RecoveryConditionalFormatRule) => void;
-}
-
-function normalizeConditionalFormatAddress(value: unknown): string | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function captureDataBarRule(value: unknown): RecoveryConditionalDataBarRule | null {
-  if (!isRecord(value)) return null;
-
-  const type = value.type;
-  if (!isRecoveryConditionalDataBarRuleType(type)) {
-    return null;
-  }
-
-  const formula = value.formula;
-  if (formula !== undefined && typeof formula !== "string") {
-    return null;
-  }
-
-  return {
-    type,
-    formula: typeof formula === "string" ? formula : undefined,
-  };
-}
-
-function captureColorScaleCriterion(value: unknown): RecoveryConditionalColorScaleCriterion | null {
-  if (!isRecord(value)) return null;
-
-  const type = value.type;
-  if (!isRecoveryConditionalColorCriterionType(type)) {
-    return null;
-  }
-
-  const formula = value.formula;
-  const color = value.color;
-
-  if (formula !== undefined && typeof formula !== "string") {
-    return null;
-  }
-
-  if (color !== undefined && typeof color !== "string") {
-    return null;
-  }
-
-  return {
-    type,
-    formula: typeof formula === "string" ? formula : undefined,
-    color: typeof color === "string" ? color : undefined,
-  };
-}
-
-function captureConditionalIcon(value: unknown): RecoveryConditionalIcon | null {
-  if (!isRecord(value)) return null;
-
-  if (!isRecoveryConditionalIconSet(value.set)) {
-    return null;
-  }
-
-  if (typeof value.index !== "number" || !Number.isFinite(value.index)) {
-    return null;
-  }
-
-  return {
-    set: value.set,
-    index: value.index,
-  };
-}
-
-function captureIconCriterion(value: unknown): RecoveryConditionalIconCriterion | null {
-  if (!isRecord(value)) return null;
-
-  const type = value.type;
-  const operator = value.operator;
-  const formula = value.formula;
-
-  if (!isRecoveryConditionalIconCriterionType(type)) {
-    return null;
-  }
-
-  if (!isRecoveryConditionalIconCriterionOperator(operator)) {
-    return null;
-  }
-
-  if (typeof formula !== "string") {
-    return null;
-  }
-
-  let customIcon: RecoveryConditionalIcon | undefined;
-  if (value.customIcon !== undefined) {
-    const capturedCustomIcon = captureConditionalIcon(value.customIcon);
-    if (!capturedCustomIcon) {
-      return null;
-    }
-    customIcon = capturedCustomIcon;
-  }
-
-  return {
-    type,
-    operator,
-    formula,
-    customIcon,
-  };
-}
-
-function toDataBarRule(rule: RecoveryConditionalDataBarRule): Excel.ConditionalDataBarRule {
-  if (typeof rule.formula === "string") {
-    return {
-      type: rule.type,
-      formula: rule.formula,
-    };
-  }
-
-  return {
-    type: rule.type,
-  };
-}
-
-function toColorScaleCriterion(
-  criterion: RecoveryConditionalColorScaleCriterion,
-): Excel.ConditionalColorScaleCriterion {
-  if (typeof criterion.formula === "string" && typeof criterion.color === "string") {
-    return {
-      type: criterion.type,
-      formula: criterion.formula,
-      color: criterion.color,
-    };
-  }
-
-  if (typeof criterion.formula === "string") {
-    return {
-      type: criterion.type,
-      formula: criterion.formula,
-    };
-  }
-
-  if (typeof criterion.color === "string") {
-    return {
-      type: criterion.type,
-      color: criterion.color,
-    };
-  }
-
-  return {
-    type: criterion.type,
-  };
-}
-
-function toIconCriterion(criterion: RecoveryConditionalIconCriterion): Excel.ConditionalIconCriterion {
-  if (criterion.customIcon) {
-    return {
-      type: criterion.type,
-      operator: criterion.operator,
-      formula: criterion.formula,
-      customIcon: {
-        set: criterion.customIcon.set,
-        index: criterion.customIcon.index,
-      },
-    };
-  }
-
-  return {
-    type: criterion.type,
-    operator: criterion.operator,
-    formula: criterion.formula,
-  };
 }
 
 const CONDITIONAL_FORMAT_RULE_HANDLERS = {
@@ -812,7 +642,7 @@ const CONDITIONAL_FORMAT_RULE_HANDLERS = {
         };
       }
 
-      const criteria: RecoveryConditionalIconCriterion[] = [];
+      const criteria: NonNullable<RecoveryConditionalFormatRule["iconSet"]>["criteria"] = [];
       for (const criterion of criteriaRaw) {
         const captured = captureIconCriterion(criterion);
         if (!captured) {

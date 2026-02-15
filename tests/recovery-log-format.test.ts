@@ -23,9 +23,16 @@ import {
   validateStringGrid,
 } from "../src/workbook/recovery/format-state-utils.ts";
 import {
+  captureColorScaleCriterion,
+  captureDataBarRule,
+  captureIconCriterion,
   isRecoveryConditionalDataBarState,
   isRecoveryConditionalIconSetState,
+  normalizeConditionalFormatAddress,
   normalizeConditionalFormatType,
+  toColorScaleCriterion,
+  toDataBarRule,
+  toIconCriterion,
 } from "../src/workbook/recovery/conditional-format-normalization.ts";
 import {
   createInMemorySettingsStore,
@@ -192,12 +199,57 @@ void test("conditional-format guards validate data-bar and icon-set rule state",
       style: "ThreeTrafficLights1",
       reverseIconOrder: false,
       showIconOnly: false,
-      criteria: [
-        { type: "Percent", operator: "LessThan", formula: "0" },
-      ],
+      criteria: [{ type: "Percent", operator: "LessThan", formula: "0" }],
     }),
     false,
   );
+});
+
+void test("conditional-format helpers capture and serialize rule fragments", () => {
+  assert.equal(normalizeConditionalFormatAddress(" Sheet1!A1:A3 "), "Sheet1!A1:A3");
+  assert.equal(normalizeConditionalFormatAddress("  "), undefined);
+
+  assert.deepEqual(captureDataBarRule({ type: "Percentile", formula: "90" }), {
+    type: "Percentile",
+    formula: "90",
+  });
+  assert.equal(captureDataBarRule({ type: "Percentile", formula: 90 }), null);
+  assert.deepEqual(toDataBarRule({ type: "LowestValue" }), { type: "LowestValue" });
+
+  assert.deepEqual(captureColorScaleCriterion({ type: "Percentile", formula: "50", color: "#FFEB84" }), {
+    type: "Percentile",
+    formula: "50",
+    color: "#FFEB84",
+  });
+  assert.equal(captureColorScaleCriterion({ type: "Percentile", color: 10 }), null);
+  assert.deepEqual(toColorScaleCriterion({ type: "HighestValue", color: "#63BE7B" }), {
+    type: "HighestValue",
+    color: "#63BE7B",
+  });
+
+  const iconCriterion = captureIconCriterion({
+    type: "Percent",
+    operator: "GreaterThanOrEqual",
+    formula: "67",
+    customIcon: { set: "ThreeTrafficLights1", index: 2 },
+  });
+
+  assert.deepEqual(iconCriterion, {
+    type: "Percent",
+    operator: "GreaterThanOrEqual",
+    formula: "67",
+    customIcon: { set: "ThreeTrafficLights1", index: 2 },
+  });
+  assert.equal(captureIconCriterion({ type: "Percent", operator: "LessThan", formula: "67" }), null);
+
+  if (iconCriterion) {
+    assert.deepEqual(toIconCriterion(iconCriterion), {
+      type: "Percent",
+      operator: "GreaterThanOrEqual",
+      formula: "67",
+      customIcon: { set: "ThreeTrafficLights1", index: 2 },
+    });
+  }
 });
 
 void test("persisted format checkpoints retain dimension state", async () => {

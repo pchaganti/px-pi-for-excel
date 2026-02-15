@@ -394,3 +394,173 @@ export function isRecoveryConditionalIconSetState(value: unknown): value is Reco
   if (!value.criteria.every((criterion) => isRecoveryConditionalIconCriterion(criterion))) return false;
   return true;
 }
+
+export function normalizeConditionalFormatAddress(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+export function captureDataBarRule(value: unknown): RecoveryConditionalDataBarRule | null {
+  if (!isRecord(value)) return null;
+
+  const type = value.type;
+  if (!isRecoveryConditionalDataBarRuleType(type)) {
+    return null;
+  }
+
+  const formula = value.formula;
+  if (formula !== undefined && typeof formula !== "string") {
+    return null;
+  }
+
+  return {
+    type,
+    formula: typeof formula === "string" ? formula : undefined,
+  };
+}
+
+export function captureColorScaleCriterion(value: unknown): RecoveryConditionalColorScaleCriterion | null {
+  if (!isRecord(value)) return null;
+
+  const type = value.type;
+  if (!isRecoveryConditionalColorCriterionType(type)) {
+    return null;
+  }
+
+  const formula = value.formula;
+  const color = value.color;
+
+  if (formula !== undefined && typeof formula !== "string") {
+    return null;
+  }
+
+  if (color !== undefined && typeof color !== "string") {
+    return null;
+  }
+
+  return {
+    type,
+    formula: typeof formula === "string" ? formula : undefined,
+    color: typeof color === "string" ? color : undefined,
+  };
+}
+
+export function captureConditionalIcon(value: unknown): RecoveryConditionalIcon | null {
+  if (!isRecord(value)) return null;
+
+  if (!isRecoveryConditionalIconSet(value.set)) {
+    return null;
+  }
+
+  if (typeof value.index !== "number" || !Number.isFinite(value.index)) {
+    return null;
+  }
+
+  return {
+    set: value.set,
+    index: value.index,
+  };
+}
+
+export function captureIconCriterion(value: unknown): RecoveryConditionalIconCriterion | null {
+  if (!isRecord(value)) return null;
+
+  const type = value.type;
+  const operator = value.operator;
+  const formula = value.formula;
+
+  if (!isRecoveryConditionalIconCriterionType(type)) {
+    return null;
+  }
+
+  if (!isRecoveryConditionalIconCriterionOperator(operator)) {
+    return null;
+  }
+
+  if (typeof formula !== "string") {
+    return null;
+  }
+
+  let customIcon: RecoveryConditionalIcon | undefined;
+  if (value.customIcon !== undefined) {
+    const capturedCustomIcon = captureConditionalIcon(value.customIcon);
+    if (!capturedCustomIcon) {
+      return null;
+    }
+    customIcon = capturedCustomIcon;
+  }
+
+  return {
+    type,
+    operator,
+    formula,
+    customIcon,
+  };
+}
+
+export function toDataBarRule(rule: RecoveryConditionalDataBarRule): Excel.ConditionalDataBarRule {
+  if (typeof rule.formula === "string") {
+    return {
+      type: rule.type,
+      formula: rule.formula,
+    };
+  }
+
+  return {
+    type: rule.type,
+  };
+}
+
+export function toColorScaleCriterion(
+  criterion: RecoveryConditionalColorScaleCriterion,
+): Excel.ConditionalColorScaleCriterion {
+  if (typeof criterion.formula === "string" && typeof criterion.color === "string") {
+    return {
+      type: criterion.type,
+      formula: criterion.formula,
+      color: criterion.color,
+    };
+  }
+
+  if (typeof criterion.formula === "string") {
+    return {
+      type: criterion.type,
+      formula: criterion.formula,
+    };
+  }
+
+  if (typeof criterion.color === "string") {
+    return {
+      type: criterion.type,
+      color: criterion.color,
+    };
+  }
+
+  return {
+    type: criterion.type,
+  };
+}
+
+export function toIconCriterion(criterion: RecoveryConditionalIconCriterion): Excel.ConditionalIconCriterion {
+  if (criterion.customIcon) {
+    return {
+      type: criterion.type,
+      operator: criterion.operator,
+      formula: criterion.formula,
+      customIcon: {
+        set: criterion.customIcon.set,
+        index: criterion.customIcon.index,
+      },
+    };
+  }
+
+  return {
+    type: criterion.type,
+    operator: criterion.operator,
+    formula: criterion.formula,
+  };
+}
