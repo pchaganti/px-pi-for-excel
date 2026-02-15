@@ -44,6 +44,19 @@ function run(command, args, options = {}) {
   }
 }
 
+function tryRun(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    stdio: "inherit",
+    ...options,
+  });
+
+  if (result.error) {
+    return false;
+  }
+
+  return result.status === 0 && !result.signal;
+}
+
 function ensureMkcert() {
   if (commandExists("mkcert")) {
     return;
@@ -84,7 +97,16 @@ function ensureCertificates() {
   ensureMkcert();
 
   console.log("[pi-for-excel-proxy] Generating local HTTPS certificates...");
-  run("mkcert", ["-install"]);
+  const installSucceeded = tryRun("mkcert", ["-install"]);
+  if (!installSucceeded) {
+    const fallbackSucceeded = tryRun("mkcert", ["install"]);
+    if (!fallbackSucceeded) {
+      console.error("[pi-for-excel-proxy] Failed to install mkcert local CA.");
+      console.error("[pi-for-excel-proxy] Tried: mkcert -install, mkcert install");
+      process.exit(1);
+    }
+  }
+
   run("mkcert", ["-key-file", keyPath, "-cert-file", certPath, "localhost"], {
     cwd: certDir,
   });
