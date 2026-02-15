@@ -512,76 +512,74 @@ export function showExtensionsDialog(manager: ExtensionRuntimeManager): void {
       details.appendChild(runtimeWarning);
     }
 
-    if (!isBuiltin) {
-      const permissionsDisclosure = document.createElement("details");
-      permissionsDisclosure.className = "pi-ext-permissions-disclosure";
+    const permissionsDisclosure = document.createElement("details");
+    permissionsDisclosure.className = "pi-ext-permissions-disclosure";
 
-      const permissionsSummary = document.createElement("summary");
-      permissionsSummary.textContent = `Permissions (${grantedCapabilities.size})`;
-      permissionsDisclosure.appendChild(permissionsSummary);
+    const permissionsSummary = document.createElement("summary");
+    permissionsSummary.textContent = `Permissions (${grantedCapabilities.size})`;
+    permissionsDisclosure.appendChild(permissionsSummary);
 
-      const permissionsEditor = document.createElement("div");
-      permissionsEditor.className = "pi-ext-installed-row__permissions-editor";
+    const permissionsEditor = document.createElement("div");
+    permissionsEditor.className = "pi-ext-installed-row__permissions-editor";
 
-      for (const capability of allCapabilities) {
-        const toggleLabel = document.createElement("label");
-        toggleLabel.className = "pi-ext-installed-row__perm-toggle";
+    for (const capability of allCapabilities) {
+      const toggleLabel = document.createElement("label");
+      toggleLabel.className = "pi-ext-installed-row__perm-toggle";
 
-        const toggle = document.createElement("input");
-        toggle.type = "checkbox";
-        toggle.checked = grantedCapabilities.has(capability)
-          || isExtensionCapabilityAllowed(status.permissions, capability);
+      const toggle = document.createElement("input");
+      toggle.type = "checkbox";
+      toggle.checked = grantedCapabilities.has(capability)
+        || isExtensionCapabilityAllowed(status.permissions, capability);
 
-        const toggleText = document.createElement("span");
-        toggleText.textContent = describeExtensionCapability(capability);
+      const toggleText = document.createElement("span");
+      toggleText.textContent = describeExtensionCapability(capability);
 
-        const riskLabel = getCapabilityRiskLabel(capability);
-        if (riskLabel) {
-          const risk = document.createElement("span");
-          risk.textContent = `(${riskLabel})`;
-          risk.className = "pi-ext-installed-row__risk pi-overlay-text-warning";
-          toggleText.append(" ", risk);
-        }
-
-        toggleLabel.append(toggle, toggleText);
-        permissionsEditor.appendChild(toggleLabel);
-
-        toggle.addEventListener("change", () => {
-          const nextAllowed = toggle.checked;
-          toggle.disabled = true;
-
-          void runAction(async () => {
-            await manager.setExtensionCapability(status.id, capability, nextAllowed);
-
-            const updated = manager.list().find((entry) => entry.id === status.id);
-            if (!updated) {
-              showToast(`Updated permissions for ${status.name}.`);
-              return;
-            }
-
-            if (!updated.enabled) {
-              showToast(`Updated permissions for ${status.name}.`);
-              return;
-            }
-
-            if (updated.lastError) {
-              showToast(`Updated permissions for ${status.name}; reload failed (see Failed to load).`);
-              return;
-            }
-
-            if (updated.loaded) {
-              showToast(`Updated permissions for ${status.name}; extension reloaded.`);
-              return;
-            }
-
-            showToast(`Updated permissions for ${status.name}.`);
-          });
-        });
+      const riskLabel = getCapabilityRiskLabel(capability);
+      if (riskLabel) {
+        const risk = document.createElement("span");
+        risk.textContent = `(${riskLabel})`;
+        risk.className = "pi-ext-installed-row__risk pi-overlay-text-warning";
+        toggleText.append(" ", risk);
       }
 
-      permissionsDisclosure.appendChild(permissionsEditor);
-      details.appendChild(permissionsDisclosure);
+      toggleLabel.append(toggle, toggleText);
+      permissionsEditor.appendChild(toggleLabel);
+
+      toggle.addEventListener("change", () => {
+        const nextAllowed = toggle.checked;
+        toggle.disabled = true;
+
+        void runAction(async () => {
+          await manager.setExtensionCapability(status.id, capability, nextAllowed);
+
+          const updated = manager.list().find((entry) => entry.id === status.id);
+          if (!updated) {
+            showToast(`Updated permissions for ${status.name}.`);
+            return;
+          }
+
+          if (!updated.enabled) {
+            showToast(`Updated permissions for ${status.name}.`);
+            return;
+          }
+
+          if (updated.lastError) {
+            showToast(`Updated permissions for ${status.name}; reload failed (see Failed to load).`);
+            return;
+          }
+
+          if (updated.loaded) {
+            showToast(`Updated permissions for ${status.name}; extension reloaded.`);
+            return;
+          }
+
+          showToast(`Updated permissions for ${status.name}.`);
+        });
+      });
     }
+
+    permissionsDisclosure.appendChild(permissionsEditor);
+    details.appendChild(permissionsDisclosure);
 
     if (status.enabled && status.lastError) {
       const errorDisclosure = document.createElement("details");
