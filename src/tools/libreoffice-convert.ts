@@ -11,6 +11,12 @@ import { Type, type TSchema } from "@sinclair/typebox";
 
 import { getErrorMessage } from "../utils/errors.js";
 import { isRecord } from "../utils/type-guards.js";
+import {
+  extractBridgeErrorMessage,
+  isAbortError,
+  joinBridgeUrl,
+  tryParseBridgeJson,
+} from "./bridge-http-utils.js";
 import { getDefaultPythonBridgeConfig } from "./python-run.js";
 
 const LIBREOFFICE_BRIDGE_API_PATH = "/v1/libreoffice-convert";
@@ -226,48 +232,8 @@ function parseBridgeResponse(value: unknown): LibreOfficeConvertResponse {
   };
 }
 
-function tryParseJson(text: string): unknown {
-  const trimmed = text.trim();
-  if (trimmed.length === 0) return null;
-
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    return null;
-  }
-}
-
-function extractBridgeErrorMessage(value: unknown): string | null {
-  if (isPlainObject(value) && typeof value.error === "string") {
-    return value.error;
-  }
-
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  }
-
-  return null;
-}
-
-function joinBridgeUrl(baseUrl: string, path: string): string {
-  return `${baseUrl.replace(/\/+$/, "")}${path}`;
-}
-
 async function defaultGetBridgeConfig(): Promise<LibreOfficeBridgeConfig | null> {
   return getDefaultPythonBridgeConfig();
-}
-
-function isAbortError(error: unknown): boolean {
-  if (error instanceof DOMException) {
-    return error.name === "AbortError";
-  }
-
-  if (error instanceof Error) {
-    return error.name === "AbortError";
-  }
-
-  return false;
 }
 
 function computeFetchTimeoutMs(request: LibreOfficeConvertRequest): number {
@@ -318,7 +284,7 @@ async function defaultCallBridge(
     });
 
     const rawBody = await response.text();
-    const parsedBody = tryParseJson(rawBody);
+    const parsedBody = tryParseBridgeJson(rawBody);
 
     if (!response.ok) {
       const payloadError = extractBridgeErrorMessage(parsedBody);
