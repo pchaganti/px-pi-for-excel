@@ -18,6 +18,11 @@ import {
   normalizeOptionalString,
 } from "../src/workbook/recovery/format-state-normalization.ts";
 import {
+  collectMergedAreaAddresses,
+  dedupeRecoveryAddresses,
+  validateStringGrid,
+} from "../src/workbook/recovery/format-state-utils.ts";
+import {
   createInMemorySettingsStore,
   findSnapshotById,
   withoutUndefined,
@@ -86,6 +91,34 @@ void test("format-state normalization keeps only optional scalar values", () => 
   assert.equal(normalizeOptionalNumber(12.5), 12.5);
   assert.equal(normalizeOptionalNumber(Number.NaN), undefined);
   assert.equal(normalizeOptionalNumber(Infinity), undefined);
+});
+
+void test("format-state utilities dedupe addresses and merged areas deterministically", () => {
+  assert.deepEqual(
+    dedupeRecoveryAddresses([" Sheet1!A1:A2 ", "Sheet1!A1:A2", "", "Sheet1!B1:B2"]),
+    ["Sheet1!A1:A2", "Sheet1!B1:B2"],
+  );
+
+  const merged = collectMergedAreaAddresses({
+    selection: { mergedAreas: true },
+    areas: [
+      { address: "Sheet1!A1:B2", rowCount: 2, columnCount: 2, mergedAreas: ["Sheet1!A1:B1"] },
+      { address: "Sheet1!C1:D2", rowCount: 2, columnCount: 2, mergedAreas: ["Sheet1!A1:B1", "Sheet1!C1:D1"] },
+    ],
+    cellCount: 4,
+  });
+
+  assert.deepEqual(merged, ["Sheet1!A1:B1", "Sheet1!C1:D1"]);
+});
+
+void test("format-state utilities validate string grid shape", () => {
+  assert.deepEqual(
+    validateStringGrid([["0.00", "General"], ["General", "0.00"]], 2, 2),
+    [["0.00", "General"], ["General", "0.00"]],
+  );
+
+  assert.equal(validateStringGrid([["0.00"]], 2, 1), null);
+  assert.equal(validateStringGrid([["0.00", 42]], 1, 2), null);
 });
 
 void test("persisted format checkpoints retain dimension state", async () => {
