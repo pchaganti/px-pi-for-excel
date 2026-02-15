@@ -732,8 +732,8 @@ export async function initTaskpane(opts: {
       };
     };
 
-    const initialCapabilities = await buildRuntimeCapabilities(runtimeSessionId);
     const initialModel = getActiveRuntime()?.agent.state.model ?? defaultModel;
+    const initialCapabilities = await buildRuntimeCapabilities(runtimeSessionId);
 
     const agent = new Agent({
       initialState: {
