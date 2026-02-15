@@ -26,7 +26,7 @@ const schema = Type.Object({
     description: "Skill name (required when action=read).",
   })),
   refresh: Type.Optional(Type.Boolean({
-    description: "When true (read only), bypass the session cache and reload from catalog.",
+    description: "When true (read only), bypass the session cache and reload from current skill sources.",
   })),
 });
 
@@ -56,12 +56,12 @@ async function defaultIsExternalDiscoveryEnabled(): Promise<boolean> {
 }
 
 async function defaultLoadExternalSkills(): Promise<AgentSkillDefinition[]> {
-  const [{ getAppStorage }, { loadExternalAgentSkillsFromSettings }] = await Promise.all([
-    import("@mariozechner/pi-web-ui/dist/storage/app-storage.js"),
+  const [{ getFilesWorkspace }, { loadExternalAgentSkillsFromWorkspace }] = await Promise.all([
+    import("../files/workspace.js"),
     import("../skills/external-store.js"),
   ]);
 
-  return loadExternalAgentSkillsFromSettings(getAppStorage().settings);
+  return loadExternalAgentSkillsFromWorkspace(getFilesWorkspace());
 }
 
 async function defaultLoadDisabledSkillNames(): Promise<Set<string>> {

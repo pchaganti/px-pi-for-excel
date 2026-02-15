@@ -49,7 +49,7 @@ const EXPERIMENTAL_FEATURES = [
     slug: "external-skills-discovery",
     aliases: ["external-skills", "skills-discovery"],
     title: "External skills discovery",
-    description: "Allow loading Agent Skills from local externally configured SKILL.md sources.",
+    description: "Allow loading Agent Skills from Files workspace external skill files.",
     warning: "Security: external skills can contain untrusted instructions and executable references.",
     wiring: "wired",
     storageKey: "pi.experimental.externalSkillsDiscovery",

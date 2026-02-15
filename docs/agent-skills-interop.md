@@ -31,9 +31,9 @@ The add-in now exposes a `skills` tool for standards-based skill loading:
 
 - `skills` action=`list` → lists bundled Agent Skills
 - `skills` action=`read` + `name` → returns full `SKILL.md`
-- `skills` action=`read` + `name` + `refresh=true` → bypasses cache and refreshes from catalog
+- `skills` action=`read` + `name` + `refresh=true` → bypasses cache and refreshes from current workspace-backed sources
 
-Runtime note: `skills` reads are cached per session runtime so repeated reads for the same skill avoid repeated catalog lookup. The cache is cleared when the runtime session identity changes (new/resume/switch context).
+Runtime note: `skills` reads are cached per session runtime so repeated reads for the same skill avoid repeated source lookup. The cache is cleared when the runtime session identity changes (new/resume/switch context).
 
 `skills list` includes provenance for each entry (`source: bundled|external`, plus location).
 
@@ -42,7 +42,7 @@ The system prompt also includes `<available_skills>` entries so the model can ch
 ## External discovery (feature-flagged, off by default)
 
 - Flag: `/experimental on external-skills-discovery`
-- Source: local settings key `skills.external.v1.catalog`
+- Source: Files workspace path `skills/external/<name>/SKILL.md`
 - Safety: external skills are untrusted input and may contain risky instructions/scripts. Keep this disabled unless you trust the source.
 
 ## Mapping table

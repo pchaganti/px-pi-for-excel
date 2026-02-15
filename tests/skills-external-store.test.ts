@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import type {
+  WorkspaceFileEntry,
+  WorkspaceFileReadResult,
+} from "../src/files/types.ts";
+import type {
+  WorkspaceMutationOptions,
+  WorkspaceReadOptions,
+} from "../src/files/workspace.ts";
 import type { AgentSkillDefinition } from "../src/skills/types.ts";
 import {
   SKILL_ACTIVATION_STORAGE_KEY,
@@ -9,11 +17,94 @@ import {
   setSkillEnabledInSettings,
 } from "../src/skills/activation-store.ts";
 import {
-  EXTERNAL_AGENT_SKILLS_STORAGE_KEY,
-  loadExternalAgentSkillsFromSettings,
-  removeExternalAgentSkillFromSettings,
-  upsertExternalAgentSkillInSettings,
+  loadExternalAgentSkillsFromWorkspace,
+  removeExternalAgentSkillFromWorkspace,
+  upsertExternalAgentSkillInWorkspace,
 } from "../src/skills/external-store.ts";
+
+interface MemoryWorkspaceFile {
+  text: string;
+  modifiedAt: number;
+}
+
+class MemoryExternalSkillWorkspace {
+  private readonly files = new Map<string, MemoryWorkspaceFile>();
+
+  seedTextFile(path: string, text: string): void {
+    this.files.set(path, {
+      text,
+      modifiedAt: Date.now(),
+    });
+  }
+
+  listPaths(): string[] {
+    return Array.from(this.files.keys()).sort((left, right) => left.localeCompare(right));
+  }
+
+  listFiles(): Promise<WorkspaceFileEntry[]> {
+    const entries = Array.from(this.files.entries())
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([path, file]) => this.buildEntry(path, file));
+
+    return Promise.resolve(entries);
+  }
+
+  readFile(path: string, options: WorkspaceReadOptions = {}): Promise<WorkspaceFileReadResult> {
+    const file = this.files.get(path);
+    if (!file) {
+      throw new Error(`File not found: ${path}`);
+    }
+
+    const maxChars = options.maxChars;
+    const limitedText = typeof maxChars === "number"
+      ? file.text.slice(0, Math.max(0, maxChars))
+      : file.text;
+    const truncated = typeof maxChars === "number" && file.text.length > Math.max(0, maxChars);
+
+    return Promise.resolve({
+      ...this.buildEntry(path, file),
+      text: limitedText,
+      truncated,
+    });
+  }
+
+  writeTextFile(
+    path: string,
+    text: string,
+    _mimeTypeHint?: string,
+    _options: WorkspaceMutationOptions = {},
+  ): Promise<void> {
+    this.files.set(path, {
+      text,
+      modifiedAt: Date.now(),
+    });
+
+    return Promise.resolve();
+  }
+
+  deleteFile(path: string, _options: WorkspaceMutationOptions = {}): Promise<void> {
+    if (!this.files.delete(path)) {
+      throw new Error(`File not found: ${path}`);
+    }
+
+    return Promise.resolve();
+  }
+
+  private buildEntry(path: string, file: MemoryWorkspaceFile): WorkspaceFileEntry {
+    const name = path.split("/").at(-1) ?? path;
+
+    return {
+      path,
+      name,
+      size: file.text.length,
+      modifiedAt: file.modifiedAt,
+      mimeType: "text/markdown",
+      kind: "text",
+      sourceKind: "workspace",
+      readOnly: false,
+    };
+  }
+}
 
 class MemorySettingsStore {
   private readonly values = new Map<string, unknown>();
@@ -28,81 +119,68 @@ class MemorySettingsStore {
   }
 }
 
-void test("loadExternalAgentSkillsFromSettings loads valid external skills", async () => {
-  const settings = new MemorySettingsStore();
+void test("loadExternalAgentSkillsFromWorkspace loads valid external skills", async () => {
+  const workspace = new MemoryExternalSkillWorkspace();
 
-  await settings.set(EXTERNAL_AGENT_SKILLS_STORAGE_KEY, {
-    version: 1,
-    items: [
-      {
-        location: "/tmp/skills/custom-skill/SKILL.md",
-        markdown: `---
+  workspace.seedTextFile(
+    "skills/external/custom-skill/SKILL.md",
+    `---
 name: custom-skill
 description: External custom skill.
 ---
 
 # Custom Skill
 `,
-      },
-    ],
-  });
+  );
 
-  const skills = await loadExternalAgentSkillsFromSettings(settings);
+  const skills = await loadExternalAgentSkillsFromWorkspace(workspace);
   assert.equal(skills.length, 1);
   assert.equal(skills[0].name, "custom-skill");
   assert.equal(skills[0].sourceKind, "external");
-  assert.equal(skills[0].location, "/tmp/skills/custom-skill/SKILL.md");
+  assert.equal(skills[0].location, "skills/external/custom-skill/SKILL.md");
 });
 
-void test("loadExternalAgentSkillsFromSettings ignores invalid payloads", async () => {
-  const settings = new MemorySettingsStore();
+void test("loadExternalAgentSkillsFromWorkspace ignores invalid or non-canonical files", async () => {
+  const workspace = new MemoryExternalSkillWorkspace();
 
-  await settings.set(EXTERNAL_AGENT_SKILLS_STORAGE_KEY, {
-    version: 1,
-    items: [
-      {
-        location: "/tmp/skills/invalid/SKILL.md",
-        markdown: "# Missing frontmatter",
-      },
-      {
-        location: 12,
-        markdown: "---\nname: invalid\ndescription: invalid\n---",
-      },
-    ],
-  });
+  workspace.seedTextFile("skills/external/invalid/SKILL.md", "# Missing frontmatter");
+  workspace.seedTextFile(
+    "skills/external/not-a-skill/README.md",
+    `---
+name: not-a-skill
+description: Wrong filename.
+---
+`,
+  );
+  workspace.seedTextFile(
+    "skills/external/nested/custom/SKILL.md",
+    `---
+name: nested
+description: Wrong path depth.
+---
+`,
+  );
 
-  const skills = await loadExternalAgentSkillsFromSettings(settings);
+  const skills = await loadExternalAgentSkillsFromWorkspace(workspace);
   assert.deepEqual(skills, []);
 });
 
-void test("loadExternalAgentSkillsFromSettings returns empty for unknown version", async () => {
-  const settings = new MemorySettingsStore();
+void test("upsertExternalAgentSkillInWorkspace installs and overwrites by skill name", async () => {
+  const workspace = new MemoryExternalSkillWorkspace();
 
-  void settings.set(EXTERNAL_AGENT_SKILLS_STORAGE_KEY, {
-    version: 2,
-    items: [],
-  });
-
-  const skills = await loadExternalAgentSkillsFromSettings(settings);
-  assert.deepEqual(skills, []);
-});
-
-void test("upsertExternalAgentSkillInSettings installs and overwrites by skill name", async () => {
-  const settings = new MemorySettingsStore();
-
-  await upsertExternalAgentSkillInSettings({
-    settings,
-    markdown: `---
+  workspace.seedTextFile(
+    "skills/external/legacy-copy/SKILL.md",
+    `---
 name: custom-skill
-description: First description.
+description: Legacy duplicate.
 ---
 
-# First
+# Legacy
 `,
-  });
+  );
 
-  await upsertExternalAgentSkillInSettings({
-    settings,
+  await upsertExternalAgentSkillInWorkspace({
+    workspace,
     markdown: `---
 name: custom-skill
 description: Updated description.
@@ -112,19 +190,20 @@ description: Updated description.
 `,
   });
 
-  const skills = await loadExternalAgentSkillsFromSettings(settings);
+  const skills = await loadExternalAgentSkillsFromWorkspace(workspace);
   assert.equal(skills.length, 1);
   assert.equal(skills[0].name, "custom-skill");
   assert.equal(skills[0].description, "Updated description.");
   assert.equal(skills[0].location, "skills/external/custom-skill/SKILL.md");
+  assert.deepEqual(workspace.listPaths(), ["skills/external/custom-skill/SKILL.md"]);
 });
 
-void test("upsertExternalAgentSkillInSettings enforces expectedName when provided", async () => {
-  const settings = new MemorySettingsStore();
+void test("upsertExternalAgentSkillInWorkspace enforces expectedName when provided", async () => {
+  const workspace = new MemoryExternalSkillWorkspace();
 
   await assert.rejects(
-    () => upsertExternalAgentSkillInSettings({
-      settings,
+    () => upsertExternalAgentSkillInWorkspace({
+      workspace,
       expectedName: "different-name",
       markdown: `---
 name: custom-skill
@@ -138,31 +217,42 @@ description: External custom skill.
   );
 });
 
-void test("removeExternalAgentSkillFromSettings removes by name and reports whether removed", async () => {
-  const settings = new MemorySettingsStore();
+void test("removeExternalAgentSkillFromWorkspace removes by name and reports whether removed", async () => {
+  const workspace = new MemoryExternalSkillWorkspace();
 
-  await upsertExternalAgentSkillInSettings({
-    settings,
-    markdown: `---
+  workspace.seedTextFile(
+    "skills/external/custom-skill/SKILL.md",
+    `---
 name: custom-skill
-description: External custom skill.
+description: Canonical copy.
 ---
 
-# Custom
+# Canonical
 `,
-  });
+  );
+  workspace.seedTextFile(
+    "skills/external/legacy-copy/SKILL.md",
+    `---
+name: custom-skill
+description: Duplicate copy.
+---
 
-  const removed = await removeExternalAgentSkillFromSettings({
-    settings,
+# Duplicate
+`,
+  );
+
+  const removed = await removeExternalAgentSkillFromWorkspace({
+    workspace,
     name: "custom-skill",
   });
   assert.equal(removed, true);
 
-  const skillsAfterRemove = await loadExternalAgentSkillsFromSettings(settings);
+  const skillsAfterRemove = await loadExternalAgentSkillsFromWorkspace(workspace);
   assert.deepEqual(skillsAfterRemove, []);
+  assert.deepEqual(workspace.listPaths(), []);
 
-  const removedMissing = await removeExternalAgentSkillFromSettings({
-    settings,
+  const removedMissing = await removeExternalAgentSkillFromWorkspace({
+    workspace,
     name: "missing-skill",
   });
   assert.equal(removedMissing, false);

@@ -4,17 +4,18 @@
 
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 import { isExperimentalFeatureEnabled } from "../../experiments/flags.js";
+import { getFilesWorkspace } from "../../files/workspace.js";
 import { mergeAgentSkillDefinitions, listAgentSkills } from "../../skills/catalog.js";
 import {
   filterAgentSkillsByEnabledState,
   loadDisabledSkillNamesFromSettings,
   setSkillEnabledInSettings,
+  type SkillActivationMutableSettingsStore,
 } from "../../skills/activation-store.js";
 import {
-  loadExternalAgentSkillsFromSettings,
-  removeExternalAgentSkillFromSettings,
-  upsertExternalAgentSkillInSettings,
-  type ExternalSkillSettingsStore,
+  loadExternalAgentSkillsFromWorkspace,
+  removeExternalAgentSkillFromWorkspace,
+  upsertExternalAgentSkillInWorkspace,
 } from "../../skills/external-store.js";
 import { dispatchSkillsChanged } from "../../skills/events.js";
 import type { AgentSkillDefinition } from "../../skills/types.js";
@@ -179,14 +180,14 @@ function renderSkillList(args: {
   }
 }
 
-async function buildSnapshot(settings: ExternalSkillSettingsStore): Promise<SkillsSnapshot> {
+async function buildSnapshot(settings: SkillActivationMutableSettingsStore): Promise<SkillsSnapshot> {
   const bundled = listAgentSkills();
 
   let external: AgentSkillDefinition[] = [];
   let externalLoadError: string | null = null;
 
   try {
-    external = await loadExternalAgentSkillsFromSettings(settings);
+    external = await loadExternalAgentSkillsFromWorkspace(getFilesWorkspace());
   } catch (error: unknown) {
     externalLoadError = error instanceof Error ? error.message : "Unknown error";
     console.warn("[skills] Failed to load external skills for UI:", error);
@@ -450,8 +451,8 @@ export function showSkillsDialog(): void {
         void (async () => {
           setBusy(true);
           try {
-            const removed = await removeExternalAgentSkillFromSettings({
-              settings,
+            const removed = await removeExternalAgentSkillFromWorkspace({
+              workspace: getFilesWorkspace(),
               name: skillName,
             });
 
@@ -487,8 +488,8 @@ export function showSkillsDialog(): void {
     void (async () => {
       setBusy(true);
       try {
-        const result = await upsertExternalAgentSkillInSettings({
-          settings,
+        const result = await upsertExternalAgentSkillInWorkspace({
+          workspace: getFilesWorkspace(),
           markdown,
         });
 
