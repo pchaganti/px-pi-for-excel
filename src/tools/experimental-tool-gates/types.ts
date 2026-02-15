@@ -17,7 +17,6 @@ export const PYTHON_BRIDGE_URL_SETTING_KEY = "python.bridge.url";
 export const PYTHON_BRIDGE_APPROVED_URL_SETTING_KEY = "python.bridge.approved.url";
 
 export type TmuxBridgeGateReason =
-  | "tmux_experiment_disabled"
   | "missing_bridge_url"
   | "invalid_bridge_url"
   | "bridge_unreachable";
@@ -29,7 +28,6 @@ export interface TmuxBridgeGateResult {
 }
 
 export interface TmuxBridgeGateDependencies {
-  isTmuxExperimentEnabled?: () => boolean;
   getTmuxBridgeUrl?: () => Promise<string | undefined>;
   validateBridgeUrl?: (url: string) => string | null;
   probeTmuxBridge?: (bridgeUrl: string) => Promise<boolean>;

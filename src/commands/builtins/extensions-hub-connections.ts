@@ -40,7 +40,6 @@ import {
   PYTHON_BRIDGE_URL_SETTING_KEY,
   TMUX_BRIDGE_URL_SETTING_KEY,
 } from "../../tools/experimental-tool-gates.js";
-import { isExperimentalFeatureEnabled } from "../../experiments/flags.js";
 import { probeMcpServer } from "./extensions-hub-mcp-probe.js";
 import { showToast } from "../../ui/toast.js";
 import {
@@ -411,9 +410,8 @@ export async function renderConnectionsTab(args: {
   container.appendChild(mcpAddForm);
 
   // ── Bridges section ───────────────────────────
-  // Python bridge is always available; tmux bridge requires the experimental flag
   const showPython = true;
-  const showTmux = isExperimentalFeatureEnabled("tmux_bridge") || tmuxUrl.length > 0;
+  const showTmux = true;
 
   if (showPython || showTmux) {
     container.appendChild(createSectionHeader({ label: "Bridges" }));

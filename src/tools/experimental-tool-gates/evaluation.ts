@@ -1,5 +1,4 @@
 import { validateOfficeProxyUrl } from "../../auth/proxy-validation.js";
-import { isExperimentalFeatureEnabled } from "../../experiments/flags.js";
 
 import {
   PYTHON_BRIDGE_URL_SETTING_KEY,
@@ -14,10 +13,6 @@ import {
 
 const BRIDGE_HEALTH_PATH = "/health";
 const BRIDGE_HEALTH_TIMEOUT_MS = 900;
-
-function defaultIsTmuxExperimentEnabled(): boolean {
-  return isExperimentalFeatureEnabled("tmux_bridge");
-}
 
 async function defaultGetBridgeUrl(settingKey: string): Promise<string | undefined> {
   try {
@@ -90,13 +85,8 @@ async function defaultProbeBridge(bridgeUrl: string): Promise<boolean> {
 export async function evaluateTmuxBridgeGate(
   dependencies: TmuxBridgeGateDependencies = {},
 ): Promise<TmuxBridgeGateResult> {
-  const isEnabled = dependencies.isTmuxExperimentEnabled ?? defaultIsTmuxExperimentEnabled;
-  if (!isEnabled()) {
-    return {
-      allowed: false,
-      reason: "tmux_experiment_disabled",
-    };
-  }
+  // No experiment flag gate — tmux is available when a bridge URL is configured.
+  // The Connections tab in Extensions is the single control surface.
 
   const getBridgeUrl = dependencies.getTmuxBridgeUrl ?? defaultGetTmuxBridgeUrl;
   const rawBridgeUrl = await getBridgeUrl();
@@ -178,8 +168,6 @@ export async function evaluatePythonBridgeGate(
 
 export function buildTmuxBridgeGateErrorMessage(reason: TmuxBridgeGateReason): string {
   switch (reason) {
-    case "tmux_experiment_disabled":
-      return "Tmux bridge is disabled. Enable it with /experimental on tmux-bridge.";
     case "missing_bridge_url":
       return `Tmux bridge URL is not configured. Run /experimental tmux-bridge-url https://localhost:<port> (setting: ${TMUX_BRIDGE_URL_SETTING_KEY}).`;
     case "invalid_bridge_url":

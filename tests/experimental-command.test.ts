@@ -373,7 +373,7 @@ void test("/experimental tmux-status reports blocked state with hint", async () 
     showToast: (message) => {
       toasts.push(message);
     },
-    isTmuxBridgeEnabled: () => false,
+    isTmuxBridgeEnabled: () => true,
     getTmuxBridgeUrl: () => Promise.resolve(undefined),
     getTmuxBridgeToken: () => Promise.resolve(undefined),
   });
@@ -381,9 +381,8 @@ void test("/experimental tmux-status reports blocked state with hint", async () 
   await command.execute("tmux-status");
 
   assert.equal(toasts.length, 1);
-  assert.match(toasts[0], /feature flag \(tmux-bridge\): disabled/u);
-  assert.match(toasts[0], /gate: blocked \(tmux_experiment_disabled\)/u);
-  assert.match(toasts[0], /Enable it with \/experimental on tmux-bridge/u);
+  assert.match(toasts[0], /bridge URL: not set/u);
+  assert.match(toasts[0], /gate: blocked \(missing_bridge_url\)/u);
   assert.match(toasts[0], /health: not checked/u);
 });
 
@@ -410,7 +409,6 @@ void test("/experimental tmux-status reports healthy bridge details", async () =
   await command.execute("tmux-status");
 
   assert.equal(toasts.length, 1);
-  assert.match(toasts[0], /feature flag \(tmux-bridge\): enabled/u);
   assert.match(toasts[0], /bridge URL: https:\/\/localhost:3337/u);
   assert.match(toasts[0], /auth token: set \(supe\*{10}en, length 16\)/u);
   assert.match(toasts[0], /gate: pass/u);

@@ -510,7 +510,6 @@ async function handleBridgeTokenCommand(
 async function handleTmuxStatusCommand(
   dependencies: ResolvedExperimentalCommandDependencies,
 ): Promise<void> {
-  const featureEnabled = dependencies.isTmuxBridgeEnabled();
   const configuredBridgeUrl = await dependencies.getTmuxBridgeUrl();
   const configuredToken = await dependencies.getTmuxBridgeToken();
 
@@ -530,9 +529,7 @@ async function handleTmuxStatusCommand(
     : undefined;
 
   let gateReason: TmuxBridgeGateReason | undefined;
-  if (!featureEnabled) {
-    gateReason = "tmux_experiment_disabled";
-  } else if (!configuredBridgeUrl) {
+  if (!configuredBridgeUrl) {
     gateReason = "missing_bridge_url";
   } else if (!normalizedBridgeUrl) {
     gateReason = "invalid_bridge_url";
@@ -552,7 +549,6 @@ async function handleTmuxStatusCommand(
     };
 
   const lines: string[] = ["Tmux bridge status:"];
-  lines.push(`- feature flag (tmux-bridge): ${featureEnabled ? "enabled" : "disabled"}`);
 
   if (!configuredBridgeUrl) {
     lines.push("- bridge URL: not set");

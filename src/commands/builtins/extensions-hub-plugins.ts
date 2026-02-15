@@ -1,7 +1,7 @@
 /**
  * Extensions hub — Plugins tab.
  *
- * Installed plugins, install from URL / code, and advanced settings.
+ * Installed plugins and install from URL.
  */
 
 import type {
