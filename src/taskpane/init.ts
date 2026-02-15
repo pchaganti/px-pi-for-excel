@@ -129,6 +129,7 @@ import {
 } from "./tab-layout.js";
 import { createTabLayoutPersistence } from "./tab-layout-persistence.js";
 import { injectStatusBar } from "./status-bar.js";
+import { startProxyPolling } from "./proxy-status.js";
 import {
   closeStatusPopover,
   toggleContextPopover,
@@ -1608,6 +1609,9 @@ export async function initTaskpane(opts: {
     getExecutionMode,
   });
 
+  // ── Proxy status polling ──
+  startProxyPolling(settings);
+
   // ── Wire command menu to textarea ──
   const wireTextarea = () => {
     const ta = sidebar.getTextarea();
@@ -1721,6 +1725,13 @@ export async function initTaskpane(opts: {
     // Thinking level selector
     if (el.closest(".pi-status-thinking")) {
       openThinkingPopoverFrom(el);
+      return;
+    }
+
+    // Proxy status — "no helper" click opens settings
+    if (el.closest(".pi-status-proxy--missing")) {
+      closeStatusPopover();
+      void showSettingsDialog();
       return;
     }
 
