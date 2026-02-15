@@ -56,7 +56,9 @@ export async function buildSnapshot(
     mcpServers,
   ] = await Promise.all([
     getExternalToolsEnabled(settings),
-    getSessionIntegrationIds(settings, sessionId, INTEGRATION_IDS),
+    getSessionIntegrationIds(settings, sessionId, INTEGRATION_IDS, {
+      applyDefaultsWhenUnconfigured: workbookContext.workbookId === null,
+    }),
     workbookContext.workbookId
       ? getWorkbookIntegrationIds(settings, workbookContext.workbookId, INTEGRATION_IDS)
       : Promise.resolve([]),

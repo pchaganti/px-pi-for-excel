@@ -30,6 +30,9 @@ export interface IntegrationDefinition {
   /** Standards-based Agent Skill identity (agentskills.io). */
   agentSkillName?: string;
   warning?: string;
+  /** When true the integration is active for new sessions/workbooks that have
+   *  not been explicitly configured yet. */
+  enabledByDefault?: boolean;
   toolNames: readonly string[];
   instructions: string;
   createTools: () => AgentTool[];
@@ -41,6 +44,7 @@ const INTEGRATION_DEFINITIONS: Record<IntegrationId, IntegrationDefinition> = {
     title: "Web Search",
     description: "Search external web content and fetch readable page content. Works out of the box with Jina (default); optionally Serper, Tavily, or Brave.",
     agentSkillName: "web-search",
+    enabledByDefault: true,
     warning: "External network access: queries and fetched URLs are sent to the configured provider/target host.",
     toolNames: ["web_search", "fetch_page"],
     instructions:
@@ -104,6 +108,11 @@ export function buildIntegrationPromptEntries(integrationIds: readonly string[])
   }
 
   return entries;
+}
+
+/** Integration IDs that are active for scopes that have never been configured. */
+export function getDefaultEnabledIntegrationIds(): string[] {
+  return INTEGRATION_IDS.filter((id) => INTEGRATION_DEFINITIONS[id].enabledByDefault === true);
 }
 
 export function getIntegrationToolNames(): string[] {

@@ -70,7 +70,7 @@ void test("setIntegrationEnabledInScope toggles session/workbook flags", async (
   );
   assert.deepEqual(
     await getWorkbookIntegrationIds(settings, "workbook-2", KNOWN_INTEGRATIONS),
-    ["mcp_tools"],
+    ["web_search", "mcp_tools"],
   );
 
   await setIntegrationEnabledInScope({
@@ -98,4 +98,110 @@ void test("external tools gate defaults off and can be enabled", async () => {
 
   await setExternalToolsEnabled(settings, false);
   assert.equal(await getExternalToolsEnabled(settings), false);
+});
+
+void test("unconfigured session scope is explicit empty", async () => {
+  const settings = new MemorySettingsStore();
+
+  const ids = await getSessionIntegrationIds(settings, "new-session", KNOWN_INTEGRATIONS);
+  assert.deepEqual(ids, []);
+});
+
+void test("session scope can opt into defaults when unconfigured", async () => {
+  const settings = new MemorySettingsStore();
+
+  const ids = await getSessionIntegrationIds(settings, "new-session", KNOWN_INTEGRATIONS, {
+    applyDefaultsWhenUnconfigured: true,
+  });
+  assert.deepEqual(ids, ["web_search"]);
+});
+
+void test("explicitly cleared session scope returns empty", async () => {
+  const settings = new MemorySettingsStore();
+
+  // Set then clear web_search → stores [] explicitly
+  await setIntegrationEnabledInScope({
+    settings,
+    scope: "session",
+    identifier: "session-x",
+    integrationId: "web_search",
+    enabled: true,
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
+  });
+  await setIntegrationEnabledInScope({
+    settings,
+    scope: "session",
+    identifier: "session-x",
+    integrationId: "web_search",
+    enabled: false,
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
+  });
+
+  const ids = await getSessionIntegrationIds(settings, "session-x", KNOWN_INTEGRATIONS);
+  assert.deepEqual(ids, []);
+
+  const fallbackIds = await getSessionIntegrationIds(settings, "session-x", KNOWN_INTEGRATIONS, {
+    applyDefaultsWhenUnconfigured: true,
+  });
+  assert.deepEqual(fallbackIds, []);
+});
+
+void test("unconfigured workbook scope returns default-enabled integrations", async () => {
+  const settings = new MemorySettingsStore();
+
+  const ids = await getWorkbookIntegrationIds(settings, "new-workbook", KNOWN_INTEGRATIONS);
+  assert.deepEqual(ids, ["web_search"]);
+});
+
+void test("resolveConfiguredIntegrationIds includes defaults for fresh session+workbook", async () => {
+  const settings = new MemorySettingsStore();
+
+  const ids = await resolveConfiguredIntegrationIds({
+    settings,
+    sessionId: "fresh-session",
+    workbookId: "fresh-workbook",
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
+  });
+
+  assert.deepEqual(ids, ["web_search"]);
+});
+
+void test("resolveConfiguredIntegrationIds includes defaults when workbook identity is unavailable", async () => {
+  const settings = new MemorySettingsStore();
+
+  const ids = await resolveConfiguredIntegrationIds({
+    settings,
+    sessionId: "fresh-session-no-workbook",
+    workbookId: null,
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
+  });
+
+  assert.deepEqual(ids, ["web_search"]);
+});
+
+void test("workbook-level disable persists across new sessions", async () => {
+  const settings = new MemorySettingsStore();
+
+  await setIntegrationEnabledInScope({
+    settings,
+    scope: "workbook",
+    identifier: "workbook-off",
+    integrationId: "web_search",
+    enabled: false,
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
+  });
+
+  assert.deepEqual(
+    await getWorkbookIntegrationIds(settings, "workbook-off", KNOWN_INTEGRATIONS),
+    [],
+  );
+
+  const resolved = await resolveConfiguredIntegrationIds({
+    settings,
+    sessionId: "brand-new-session",
+    workbookId: "workbook-off",
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
+  });
+
+  assert.deepEqual(resolved, []);
 });
