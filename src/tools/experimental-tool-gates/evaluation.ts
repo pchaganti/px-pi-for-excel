@@ -171,7 +171,7 @@ export function buildTmuxBridgeGateErrorMessage(reason: TmuxBridgeGateReason): s
     case "missing_bridge_url":
       return `Tmux bridge URL is not configured. Run /experimental tmux-bridge-url https://localhost:<port> (setting: ${TMUX_BRIDGE_URL_SETTING_KEY}).`;
     case "invalid_bridge_url":
-      return "Tmux bridge URL is invalid. Use a full URL like https://localhost:3337.";
+      return "Tmux bridge URL is invalid. Use a full URL like https://localhost:3341.";
     case "bridge_unreachable":
       return "Tmux bridge is not reachable at the configured URL.";
   }

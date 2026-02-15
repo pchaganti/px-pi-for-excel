@@ -12,9 +12,8 @@ The bridge supports two modes:
 
 The `tmux` tool remains registered (stable tool list / prompt caching), but execution is blocked unless all gates pass:
 
-1. `/experimental on tmux-bridge`
-2. `tmux.bridge.url` is configured (via `/experimental tmux-bridge-url <url>`)
-3. bridge `GET /health` returns success
+1. `tmux.bridge.url` is configured (via `/experimental tmux-bridge-url <url>`)
+2. bridge `GET /health` returns success
 
 The gate is checked on each tool execution (defense in depth).
 
@@ -31,8 +30,7 @@ TMUX_BRIDGE_MODE=tmux npm run tmux:bridge:https
 Then in the add-in:
 
 ```bash
-/experimental on tmux-bridge
-/experimental tmux-bridge-url https://localhost:3337
+/experimental tmux-bridge-url https://localhost:3341
 /experimental tmux-status
 ```
 

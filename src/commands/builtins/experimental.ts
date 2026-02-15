@@ -5,7 +5,6 @@
 import type { SlashCommand } from "../types.js";
 import {
   getExperimentalFeatureSlugs,
-  isExperimentalFeatureEnabled,
   resolveExperimentalFeature,
   setExperimentalFeatureEnabled,
   toggleExperimentalFeature,
@@ -76,7 +75,6 @@ export interface ExperimentalCommandDependencies {
   setTmuxBridgeToken?: (token: string) => Promise<void>;
   clearTmuxBridgeToken?: () => Promise<void>;
   validateTmuxBridgeToken?: (token: string) => string;
-  isTmuxBridgeEnabled?: () => boolean;
   probeTmuxBridgeHealth?: (bridgeUrl: string) => Promise<TmuxBridgeHealthStatus>;
 
   getPythonBridgeUrl?: () => Promise<string | undefined>;
@@ -109,7 +107,6 @@ interface ResolvedExperimentalCommandDependencies {
   setTmuxBridgeToken: (token: string) => Promise<void>;
   clearTmuxBridgeToken: () => Promise<void>;
   validateTmuxBridgeToken: (token: string) => string;
-  isTmuxBridgeEnabled: () => boolean;
   probeTmuxBridgeHealth: (bridgeUrl: string) => Promise<TmuxBridgeHealthStatus>;
 
   getPythonBridgeUrl: () => Promise<string | undefined>;
@@ -252,10 +249,6 @@ function maskToken(token: string): string {
   return `${token.slice(0, 4)}${"*".repeat(hiddenLength)}${token.slice(-2)}`;
 }
 
-function defaultIsTmuxBridgeEnabled(): boolean {
-  return isExperimentalFeatureEnabled("tmux_bridge");
-}
-
 function normalizeOptionalString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -313,7 +306,6 @@ function resolveDependencies(
       dependencies.clearTmuxBridgeToken
       ?? (() => defaultClearSettingValue(TMUX_BRIDGE_TOKEN_SETTING_KEY)),
     validateTmuxBridgeToken: dependencies.validateTmuxBridgeToken ?? defaultValidateTmuxBridgeToken,
-    isTmuxBridgeEnabled: dependencies.isTmuxBridgeEnabled ?? defaultIsTmuxBridgeEnabled,
     probeTmuxBridgeHealth: dependencies.probeTmuxBridgeHealth ?? defaultProbeTmuxBridgeHealth,
 
     getPythonBridgeUrl:
@@ -629,7 +621,7 @@ export function createExperimentalCommands(
             await handleBridgeUrlCommand(tokens.slice(1), {
               bridgeLabel: "Tmux bridge",
               commandLabel: "tmux-bridge-url",
-              exampleUrl: "https://localhost:3337",
+              exampleUrl: "https://localhost:3341",
               configKey: TMUX_BRIDGE_URL_SETTING_KEY,
               getValue: resolved.getTmuxBridgeUrl,
               setValue: resolved.setTmuxBridgeUrl,

@@ -3,7 +3,6 @@
  *
  * This tool stays registered for a stable tool list/prompt cache,
  * but execution is gated by:
- * - /experimental on tmux-bridge
  * - /experimental tmux-bridge-url https://localhost:<port>
  * - reachable bridge health endpoint
  *
@@ -507,7 +506,7 @@ function buildOutputPreview(output: string | undefined): string | undefined {
 function buildMissingBridgeConfigurationMessage(): string {
   return (
     "Tmux bridge URL is not configured. " +
-    "Run /experimental tmux-bridge-url https://localhost:3337 and enable /experimental on tmux-bridge."
+    "Run /experimental tmux-bridge-url https://localhost:3341 to configure the bridge."
   );
 }
 

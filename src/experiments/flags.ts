@@ -9,7 +9,6 @@ import { ALLOW_REMOTE_EXTENSION_URLS_STORAGE_KEY } from "../commands/extension-s
 import { dispatchExperimentalFeatureChanged } from "./events.js";
 
 export type ExperimentalFeatureId =
-  | "tmux_bridge"
   | "ui_dark_mode"
   | "remote_extension_urls"
   | "extension_permission_gates"
@@ -20,7 +19,7 @@ export type ExperimentalFeatureWiring = "wired" | "flag-only";
 
 export interface ExperimentalFeatureDefinition {
   id: ExperimentalFeatureId;
-  /** Slash-command token, e.g. `/experimental on tmux-bridge` */
+  /** Slash-command token, e.g. `/experimental on extension-permissions` */
   slug: string;
   /** Alternate tokens accepted by the resolver. */
   aliases: readonly string[];
@@ -34,15 +33,6 @@ export interface ExperimentalFeatureDefinition {
 }
 
 const EXPERIMENTAL_FEATURES = [
-  {
-    id: "tmux_bridge",
-    slug: "tmux-bridge",
-    aliases: ["tmux", "tmux-local-bridge"],
-    title: "Tmux local bridge",
-    description: "Allow local tmux bridge integration for interactive shell sessions.",
-    wiring: "wired",
-    storageKey: "pi.experimental.tmuxBridge",
-  },
   {
     id: "ui_dark_mode",
     slug: "dark-mode",
