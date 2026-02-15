@@ -29,24 +29,6 @@ function showFatalError(errorRoot: HTMLElement, message: string): void {
   render(renderError(message), errorRoot);
 }
 
-async function awaitWithTimeout<T>(label: string, timeoutMs: number, task: Promise<T>): Promise<T> {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  try {
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        reject(new Error(`${label} timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-    });
-
-    return await Promise.race([task, timeoutPromise]);
-  } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-  }
-}
-
 export function bootstrapTaskpane(): void {
   const appEl = getRequiredElement<HTMLElement>("app");
   const loadingRoot = getRequiredElement<HTMLElement>("loading-root");
@@ -68,15 +50,47 @@ export function bootstrapTaskpane(): void {
 
     initialized = true;
 
-    void awaitWithTimeout(
-      "Taskpane initialization",
-      12_000,
-      initTaskpane({ appEl, errorRoot }),
-    ).catch((error: unknown) => {
+    let initComplete = false;
+
+    const markInitComplete = () => {
+      if (initComplete) return false;
+      initComplete = true;
+      return true;
+    };
+
+    const slowInitTimer = setTimeout(() => {
+      if (initComplete) return;
+      console.warn("[pi] Taskpane initialization is taking longer than expected (>12s)");
+    }, 12_000);
+
+    const hardTimeoutTimer = setTimeout(() => {
+      if (!markInitComplete()) return;
       loadingRoot.innerHTML = "";
-      showFatalError(errorRoot, `Failed to initialize: ${getErrorMessage(error)}`);
-      console.error("[pi] Init error:", error);
-    });
+      showFatalError(
+        errorRoot,
+        "Failed to initialize: Taskpane initialization timed out after 60000ms",
+      );
+      console.error("[pi] Init error: Taskpane initialization timed out after 60000ms");
+    }, 60_000);
+
+    void initTaskpane({ appEl, errorRoot })
+      .then(() => {
+        if (!markInitComplete()) return;
+        clearTimeout(slowInitTimer);
+        clearTimeout(hardTimeoutTimer);
+      })
+      .catch((error: unknown) => {
+        if (!markInitComplete()) {
+          console.error("[pi] Init error after timeout:", error);
+          return;
+        }
+
+        clearTimeout(slowInitTimer);
+        clearTimeout(hardTimeoutTimer);
+        loadingRoot.innerHTML = "";
+        showFatalError(errorRoot, `Failed to initialize: ${getErrorMessage(error)}`);
+        console.error("[pi] Init error:", error);
+      });
   };
 
   if (typeof Office === "undefined") {
