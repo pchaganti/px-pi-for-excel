@@ -5,6 +5,7 @@
 import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 
+import { filterAgentSkillsByEnabledState } from "../skills/activation-store.js";
 import type { AgentSkillDefinition } from "../skills/types.js";
 import type { SkillReadCache } from "../skills/read-cache.js";
 import type {
@@ -63,12 +64,31 @@ async function defaultLoadExternalSkills(): Promise<AgentSkillDefinition[]> {
   return loadExternalAgentSkillsFromSettings(getAppStorage().settings);
 }
 
+async function defaultLoadDisabledSkillNames(): Promise<Set<string>> {
+  if (typeof window === "undefined") {
+    return new Set();
+  }
+
+  try {
+    const [{ getAppStorage }, { loadDisabledSkillNamesFromSettings }] = await Promise.all([
+      import("@mariozechner/pi-web-ui/dist/storage/app-storage.js"),
+      import("../skills/activation-store.js"),
+    ]);
+
+    return loadDisabledSkillNamesFromSettings(getAppStorage().settings);
+  } catch (error: unknown) {
+    console.warn("[skills] Failed to load skill activation state for tool:", error);
+    return new Set();
+  }
+}
+
 export interface SkillsToolDependencies {
   getSessionId?: () => string | null;
   readCache?: SkillReadCache;
   catalog?: SkillsToolCatalog;
   isExternalDiscoveryEnabled?: () => boolean | Promise<boolean>;
   loadExternalSkills?: () => Promise<AgentSkillDefinition[]>;
+  loadDisabledSkillNames?: () => Promise<Set<string>>;
 }
 
 function renderSkillListMarkdown(args: {
@@ -195,17 +215,21 @@ async function resolveAllSkills(args: {
   catalog: SkillsToolCatalog;
   externalDiscoveryEnabled: boolean;
   loadExternalSkills: () => Promise<AgentSkillDefinition[]>;
+  loadDisabledSkillNames: () => Promise<Set<string>>;
 }): Promise<AgentSkillDefinition[]> {
   const bundled = await resolveCatalogSkills(args.catalog);
 
-  if (!args.externalDiscoveryEnabled) {
-    return bundled;
-  }
+  const merged = args.externalDiscoveryEnabled
+    ? mergeSkillsByName({
+      preferred: bundled,
+      fallback: await args.loadExternalSkills(),
+    })
+    : bundled;
 
-  const external = await args.loadExternalSkills();
-  return mergeSkillsByName({
-    preferred: bundled,
-    fallback: external,
+  const disabledSkillNames = await args.loadDisabledSkillNames();
+  return filterAgentSkillsByEnabledState({
+    skills: merged,
+    disabledSkillNames,
   });
 }
 
@@ -226,12 +250,14 @@ export function createSkillsTool(
       const catalog = dependencies.catalog ?? await getDefaultCatalog();
       const isExternalDiscoveryEnabled = dependencies.isExternalDiscoveryEnabled ?? defaultIsExternalDiscoveryEnabled;
       const loadExternalSkills = dependencies.loadExternalSkills ?? defaultLoadExternalSkills;
+      const loadDisabledSkillNames = dependencies.loadDisabledSkillNames ?? defaultLoadDisabledSkillNames;
 
       const externalDiscoveryEnabled = await isExternalDiscoveryEnabled();
       const skills = await resolveAllSkills({
         catalog,
         externalDiscoveryEnabled,
         loadExternalSkills,
+        loadDisabledSkillNames,
       });
 
       if (params.action === "list") {

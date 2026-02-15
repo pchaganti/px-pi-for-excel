@@ -6,11 +6,17 @@ import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.
 import { isExperimentalFeatureEnabled } from "../../experiments/flags.js";
 import { mergeAgentSkillDefinitions, listAgentSkills } from "../../skills/catalog.js";
 import {
+  filterAgentSkillsByEnabledState,
+  loadDisabledSkillNamesFromSettings,
+  setSkillEnabledInSettings,
+} from "../../skills/activation-store.js";
+import {
   loadExternalAgentSkillsFromSettings,
   removeExternalAgentSkillFromSettings,
   upsertExternalAgentSkillInSettings,
   type ExternalSkillSettingsStore,
 } from "../../skills/external-store.js";
+import { dispatchSkillsChanged } from "../../skills/events.js";
 import type { AgentSkillDefinition } from "../../skills/types.js";
 import {
   closeOverlayById,
@@ -27,8 +33,10 @@ interface SkillsSnapshot {
   bundled: AgentSkillDefinition[];
   external: AgentSkillDefinition[];
   active: AgentSkillDefinition[];
+  disabledNames: Set<string>;
   externalDiscoveryEnabled: boolean;
   externalLoadError: string | null;
+  activationLoadError: string | null;
 }
 
 function normalizeSkillName(name: string): string {
@@ -42,10 +50,13 @@ function formatSkillCount(count: number): string {
 function createSkillItem(args: {
   skill: AgentSkillDefinition;
   active: boolean;
+  enabled: boolean;
   shadowed: boolean;
   removable: boolean;
+  toggleable: boolean;
   busy: boolean;
   onRemove?: () => void;
+  onToggleEnabled?: () => void;
 }): HTMLElement {
   const item = document.createElement("div");
   item.className = "pi-overlay-surface pi-skills-item";
@@ -61,6 +72,9 @@ function createSkillItem(args: {
   badges.className = "pi-overlay-badges";
   badges.appendChild(createOverlayBadge(args.skill.sourceKind, "muted"));
   badges.appendChild(createOverlayBadge(args.active ? "active" : "inactive", args.active ? "ok" : "muted"));
+  if (!args.enabled) {
+    badges.appendChild(createOverlayBadge("disabled", "warn"));
+  }
   if (args.shadowed) {
     badges.appendChild(createOverlayBadge("shadowed", "warn"));
   }
@@ -88,10 +102,23 @@ function createSkillItem(args: {
 
   item.append(top, description, meta);
 
-  if (args.removable && args.onRemove) {
-    const actions = document.createElement("div");
-    actions.className = "pi-overlay-actions pi-overlay-actions--inline";
+  const actions = document.createElement("div");
+  actions.className = "pi-overlay-actions pi-overlay-actions--inline";
 
+  if (args.toggleable && args.onToggleEnabled) {
+    const toggleButton = createOverlayButton({
+      text: args.enabled ? "Disable" : "Enable",
+      className: "pi-overlay-btn--compact",
+    });
+    toggleButton.disabled = args.busy;
+    toggleButton.addEventListener("click", () => {
+      args.onToggleEnabled?.();
+    });
+
+    actions.appendChild(toggleButton);
+  }
+
+  if (args.removable && args.onRemove) {
     const removeButton = createOverlayButton({
       text: "Remove",
       className: "pi-overlay-btn--compact pi-overlay-btn--danger",
@@ -102,6 +129,9 @@ function createSkillItem(args: {
     });
 
     actions.appendChild(removeButton);
+  }
+
+  if (actions.childElementCount > 0) {
     item.appendChild(actions);
   }
 
@@ -112,11 +142,14 @@ function renderSkillList(args: {
   container: HTMLElement;
   skills: readonly AgentSkillDefinition[];
   activeNames: ReadonlySet<string>;
+  disabledNames: ReadonlySet<string>;
   shadowedNames?: ReadonlySet<string>;
   emptyMessage: string;
   removable?: boolean;
+  toggleable?: boolean;
   busy: boolean;
   onRemove?: (skillName: string) => void;
+  onToggleEnabled?: (skillName: string) => void;
 }): void {
   args.container.replaceChildren();
 
@@ -130,13 +163,18 @@ function renderSkillList(args: {
 
   for (const skill of args.skills) {
     const normalizedName = normalizeSkillName(skill.name);
+    const shadowed = args.shadowedNames?.has(normalizedName) ?? false;
+
     args.container.appendChild(createSkillItem({
       skill,
       active: args.activeNames.has(normalizedName),
-      shadowed: args.shadowedNames?.has(normalizedName) ?? false,
+      enabled: !args.disabledNames.has(normalizedName),
+      shadowed,
       removable: args.removable === true,
+      toggleable: args.toggleable === true && !shadowed,
       busy: args.busy,
       onRemove: args.onRemove ? () => args.onRemove?.(skill.name) : undefined,
+      onToggleEnabled: args.onToggleEnabled ? () => args.onToggleEnabled?.(skill.name) : undefined,
     }));
   }
 }
@@ -154,18 +192,35 @@ async function buildSnapshot(settings: ExternalSkillSettingsStore): Promise<Skil
     console.warn("[skills] Failed to load external skills for UI:", error);
   }
 
+  let disabledNames = new Set<string>();
+  let activationLoadError: string | null = null;
+
+  try {
+    disabledNames = await loadDisabledSkillNamesFromSettings(settings);
+  } catch (error: unknown) {
+    activationLoadError = error instanceof Error ? error.message : "Unknown error";
+    console.warn("[skills] Failed to load skill activation state for UI:", error);
+  }
+
   const externalDiscoveryEnabled = isExperimentalFeatureEnabled("external_skills_discovery");
 
-  const active = externalDiscoveryEnabled
+  const discoverable = externalDiscoveryEnabled
     ? mergeAgentSkillDefinitions(bundled, external)
     : bundled;
+
+  const active = filterAgentSkillsByEnabledState({
+    skills: discoverable,
+    disabledSkillNames: disabledNames,
+  });
 
   return {
     bundled,
     external,
     active,
+    disabledNames,
     externalDiscoveryEnabled,
     externalLoadError,
+    activationLoadError,
   };
 }
 
@@ -202,7 +257,7 @@ export function showSkillsDialog(): void {
   summaryText.className = "pi-skills-summary";
   summaryText.textContent = "Loading skills…";
 
-  const defaultSummaryHint = "Skills are injected when relevant; the agent can read full SKILL.md content with the skills tool.";
+  const defaultSummaryHint = "Enabled skills are injected when relevant; disable a skill here to keep it out of the prompt.";
   const summaryHint = document.createElement("p");
   summaryHint.className = "pi-overlay-hint";
   summaryHint.textContent = defaultSummaryHint;
@@ -284,6 +339,39 @@ export function showSkillsDialog(): void {
     }
   };
 
+  const toggleSkillEnabled = (skillName: string, disabledNames: ReadonlySet<string>): void => {
+    if (busy) return;
+
+    const normalizedName = normalizeSkillName(skillName);
+    const currentlyEnabled = !disabledNames.has(normalizedName);
+
+    void (async () => {
+      setBusy(true);
+      try {
+        const result = await setSkillEnabledInSettings({
+          settings,
+          name: skillName,
+          enabled: !currentlyEnabled,
+        });
+
+        if (result.changed) {
+          showToast(`${result.enabled ? "Enabled" : "Disabled"} skill: ${skillName}`);
+          dispatchSkillsChanged({ reason: "activation" });
+        } else {
+          showToast(`Skill already ${result.enabled ? "enabled" : "disabled"}: ${skillName}`);
+        }
+
+        snapshot = await buildSnapshot(settings);
+        render(snapshot);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        showToast(`Failed to update skill activation: ${message}`);
+      } finally {
+        setBusy(false);
+      }
+    })();
+  };
+
   const render = (current: SkillsSnapshot): void => {
     const activeNames = new Set(current.active.map((skill) => normalizeSkillName(skill.name)));
     const bundledNames = new Set(current.bundled.map((skill) => normalizeSkillName(skill.name)));
@@ -302,8 +390,18 @@ export function showSkillsDialog(): void {
     summaryHint.textContent = defaultSummaryHint;
     summaryHint.classList.remove("pi-overlay-text-warning");
 
+    const warningMessages: string[] = [];
+
     if (current.externalLoadError) {
-      summaryHint.textContent = `External skills could not be loaded (${current.externalLoadError}). Showing bundled skills only.`;
+      warningMessages.push(`External skills could not be loaded (${current.externalLoadError}).`);
+    }
+
+    if (current.activationLoadError) {
+      warningMessages.push(`Skill activation state could not be loaded (${current.activationLoadError}).`);
+    }
+
+    if (warningMessages.length > 0) {
+      summaryHint.textContent = `${warningMessages.join(" ")} Showing default behavior.`;
       summaryHint.classList.add("pi-overlay-text-warning");
     }
 
@@ -311,6 +409,7 @@ export function showSkillsDialog(): void {
       container: activeList,
       skills: current.active,
       activeNames,
+      disabledNames: current.disabledNames,
       emptyMessage: "No active skills.",
       busy,
     });
@@ -319,8 +418,13 @@ export function showSkillsDialog(): void {
       container: bundledList,
       skills: current.bundled,
       activeNames,
+      disabledNames: current.disabledNames,
       emptyMessage: "No bundled skills are available in this build.",
+      toggleable: true,
       busy,
+      onToggleEnabled: (skillName: string) => {
+        toggleSkillEnabled(skillName, current.disabledNames);
+      },
     });
 
     const externalEmptyMessage = current.externalDiscoveryEnabled
@@ -331,10 +435,15 @@ export function showSkillsDialog(): void {
       container: externalList,
       skills: current.external,
       activeNames,
+      disabledNames: current.disabledNames,
       shadowedNames: shadowedExternalNames,
       emptyMessage: externalEmptyMessage,
       removable: true,
+      toggleable: true,
       busy,
+      onToggleEnabled: (skillName: string) => {
+        toggleSkillEnabled(skillName, current.disabledNames);
+      },
       onRemove: (skillName: string) => {
         if (busy) return;
 
@@ -350,6 +459,7 @@ export function showSkillsDialog(): void {
               showToast(`External skill not found: ${skillName}`);
             } else {
               showToast(`Removed external skill: ${skillName}`);
+              dispatchSkillsChanged({ reason: "catalog" });
             }
 
             snapshot = await buildSnapshot(settings);
@@ -384,6 +494,7 @@ export function showSkillsDialog(): void {
 
         showToast(`Saved external skill: ${result.name}`);
         installInput.value = "";
+        dispatchSkillsChanged({ reason: "catalog" });
 
         snapshot = await buildSnapshot(settings);
         render(snapshot);

@@ -197,3 +197,31 @@ void test("skills read resolves external skill when discovery is enabled", async
   assert.equal(result.details.sourceKind, "external");
   assert.equal(result.details.location, CUSTOM_EXTERNAL_SKILL.location);
 });
+
+void test("skills list/read exclude disabled skills", async () => {
+  const tool = createSkillsTool({
+    catalog: {
+      list: () => [WEB_SEARCH_SKILL],
+    },
+    isExternalDiscoveryEnabled: () => true,
+    loadExternalSkills: () => Promise.resolve([CUSTOM_EXTERNAL_SKILL]),
+    loadDisabledSkillNames: () => Promise.resolve(new Set(["custom-skill"])),
+  });
+
+  const listResult = await tool.execute("call-list-disabled", { action: "list" });
+
+  assert.ok(isSkillsListDetails(listResult.details));
+  if (!isSkillsListDetails(listResult.details)) return;
+
+  assert.deepEqual(listResult.details.names, ["web-search"]);
+
+  const readResult = await tool.execute("call-read-disabled", {
+    action: "read",
+    name: "custom-skill",
+  });
+
+  assert.ok(isSkillsErrorDetails(readResult.details));
+  if (!isSkillsErrorDetails(readResult.details)) return;
+
+  assert.match(readResult.details.message, /Skill not found: `custom-skill`/);
+});
