@@ -4,7 +4,13 @@
  * Integrations can be enabled in two scopes:
  * - session: only for one chat tab/session
  * - workbook: applies to all sessions for the active workbook
+ *
+ * Scopes that have never been configured (null in storage) inherit the
+ * catalog defaults (e.g. web_search is enabled by default).  Once any
+ * explicit toggle is saved the defaults are no longer applied for that scope.
  */
+
+import { getDefaultEnabledIntegrationIds } from "./catalog.js";
 
 export type IntegrationScope = "session" | "workbook";
 
@@ -78,6 +84,13 @@ async function getScopeIntegrationIds(
     ? sessionIntegrationsKey(identifier)
     : workbookIntegrationsKey(identifier);
   const raw = await settings.get(key);
+
+  // Never configured → apply catalog defaults.
+  // Explicitly saved (even []) → use stored value.
+  if (raw == null) {
+    return normalizeIntegrationIds(getDefaultEnabledIntegrationIds(), knownIntegrationIds);
+  }
+
   return normalizeIntegrationIds(raw, knownIntegrationIds);
 }
 
@@ -189,6 +202,8 @@ function parseStoredBoolean(value: unknown): boolean {
 
 export async function getExternalToolsEnabled(settings: IntegrationSettingsStore): Promise<boolean> {
   const raw = await settings.get(EXTERNAL_TOOLS_ENABLED_SETTING_KEY);
+  // Default to true so web search (Jina, zero-config) works out of the box.
+  if (raw == null) return true;
   return parseStoredBoolean(raw);
 }
 

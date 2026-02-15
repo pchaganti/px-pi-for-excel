@@ -70,7 +70,7 @@ void test("setIntegrationEnabledInScope toggles session/workbook flags", async (
   );
   assert.deepEqual(
     await getWorkbookIntegrationIds(settings, "workbook-2", KNOWN_INTEGRATIONS),
-    ["mcp_tools"],
+    ["web_search", "mcp_tools"],
   );
 
   await setIntegrationEnabledInScope({
@@ -88,14 +88,66 @@ void test("setIntegrationEnabledInScope toggles session/workbook flags", async (
   );
 });
 
-void test("external tools gate defaults off and can be enabled", async () => {
+void test("external tools gate defaults on and can be disabled", async () => {
   const settings = new MemorySettingsStore();
 
-  assert.equal(await getExternalToolsEnabled(settings), false);
-
-  await setExternalToolsEnabled(settings, true);
   assert.equal(await getExternalToolsEnabled(settings), true);
 
   await setExternalToolsEnabled(settings, false);
   assert.equal(await getExternalToolsEnabled(settings), false);
+
+  await setExternalToolsEnabled(settings, true);
+  assert.equal(await getExternalToolsEnabled(settings), true);
+});
+
+void test("unconfigured session scope returns default-enabled integrations", async () => {
+  const settings = new MemorySettingsStore();
+
+  const ids = await getSessionIntegrationIds(settings, "new-session", KNOWN_INTEGRATIONS);
+  assert.deepEqual(ids, ["web_search"]);
+});
+
+void test("explicitly cleared session scope returns empty", async () => {
+  const settings = new MemorySettingsStore();
+
+  // Set then clear web_search → stores [] explicitly
+  await setIntegrationEnabledInScope({
+    settings,
+    scope: "session",
+    identifier: "session-x",
+    integrationId: "web_search",
+    enabled: true,
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
+  });
+  await setIntegrationEnabledInScope({
+    settings,
+    scope: "session",
+    identifier: "session-x",
+    integrationId: "web_search",
+    enabled: false,
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
+  });
+
+  const ids = await getSessionIntegrationIds(settings, "session-x", KNOWN_INTEGRATIONS);
+  assert.deepEqual(ids, []);
+});
+
+void test("unconfigured workbook scope returns default-enabled integrations", async () => {
+  const settings = new MemorySettingsStore();
+
+  const ids = await getWorkbookIntegrationIds(settings, "new-workbook", KNOWN_INTEGRATIONS);
+  assert.deepEqual(ids, ["web_search"]);
+});
+
+void test("resolveConfiguredIntegrationIds includes defaults for fresh session+workbook", async () => {
+  const settings = new MemorySettingsStore();
+
+  const ids = await resolveConfiguredIntegrationIds({
+    settings,
+    sessionId: "fresh-session",
+    workbookId: "fresh-workbook",
+    knownIntegrationIds: KNOWN_INTEGRATIONS,
+  });
+
+  assert.deepEqual(ids, ["web_search"]);
 });
