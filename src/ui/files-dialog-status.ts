@@ -1,17 +1,33 @@
-import type { FilesDialogFilterValue } from "./files-dialog-filtering.js";
+import { formatBytes } from "../files/mime.js";
+
+function formatFileCount(totalCount: number): string {
+  return `${totalCount} file${totalCount === 1 ? "" : "s"}`;
+}
+
+function formatBackendLabel(args: {
+  backendLabel: string;
+  nativeDirectoryName?: string | null;
+}): string {
+  const directoryName = args.nativeDirectoryName?.trim();
+  if (!directoryName) {
+    return args.backendLabel;
+  }
+
+  return `${args.backendLabel}: ${directoryName}`;
+}
 
 export function buildFilesDialogStatusMessage(args: {
   totalCount: number;
-  filteredCount: number;
-  selectedFilter: FilesDialogFilterValue;
-  activeFilterLabel: string;
+  totalSizeBytes: number;
+  backendLabel: string;
+  nativeDirectoryName?: string | null;
 }): string {
-  if (args.selectedFilter === "all") {
-    return `${args.totalCount} file${args.totalCount === 1 ? "" : "s"} available to the agent.`;
-  }
-
-  return (
-    `${args.filteredCount} of ${args.totalCount} file${args.totalCount === 1 ? "" : "s"} shown`
-    + ` · ${args.activeFilterLabel}.`
-  );
+  return [
+    formatFileCount(args.totalCount),
+    formatBytes(args.totalSizeBytes),
+    formatBackendLabel({
+      backendLabel: args.backendLabel,
+      nativeDirectoryName: args.nativeDirectoryName,
+    }),
+  ].join(" · ");
 }

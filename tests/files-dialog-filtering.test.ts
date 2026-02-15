@@ -3,116 +3,65 @@ import { test } from "node:test";
 
 import type { WorkspaceFileEntry } from "../src/files/types.ts";
 import {
-  buildFilesDialogFilterOptions,
-  countBuiltInDocs,
+  filterFilesDialogEntries,
   fileMatchesFilesDialogFilter,
-  isFilesDialogFilterSelectable,
-  parseFilesDialogFilterValue,
+  normalizeFilesDialogFilterText,
 } from "../src/ui/files-dialog-filtering.ts";
-import { buildFilesDialogTree } from "../src/ui/files-dialog-tree.ts";
 
-function makeFile(args: {
-  path: string;
-  sourceKind?: "workspace" | "builtin-doc";
-  workbookId?: string;
-}): WorkspaceFileEntry {
+function makeFile(path: string): WorkspaceFileEntry {
   return {
-    path: args.path,
-    name: args.path.split("/").at(-1) ?? args.path,
+    path,
+    name: path.split("/").at(-1) ?? path,
     size: 10,
     modifiedAt: 0,
     mimeType: "text/plain",
     kind: "text",
-    sourceKind: args.sourceKind ?? "workspace",
-    readOnly: args.sourceKind === "builtin-doc",
-    workbookTag: args.workbookId
-      ? {
-        workbookId: args.workbookId,
-        workbookLabel: "Book",
-        taggedAt: 0,
-      }
-      : undefined,
+    sourceKind: "workspace",
+    readOnly: false,
   };
 }
 
-void test("filter options include built-in docs and current workbook state", () => {
+void test("normalizeFilesDialogFilterText trims and lowercases", () => {
+  assert.equal(normalizeFilesDialogFilterText("  Notes/Q1  "), "notes/q1");
+  assert.equal(normalizeFilesDialogFilterText("   "), "");
+});
+
+void test("fileMatchesFilesDialogFilter uses case-insensitive path substring", () => {
+  const file = makeFile("notes/Quarterly-Plan.md");
+
+  assert.equal(fileMatchesFilesDialogFilter({ file, filterText: "quarterly" }), true);
+  assert.equal(fileMatchesFilesDialogFilter({ file, filterText: "NOTES/QU" }), true);
+  assert.equal(fileMatchesFilesDialogFilter({ file, filterText: "missing" }), false);
+});
+
+void test("filterFilesDialogEntries returns all files when filter is empty", () => {
   const files = [
-    makeFile({ path: "notes.md" }),
-    makeFile({ path: "assistant-docs/docs/extensions.md", sourceKind: "builtin-doc" }),
+    makeFile("notes/index.md"),
+    makeFile("imports/budget.csv"),
   ];
 
-  const options = buildFilesDialogFilterOptions({
+  const result = filterFilesDialogEntries({
     files,
-    currentWorkbookId: null,
-    currentWorkbookLabel: null,
-    builtinDocsCount: countBuiltInDocs(files),
+    filterText: "   ",
   });
 
-  const builtin = options.find((option) => option.value === "builtin");
-  const current = options.find((option) => option.value === "current");
-
-  assert.equal(builtin?.label, "Built-in docs (1)");
-  assert.equal(current?.disabled, true);
-  assert.equal(isFilesDialogFilterSelectable({ filter: "current", options }), false);
+  assert.deepEqual(result.map((file) => file.path), [
+    "notes/index.md",
+    "imports/budget.csv",
+  ]);
 });
 
-void test("parseFilesDialogFilterValue handles known and unknown values", () => {
-  assert.equal(parseFilesDialogFilterValue("builtin"), "builtin");
-  assert.equal(parseFilesDialogFilterValue("tag:abc"), "tag:abc");
-  assert.equal(parseFilesDialogFilterValue("unknown"), "all");
-});
-
-void test("fileMatchesFilesDialogFilter handles builtin/current/tag filters", () => {
-  const builtin = makeFile({ path: "assistant-docs/README.md", sourceKind: "builtin-doc" });
-  const tagged = makeFile({ path: "notes.md", workbookId: "wb-1" });
-
-  assert.equal(fileMatchesFilesDialogFilter({
-    file: builtin,
-    filter: "builtin",
-    currentWorkbookId: null,
-  }), true);
-
-  assert.equal(fileMatchesFilesDialogFilter({
-    file: tagged,
-    filter: "current",
-    currentWorkbookId: "wb-1",
-  }), true);
-
-  assert.equal(fileMatchesFilesDialogFilter({
-    file: tagged,
-    filter: "tag:wb-1",
-    currentWorkbookId: null,
-  }), true);
-});
-
-void test("buildFilesDialogTree groups nested folders and root files", () => {
+void test("filterFilesDialogEntries returns only matching paths", () => {
   const files = [
-    makeFile({ path: "notes/index.md" }),
-    makeFile({ path: "workbooks/budget/extract.csv" }),
-    makeFile({ path: "workbooks/budget/analysis.md" }),
-    makeFile({ path: "workbooks/forecast/input.json" }),
-    makeFile({ path: "standalone.txt" }),
+    makeFile("notes/index.md"),
+    makeFile("notes/meeting-notes.md"),
+    makeFile("imports/raw.csv"),
   ];
 
-  const tree = buildFilesDialogTree(files);
+  const result = filterFilesDialogEntries({
+    files,
+    filterText: "notes/meeting",
+  });
 
-  assert.equal(tree.rootFiles.length, 1);
-  assert.equal(tree.rootFiles[0]?.path, "standalone.txt");
-
-  const notes = tree.folders.find((folder) => folder.folderPath === "notes");
-  assert.ok(notes);
-  assert.equal(notes.totalFileCount, 1);
-  assert.equal(notes.files[0]?.path, "notes/index.md");
-
-  const workbooks = tree.folders.find((folder) => folder.folderPath === "workbooks");
-  assert.ok(workbooks);
-  assert.equal(workbooks.totalFileCount, 3);
-
-  const budget = workbooks.children.find((folder) => folder.folderPath === "workbooks/budget");
-  assert.ok(budget);
-  assert.equal(budget.totalFileCount, 2);
-
-  const forecast = workbooks.children.find((folder) => folder.folderPath === "workbooks/forecast");
-  assert.ok(forecast);
-  assert.equal(forecast.totalFileCount, 1);
+  assert.deepEqual(result.map((file) => file.path), ["notes/meeting-notes.md"]);
 });
