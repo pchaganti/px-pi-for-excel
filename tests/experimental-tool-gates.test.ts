@@ -201,6 +201,32 @@ void test("execute_office_js requires explicit user approval", async () => {
   assert.equal(executeCount, 0);
 });
 
+void test("execute_office_js aborts if cancellation happens during approval", async () => {
+  let executeCount = 0;
+
+  const abortController = new AbortController();
+  const [officeTool] = await applyExperimentalToolGates([
+    createTestTool("execute_office_js", () => {
+      executeCount += 1;
+    }),
+  ], {
+    requestOfficeJsExecuteApproval: () => {
+      abortController.abort();
+      return Promise.resolve(true);
+    },
+  });
+
+  await assert.rejects(
+    () => officeTool.execute("call-office", {
+      explanation: "Rebuild totals",
+      code: "return { ok: true };",
+    }, abortController.signal),
+    /aborted/i,
+  );
+
+  assert.equal(executeCount, 0);
+});
+
 void test("execute_office_js fails closed when confirmation UI is unavailable", async () => {
   let executeCount = 0;
 

@@ -27,6 +27,14 @@ function getRecordValue(record: Record<string, unknown>, key: string): string | 
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) {
+    return;
+  }
+
+  throw new Error("Aborted");
+}
+
 export function buildPythonBridgeApprovalMessage(
   toolName: string,
   bridgeUrl: string,
@@ -143,12 +151,15 @@ function wrapTmuxToolWithHardGate(
   return {
     ...tool,
     execute: async (toolCallId, params, signal, onUpdate) => {
+      throwIfAborted(signal);
+
       const gate = await evaluateTmuxBridgeGate(dependencies);
       if (!gate.allowed) {
         const reason = gate.reason ?? "bridge_unreachable";
         throw new Error(buildTmuxBridgeGateErrorMessage(reason));
       }
 
+      throwIfAborted(signal);
       return tool.execute(toolCallId, params, signal, onUpdate);
     },
   };
@@ -165,11 +176,14 @@ function wrapExecuteOfficeJsToolWithHardGate(
   return {
     ...tool,
     execute: async (toolCallId, params, signal, onUpdate) => {
+      throwIfAborted(signal);
+
       const approved = await requestApproval(getOfficeJsExecuteApprovalRequest(params));
       if (!approved) {
         throw new Error("Office.js execution cancelled by user.");
       }
 
+      throwIfAborted(signal);
       return tool.execute(toolCallId, params, signal, onUpdate);
     },
   };
@@ -224,6 +238,8 @@ function wrapPythonToolWithOptionalBridgeApproval(
   return {
     ...tool,
     execute: async (toolCallId, params, signal, onUpdate) => {
+      throwIfAborted(signal);
+
       const gate = await evaluatePythonBridgeGate(dependencies);
       if (gate.allowed) {
         const bridgeUrl = gate.bridgeUrl;
@@ -231,6 +247,7 @@ function wrapPythonToolWithOptionalBridgeApproval(
           throw new Error("Python bridge gate did not return a bridge URL.");
         }
 
+        throwIfAborted(signal);
         await approveBridgeUsage(tool.name, bridgeUrl, params);
       } else {
         const reason = gate.reason ?? "bridge_unreachable";
@@ -241,6 +258,7 @@ function wrapPythonToolWithOptionalBridgeApproval(
         }
       }
 
+      throwIfAborted(signal);
       return tool.execute(toolCallId, params, signal, onUpdate);
     },
   };
@@ -258,6 +276,8 @@ function wrapPythonBridgeOnlyToolWithApprovalGate(
   return {
     ...tool,
     execute: async (toolCallId, params, signal, onUpdate) => {
+      throwIfAborted(signal);
+
       const gate = await evaluatePythonBridgeGate(dependencies);
       if (!gate.allowed) {
         const reason = gate.reason ?? "bridge_unreachable";
@@ -269,8 +289,10 @@ function wrapPythonBridgeOnlyToolWithApprovalGate(
         throw new Error("Python bridge gate did not return a bridge URL.");
       }
 
+      throwIfAborted(signal);
       await approveBridgeUsage(tool.name, bridgeUrl, params);
 
+      throwIfAborted(signal);
       return tool.execute(toolCallId, params, signal, onUpdate);
     },
   };

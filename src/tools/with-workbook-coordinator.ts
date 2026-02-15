@@ -183,6 +183,8 @@ function wrapTool<TParameters extends TSchema, TDetails>(
         params,
       });
 
+      throwIfAborted(signal);
+
       const out = await coordinator.runWrite(
         context,
         () => {
