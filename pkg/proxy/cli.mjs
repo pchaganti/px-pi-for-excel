@@ -44,10 +44,9 @@ function run(command, args, options = {}) {
   }
 }
 
-function tryRun(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    stdio: "inherit",
-    ...options,
+function supportsMkcertCli(command) {
+  const result = spawnSync(command, ["-CAROOT"], {
+    stdio: "ignore",
   });
 
   if (result.error) {
@@ -57,12 +56,27 @@ function tryRun(command, args, options = {}) {
   return result.status === 0 && !result.signal;
 }
 
-function ensureMkcert() {
-  if (commandExists("mkcert")) {
-    return;
+function resolveMkcertCommand() {
+  const candidates = [];
+
+  if (process.platform === "darwin") {
+    const brewCandidates = ["/opt/homebrew/bin/mkcert", "/usr/local/bin/mkcert"];
+    for (const candidate of brewCandidates) {
+      if (fs.existsSync(candidate)) {
+        candidates.push(candidate);
+      }
+    }
   }
 
-  console.log("[pi-for-excel-proxy] mkcert not found.");
+  if (commandExists("mkcert")) {
+    candidates.push("mkcert");
+  }
+
+  for (const candidate of candidates) {
+    if (supportsMkcertCli(candidate)) {
+      return candidate;
+    }
+  }
 
   if (process.platform === "darwin") {
     if (!commandExists("brew")) {
@@ -74,16 +88,44 @@ function ensureMkcert() {
     console.log("[pi-for-excel-proxy] Installing mkcert via Homebrew...");
     run("brew", ["install", "mkcert"]);
 
-    if (!commandExists("mkcert")) {
-      console.error("[pi-for-excel-proxy] mkcert installation completed but mkcert is still unavailable in PATH.");
-      process.exit(1);
+    const brewCandidates = ["/opt/homebrew/bin/mkcert", "/usr/local/bin/mkcert", "mkcert"];
+    for (const candidate of brewCandidates) {
+      if (candidate !== "mkcert" && !fs.existsSync(candidate)) {
+        continue;
+      }
+
+      if (supportsMkcertCli(candidate)) {
+        return candidate;
+      }
     }
 
-    return;
+    console.error("[pi-for-excel-proxy] mkcert is installed but not compatible with required CLI flags.");
+    console.error("[pi-for-excel-proxy] Ensure FiloSottile mkcert is used (not the npm mkcert package).");
+    process.exit(1);
   }
 
   console.error("[pi-for-excel-proxy] Please install mkcert, then run this command again.");
   console.error("[pi-for-excel-proxy] Install instructions: https://github.com/FiloSottile/mkcert#installation");
+  process.exit(1);
+}
+
+function installMkcertCa(mkcertCommand) {
+  const result = spawnSync(mkcertCommand, ["-install"], {
+    stdio: "inherit",
+  });
+
+  if (!result.error && result.status === 0 && !result.signal) {
+    return;
+  }
+
+  console.error("[pi-for-excel-proxy] Failed to install mkcert local CA.");
+  console.error("[pi-for-excel-proxy] Run manually: mkcert -install");
+  console.error("[pi-for-excel-proxy] If it fails, fix trust-store permissions and retry.");
+
+  if (typeof result.status === "number" && result.status !== 0) {
+    process.exit(result.status);
+  }
+
   process.exit(1);
 }
 
@@ -94,20 +136,12 @@ function ensureCertificates() {
     return;
   }
 
-  ensureMkcert();
+  const mkcertCommand = resolveMkcertCommand();
 
   console.log("[pi-for-excel-proxy] Generating local HTTPS certificates...");
-  const installSucceeded = tryRun("mkcert", ["-install"]);
-  if (!installSucceeded) {
-    const fallbackSucceeded = tryRun("mkcert", ["install"]);
-    if (!fallbackSucceeded) {
-      console.error("[pi-for-excel-proxy] Failed to install mkcert local CA.");
-      console.error("[pi-for-excel-proxy] Tried: mkcert -install, mkcert install");
-      process.exit(1);
-    }
-  }
+  installMkcertCa(mkcertCommand);
 
-  run("mkcert", ["-key-file", keyPath, "-cert-file", certPath, "localhost"], {
+  run(mkcertCommand, ["-key-file", keyPath, "-cert-file", certPath, "localhost"], {
     cwd: certDir,
   });
 
