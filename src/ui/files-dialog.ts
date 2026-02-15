@@ -6,37 +6,75 @@ import { base64ToBytes } from "../files/encoding.js";
 import { formatBytes } from "../files/mime.js";
 import {
   FILES_WORKSPACE_CHANGED_EVENT,
+  type WorkspaceBackendStatus,
   type WorkspaceFileEntry,
+  type WorkspaceFileLocationKind,
+  type WorkspaceFileWorkbookTag,
 } from "../files/types.js";
 import { type FilesWorkspaceAuditContext, getFilesWorkspace } from "../files/workspace.js";
 import { getErrorMessage } from "../utils/errors.js";
-import { formatWorkbookLabel, getWorkbookContext } from "../workbook/context.js";
+import { requestConfirmationDialog } from "./confirm-dialog.js";
+import {
+  buildFilesDialogSections,
+  isAgentWrittenNotesFilePath,
+  isFilesDialogBuiltInDoc,
+  normalizeFilesDialogFilterText,
+  resolveFilesDialogBadge,
+  resolveFilesDialogConnectFolderButtonState,
+  resolveFilesDialogSourceLabel,
+} from "./files-dialog-filtering.js";
+import { buildFilesDialogStatusMessage } from "./files-dialog-status.js";
 import {
   closeOverlayById,
+  createOverlayCloseButton,
   createOverlayDialog,
   createOverlayHeader,
 } from "./overlay-dialog.js";
-import { requestConfirmationDialog } from "./confirm-dialog.js";
 import { FILES_WORKSPACE_OVERLAY_ID } from "./overlay-ids.js";
 import { requestTextInputDialog } from "./text-input-dialog.js";
-import {
-  buildFilesDialogFilterOptions,
-  countBuiltInDocs,
-  fileMatchesFilesDialogFilter,
-  isFilesDialogFilterSelectable,
-  type FilesDialogFilterOption,
-  type FilesDialogFilterValue,
-} from "./files-dialog-filtering.js";
-import { buildFilesDialogStatusMessage } from "./files-dialog-status.js";
-import { buildFilesDialogTree, type FilesDialogFolderNode } from "./files-dialog-tree.js";
 import { showToast } from "./toast.js";
 
 const OVERLAY_ID = FILES_WORKSPACE_OVERLAY_ID;
+const TEXT_PREVIEW_MAX_LINES = 50;
 
 const DIALOG_AUDIT_CONTEXT: FilesWorkspaceAuditContext = {
   actor: "user",
   source: "files-dialog",
 };
+
+interface DetailPreviewResult {
+  element: HTMLElement;
+  previewTruncated: boolean;
+  objectUrl: string | null;
+}
+
+interface FilesDialogFileRef {
+  path: string;
+  locationKind: WorkspaceFileLocationKind;
+}
+
+function resolveFileLocationKind(file: WorkspaceFileEntry): WorkspaceFileLocationKind {
+  if (file.locationKind) {
+    return file.locationKind;
+  }
+
+  if (isFilesDialogBuiltInDoc(file)) {
+    return "builtin-doc";
+  }
+
+  return "workspace";
+}
+
+function toFileRef(file: WorkspaceFileEntry): FilesDialogFileRef {
+  return {
+    path: file.path,
+    locationKind: resolveFileLocationKind(file),
+  };
+}
+
+function fileMatchesRef(file: WorkspaceFileEntry, ref: FilesDialogFileRef): boolean {
+  return file.path === ref.path && resolveFileLocationKind(file) === ref.locationKind;
+}
 
 function formatRelativeDate(timestamp: number): string {
   const now = Date.now();
@@ -49,41 +87,17 @@ function formatRelativeDate(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString();
 }
 
-function formatFileCountLabel(count: number): string {
-  return `${count} file${count === 1 ? "" : "s"}`;
+function isImageMimeType(mimeType: string): boolean {
+  return mimeType.toLowerCase().startsWith("image/");
 }
 
-const WORKSPACE_ROOT_COLLAPSE_KEY = "workspace-root";
-
-function getFolderCollapseKey(folderPath: string): string {
-  return `path:${folderPath}`;
+function isPdfMimeType(mimeType: string): boolean {
+  return mimeType.trim().toLowerCase() === "application/pdf";
 }
 
-function makeButton(label: string, className: string): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = className;
-  button.textContent = label;
-  return button;
-}
-
-function getFileExtension(fileName: string): string | null {
-  const trimmed = fileName.trim();
-  const lastDot = trimmed.lastIndexOf(".");
-  if (lastDot <= 0 || lastDot === trimmed.length - 1) {
-    return null;
-  }
-
-  return trimmed.slice(lastDot + 1).toLowerCase();
-}
-
-function getBinaryPreviewNote(file: WorkspaceFileEntry): string {
-  const extension = getFileExtension(file.name);
-  if (!extension) {
-    return "Preview not available for this binary file. Use Download to inspect it locally.";
-  }
-
-  return `Preview not available for .${extension} files. Use Download to inspect locally.`;
+function hasOneOfExtensions(path: string, extensions: readonly string[]): boolean {
+  const lowerPath = path.toLowerCase();
+  return extensions.some((extension) => lowerPath.endsWith(extension));
 }
 
 function resolveRenameDestinationPath(currentPath: string, inputPath: string): string {
@@ -104,18 +118,256 @@ function resolveRenameDestinationPath(currentPath: string, inputPath: string): s
   return `${currentPath.slice(0, lastSlash + 1)}${normalizedInput}`;
 }
 
-function isImageMimeType(mimeType: string): boolean {
-  return mimeType.toLowerCase().startsWith("image/");
+function resolveFileIcon(file: WorkspaceFileEntry): string {
+  if (isFilesDialogBuiltInDoc(file)) {
+    return "📋";
+  }
+
+  if (isImageMimeType(file.mimeType)) {
+    return "🖼";
+  }
+
+  if (hasOneOfExtensions(file.path, [".csv", ".xlsx", ".xls"])) {
+    return "📊";
+  }
+
+  if (isAgentWrittenNotesFilePath(file.path)) {
+    return "📝";
+  }
+
+  return "📄";
 }
 
-function isPdfMimeType(mimeType: string): boolean {
-  return mimeType.trim().toLowerCase() === "application/pdf";
+function buildFileMetaLine(file: WorkspaceFileEntry): string {
+  const sourceLabel = resolveFilesDialogSourceLabel(file);
+  if (isFilesDialogBuiltInDoc(file)) {
+    return `${sourceLabel} · ${formatBytes(file.size)}`;
+  }
+
+  return `${formatBytes(file.size)} · ${sourceLabel} · ${formatRelativeDate(file.modifiedAt)}`;
+}
+
+function resolveDetailTypeName(file: WorkspaceFileEntry): string {
+  if (isImageMimeType(file.mimeType)) {
+    return "Image";
+  }
+
+  if (isPdfMimeType(file.mimeType)) {
+    return "PDF";
+  }
+
+  if (hasOneOfExtensions(file.path, [".csv"])) {
+    return "CSV";
+  }
+
+  if (file.kind === "text") {
+    return "Text";
+  }
+
+  return "Binary";
+}
+
+function buildDetailSubtitle(args: {
+  file: WorkspaceFileEntry;
+  previewTruncated: boolean;
+}): string {
+  const sourceLabel = resolveFilesDialogSourceLabel(args.file);
+  const pieces = [
+    resolveDetailTypeName(args.file),
+    formatBytes(args.file.size),
+    sourceLabel,
+  ];
+
+  if (!isFilesDialogBuiltInDoc(args.file)) {
+    pieces.push(formatRelativeDate(args.file.modifiedAt));
+  }
+
+  const base = pieces.join(" · ");
+  if (args.previewTruncated) {
+    return `${base} (preview truncated)`;
+  }
+
+  return base;
+}
+
+function createChevronIcon(): SVGSVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.classList.add("pi-files-section-head__chevron");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.5");
+
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M4 6l4 4 4-4");
+  svg.appendChild(path);
+
+  return svg;
+}
+
+function createInfoCallout(args: {
+  icon: string;
+  body: Array<HTMLElement | string>;
+}): HTMLDivElement {
+  const callout = document.createElement("div");
+  callout.className = "pi-callout pi-callout--info";
+
+  const icon = document.createElement("span");
+  icon.className = "pi-callout__icon";
+  icon.textContent = args.icon;
+
+  const body = document.createElement("div");
+  body.className = "pi-callout__body";
+
+  for (const item of args.body) {
+    if (typeof item === "string") {
+      body.append(item);
+      continue;
+    }
+
+    body.appendChild(item);
+  }
+
+  callout.append(icon, body);
+  return callout;
+}
+
+function createBinaryPreview(args: {
+  file: WorkspaceFileEntry;
+  icon: string;
+  label: string;
+}): HTMLDivElement {
+  const preview = document.createElement("div");
+  preview.className = "pi-files-detail-preview pi-files-detail-preview--binary";
+
+  const placeholder = document.createElement("div");
+  placeholder.className = "pi-files-detail-preview__placeholder";
+
+  const icon = document.createElement("span");
+  icon.className = "pi-files-detail-preview__placeholder-icon";
+  icon.textContent = args.icon;
+
+  const label = document.createElement("span");
+  label.className = "pi-files-detail-preview__placeholder-label";
+  label.textContent = args.label;
+
+  const size = document.createElement("span");
+  size.className = "pi-files-detail-preview__placeholder-size";
+  size.textContent = formatBytes(args.file.size);
+
+  placeholder.append(icon, label, size);
+  preview.appendChild(placeholder);
+  return preview;
+}
+
+function createTextPreview(text: string, truncated: boolean): {
+  element: HTMLDivElement;
+  hasMoreLines: boolean;
+} {
+  const preview = document.createElement("div");
+  preview.className = "pi-files-detail-preview pi-files-detail-preview--text";
+
+  const lines = text.replaceAll("\r\n", "\n").split("\n");
+  const visibleLines = lines.slice(0, TEXT_PREVIEW_MAX_LINES);
+
+  visibleLines.forEach((line, index) => {
+    const lineRow = document.createElement("div");
+    lineRow.className = "pi-files-detail-preview__line";
+
+    const lineNumber = document.createElement("span");
+    lineNumber.className = "pi-files-detail-preview__ln";
+    lineNumber.textContent = String(index + 1);
+
+    const code = document.createElement("span");
+    code.className = "pi-files-detail-preview__code";
+    code.textContent = line;
+
+    lineRow.append(lineNumber, code);
+    preview.appendChild(lineRow);
+  });
+
+  const hasMoreLines = lines.length > TEXT_PREVIEW_MAX_LINES;
+  if (hasMoreLines && !truncated) {
+    const fadeLine = document.createElement("div");
+    fadeLine.className = "pi-files-detail-preview__line pi-files-detail-preview__line--fade";
+
+    const lineNumber = document.createElement("span");
+    lineNumber.className = "pi-files-detail-preview__ln";
+    lineNumber.textContent = String(TEXT_PREVIEW_MAX_LINES + 1);
+
+    const code = document.createElement("span");
+    code.className = "pi-files-detail-preview__code";
+
+    fadeLine.append(lineNumber, code);
+    preview.appendChild(fadeLine);
+  }
+
+  return {
+    element: preview,
+    hasMoreLines,
+  };
+}
+
+function createUploadActionButton(args: {
+  icon: string;
+  label: string;
+}): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--compact";
+
+  const icon = document.createElement("span");
+  icon.className = "pi-files-actions__icon";
+  icon.textContent = args.icon;
+
+  button.append(icon, ` ${args.label}`);
+  return button;
+}
+
+function createEmptyState(onUpload: () => void): HTMLDivElement {
+  const empty = document.createElement("div");
+  empty.className = "pi-files-empty";
+
+  const icon = document.createElement("div");
+  icon.className = "pi-files-empty__icon";
+  icon.textContent = "📄";
+
+  const title = document.createElement("div");
+  title.className = "pi-files-empty__title";
+  title.textContent = "Give Pi more context";
+
+  const description = document.createElement("p");
+  description.className = "pi-files-empty__desc";
+  description.textContent = "Upload documents, data, or reference material to help Pi give better answers.";
+
+  const uploadButton = document.createElement("button");
+  uploadButton.type = "button";
+  uploadButton.className = "pi-overlay-btn pi-overlay-btn--primary pi-overlay-btn--compact";
+  uploadButton.textContent = "Upload files";
+  uploadButton.addEventListener("click", onUpload);
+
+  const hint = document.createElement("p");
+  hint.className = "pi-files-empty__hint";
+  hint.textContent = "Files are stored locally in your browser.";
+
+  empty.append(icon, title, description, uploadButton, hint);
+  return empty;
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const out = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(out).set(bytes);
   return out;
+}
+
+function createWorkbookTagCallout(workbookTag: WorkspaceFileWorkbookTag): HTMLDivElement {
+  const strong = document.createElement("strong");
+  strong.textContent = workbookTag.workbookLabel;
+
+  return createInfoCallout({
+    icon: "🔗",
+    body: ["Tagged to ", strong, " — included when that workbook is open."],
+  });
 }
 
 export async function showFilesWorkspaceDialog(): Promise<void> {
@@ -132,657 +384,731 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
   const closeOverlay = dialog.close;
 
-  const { header, subtitle } = createOverlayHeader({
+  const listHeaderElements = createOverlayHeader({
     onClose: closeOverlay,
     closeLabel: "Close files",
     title: "Files",
-    subtitle: "Storage: loading…",
+    subtitle: "Documents available to Pi",
   });
 
-  if (!subtitle) {
-    throw new Error("Files overlay subtitle is required.");
-  }
+  const detailHeader = document.createElement("div");
+  detailHeader.className = "pi-overlay-header";
+  detailHeader.hidden = true;
 
-  const controls = document.createElement("div");
-  controls.className = "pi-files-dialog__controls";
+  const detailTitleContainer = document.createElement("div");
+  detailTitleContainer.className = "pi-files-detail-title";
 
-  const uploadButton = makeButton("Upload", "pi-overlay-btn pi-overlay-btn--ghost");
-  const nativeButton = makeButton("Select folder", "pi-overlay-btn pi-overlay-btn--ghost");
+  const detailBackButton = document.createElement("button");
+  detailBackButton.type = "button";
+  detailBackButton.className = "pi-files-detail__back";
+  detailBackButton.setAttribute("aria-label", "Back to file list");
+  detailBackButton.textContent = "←";
+
+  const detailTitleWrap = document.createElement("div");
+  detailTitleWrap.className = "pi-overlay-title-wrap";
+
+  const detailTitle = document.createElement("h2");
+  detailTitle.className = "pi-overlay-title pi-overlay-title--sm";
+
+  const detailSubtitle = document.createElement("p");
+  detailSubtitle.className = "pi-overlay-subtitle";
+
+  detailTitleWrap.append(detailTitle, detailSubtitle);
+  detailTitleContainer.append(detailBackButton, detailTitleWrap);
+
+  const detailCloseButton = createOverlayCloseButton({
+    onClose: closeOverlay,
+    label: "Close files",
+  });
+
+  detailHeader.append(detailTitleContainer, detailCloseButton);
+
+  const actionsRow = document.createElement("div");
+  actionsRow.className = "pi-files-actions";
+
+  const uploadButton = createUploadActionButton({
+    icon: "⬆",
+    label: "Upload",
+  });
+
+  const connectFolderButton = createUploadActionButton({
+    icon: "📁",
+    label: "Connect folder",
+  });
+  connectFolderButton.hidden = true;
+  connectFolderButton.disabled = true;
+
+  actionsRow.append(uploadButton, connectFolderButton);
 
   const hiddenInput = document.createElement("input");
   hiddenInput.type = "file";
   hiddenInput.multiple = true;
-  hiddenInput.className = "pi-files-dialog__hidden-input";
+  hiddenInput.hidden = true;
 
-  const statusLine = document.createElement("div");
-  statusLine.className = "pi-files-dialog__status";
+  const listBody = document.createElement("div");
+  listBody.className = "pi-overlay-body";
 
-  const filters = document.createElement("div");
-  filters.className = "pi-files-dialog__filters";
+  const filterHost = document.createElement("div");
 
-  const quickFilters = document.createElement("div");
-  quickFilters.className = "pi-files-dialog__quick-filters";
+  const filterWrap = document.createElement("div");
+  filterWrap.className = "pi-files-filter";
 
-  const quickAllButton = makeButton("All", "pi-files-dialog__quick-filter");
-  const quickBuiltinButton = makeButton("Built-in docs", "pi-files-dialog__quick-filter");
-  const quickCurrentButton = makeButton("Current workbook", "pi-files-dialog__quick-filter");
+  const filterIcon = document.createElement("span");
+  filterIcon.className = "pi-files-filter__icon";
+  filterIcon.textContent = "🔍";
 
-  quickAllButton.dataset.filter = "all";
-  quickBuiltinButton.dataset.filter = "builtin";
-  quickCurrentButton.dataset.filter = "current";
+  const filterInput = document.createElement("input");
+  filterInput.type = "text";
+  filterInput.className = "pi-files-filter__input";
+  filterInput.placeholder = "Filter files…";
+  filterInput.addEventListener("input", () => {
+    filterText = filterInput.value;
+    renderListView();
+  });
 
-  quickFilters.append(quickAllButton, quickBuiltinButton, quickCurrentButton);
-  filters.append(quickFilters);
+  filterWrap.append(filterIcon, filterInput);
+  filterHost.appendChild(filterWrap);
 
-  const list = document.createElement("div");
-  list.className = "pi-files-dialog__list";
+  const sectionsHost = document.createElement("div");
+  listBody.append(filterHost, sectionsHost);
 
-  const viewer = document.createElement("div");
-  viewer.className = "pi-files-dialog__viewer";
-  viewer.hidden = true;
+  const footer = document.createElement("div");
+  footer.className = "pi-files-footer";
 
-  const viewerHeader = document.createElement("div");
-  viewerHeader.className = "pi-files-dialog__viewer-header";
-
-  const viewerTitle = document.createElement("div");
-  viewerTitle.className = "pi-files-dialog__viewer-title";
-
-  const viewerActions = document.createElement("div");
-  viewerActions.className = "pi-files-dialog__viewer-actions";
-
-  const saveButton = makeButton("Save", "pi-overlay-btn pi-overlay-btn--primary");
-  const closeViewerButton = makeButton("Close", "pi-overlay-btn pi-overlay-btn--ghost");
-
-  viewerActions.append(saveButton, closeViewerButton);
-  viewerHeader.append(viewerTitle, viewerActions);
-
-  const viewerNote = document.createElement("div");
-  viewerNote.className = "pi-files-dialog__viewer-note";
-
-  const viewerTextarea = document.createElement("textarea");
-  viewerTextarea.className = "pi-files-dialog__textarea";
-  viewerTextarea.spellcheck = false;
-
-  const viewerPreview = document.createElement("div");
-  viewerPreview.className = "pi-files-dialog__preview";
-  viewerPreview.hidden = true;
-
-  viewer.append(viewerHeader, viewerNote, viewerTextarea, viewerPreview);
-
-  controls.append(
-    uploadButton,
-    nativeButton,
-  );
+  const detailBody = document.createElement("div");
+  detailBody.className = "pi-overlay-body";
+  detailBody.hidden = true;
 
   dialog.card.append(
-    header,
-    controls,
+    listHeaderElements.header,
+    detailHeader,
+    actionsRow,
     hiddenInput,
-    statusLine,
-    filters,
-    list,
-    viewer,
+    listBody,
+    footer,
+    detailBody,
   );
 
-  let activeViewerPath: string | null = null;
-  let activeViewerReadOnly = false;
-  let viewerTruncated = false;
-  let activeObjectUrl: string | null = null;
-  let selectedFilter: FilesDialogFilterValue = "all";
-  let currentWorkbookId: string | null = null;
-  let currentWorkbookLabel: string | null = null;
-  const collapsedFolderPaths = new Set<string>();
+  let backendStatus: WorkspaceBackendStatus | null = null;
+  let allFiles: WorkspaceFileEntry[] = [];
+  let currentView: "list" | "detail" = "list";
+  let detailFileRef: FilesDialogFileRef | null = null;
+  let filterText = "";
+  let activePreviewObjectUrl: string | null = null;
+  let detailRenderVersion = 0;
+  const collapsedSections = new Set<string>();
 
-  const quickFilterButtons: Array<{
-    value: FilesDialogFilterValue;
-    button: HTMLButtonElement;
-  }> = [
-    { value: "all", button: quickAllButton },
-    { value: "builtin", button: quickBuiltinButton },
-    { value: "current", button: quickCurrentButton },
-  ];
-
-  const revokeObjectUrl = () => {
-    if (!activeObjectUrl) return;
-    URL.revokeObjectURL(activeObjectUrl);
-    activeObjectUrl = null;
-  };
-
-  const setStatus = (message: string) => {
-    statusLine.textContent = message;
-  };
-
-  const syncQuickFilterButtons = (options: FilesDialogFilterOption[]) => {
-    for (const quickFilter of quickFilterButtons) {
-      const option = options.find((candidate) => candidate.value === quickFilter.value);
-      const isSelectable = option !== undefined && option.disabled !== true;
-      quickFilter.button.disabled = !isSelectable;
-
-      const isActive = selectedFilter === quickFilter.value;
-      quickFilter.button.classList.toggle("is-active", isActive);
-      quickFilter.button.setAttribute("aria-pressed", isActive ? "true" : "false");
-    }
-  };
-
-  const setViewerMode = (mode: "hidden" | "text" | "preview") => {
-    viewer.hidden = mode === "hidden";
-    viewerTextarea.hidden = mode !== "text";
-    viewerPreview.hidden = mode !== "preview";
-  };
-
-  const clearViewer = () => {
-    activeViewerPath = null;
-    activeViewerReadOnly = false;
-    viewerTruncated = false;
-    revokeObjectUrl();
-
-    viewerTitle.textContent = "";
-    viewerNote.textContent = "";
-    viewerTextarea.value = "";
-    viewerTextarea.disabled = false;
-    viewerPreview.replaceChildren();
-
-    saveButton.hidden = true;
-    saveButton.disabled = true;
-
-    setViewerMode("hidden");
-  };
-
-  const openTextViewer = async (entry: WorkspaceFileEntry) => {
-    const result = await workspace.readFile(entry.path, {
-      mode: "text",
-      maxChars: 1_000_000,
-      audit: DIALOG_AUDIT_CONTEXT,
-    });
-
-    activeViewerPath = entry.path;
-    activeViewerReadOnly = entry.readOnly;
-    viewerTruncated = result.truncated === true;
-
-    viewerTitle.textContent = entry.path;
-    viewerTextarea.value = result.text ?? "";
-    viewerTextarea.disabled = viewerTruncated || entry.readOnly;
-
-    if (entry.readOnly) {
-      viewerNote.textContent = "Built-in documentation file (read-only).";
-      saveButton.hidden = true;
-      saveButton.disabled = true;
-    } else if (viewerTruncated) {
-      viewerNote.textContent = "This file is too large to edit inline safely (preview truncated to 1,000,000 chars).";
-      saveButton.hidden = false;
-      saveButton.disabled = true;
-    } else {
-      viewerNote.textContent = "Editable text file.";
-      saveButton.hidden = false;
-      saveButton.disabled = false;
-    }
-
-    setViewerMode("text");
-  };
-
-  const openImagePreview = async (entry: WorkspaceFileEntry) => {
-    const result = await workspace.readFile(entry.path, {
-      mode: "base64",
-      maxChars: 8_000_000,
-      audit: DIALOG_AUDIT_CONTEXT,
-    });
-
-    viewerTitle.textContent = entry.path;
-    saveButton.hidden = true;
-    saveButton.disabled = true;
-
-    if (!result.base64 || result.truncated) {
-      viewerNote.textContent = "Preview unavailable: image is too large for inline preview.";
-      viewerPreview.replaceChildren();
-      setViewerMode("preview");
+  const revokePreviewObjectUrl = (): void => {
+    if (!activePreviewObjectUrl) {
       return;
     }
 
-    const bytes = base64ToBytes(result.base64);
-    const blob = new Blob([toArrayBuffer(bytes)], { type: entry.mimeType });
-    activeObjectUrl = URL.createObjectURL(blob);
-
-    const image = document.createElement("img");
-    image.className = "pi-files-dialog__preview-image";
-    image.src = activeObjectUrl;
-    image.alt = entry.path;
-
-    viewerNote.textContent = `Image preview (${formatBytes(entry.size)}).`;
-    viewerPreview.replaceChildren(image);
-    setViewerMode("preview");
+    URL.revokeObjectURL(activePreviewObjectUrl);
+    activePreviewObjectUrl = null;
   };
 
-  const openPdfPreview = async (entry: WorkspaceFileEntry) => {
-    const result = await workspace.readFile(entry.path, {
+  const findFileByRef = (ref: FilesDialogFileRef): WorkspaceFileEntry | null => {
+    return allFiles.find((file) => fileMatchesRef(file, ref)) ?? null;
+  };
+
+  const refreshWorkspaceState = async (): Promise<void> => {
+    const [backend, files] = await Promise.all([
+      workspace.getBackendStatus(),
+      workspace.listFiles(),
+    ]);
+
+    backendStatus = backend;
+    allFiles = files;
+  };
+
+  const setView = (view: "list" | "detail"): void => {
+    currentView = view;
+    const showList = view === "list";
+
+    listHeaderElements.header.hidden = !showList;
+    actionsRow.hidden = !showList;
+    listBody.hidden = !showList;
+    footer.hidden = !showList;
+
+    detailHeader.hidden = showList;
+    detailBody.hidden = showList;
+  };
+
+  const showListView = (): void => {
+    detailFileRef = null;
+    detailRenderVersion += 1;
+    revokePreviewObjectUrl();
+    setView("list");
+  };
+
+  const openBlobInNewTab = (blob: Blob): void => {
+    const url = URL.createObjectURL(blob);
+    const opened = window.open(url, "_blank");
+
+    if (!opened) {
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    }
+
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 60_000);
+  };
+
+  const openFileInBrowser = async (file: WorkspaceFileEntry): Promise<void> => {
+    const fileRef = toFileRef(file);
+
+    if (file.kind === "text") {
+      const result = await workspace.readFile(file.path, {
+        mode: "text",
+        maxChars: 16_000_000,
+        audit: DIALOG_AUDIT_CONTEXT,
+        locationKind: fileRef.locationKind,
+      });
+
+      if (result.text === undefined || result.truncated) {
+        throw new Error("File is too large to open in a browser tab.");
+      }
+
+      const blob = new Blob([result.text], {
+        type: file.mimeType || "text/plain",
+      });
+
+      openBlobInNewTab(blob);
+      return;
+    }
+
+    const result = await workspace.readFile(file.path, {
       mode: "base64",
       maxChars: 16_000_000,
       audit: DIALOG_AUDIT_CONTEXT,
+      locationKind: fileRef.locationKind,
     });
 
-    viewerTitle.textContent = entry.path;
-    saveButton.hidden = true;
-    saveButton.disabled = true;
-
     if (!result.base64 || result.truncated) {
-      viewerNote.textContent = "Preview unavailable: PDF is too large for inline preview.";
-      viewerPreview.replaceChildren();
-      setViewerMode("preview");
-      return;
+      throw new Error("File is too large to open in a browser tab.");
     }
 
     const bytes = base64ToBytes(result.base64);
-    const blob = new Blob([toArrayBuffer(bytes)], { type: "application/pdf" });
-    activeObjectUrl = URL.createObjectURL(blob);
+    const blob = new Blob([toArrayBuffer(bytes)], {
+      type: file.mimeType,
+    });
 
-    const frame = document.createElement("iframe");
-    frame.className = "pi-files-dialog__preview-frame";
-    frame.src = activeObjectUrl;
-    frame.title = entry.path;
-
-    viewerNote.textContent = `PDF preview (${formatBytes(entry.size)}).`;
-    viewerPreview.replaceChildren(frame);
-    setViewerMode("preview");
+    openBlobInNewTab(blob);
   };
 
-  const openBinaryPlaceholder = (entry: WorkspaceFileEntry) => {
-    viewerTitle.textContent = entry.path;
-    viewerNote.textContent = getBinaryPreviewNote(entry);
+  const createDetailActions = (file: WorkspaceFileEntry): HTMLDivElement => {
+    const fileRef = toFileRef(file);
+    const actions = document.createElement("div");
+    actions.className = "pi-files-detail-actions";
 
-    const message = document.createElement("div");
-    message.className = "pi-files-dialog__preview-empty";
-    message.textContent = `${entry.mimeType} · ${formatBytes(entry.size)}`;
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.className = file.kind === "text"
+      ? "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--compact"
+      : "pi-overlay-btn pi-overlay-btn--primary pi-overlay-btn--compact";
+    openButton.textContent = "Open ↗";
+    openButton.addEventListener("click", () => {
+      void openFileInBrowser(file).catch((error: unknown) => {
+        showToast(`Open failed: ${getErrorMessage(error)}`);
+      });
+    });
 
-    viewerPreview.replaceChildren(message);
-    saveButton.hidden = true;
-    saveButton.disabled = true;
-    setViewerMode("preview");
-  };
+    const downloadButton = document.createElement("button");
+    downloadButton.type = "button";
+    downloadButton.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--compact";
+    downloadButton.textContent = "Download";
+    downloadButton.addEventListener("click", () => {
+      void workspace.downloadFile(file.path, {
+        locationKind: fileRef.locationKind,
+      }).catch((error: unknown) => {
+        showToast(`Download failed: ${getErrorMessage(error)}`);
+      });
+    });
 
-  const openViewer = async (entry: WorkspaceFileEntry) => {
-    try {
-      revokeObjectUrl();
-      activeViewerPath = null;
-      activeViewerReadOnly = false;
-      viewerTruncated = false;
-      viewerPreview.replaceChildren();
+    actions.append(openButton, downloadButton);
 
-      if (entry.kind === "text") {
-        await openTextViewer(entry);
-        return;
-      }
-
-      if (isImageMimeType(entry.mimeType)) {
-        await openImagePreview(entry);
-        return;
-      }
-
-      if (isPdfMimeType(entry.mimeType)) {
-        await openPdfPreview(entry);
-        return;
-      }
-
-      openBinaryPlaceholder(entry);
-    } catch (error: unknown) {
-      activeViewerPath = null;
-      activeViewerReadOnly = false;
-      viewerTruncated = false;
-      viewerTitle.textContent = entry.path;
-      viewerNote.textContent = `Preview unavailable: ${getErrorMessage(error)}`;
-      viewerTextarea.value = "";
-      viewerTextarea.disabled = true;
-      saveButton.hidden = true;
-      saveButton.disabled = true;
-
-      const message = document.createElement("div");
-      message.className = "pi-files-dialog__preview-empty";
-      message.textContent = "Try downloading the file and opening it locally.";
-      viewerPreview.replaceChildren(message);
-      setViewerMode("preview");
+    const isReadOnly = file.readOnly || isFilesDialogBuiltInDoc(file);
+    if (isReadOnly) {
+      return actions;
     }
+
+    const renameButton = document.createElement("button");
+    renameButton.type = "button";
+    renameButton.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--compact";
+    renameButton.textContent = "Rename";
+    renameButton.addEventListener("click", () => {
+      void (async () => {
+        const nextPathInput = await requestTextInputDialog({
+          title: "Rename file",
+          message: file.path,
+          initialValue: file.path,
+          placeholder: "folder/file.ext",
+          confirmLabel: "Rename",
+          cancelLabel: "Cancel",
+          restoreFocusOnClose: false,
+        });
+
+        if (nextPathInput === null) {
+          return;
+        }
+
+        const nextPath = resolveRenameDestinationPath(file.path, nextPathInput);
+        if (nextPath === file.path) {
+          return;
+        }
+
+        await workspace.renameFile(file.path, nextPath, {
+          audit: DIALOG_AUDIT_CONTEXT,
+          locationKind: fileRef.locationKind,
+        });
+
+        showToast(`Renamed to ${nextPath}.`);
+
+        await refreshWorkspaceState();
+        renderListView();
+        await showDetailView({
+          path: nextPath,
+          locationKind: fileRef.locationKind,
+        });
+      })().catch((error: unknown) => {
+        showToast(`Rename failed: ${getErrorMessage(error)}`);
+      });
+    });
+
+    const spacer = document.createElement("div");
+    spacer.className = "pi-files-detail-actions__spacer";
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "pi-overlay-btn pi-overlay-btn--danger pi-overlay-btn--compact";
+    deleteButton.textContent = "Delete";
+    deleteButton.addEventListener("click", () => {
+      void (async () => {
+        const confirmed = await requestConfirmationDialog({
+          title: "Delete file?",
+          message: file.path,
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+          confirmButtonTone: "danger",
+          restoreFocusOnClose: false,
+        });
+
+        if (!confirmed) {
+          return;
+        }
+
+        await workspace.deleteFile(file.path, {
+          audit: DIALOG_AUDIT_CONTEXT,
+          locationKind: fileRef.locationKind,
+        });
+
+        showToast(`Deleted ${file.name}.`);
+
+        await refreshWorkspaceState();
+        renderListView();
+        showListView();
+      })().catch((error: unknown) => {
+        showToast(`Delete failed: ${getErrorMessage(error)}`);
+      });
+    });
+
+    actions.append(renameButton, spacer, deleteButton);
+    return actions;
   };
 
-  const createFileRow = (file: WorkspaceFileEntry): HTMLElement => {
-    const row = document.createElement("div");
-    row.className = "pi-files-row";
-    row.tabIndex = 0;
-    row.setAttribute("role", "listitem");
-    row.setAttribute("aria-label", `${file.path} — press Enter to open`);
+  const buildDetailPreview = async (file: WorkspaceFileEntry): Promise<DetailPreviewResult> => {
+    const fileRef = toFileRef(file);
 
-    const fileIcon = file.kind === "text" ? "📄" : isImageMimeType(file.mimeType) ? "🖼" : "📎";
+    if (file.kind === "text") {
+      const result = await workspace.readFile(file.path, {
+        mode: "text",
+        maxChars: 50_000,
+        audit: DIALOG_AUDIT_CONTEXT,
+        locationKind: fileRef.locationKind,
+      });
 
-    const info = document.createElement("div");
-    info.className = "pi-files-row__info";
-
-    const nameRow = document.createElement("div");
-    nameRow.className = "pi-files-row__name-row";
-
-    const iconEl = document.createElement("span");
-    iconEl.className = "pi-files-row__icon";
-    iconEl.textContent = fileIcon;
-
-    const name = document.createElement("div");
-    name.className = "pi-files-row__name";
-    name.textContent = file.path;
-
-    nameRow.append(iconEl, name);
-
-    if (file.sourceKind === "builtin-doc") {
-      const sourceBadge = document.createElement("span");
-      sourceBadge.className = "pi-files-row__badge pi-files-row__badge--info";
-      sourceBadge.textContent = "Built-in";
-      nameRow.appendChild(sourceBadge);
+      const preview = createTextPreview(result.text ?? "", result.truncated === true);
+      return {
+        element: preview.element,
+        previewTruncated: result.truncated === true,
+        objectUrl: null,
+      };
     }
+
+    if (isImageMimeType(file.mimeType)) {
+      const result = await workspace.readFile(file.path, {
+        mode: "base64",
+        maxChars: 8_000_000,
+        audit: DIALOG_AUDIT_CONTEXT,
+        locationKind: fileRef.locationKind,
+      });
+
+      if (!result.base64 || result.truncated) {
+        return {
+          element: createBinaryPreview({
+            file,
+            icon: "🖼",
+            label: "Image preview unavailable",
+          }),
+          previewTruncated: false,
+          objectUrl: null,
+        };
+      }
+
+      const bytes = base64ToBytes(result.base64);
+      const url = URL.createObjectURL(new Blob([toArrayBuffer(bytes)], { type: file.mimeType }));
+
+      const preview = document.createElement("div");
+      preview.className = "pi-files-detail-preview pi-files-detail-preview--image";
+
+      const image = document.createElement("img");
+      image.src = url;
+      image.alt = file.name;
+      preview.appendChild(image);
+
+      return {
+        element: preview,
+        previewTruncated: false,
+        objectUrl: url,
+      };
+    }
+
+    if (isPdfMimeType(file.mimeType)) {
+      return {
+        element: createBinaryPreview({
+          file,
+          icon: "📄",
+          label: "PDF document",
+        }),
+        previewTruncated: false,
+        objectUrl: null,
+      };
+    }
+
+    return {
+      element: createBinaryPreview({
+        file,
+        icon: "📎",
+        label: "Binary file",
+      }),
+      previewTruncated: false,
+      objectUrl: null,
+    };
+  };
+
+  const renderDetailView = async (fileRef: FilesDialogFileRef): Promise<void> => {
+    const file = findFileByRef(fileRef);
+    if (!file) {
+      showListView();
+      renderListView();
+      return;
+    }
+
+    const renderVersion = ++detailRenderVersion;
+    revokePreviewObjectUrl();
+
+    detailTitle.textContent = file.name;
+    detailSubtitle.textContent = buildDetailSubtitle({
+      file,
+      previewTruncated: false,
+    });
+
+    const nodes: HTMLElement[] = [];
 
     if (file.workbookTag) {
-      const workbookTag = document.createElement("span");
-      workbookTag.className = "pi-files-row__badge pi-files-row__badge--ok";
-      workbookTag.textContent = file.workbookTag.workbookLabel;
-      nameRow.appendChild(workbookTag);
+      nodes.push(createWorkbookTagCallout(file.workbookTag));
     }
 
-    const meta = document.createElement("div");
-    meta.className = "pi-files-row__meta";
-    const metaText = document.createElement("span");
-    metaText.textContent = `${formatBytes(file.size)} · ${file.kind} · ${formatRelativeDate(file.modifiedAt)}`;
-    meta.appendChild(metaText);
+    if (isFilesDialogBuiltInDoc(file)) {
+      nodes.push(createInfoCallout({
+        icon: "📋",
+        body: ["Built-in documentation — read only. Pi references this automatically."],
+      }));
+    }
+
+    let previewResult: DetailPreviewResult;
+    try {
+      previewResult = await buildDetailPreview(file);
+    } catch (error: unknown) {
+      previewResult = {
+        element: createBinaryPreview({
+          file,
+          icon: "⚠",
+          label: `Preview unavailable: ${getErrorMessage(error)}`,
+        }),
+        previewTruncated: false,
+        objectUrl: null,
+      };
+    }
+
+    if (
+      renderVersion !== detailRenderVersion ||
+      currentView !== "detail" ||
+      !detailFileRef ||
+      detailFileRef.path !== fileRef.path ||
+      detailFileRef.locationKind !== fileRef.locationKind
+    ) {
+      if (previewResult.objectUrl) {
+        URL.revokeObjectURL(previewResult.objectUrl);
+      }
+
+      return;
+    }
+
+    if (previewResult.objectUrl) {
+      activePreviewObjectUrl = previewResult.objectUrl;
+    }
+
+    detailSubtitle.textContent = buildDetailSubtitle({
+      file,
+      previewTruncated: previewResult.previewTruncated,
+    });
+
+    nodes.push(previewResult.element, createDetailActions(file));
+    detailBody.replaceChildren(...nodes);
+  };
+
+  const showDetailView = async (fileRef: FilesDialogFileRef): Promise<void> => {
+    detailFileRef = fileRef;
+    setView("detail");
+    await renderDetailView(fileRef);
+  };
+
+  const createFileItem = (file: WorkspaceFileEntry): HTMLButtonElement => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `pi-files-item${isFilesDialogBuiltInDoc(file) ? " pi-files-item--muted" : ""}`;
+
+    const icon = document.createElement("span");
+    icon.className = "pi-files-item__icon";
+    icon.textContent = resolveFileIcon(file);
+
+    const info = document.createElement("div");
+    info.className = "pi-files-item__info";
+
+    const nameRow = document.createElement("div");
+    nameRow.className = "pi-files-item__name-row";
+
+    const name = document.createElement("span");
+    name.className = "pi-files-item__name";
+    name.textContent = file.name;
+    name.title = file.path;
+    nameRow.appendChild(name);
+
+    const badge = resolveFilesDialogBadge(file);
+    if (badge) {
+      const badgeElement = document.createElement("span");
+      badgeElement.className = `pi-overlay-badge pi-overlay-badge--${badge.tone}`;
+      badgeElement.textContent = badge.label;
+      nameRow.appendChild(badgeElement);
+    }
+
+    const meta = document.createElement("span");
+    meta.className = "pi-files-item__meta";
+    meta.textContent = buildFileMetaLine(file);
 
     info.append(nameRow, meta);
 
-    // Click or keyboard activate row to open viewer
-    const activateRow = (event: Event) => {
-      if ((event.target as HTMLElement).closest(".pi-files-row__overflow")) return;
-      if ((event.target as HTMLElement).closest(".pi-files-overflow-menu")) return;
-      void openViewer(file);
-    };
-    row.addEventListener("click", activateRow);
-    row.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        activateRow(event);
-      }
+    const arrow = document.createElement("span");
+    arrow.className = "pi-files-item__arrow";
+    arrow.textContent = "›";
+
+    row.append(icon, info, arrow);
+    row.addEventListener("click", () => {
+      void showDetailView(toFileRef(file));
     });
-
-    // Overflow menu (⋯)
-    const overflowBtn = document.createElement("button");
-    overflowBtn.type = "button";
-    overflowBtn.className = "pi-files-row__overflow";
-    overflowBtn.textContent = "⋯";
-    overflowBtn.title = "File actions";
-
-    overflowBtn.addEventListener("click", (event) => {
-      event.stopPropagation();
-
-      // Close any existing overflow menu
-      const existing = document.querySelector(".pi-files-overflow-menu");
-      if (existing) {
-        existing.remove();
-        return;
-      }
-
-      const menu = document.createElement("div");
-      menu.className = "pi-files-overflow-menu";
-
-      const addMenuItem = (label: string, handler: () => void, tone?: "danger") => {
-        const item = document.createElement("button");
-        item.type = "button";
-        item.className = `pi-files-overflow-menu__item${tone === "danger" ? " pi-files-overflow-menu__item--danger" : ""}`;
-        item.textContent = label;
-        item.addEventListener("click", () => {
-          menu.remove();
-          handler();
-        });
-        menu.appendChild(item);
-      };
-
-      addMenuItem("Download", () => {
-        void workspace.downloadFile(file.path).catch((error: unknown) => {
-          showToast(`Download failed: ${getErrorMessage(error)}`);
-        });
-      });
-
-      if (!file.readOnly) {
-        addMenuItem("Rename", () => {
-          void (async () => {
-            const nextPathInput = await requestTextInputDialog({
-              title: "Rename file",
-              message: file.path,
-              initialValue: file.path,
-              placeholder: "folder/file.ext",
-              confirmLabel: "Rename",
-              cancelLabel: "Cancel",
-              restoreFocusOnClose: false,
-            });
-
-            if (nextPathInput === null) {
-              return;
-            }
-
-            const nextPath = resolveRenameDestinationPath(file.path, nextPathInput);
-            if (nextPath === file.path) {
-              return;
-            }
-
-            await workspace.renameFile(file.path, nextPath, {
-              audit: DIALOG_AUDIT_CONTEXT,
-            });
-
-            showToast(`Renamed to ${nextPath}.`);
-          })().catch((error: unknown) => {
-            showToast(`Rename failed: ${getErrorMessage(error)}`);
-          });
-        });
-
-        const sep = document.createElement("div");
-        sep.className = "pi-files-overflow-menu__separator";
-        menu.appendChild(sep);
-
-        addMenuItem("Delete", () => {
-          void (async () => {
-            const ok = await requestConfirmationDialog({
-              title: "Delete file?",
-              message: file.path,
-              confirmLabel: "Delete",
-              cancelLabel: "Cancel",
-              confirmButtonTone: "danger",
-              restoreFocusOnClose: false,
-            });
-            if (!ok) return;
-            await workspace.deleteFile(file.path, {
-              audit: DIALOG_AUDIT_CONTEXT,
-            }).catch((error: unknown) => {
-              showToast(`Delete failed: ${getErrorMessage(error)}`);
-            });
-          })();
-        }, "danger");
-      }
-
-      meta.appendChild(menu);
-
-      const closeOnOutsideClick = (e: MouseEvent) => {
-        if (!menu.contains(e.target as Node)) {
-          menu.remove();
-          document.removeEventListener("click", closeOnOutsideClick, true);
-        }
-      };
-      // Delay listener to avoid catching the current click
-      requestAnimationFrame(() => {
-        document.addEventListener("click", closeOnOutsideClick, true);
-      });
-    });
-
-    meta.appendChild(overflowBtn);
-    row.appendChild(info);
 
     return row;
   };
 
-  const appendFolderNode = (
-    container: HTMLElement,
-    folder: FilesDialogFolderNode,
-    collapseKey: string,
-  ): void => {
-    const section = document.createElement("section");
-    section.className = "pi-files-section";
+  const renderListView = (): void => {
+    const files = allFiles;
 
-    const header = document.createElement("button");
-    header.type = "button";
-    header.className = "pi-files-section__header";
-
-    const label = document.createElement("span");
-    label.className = "pi-files-section__label";
-    label.textContent = folder.folderName.toUpperCase();
-
-    const count = document.createElement("span");
-    count.className = "pi-files-section__count";
-    count.textContent = formatFileCountLabel(folder.totalFileCount);
-
-    header.append(label, count);
-
-    const body = document.createElement("div");
-    body.className = "pi-files-section__body";
-
-    const applyCollapsedState = (isCollapsed: boolean): void => {
-      section.classList.toggle("is-collapsed", isCollapsed);
-      header.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
-      body.hidden = isCollapsed;
-    };
-
-    let isCollapsed = collapsedFolderPaths.has(collapseKey);
-    applyCollapsedState(isCollapsed);
-
-    for (const file of folder.files) {
-      body.appendChild(createFileRow(file));
-    }
-
-    for (const childFolder of folder.children) {
-      appendFolderNode(body, childFolder, getFolderCollapseKey(childFolder.folderPath));
-    }
-
-    header.addEventListener("click", () => {
-      isCollapsed = !isCollapsed;
-      if (isCollapsed) {
-        collapsedFolderPaths.add(collapseKey);
-      } else {
-        collapsedFolderPaths.delete(collapseKey);
-      }
-
-      applyCollapsedState(isCollapsed);
-    });
-
-    section.append(header, body);
-    container.appendChild(section);
-  };
-
-  const renderList = async () => {
-    const [backend, files, workbookContext] = await Promise.all([
-      workspace.getBackendStatus(),
-      workspace.listFiles(),
-      getWorkbookContext().catch(() => null),
-    ]);
-
-    subtitle.textContent = `Storage: ${backend.label}${backend.nativeDirectoryName ? ` (${backend.nativeDirectoryName})` : ""}`;
-
-    currentWorkbookId = workbookContext?.workbookId ?? null;
-    currentWorkbookLabel = workbookContext && workbookContext.workbookId
-      ? formatWorkbookLabel(workbookContext)
-      : null;
-
-    const builtinDocsCount = countBuiltInDocs(files);
-    quickBuiltinButton.textContent = builtinDocsCount > 0
-      ? `Built-in docs (${builtinDocsCount})`
-      : "Built-in docs";
-
-    const filterOptions = buildFilesDialogFilterOptions({
-      files,
-      currentWorkbookId,
-      currentWorkbookLabel,
-      builtinDocsCount,
-    });
-
-    if (!isFilesDialogFilterSelectable({
-      filter: selectedFilter,
-      options: filterOptions,
-    })) {
-      selectedFilter = "all";
-    }
-
-    syncQuickFilterButtons(filterOptions);
-
-    const filteredFiles = files.filter((file) => fileMatchesFilesDialogFilter({
-      file,
-      filter: selectedFilter,
-      currentWorkbookId,
-    }));
-
-    const activeFilterLabel =
-      filterOptions.find((option) => option.value === selectedFilter)?.label
-      ?? "All files";
-
-    nativeButton.disabled = !backend.nativeSupported;
-    nativeButton.hidden = !backend.nativeSupported;
-
-    setStatus(buildFilesDialogStatusMessage({
-      totalCount: files.length,
-      filteredCount: filteredFiles.length,
-      selectedFilter,
-      activeFilterLabel,
-    }));
-
-    list.replaceChildren();
-
-    if (files.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "pi-files-dialog__empty";
-      empty.textContent = "No files yet. Upload documents to get started.";
-      list.appendChild(empty);
-    } else if (filteredFiles.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "pi-files-dialog__empty";
-      empty.textContent = "No files match the selected filter.";
-      list.appendChild(empty);
+    const connectState = resolveFilesDialogConnectFolderButtonState(backendStatus);
+    connectFolderButton.hidden = connectState.hidden;
+    connectFolderButton.disabled = connectState.disabled;
+    if (connectState.label === "Connected ✓") {
+      connectFolderButton.title = "Folder already connected";
+    } else if (connectState.label === "Folder unavailable") {
+      connectFolderButton.title = "Native folder picker is not available in this environment";
     } else {
-      const tree = buildFilesDialogTree(filteredFiles);
+      connectFolderButton.title = "Connect local folder";
+    }
+    connectFolderButton.setAttribute("aria-label", connectState.label);
 
-      if (tree.rootFiles.length > 0) {
-        appendFolderNode(list, {
-          folderName: "General",
-          folderPath: "",
-          files: tree.rootFiles,
-          children: [],
-          totalFileCount: tree.rootFiles.length,
-        }, WORKSPACE_ROOT_COLLAPSE_KEY);
+    if (connectFolderButton.lastChild) {
+      connectFolderButton.lastChild.textContent = ` ${connectState.label}`;
+    }
+
+    if (files.length < 5 && filterText.length > 0) {
+      filterText = "";
+    }
+
+    if (files.length >= 5) {
+      filterWrap.hidden = false;
+      if (filterInput.value !== filterText) {
+        filterInput.value = filterText;
       }
-
-      for (const folder of tree.folders) {
-        appendFolderNode(list, folder, getFolderCollapseKey(folder.folderPath));
+    } else {
+      filterWrap.hidden = true;
+      if (filterInput.value.length > 0) {
+        filterInput.value = "";
       }
     }
 
+    const sections = buildFilesDialogSections({
+      files,
+      filterText,
+      backendStatus,
+    });
+
+    const hasNonBuiltInFiles = files.some((file) => !isFilesDialogBuiltInDoc(file));
+    const hasFilterQuery = normalizeFilesDialogFilterText(filterText).length > 0;
+
+    sectionsHost.replaceChildren();
+
+    if (!hasNonBuiltInFiles && !hasFilterQuery) {
+      sectionsHost.appendChild(createEmptyState(() => {
+        hiddenInput.click();
+      }));
+    }
+
+    if (sections.length === 0) {
+      if (hasFilterQuery) {
+        const empty = document.createElement("div");
+        empty.className = "pi-files-empty";
+
+        const title = document.createElement("div");
+        title.className = "pi-files-empty__title";
+        title.textContent = "No matching files";
+
+        const description = document.createElement("p");
+        description.className = "pi-files-empty__desc";
+        description.textContent = "Try a different filter term.";
+
+        empty.append(title, description);
+        sectionsHost.appendChild(empty);
+      }
+    } else {
+      sections.forEach((section) => {
+        const sectionGroup = document.createElement("div");
+        sectionGroup.className = "pi-files-section-group";
+
+        const sectionHead = document.createElement("button");
+        sectionHead.type = "button";
+        sectionHead.className = "pi-files-section-head";
+
+        const sectionLabel = document.createElement("span");
+        sectionLabel.className = "pi-files-section-head__label";
+        sectionLabel.textContent = section.label;
+
+        const sectionCount = document.createElement("span");
+        sectionCount.className = "pi-files-section-head__count";
+        sectionCount.textContent = String(section.files.length);
+
+        sectionHead.append(sectionLabel, sectionCount, createChevronIcon());
+
+        const sectionList = document.createElement("div");
+        sectionList.className = "pi-files-section-list";
+        section.files.forEach((file) => {
+          sectionList.appendChild(createFileItem(file));
+        });
+
+        const applyCollapsedState = (collapsed: boolean): void => {
+          sectionHead.setAttribute("aria-expanded", collapsed ? "false" : "true");
+          sectionList.hidden = collapsed;
+        };
+
+        applyCollapsedState(collapsedSections.has(section.key));
+
+        sectionHead.addEventListener("click", () => {
+          const currentlyCollapsed = collapsedSections.has(section.key);
+          if (currentlyCollapsed) {
+            collapsedSections.delete(section.key);
+          } else {
+            collapsedSections.add(section.key);
+          }
+
+          applyCollapsedState(!currentlyCollapsed);
+        });
+
+        sectionGroup.append(sectionHead, sectionList);
+        sectionsHost.appendChild(sectionGroup);
+      });
+    }
+
+    const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+
+    footer.textContent = buildFilesDialogStatusMessage({
+      totalCount: files.length,
+      totalSizeBytes: totalSize,
+      backendLabel: backendStatus?.label ?? "Storage unavailable",
+      nativeDirectoryName: backendStatus?.nativeConnected ? backendStatus.nativeDirectoryName ?? null : null,
+    });
   };
 
   const onWorkspaceChanged: EventListener = () => {
-    void renderList();
+    void (async () => {
+      try {
+        await refreshWorkspaceState();
+        renderListView();
+
+        if (currentView !== "detail" || !detailFileRef) {
+          return;
+        }
+
+        const file = findFileByRef(detailFileRef);
+        if (!file) {
+          showToast("That file is no longer available.");
+          showListView();
+          return;
+        }
+
+        await renderDetailView(detailFileRef);
+      } catch (error: unknown) {
+        showToast(`Could not refresh files: ${getErrorMessage(error)}`);
+      }
+    })();
   };
 
-  const cleanup = () => {
+  dialog.addCleanup(() => {
     document.removeEventListener(FILES_WORKSPACE_CHANGED_EVENT, onWorkspaceChanged);
-    revokeObjectUrl();
-  };
-
-  dialog.addCleanup(cleanup);
+    revokePreviewObjectUrl();
+  });
 
   uploadButton.addEventListener("click", () => {
     hiddenInput.click();
   });
 
-  hiddenInput.addEventListener("change", () => {
-    const { files } = hiddenInput;
-    if (!files || files.length === 0) return;
+  connectFolderButton.addEventListener("click", () => {
+    if (connectFolderButton.disabled) {
+      return;
+    }
 
-    const selectedFiles = Array.from(files);
+    void workspace.connectNativeDirectory({
+      audit: DIALOG_AUDIT_CONTEXT,
+    }).catch((error: unknown) => {
+      showToast(`Connect folder failed: ${getErrorMessage(error)}`);
+    });
+  });
+
+  hiddenInput.addEventListener("change", () => {
+    const selected = hiddenInput.files;
+    if (!selected || selected.length === 0) {
+      return;
+    }
+
+    const files = Array.from(selected);
     hiddenInput.value = "";
 
-    void workspace.importFiles(selectedFiles, {
+    void workspace.importFiles(files, {
       audit: DIALOG_AUDIT_CONTEXT,
     })
       .then((count) => {
@@ -793,47 +1119,21 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       });
   });
 
-  for (const quickFilter of quickFilterButtons) {
-    quickFilter.button.addEventListener("click", () => {
-      selectedFilter = quickFilter.value;
-      void renderList();
-    });
-  }
-
-  nativeButton.addEventListener("click", () => {
-    void workspace.connectNativeDirectory({
-      audit: DIALOG_AUDIT_CONTEXT,
-    })
-      .then(() => {
-        showToast("Connected local folder.");
-      })
-      .catch((error: unknown) => {
-        showToast(`Could not connect folder: ${getErrorMessage(error)}`);
-      });
-  });
-
-  saveButton.addEventListener("click", () => {
-    if (!activeViewerPath || viewerTruncated || activeViewerReadOnly) return;
-
-    const path = activeViewerPath;
-    const nextContent = viewerTextarea.value;
-    void workspace.writeTextFile(path, nextContent, undefined, {
-      audit: DIALOG_AUDIT_CONTEXT,
-    })
-      .then(() => {
-        showToast(`Saved ${path}.`);
-      })
-      .catch((error: unknown) => {
-        showToast(`Save failed: ${getErrorMessage(error)}`);
-      });
-  });
-
-  closeViewerButton.addEventListener("click", () => {
-    clearViewer();
+  detailBackButton.addEventListener("click", () => {
+    showListView();
   });
 
   document.addEventListener(FILES_WORKSPACE_CHANGED_EVENT, onWorkspaceChanged);
 
   dialog.mount();
-  await renderList();
+
+  try {
+    await refreshWorkspaceState();
+    renderListView();
+    setView("list");
+  } catch (error: unknown) {
+    showToast(`Could not load files: ${getErrorMessage(error)}`);
+    showListView();
+    renderListView();
+  }
 }

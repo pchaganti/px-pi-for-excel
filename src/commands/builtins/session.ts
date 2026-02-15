@@ -111,7 +111,7 @@ export function createSessionLifecycleCommands(actions: SessionCommandActions): 
     },
     {
       name: "history",
-      description: "Open Backups (Beta)",
+      description: "Open Backups",
       source: "builtin",
       execute: async () => {
         await actions.openRecoveryDialog();

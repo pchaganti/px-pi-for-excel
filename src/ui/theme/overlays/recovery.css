@@ -21,12 +21,28 @@
   flex-shrink: 0;
 }
 
-/* Retention row */
+/* Retention — collapsible <details> */
+
+.pi-recovery-retention-details {
+  margin-top: 2px;
+}
+
+.pi-recovery-retention-summary {
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  user-select: none;
+  padding: 4px 0;
+}
 
 .pi-recovery-retention {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   color: var(--muted-foreground);
+  margin-top: 8px;
 }
 
 .pi-recovery-retention__input {
