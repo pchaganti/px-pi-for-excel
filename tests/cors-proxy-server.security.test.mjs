@@ -52,7 +52,12 @@ async function startProxy(extraEnv = {}) {
   const ready = new Promise((resolve, reject) => {
     child.stdout.on("data", (chunk) => {
       stdout += chunk;
-      if (stdout.includes("CORS proxy listening on")) {
+      const hasListeningLog = stdout.includes("CORS proxy listening on");
+      const hasTargetPolicyLog =
+        stdout.includes("Allowed target hosts")
+        || stdout.includes("target host allowlisting disabled");
+
+      if (hasListeningLog && hasTargetPolicyLog) {
         resolve(undefined);
       }
     });
@@ -93,6 +98,7 @@ async function startProxy(extraEnv = {}) {
   return {
     port,
     stop,
+    getLogs: () => ({ stdout, stderr }),
   };
 }
 
@@ -148,6 +154,41 @@ test("proxy blocks non-allowlisted hosts by default", async (t) => {
   assert.equal(response.status, 403);
   const text = await response.text();
   assert.match(text, /blocked_target_not_allowlisted/);
+});
+
+test("proxy default allowlist includes supported web search providers", async (t) => {
+  const proxy = await startProxy();
+  t.after(async () => {
+    await proxy.stop();
+  });
+
+  const { stdout } = proxy.getLogs();
+  const allowlistLine = stdout
+    .split("\n")
+    .find((line) => line.includes("Allowed target hosts"));
+
+  assert.ok(allowlistLine, "Expected startup logs to include default allowed target hosts");
+
+  const loggedHosts = new Set(
+    allowlistLine
+      .split(":")
+      .slice(1)
+      .join(":")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+
+  const requiredHosts = [
+    "s.jina.ai",
+    "google.serper.dev",
+    "api.tavily.com",
+    "api.search.brave.com",
+  ];
+
+  for (const host of requiredHosts) {
+    assert.ok(loggedHosts.has(host), `Expected ${host} in default target allowlist log`);
+  }
 });
 
 test("proxy allows GitHub enterprise OAuth-style endpoints on custom domains by default", async (t) => {
