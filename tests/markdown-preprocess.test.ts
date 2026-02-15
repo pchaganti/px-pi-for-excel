@@ -79,3 +79,31 @@ Date: 2026-02-14
   const output = stripYamlFrontmatter(input);
   assert.equal(output, "# Heading\n");
 });
+
+void test("stripYamlFrontmatter supports YAML block scalars", () => {
+  const input = `---
+name: skill
+description: >-
+  Multi-line
+  description text.
+metadata:
+  integration-id: sample
+---
+# Heading
+`;
+
+  const output = stripYamlFrontmatter(input);
+  assert.equal(output, "# Heading\n");
+});
+
+void test("stripYamlFrontmatter supports UTF-8 BOM before frontmatter", () => {
+  const input = `\uFEFF---
+name: skill
+description: Test
+---
+# Heading
+`;
+
+  const output = stripYamlFrontmatter(input);
+  assert.equal(output, "# Heading\n");
+});
