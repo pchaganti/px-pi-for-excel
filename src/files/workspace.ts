@@ -23,6 +23,7 @@ import {
   type WorkspaceBackendKind,
   type WorkspaceBackendStatus,
   type WorkspaceFileEntry,
+  type WorkspaceFileLocationKind,
   type WorkspaceFileReadResult,
   type WorkspaceFileWorkbookTag,
   type WorkspaceSnapshot,
@@ -53,10 +54,12 @@ export interface WorkspaceReadOptions {
   mode?: WorkspaceReadMode;
   maxChars?: number;
   audit?: FilesWorkspaceAuditContext;
+  locationKind?: WorkspaceFileLocationKind;
 }
 
 export interface WorkspaceMutationOptions {
   audit?: FilesWorkspaceAuditContext;
+  locationKind?: WorkspaceFileLocationKind;
 }
 
 interface DirectoryPickerHost {
@@ -427,8 +430,33 @@ function buildContextFileSignature(file: WorkspaceFileEntry): string {
   return `${file.path}:${file.size}:${file.modifiedAt}:${workbookId}`;
 }
 
+function locationPriority(locationKind: WorkspaceFileLocationKind | undefined): number {
+  switch (locationKind) {
+    case "workspace":
+      return 0;
+    case "native-directory":
+      return 1;
+    case "builtin-doc":
+      return 2;
+    default:
+      return 3;
+  }
+}
+
 function sortFilesByPath(files: readonly WorkspaceFileEntry[]): WorkspaceFileEntry[] {
-  return [...files].sort((left, right) => left.path.localeCompare(right.path));
+  return [...files].sort((left, right) => {
+    const byPath = left.path.localeCompare(right.path);
+    if (byPath !== 0) {
+      return byPath;
+    }
+
+    const byLocation = locationPriority(left.locationKind) - locationPriority(right.locationKind);
+    if (byLocation !== 0) {
+      return byLocation;
+    }
+
+    return right.modifiedAt - left.modifiedAt;
+  });
 }
 
 function formatPathPreview(files: readonly WorkspaceFileEntry[], limit: number): string {
@@ -520,12 +548,16 @@ export function buildWorkspaceContextSummary(args: WorkspaceContextSummaryArgs):
 
 export interface FilesWorkspaceOptions {
   initialBackend?: WorkspaceBackend;
+  initialWorkspaceBackend?: WorkspaceBackend;
 }
 
 export class FilesWorkspace {
   private backend: WorkspaceBackend | null = null;
   private backendPromise: Promise<WorkspaceBackend> | null = null;
   private nativeHandle: FileSystemDirectoryHandle | null = null;
+
+  private workspaceStorageBackend: WorkspaceBackend | null = null;
+  private workspaceStorageBackendPromise: Promise<WorkspaceBackend> | null = null;
 
   private metadataLoaded = false;
   private readonly metadataByPath = new Map<string, WorkspaceFileWorkbookTag>();
@@ -538,6 +570,13 @@ export class FilesWorkspace {
   constructor(options: FilesWorkspaceOptions = {}) {
     if (options.initialBackend) {
       this.backend = options.initialBackend;
+      if (options.initialBackend.kind !== "native-directory") {
+        this.workspaceStorageBackend = options.initialBackend;
+      }
+    }
+
+    if (options.initialWorkspaceBackend) {
+      this.workspaceStorageBackend = options.initialWorkspaceBackend;
     }
   }
 
@@ -556,6 +595,38 @@ export class FilesWorkspace {
     }
 
     return new MemoryBackend();
+  }
+
+  private initializeWorkspaceStorageBackend(): Promise<WorkspaceBackend> {
+    if (typeof navigator !== "undefined" && navigator.storage && typeof navigator.storage.getDirectory === "function") {
+      return Promise.resolve(new OpfsBackend());
+    }
+
+    return Promise.resolve(new MemoryBackend());
+  }
+
+  private async getWorkspaceStorageBackend(activeBackend?: WorkspaceBackend): Promise<WorkspaceBackend> {
+    if (this.workspaceStorageBackend) {
+      await this.ensureScratchCleanupAttempted(this.workspaceStorageBackend);
+      return this.workspaceStorageBackend;
+    }
+
+    const backend = activeBackend ?? await this.getBackend();
+    if (backend.kind !== "native-directory") {
+      this.workspaceStorageBackend = backend;
+      await this.ensureScratchCleanupAttempted(backend);
+      return backend;
+    }
+
+    if (!this.workspaceStorageBackendPromise) {
+      this.workspaceStorageBackendPromise = this.initializeWorkspaceStorageBackend();
+    }
+
+    const workspaceBackend = await this.workspaceStorageBackendPromise;
+    this.workspaceStorageBackendPromise = null;
+    this.workspaceStorageBackend = workspaceBackend;
+    await this.ensureScratchCleanupAttempted(workspaceBackend);
+    return workspaceBackend;
   }
 
   private async removeWorkbookTags(paths: readonly string[]): Promise<void> {
@@ -620,6 +691,9 @@ export class FilesWorkspace {
   private async getBackend(): Promise<WorkspaceBackend> {
     if (this.backend) {
       await this.ensureScratchCleanupAttempted(this.backend);
+      if (this.backend.kind !== "native-directory" && !this.workspaceStorageBackend) {
+        this.workspaceStorageBackend = this.backend;
+      }
       return this.backend;
     }
 
@@ -632,12 +706,19 @@ export class FilesWorkspace {
     this.backendPromise = null;
 
     await this.ensureScratchCleanupAttempted(backend);
+    if (backend.kind !== "native-directory") {
+      this.workspaceStorageBackend = backend;
+    }
     return backend;
   }
 
   private replaceBackend(nextBackend: WorkspaceBackend): void {
     this.backend = nextBackend;
     this.backendPromise = null;
+    if (nextBackend.kind !== "native-directory") {
+      this.workspaceStorageBackend = nextBackend;
+      this.workspaceStorageBackendPromise = null;
+    }
     dispatchWorkspaceChanged({ reason: "backend" });
   }
 
@@ -839,6 +920,162 @@ export class FilesWorkspace {
     await this.persistAuditTrail();
   }
 
+  private withLocationKind(
+    entries: readonly WorkspaceFileEntry[],
+    locationKind: WorkspaceFileLocationKind,
+  ): WorkspaceFileEntry[] {
+    return entries.map((entry) => ({
+      ...entry,
+      locationKind,
+    }));
+  }
+
+  private async resolveSourceBackends(): Promise<{
+    activeBackend: WorkspaceBackend;
+    workspaceBackend: WorkspaceBackend;
+    nativeBackend: WorkspaceBackend | null;
+  }> {
+    const activeBackend = await this.getBackend();
+    const workspaceBackend = await this.getWorkspaceStorageBackend(activeBackend);
+
+    return {
+      activeBackend,
+      workspaceBackend,
+      nativeBackend: activeBackend.kind === "native-directory" ? activeBackend : null,
+    };
+  }
+
+  private async resolveMutationTarget(args: {
+    requestedLocationKind?: WorkspaceFileLocationKind;
+    defaultToWorkspace: boolean;
+  }): Promise<{
+    backend: WorkspaceBackend;
+    locationKind: WorkspaceFileLocationKind;
+  }> {
+    const { activeBackend, workspaceBackend, nativeBackend } = await this.resolveSourceBackends();
+
+    if (args.requestedLocationKind === "workspace") {
+      return {
+        backend: workspaceBackend,
+        locationKind: "workspace",
+      };
+    }
+
+    if (args.requestedLocationKind === "native-directory") {
+      if (!nativeBackend) {
+        throw new Error("Connected folder is not available.");
+      }
+
+      return {
+        backend: nativeBackend,
+        locationKind: "native-directory",
+      };
+    }
+
+    if (args.requestedLocationKind === "builtin-doc") {
+      throw new Error("Built-in docs are read-only.");
+    }
+
+    if (args.defaultToWorkspace) {
+      return {
+        backend: workspaceBackend,
+        locationKind: "workspace",
+      };
+    }
+
+    if (activeBackend.kind === "native-directory") {
+      return {
+        backend: activeBackend,
+        locationKind: "native-directory",
+      };
+    }
+
+    return {
+      backend: activeBackend,
+      locationKind: "workspace",
+    };
+  }
+
+  private async readRawFile(args: {
+    path: string;
+    requestedLocationKind?: WorkspaceFileLocationKind;
+  }): Promise<{
+    result: WorkspaceFileReadResult;
+    locationKind: WorkspaceFileLocationKind;
+    auditBackend: WorkspaceBackendKind;
+  }> {
+    const { activeBackend, workspaceBackend, nativeBackend } = await this.resolveSourceBackends();
+    const builtinResult = getBuiltinWorkspaceDoc(args.path);
+
+    if (args.requestedLocationKind === "workspace") {
+      return {
+        result: await workspaceBackend.readFile(args.path),
+        locationKind: "workspace",
+        auditBackend: workspaceBackend.kind,
+      };
+    }
+
+    if (args.requestedLocationKind === "native-directory") {
+      if (!nativeBackend) {
+        throw new Error("Connected folder is not available.");
+      }
+
+      return {
+        result: await nativeBackend.readFile(args.path),
+        locationKind: "native-directory",
+        auditBackend: nativeBackend.kind,
+      };
+    }
+
+    if (args.requestedLocationKind === "builtin-doc") {
+      if (!builtinResult) {
+        throw new Error(`File not found: ${args.path}`);
+      }
+
+      return {
+        result: builtinResult,
+        locationKind: "builtin-doc",
+        auditBackend: activeBackend.kind,
+      };
+    }
+
+    try {
+      return {
+        result: await activeBackend.readFile(args.path),
+        locationKind: activeBackend.kind === "native-directory" ? "native-directory" : "workspace",
+        auditBackend: activeBackend.kind,
+      };
+    } catch (activeError: unknown) {
+      if (!isMissingWorkspaceFileError(activeError)) {
+        throw activeError;
+      }
+
+      if (activeBackend !== workspaceBackend) {
+        try {
+          return {
+            result: await workspaceBackend.readFile(args.path),
+            locationKind: "workspace",
+            auditBackend: workspaceBackend.kind,
+          };
+        } catch (workspaceError: unknown) {
+          if (!isMissingWorkspaceFileError(workspaceError)) {
+            throw workspaceError;
+          }
+        }
+      }
+
+      if (builtinResult) {
+        return {
+          result: builtinResult,
+          locationKind: "builtin-doc",
+          auditBackend: activeBackend.kind,
+        };
+      }
+
+      throw activeError;
+    }
+  }
+
   isNativeDirectoryPickerSupported(): boolean {
     if (typeof window === "undefined") return false;
     return isDirectoryPickerHost(window);
@@ -853,6 +1090,12 @@ export class FilesWorkspace {
     const permission = await requestReadWritePermission(handle);
     if (permission !== "granted") {
       throw new Error("Permission to the selected folder was not granted.");
+    }
+
+    const currentBackend = await this.getBackend();
+    if (currentBackend.kind !== "native-directory") {
+      this.workspaceStorageBackend = currentBackend;
+      this.workspaceStorageBackendPromise = null;
     }
 
     this.nativeHandle = handle;
@@ -871,10 +1114,7 @@ export class FilesWorkspace {
     this.nativeHandle = null;
     await persistNativeHandle(null);
 
-    const fallback =
-      typeof navigator !== "undefined" && navigator.storage && typeof navigator.storage.getDirectory === "function"
-        ? new OpfsBackend()
-        : new MemoryBackend();
+    const fallback = await this.getWorkspaceStorageBackend();
 
     this.replaceBackend(fallback);
 
@@ -899,24 +1139,33 @@ export class FilesWorkspace {
   }
 
   async listFiles(options: WorkspaceListOptions = {}): Promise<WorkspaceFileEntry[]> {
-    const backend = await this.getBackend();
-    const workspaceFiles = await backend.listFiles();
+    const { activeBackend, workspaceBackend, nativeBackend } = await this.resolveSourceBackends();
+
+    const workspaceFiles = await workspaceBackend.listFiles();
     const taggedWorkspaceFiles = await this.withWorkbookTags(workspaceFiles);
-    const builtinDocs = listBuiltinWorkspaceDocs();
+    const workspaceEntries = this.withLocationKind(taggedWorkspaceFiles, "workspace");
 
     const currentPaths = new Set(taggedWorkspaceFiles.map((file) => file.path));
     await this.pruneStaleWorkbookTags(currentPaths);
 
-    const workspacePathSet = new Set(taggedWorkspaceFiles.map((file) => file.path));
-    const visibleBuiltinDocs = builtinDocs.filter((file) => !workspacePathSet.has(file.path));
+    const nativeEntries = nativeBackend
+      ? this.withLocationKind(await nativeBackend.listFiles(), "native-directory")
+      : [];
 
-    const mergedFiles = [...taggedWorkspaceFiles, ...visibleBuiltinDocs]
-      .sort((left, right) => left.path.localeCompare(right.path));
+    const occupiedPaths = new Set([
+      ...workspaceEntries.map((file) => file.path),
+      ...nativeEntries.map((file) => file.path),
+    ]);
+
+    const builtinEntries = this.withLocationKind(listBuiltinWorkspaceDocs(), "builtin-doc")
+      .filter((file) => !occupiedPaths.has(file.path));
+
+    const mergedFiles = sortFilesByPath([...workspaceEntries, ...nativeEntries, ...builtinEntries]);
 
     if (options.audit) {
       await this.appendAuditEntry({
         action: "list",
-        backend: backend.kind,
+        backend: activeBackend.kind,
         context: options.audit,
       });
       dispatchWorkspaceChanged({ reason: "audit" });
@@ -947,30 +1196,28 @@ export class FilesWorkspace {
 
   async readFile(path: string, opts: WorkspaceReadOptions = {}): Promise<WorkspaceFileReadResult> {
     const normalizedPath = normalizeWorkspacePath(path);
-    const backend = await this.getBackend();
-    const builtinResult = getBuiltinWorkspaceDoc(normalizedPath);
+    const rawReadResult = await this.readRawFile({
+      path: normalizedPath,
+      requestedLocationKind: opts.locationKind,
+    });
 
-    let rawResult: WorkspaceFileReadResult;
-    try {
-      rawResult = await backend.readFile(normalizedPath);
-    } catch (error: unknown) {
-      if (!builtinResult || !isMissingWorkspaceFileError(error)) {
-        throw error;
-      }
+    const withTags =
+      rawReadResult.locationKind === "workspace" &&
+      rawReadResult.result.sourceKind === "workspace"
+        ? await this.withWorkbookTags([rawReadResult.result])
+        : [rawReadResult.result];
 
-      rawResult = builtinResult;
-    }
-
-    const tagged = rawResult.sourceKind === "workspace"
-      ? await this.withWorkbookTags([rawResult])
-      : [rawResult];
-    const taggedResult = tagged[0];
+    const taggedResult = withTags[0];
     const result: WorkspaceFileReadResult = taggedResult
       ? {
-        ...rawResult,
+        ...rawReadResult.result,
         workbookTag: taggedResult.workbookTag,
+        locationKind: rawReadResult.locationKind,
       }
-      : rawResult;
+      : {
+        ...rawReadResult.result,
+        locationKind: rawReadResult.locationKind,
+      };
 
     const mode = opts.mode ?? "auto";
     const maxChars = opts.maxChars ?? 20000;
@@ -1023,7 +1270,7 @@ export class FilesWorkspace {
     if (opts.audit) {
       await this.appendAuditEntry({
         action: "read",
-        backend: backend.kind,
+        backend: rawReadResult.auditBackend,
         context: opts.audit,
         path: normalizedPath,
         bytes: resolved.size,
@@ -1041,10 +1288,13 @@ export class FilesWorkspace {
     options: WorkspaceMutationOptions = {},
   ): Promise<void> {
     const normalizedPath = normalizeWorkspacePath(path);
-    const backend = await this.getBackend();
+    const target = await this.resolveMutationTarget({
+      requestedLocationKind: options.locationKind,
+      defaultToWorkspace: false,
+    });
 
     if (isBuiltinWorkspacePath(normalizedPath)) {
-      const hasWorkspaceCollision = await this.workspacePathExists(normalizedPath, backend);
+      const hasWorkspaceCollision = await this.workspacePathExists(normalizedPath, target.backend);
       if (!hasWorkspaceCollision) {
         throw new Error(`'${normalizedPath}' is a built-in doc and cannot be modified.`);
       }
@@ -1052,17 +1302,19 @@ export class FilesWorkspace {
 
     const bytes = encodeTextUtf8(text);
 
-    await backend.writeBytes(
+    await target.backend.writeBytes(
       normalizedPath,
       bytes,
       mimeTypeHint ?? inferMimeType(getWorkspaceBaseName(normalizedPath), "text/plain"),
     );
 
-    await this.setWorkbookTagForPath(normalizedPath);
+    if (target.locationKind === "workspace") {
+      await this.setWorkbookTagForPath(normalizedPath);
+    }
 
     await this.appendAuditEntry({
       action: "write",
-      backend: backend.kind,
+      backend: target.backend.kind,
       context: options.audit ?? DEFAULT_UI_AUDIT_CONTEXT,
       path: normalizedPath,
       bytes: bytes.byteLength,
@@ -1078,10 +1330,13 @@ export class FilesWorkspace {
     options: WorkspaceMutationOptions = {},
   ): Promise<void> {
     const normalizedPath = normalizeWorkspacePath(path);
-    const backend = await this.getBackend();
+    const target = await this.resolveMutationTarget({
+      requestedLocationKind: options.locationKind,
+      defaultToWorkspace: false,
+    });
 
     if (isBuiltinWorkspacePath(normalizedPath)) {
-      const hasWorkspaceCollision = await this.workspacePathExists(normalizedPath, backend);
+      const hasWorkspaceCollision = await this.workspacePathExists(normalizedPath, target.backend);
       if (!hasWorkspaceCollision) {
         throw new Error(`'${normalizedPath}' is a built-in doc and cannot be modified.`);
       }
@@ -1089,17 +1344,19 @@ export class FilesWorkspace {
 
     const bytes = base64ToBytes(base64);
 
-    await backend.writeBytes(
+    await target.backend.writeBytes(
       normalizedPath,
       bytes,
       mimeTypeHint ?? inferMimeType(getWorkspaceBaseName(normalizedPath)),
     );
 
-    await this.setWorkbookTagForPath(normalizedPath);
+    if (target.locationKind === "workspace") {
+      await this.setWorkbookTagForPath(normalizedPath);
+    }
 
     await this.appendAuditEntry({
       action: "write",
-      backend: backend.kind,
+      backend: target.backend.kind,
       context: options.audit ?? DEFAULT_UI_AUDIT_CONTEXT,
       path: normalizedPath,
       bytes: bytes.byteLength,
@@ -1110,21 +1367,26 @@ export class FilesWorkspace {
 
   async deleteFile(path: string, options: WorkspaceMutationOptions = {}): Promise<void> {
     const normalizedPath = normalizeWorkspacePath(path);
-    const backend = await this.getBackend();
+    const target = await this.resolveMutationTarget({
+      requestedLocationKind: options.locationKind,
+      defaultToWorkspace: false,
+    });
 
     if (isBuiltinWorkspacePath(normalizedPath)) {
-      const hasWorkspaceCollision = await this.workspacePathExists(normalizedPath, backend);
+      const hasWorkspaceCollision = await this.workspacePathExists(normalizedPath, target.backend);
       if (!hasWorkspaceCollision) {
         throw new Error(`'${normalizedPath}' is a built-in doc and cannot be deleted.`);
       }
     }
 
-    await backend.deleteFile(normalizedPath);
-    await this.removeWorkbookTag(normalizedPath);
+    await target.backend.deleteFile(normalizedPath);
+    if (target.locationKind === "workspace") {
+      await this.removeWorkbookTag(normalizedPath);
+    }
 
     await this.appendAuditEntry({
       action: "delete",
-      backend: backend.kind,
+      backend: target.backend.kind,
       context: options.audit ?? DEFAULT_UI_AUDIT_CONTEXT,
       path: normalizedPath,
     });
@@ -1140,10 +1402,13 @@ export class FilesWorkspace {
     const normalizedOldPath = normalizeWorkspacePath(oldPath);
     const normalizedNewPath = normalizeWorkspacePath(newPath);
 
-    const backend = await this.getBackend();
+    const target = await this.resolveMutationTarget({
+      requestedLocationKind: options.locationKind,
+      defaultToWorkspace: false,
+    });
 
     if (isBuiltinWorkspacePath(normalizedOldPath)) {
-      const hasWorkspaceCollision = await this.workspacePathExists(normalizedOldPath, backend);
+      const hasWorkspaceCollision = await this.workspacePathExists(normalizedOldPath, target.backend);
       if (!hasWorkspaceCollision) {
         throw new Error(`'${normalizedOldPath}' is a built-in doc and cannot be renamed.`);
       }
@@ -1153,12 +1418,14 @@ export class FilesWorkspace {
       throw new Error(`'${normalizedNewPath}' is reserved for a built-in doc.`);
     }
 
-    await backend.renameFile(normalizedOldPath, normalizedNewPath);
-    await this.moveWorkbookTag(normalizedOldPath, normalizedNewPath);
+    await target.backend.renameFile(normalizedOldPath, normalizedNewPath);
+    if (target.locationKind === "workspace") {
+      await this.moveWorkbookTag(normalizedOldPath, normalizedNewPath);
+    }
 
     await this.appendAuditEntry({
       action: "rename",
-      backend: backend.kind,
+      backend: target.backend.kind,
       context: options.audit ?? DEFAULT_UI_AUDIT_CONTEXT,
       fromPath: normalizedOldPath,
       toPath: normalizedNewPath,
@@ -1168,30 +1435,42 @@ export class FilesWorkspace {
   }
 
   async importFiles(files: Iterable<File>, options: WorkspaceMutationOptions = {}): Promise<number> {
-    const backend = await this.getBackend();
+    const target = await this.resolveMutationTarget({
+      requestedLocationKind: options.locationKind,
+      defaultToWorkspace: true,
+    });
+
     let imported = 0;
     let importedBytes = 0;
 
     for (const file of files) {
-      const preferredPath = file.webkitRelativePath.trim().length > 0
-        ? file.webkitRelativePath
+      const relativePath = typeof file.webkitRelativePath === "string"
+        ? file.webkitRelativePath.trim()
+        : "";
+
+      const preferredPath = relativePath.length > 0
+        ? relativePath
         : file.name;
 
       const normalizedPath = normalizeWorkspacePath(preferredPath);
       if (isBuiltinWorkspacePath(normalizedPath)) {
-        const hasWorkspaceCollision = await this.workspacePathExists(normalizedPath, backend);
+        const hasWorkspaceCollision = await this.workspacePathExists(normalizedPath, target.backend);
         if (!hasWorkspaceCollision) {
           throw new Error(`'${normalizedPath}' is reserved for a built-in doc.`);
         }
       }
 
       const bytes = new Uint8Array(await file.arrayBuffer());
-      await backend.writeBytes(
+      await target.backend.writeBytes(
         normalizedPath,
         bytes,
         inferMimeType(file.name, file.type),
       );
-      await this.setWorkbookTagForPath(normalizedPath);
+
+      if (target.locationKind === "workspace") {
+        await this.setWorkbookTagForPath(normalizedPath);
+      }
+
       imported += 1;
       importedBytes += bytes.byteLength;
     }
@@ -1199,7 +1478,7 @@ export class FilesWorkspace {
     if (imported > 0) {
       await this.appendAuditEntry({
         action: "import",
-        backend: backend.kind,
+        backend: target.backend.kind,
         context: options.audit ?? DEFAULT_UI_AUDIT_CONTEXT,
         bytes: importedBytes,
       });
@@ -1226,7 +1505,10 @@ export class FilesWorkspace {
     dispatchWorkspaceChanged({ reason: "audit" });
   }
 
-  async downloadFile(path: string): Promise<void> {
+  async downloadFile(
+    path: string,
+    options: { locationKind?: WorkspaceFileLocationKind } = {},
+  ): Promise<void> {
     if (typeof document === "undefined") {
       throw new Error("Downloads are not available in this environment.");
     }
@@ -1235,19 +1517,11 @@ export class FilesWorkspace {
 
     try {
       const normalizedPath = normalizeWorkspacePath(path);
-      const backend = await this.getBackend();
-      const builtinResult = getBuiltinWorkspaceDoc(normalizedPath);
-
-      let result: WorkspaceFileReadResult;
-      try {
-        result = await backend.readFile(normalizedPath);
-      } catch (error: unknown) {
-        if (!builtinResult || !isMissingWorkspaceFileError(error)) {
-          throw error;
-        }
-
-        result = builtinResult;
-      }
+      const readResult = await this.readRawFile({
+        path: normalizedPath,
+        requestedLocationKind: options.locationKind,
+      });
+      const result = readResult.result;
 
       const bytes = result.base64
         ? base64ToBytes(result.base64)
