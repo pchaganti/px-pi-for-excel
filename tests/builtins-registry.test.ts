@@ -53,8 +53,14 @@ void test("builtins registry wires /experimental, /extensions, and /integrations
   assert.match(source, /\.\.\.createExtensionsCommands\(context\)/);
 
   const extensionApiSource = await readFile(new URL("../src/commands/extension-api.ts", import.meta.url), "utf8");
-  assert.match(extensionApiSource, /\.glob\("\.\.\/extensions\/\*\.\{ts,js\}"\)/);
-  assert.match(extensionApiSource, /Local extension module/);
+  const extensionModuleImportSource = await readFile(
+    new URL("../src/commands/extension-module-import.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(extensionModuleImportSource, /glob\("\.\.\/extensions\/\*\.\{ts,js\}"\)/);
+  assert.match(extensionModuleImportSource, /Local extension module/);
+
   assert.match(extensionApiSource, /isCapabilityEnabled/);
   assert.match(extensionApiSource, /commands\.register/);
   assert.match(extensionApiSource, /tools\.register/);
