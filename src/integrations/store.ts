@@ -227,6 +227,8 @@ function parseStoredBoolean(value: unknown): boolean {
 
 export async function getExternalToolsEnabled(settings: IntegrationSettingsStore): Promise<boolean> {
   const raw = await settings.get(EXTERNAL_TOOLS_ENABLED_SETTING_KEY);
+  // Default ON so web search works out of the box with zero additional setup.
+  if (raw == null) return true;
   return parseStoredBoolean(raw);
 }
 
