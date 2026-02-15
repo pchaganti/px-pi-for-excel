@@ -1395,7 +1395,6 @@ export async function initTaskpane(opts: {
     getExecutionMode: () => Promise.resolve(getExecutionMode()),
     setExecutionMode,
     openAddonsManager,
-    openSkillsManager,
   });
 
   // Slash commands chosen from the popup menu dispatch this event.

@@ -162,6 +162,7 @@ void test("add-ons connections section links to detailed Tools & MCP manager", a
     "utf8",
   );
 
+  assert.match(source, /Enable external tools globally/);
   assert.match(source, /Open detailed Tools & MCP manager…/);
   assert.match(source, /openIntegrationsManager/);
 });
@@ -231,6 +232,7 @@ void test("add-ons overlay groups connections, extensions, and skills", async ()
   assert.match(extensionsSource, /dataset\.addonsSection = "extensions"/);
   assert.match(extensionsSource, /confirmExtensionEnable/);
   assert.match(skillsSource, /dataset\.addonsSection = "skills"/);
+  assert.match(skillsSource, /Open full Skills manager…/);
 });
 
 void test("context pill headers expose expanded state and controlled body", async () => {
@@ -304,12 +306,14 @@ void test("addons and alias commands deep-link to add-ons sections", async () =>
   const addonsSource = await readFile(new URL("../src/commands/builtins/addons.ts", import.meta.url), "utf8");
   const integrationsSource = await readFile(new URL("../src/commands/builtins/integrations.ts", import.meta.url), "utf8");
   const extensionsSource = await readFile(new URL("../src/commands/builtins/extensions.ts", import.meta.url), "utf8");
+  const skillsSource = await readFile(new URL("../src/commands/builtins/skills.ts", import.meta.url), "utf8");
 
   assert.match(addonsSource, /name:\s*"addons"/);
   assert.match(addonsSource, /openAddonsManager\(\)/);
 
   assert.match(integrationsSource, /openAddonsManager\("connections"\)/);
   assert.match(extensionsSource, /openAddonsManager\("extensions"\)/);
+  assert.match(skillsSource, /openAddonsManager\("skills"\)/);
 });
 
 void test("settings overlay serializes open flow and tolerates provider storage lookup failure", async () => {
