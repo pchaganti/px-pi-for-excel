@@ -41,6 +41,7 @@ import {
   withWorkbookCoordinator,
 } from "../tools/with-workbook-coordinator.js";
 import { registerBuiltins } from "../commands/builtins.js";
+import { showAddonsDialog } from "../commands/builtins/addons-overlay.js";
 import { showExtensionsDialog } from "../commands/builtins/extensions-overlay.js";
 import { showIntegrationsDialog } from "../commands/builtins/integrations-overlay.js";
 import { showSkillsDialog } from "../commands/builtins/skills-overlay.js";
@@ -91,6 +92,7 @@ import { createSkillReadCache } from "../skills/read-cache.js";
 import { initAppStorage } from "../storage/init-app-storage.js";
 import { renderError } from "../ui/loading.js";
 import { showFilesWorkspaceDialog } from "../ui/files-dialog.js";
+
 import {
   PI_REQUEST_INPUT_FOCUS_EVENT,
   moveCursorToEnd,
@@ -446,7 +448,6 @@ export async function initTaskpane(opts: {
 
     const address = restored.result.address;
     showToast(`Reverted ${address}`);
-    await refreshRecoveryQuickActionState();
   };
 
   const toRecoveryCheckpointSummary = (
@@ -459,23 +460,6 @@ export async function initTaskpane(opts: {
     changedCount: snapshot.changedCount,
     restoredFromSnapshotId: snapshot.restoredFromSnapshotId,
   });
-
-  const refreshRecoveryQuickActionState = async (): Promise<void> => {
-    try {
-      const checkpoints = await workbookRecoveryLog.listForCurrentWorkbook(1);
-      sidebar.hasRecoveryCheckpoints = checkpoints.length > 0;
-    } catch {
-      sidebar.hasRecoveryCheckpoints = false;
-    }
-  };
-
-  const getActiveIntegrationTitles = (): string[] => {
-    const runtime = getActiveRuntime();
-    if (!runtime) return [];
-
-    const integrationIds = runtimeActiveIntegrationIds.get(runtime.runtimeId) ?? [];
-    return buildIntegrationPromptEntries(integrationIds).map((entry) => entry.title);
-  };
 
   const formatSessionTitle = (title: string): string => {
     const trimmed = title.trim();
@@ -585,7 +569,6 @@ export async function initTaskpane(opts: {
 
   const refreshWorkbookState = async () => {
     await resolveWorkbookContext();
-    await refreshRecoveryQuickActionState();
     sidebar.requestUpdate();
 
     await refreshCapabilitiesForAllRuntimes();
@@ -1257,7 +1240,6 @@ export async function initTaskpane(opts: {
 
     if (event.type === "completed" || event.type === "failed") {
       runtimeManager.setRuntimeLockState(runtime.runtimeId, "idle");
-      void refreshRecoveryQuickActionState();
     }
   });
 
@@ -1282,6 +1264,14 @@ export async function initTaskpane(opts: {
     showSkillsDialog();
   };
 
+  const openAddonsManager = () => {
+    showAddonsDialog({
+      openIntegrationsManager,
+      openSkillsManager,
+      openExtensionsManager,
+    });
+  };
+
   const openRecoveryDialog = async (): Promise<void> => {
     const workbookContext = await resolveWorkbookContext();
 
@@ -1293,17 +1283,12 @@ export async function initTaskpane(opts: {
       },
       onRestore: async (snapshotId: string) => {
         await restoreCheckpointById(snapshotId);
-        await refreshRecoveryQuickActionState();
       },
       onDelete: async (snapshotId: string) => {
-        const removed = await workbookRecoveryLog.delete(snapshotId);
-        await refreshRecoveryQuickActionState();
-        return removed;
+        return workbookRecoveryLog.delete(snapshotId);
       },
       onClear: async () => {
-        const removed = await workbookRecoveryLog.clearForCurrentWorkbook();
-        await refreshRecoveryQuickActionState();
-        return removed;
+        return workbookRecoveryLog.clearForCurrentWorkbook();
       },
       onCreateManualFullBackup: async () => {
         return createManualFullBackup();
@@ -1444,20 +1429,14 @@ export async function initTaskpane(opts: {
   sidebar.onOpenRules = () => {
     void openRulesEditor();
   };
-  sidebar.onOpenIntegrations = () => {
-    openIntegrationsManager();
-  };
-  sidebar.onOpenSkills = () => {
-    openSkillsManager();
-  };
-  sidebar.onOpenExtensions = () => {
-    openExtensionsManager();
-  };
-  sidebar.onOpenFiles = () => {
-    void showFilesWorkspaceDialog();
+  sidebar.onOpenAddons = () => {
+    openAddonsManager();
   };
   sidebar.onOpenSettings = () => {
     void SettingsDialog.open([new ApiKeysTab(), new ProxyTab()]);
+  };
+  sidebar.onOpenFilesWorkspace = () => {
+    void showFilesWorkspaceDialog();
   };
   sidebar.onFilesDrop = (files: File[]) => {
     const workspace = getFilesWorkspace();
@@ -1480,9 +1459,6 @@ export async function initTaskpane(opts: {
   };
   sidebar.onOpenResumePicker = () => {
     void openResumePicker("new_tab");
-  };
-  sidebar.onReopenLastClosed = () => {
-    void reopenLastClosed();
   };
   sidebar.onOpenRecovery = () => {
     void openRecoveryDialog();
@@ -1561,9 +1537,7 @@ export async function initTaskpane(opts: {
   injectStatusBar({
     getActiveAgent,
     getLockState: getActiveLockState,
-    getRulesActive: () => rulesActive,
     getExecutionMode,
-    getActiveIntegrations: getActiveIntegrationTitles,
   });
 
   // ── Wire command menu to textarea ──
@@ -1656,24 +1630,10 @@ export async function initTaskpane(opts: {
       return;
     }
 
-    // Rules editor
-    if (el.closest(".pi-status-rules")) {
-      closeStatusPopover();
-      void openRulesEditor();
-      return;
-    }
-
     // Execution mode toggle
     if (el.closest(".pi-status-mode")) {
       closeStatusPopover();
       void toggleExecutionModeFromUi();
-      return;
-    }
-
-    // Integrations manager
-    if (el.closest(".pi-status-integrations")) {
-      closeStatusPopover();
-      openIntegrationsManager();
       return;
     }
 

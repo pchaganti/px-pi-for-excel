@@ -131,33 +131,44 @@ void test("taskpane init keeps getIntegrationToolNames imported when used", asyn
   );
 });
 
-void test("taskpane init wires Files workspace opener when sidebar callback is present", async () => {
+void test("taskpane init wires Files workspace opener", async () => {
   const initSource = await readFile(new URL("../src/taskpane/init.ts", import.meta.url), "utf8");
-  if (!/sidebar\.onOpenFiles\s*=/.test(initSource)) {
-    return;
-  }
 
   assert.match(initSource, /showFilesWorkspaceDialog/);
   assert.match(
     initSource,
-    /sidebar\.onOpenFiles\s*=\s*\(\)\s*=>\s*\{\s*void showFilesWorkspaceDialog\(\);\s*\};/,
+    /sidebar\.onOpenFilesWorkspace\s*=\s*\(\)\s*=>\s*\{\s*void showFilesWorkspaceDialog\(\);\s*\};/,
   );
 });
 
-void test("taskpane init wires extensions menu opener", async () => {
+void test("taskpane init wires add-ons menu opener", async () => {
   const initSource = await readFile(new URL("../src/taskpane/init.ts", import.meta.url), "utf8");
 
-  assert.match(initSource, /const openExtensionsManager = \(\) =>/);
-  assert.match(initSource, /sidebar\.onOpenExtensions\s*=\s*\(\)\s*=>\s*\{\s*openExtensionsManager\(\);\s*\};/);
+  assert.match(initSource, /const openAddonsManager = \(\) =>/);
+  assert.match(initSource, /showAddonsDialog\(\{/);
+  assert.match(initSource, /openIntegrationsManager/);
+  assert.match(initSource, /openSkillsManager/);
+  assert.match(initSource, /openExtensionsManager/);
+  assert.match(initSource, /sidebar\.onOpenAddons\s*=\s*\(\)\s*=>\s*\{\s*openAddonsManager\(\);\s*\};/);
 });
 
-void test("sidebar utilities menu includes extensions and files labels", async () => {
+void test("sidebar utilities menu includes add-ons label", async () => {
   const sidebarSource = await readFile(new URL("../src/ui/pi-sidebar.ts", import.meta.url), "utf8");
 
   assert.match(sidebarSource, /aria-label="Settings and tools"/);
-  assert.match(sidebarSource, /Extensions…/);
-  assert.match(sidebarSource, /Files…/);
-  assert.doesNotMatch(sidebarSource, /Files workspace \(Beta\)…/);
+  assert.match(sidebarSource, /Add-ons…/);
+  // Extensions and Files removed from gear menu — accessible via Add-ons and 📎 respectively
+  assert.doesNotMatch(sidebarSource, /Extensions…/);
+  assert.doesNotMatch(sidebarSource, /Files…/);
+});
+
+void test("input paperclip opens Files workspace through sidebar callback", async () => {
+  const inputSource = await readFile(new URL("../src/ui/pi-input.ts", import.meta.url), "utf8");
+  const sidebarSource = await readFile(new URL("../src/ui/pi-sidebar.ts", import.meta.url), "utf8");
+
+  assert.match(inputSource, /pi-open-files/);
+  assert.match(sidebarSource, /onOpenFilesWorkspace/);
+  assert.match(sidebarSource, /@pi-open-files=\$\{this\._onOpenFilesWorkspace\}/);
 });
 
 void test("session builtins include recovery and manual-backup commands", async () => {
@@ -175,7 +186,7 @@ void test("settings builtins include yolo execution-mode command", async () => {
   const settingsSource = await readFile(new URL("../src/commands/builtins/settings.ts", import.meta.url), "utf8");
 
   assert.match(settingsSource, /name:\s*"yolo"/);
-  assert.match(settingsSource, /Toggle execution mode \(YOLO vs Safe\)/);
+  assert.match(settingsSource, /Toggle execution mode \(Auto vs Confirm\)/);
   assert.match(settingsSource, /Usage:\s*\/yolo/);
 });
 

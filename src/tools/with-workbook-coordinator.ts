@@ -100,7 +100,7 @@ export function buildMutationApprovalMessage(request: MutationApprovalRequest): 
     lines.push(`Range: ${range}`);
   }
 
-  lines.push("", "Tip: run /yolo on to disable pre-execution mutation confirmations.");
+  lines.push("", "Tip: run /yolo on to switch to Auto mode (no confirmations).");
   return lines.join("\n");
 }
 
@@ -111,7 +111,7 @@ function defaultGetExecutionMode(): Promise<ExecutionMode> {
 function defaultRequestMutationApproval(request: MutationApprovalRequest): Promise<boolean> {
   if (typeof window === "undefined" || typeof window.confirm !== "function") {
     return Promise.reject(new Error(
-      "Safe mode requires explicit user approval, but confirmation UI is unavailable.",
+      "Confirm mode requires explicit user approval, but confirmation UI is unavailable.",
     ));
   }
 
@@ -144,7 +144,7 @@ async function requireMutationApprovalIfNeeded(args: {
   });
 
   if (!approved) {
-    throw new Error("Mutation cancelled by user (Safe mode).");
+    throw new Error("Mutation cancelled by user (Confirm mode).");
   }
 }
 
