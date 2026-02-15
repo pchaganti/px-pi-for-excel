@@ -4,8 +4,6 @@ import { excelRun, getRange } from "../../excel/helpers.js";
 import { cloneRecoveryConditionalFormatRules } from "./clone.js";
 import {
   BASIC_CONDITIONAL_FORMAT_RULE_HANDLERS,
-  type ConditionalFormatRuleCaptureContext,
-  type ConditionalFormatRuleCaptureResult,
   type ConditionalFormatRuleHandler,
 } from "./conditional-format-handlers-basic.js";
 import type {
