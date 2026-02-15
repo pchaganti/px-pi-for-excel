@@ -137,3 +137,11 @@
   margin-top: 6px;
   overflow-y: auto;
 }
+
+.pi-utilities-menu__item-icon {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  font-size: var(--text-sm);
+  line-height: 1;
+}

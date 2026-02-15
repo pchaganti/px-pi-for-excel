@@ -1,5 +1,9 @@
 /**
  * Recovery backups overlay.
+ *
+ * Progressive-disclosure empty state: when there are no backups, only the
+ * title, subtitle, warning callout, and empty message are shown. Search,
+ * filter, toolbar, and retention controls appear once backups exist.
  */
 
 import { formatRelativeDate } from "./overlay-relative-date.js";
@@ -19,6 +23,12 @@ import {
 import { requestConfirmationDialog } from "../../ui/confirm-dialog.js";
 import { RECOVERY_OVERLAY_ID } from "../../ui/overlay-ids.js";
 import { showToast } from "../../ui/toast.js";
+import {
+  createCallout,
+  createEmptyInline,
+  createButton,
+  createActionsRow,
+} from "../../ui/extensions-hub-components.js";
 
 export type RecoveryCheckpointToolName =
   | "write_cells"
@@ -84,40 +94,6 @@ function formatBytes(bytes: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Export
-// ---------------------------------------------------------------------------
-
-function exportCheckpointsAsJson(
-  checkpoints: RecoveryCheckpointSummary[],
-  workbookLabel: string,
-): void {
-  const payload = {
-    exported: new Date().toISOString(),
-    workbook: workbookLabel,
-    count: checkpoints.length,
-    checkpoints,
-  };
-
-  const json = JSON.stringify(payload, null, 2);
-  const blob = new Blob([json], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-
-  const opened = window.open(url, "_blank");
-  if (!opened) {
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `pi-backups-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.rel = "noopener";
-    anchor.hidden = true;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-  }
-
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
-
-// ---------------------------------------------------------------------------
 // Retention
 // ---------------------------------------------------------------------------
 
@@ -156,26 +132,27 @@ export async function showRecoveryDialog(opts: {
   const { header } = createOverlayHeader({
     onClose: dialog.close,
     closeLabel: "Close backups",
-    title: "Backups (Beta)",
-    subtitle: "Saved before Pi edits, in between saves. Entries are sheet-specific in this workbook.",
+    title: "Backups",
+    subtitle: "Snapshots saved before Pi changes your data",
   });
 
-  const workbookTag = document.createElement("p");
-  workbookTag.className = "pi-overlay-workbook-tag";
-  workbookTag.textContent = `Workbook: ${opts.workbookLabel}`;
+  // -- Warning callout --
 
-  const saveBoundaryHint = document.createElement("p");
-  saveBoundaryHint.className = "pi-overlay-hint";
-  saveBoundaryHint.textContent = "Backups reset after you save this workbook.";
+  const warningCallout = createCallout(
+    "warn",
+    "⚠",
+    "Backups clear when you save this workbook in Excel.",
+    { compact: true },
+  );
 
-  // -- Search + filters --
+  // -- Search + filters (hidden when empty) --
 
   const searchRow = document.createElement("div");
   searchRow.className = "pi-recovery-search-row pi-overlay-inline-row pi-overlay-inline-row--compact pi-overlay-inline-row--wrap";
 
   const searchInput = document.createElement("input");
   searchInput.type = "text";
-  searchInput.placeholder = "Search by id, tool, or range…";
+  searchInput.placeholder = "Search backups…";
   searchInput.className = "pi-recovery-search pi-overlay-inline-control";
 
   const toolFilterSelect = document.createElement("select");
@@ -188,7 +165,7 @@ export async function showRecoveryDialog(opts: {
 
   searchRow.append(searchInput, toolFilterSelect, sortButton);
 
-  // -- Toolbar --
+  // -- Toolbar (hidden when empty) --
 
   const toolbar = document.createElement("div");
   toolbar.className = "pi-overlay-toolbar";
@@ -196,35 +173,102 @@ export async function showRecoveryDialog(opts: {
   const toolbarActions = document.createElement("div");
   toolbarActions.className = "pi-overlay-toolbar-actions";
 
-  const fullBackupButton = document.createElement("button");
-  fullBackupButton.type = "button";
-  fullBackupButton.className = "pi-overlay-btn pi-overlay-btn--ghost";
-  fullBackupButton.textContent = "Full backup";
-  fullBackupButton.hidden = opts.onCreateManualFullBackup === undefined;
+  const downloadBackupBtn = createButton("Download backup", {
+    primary: true,
+    compact: true,
+    onClick: () => {
+      if (busy) return;
+      const createManualFullBackup = opts.onCreateManualFullBackup;
+      if (!createManualFullBackup) return;
+      void (async () => {
+        setBusy(true);
+        statusText.textContent = "Capturing…";
+        try {
+          const backup = await createManualFullBackup();
+          showToast(`Backup downloaded: #${shortId(backup.id)} (${formatBytes(backup.sizeBytes)})`);
+          renderList();
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : "Unknown error";
+          showToast(`Backup failed: ${message}`);
+          statusText.textContent = "Backup failed";
+        } finally {
+          setBusy(false);
+        }
+      })();
+    },
+  });
+  downloadBackupBtn.hidden = opts.onCreateManualFullBackup === undefined;
 
-  const refreshButton = document.createElement("button");
-  refreshButton.type = "button";
-  refreshButton.className = "pi-overlay-btn pi-overlay-btn--ghost";
-  refreshButton.textContent = "Refresh";
+  const refreshButton = createButton("Refresh", {
+    compact: true,
+    onClick: () => {
+      if (busy) return;
+      void (async () => {
+        setBusy(true);
+        statusText.textContent = "Refreshing…";
+        try {
+          await reload();
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : "Unknown error";
+          showToast(`Refresh failed: ${message}`);
+          statusText.textContent = "Refresh failed";
+        } finally {
+          setBusy(false);
+        }
+      })();
+    },
+  });
 
-  const exportButton = document.createElement("button");
-  exportButton.type = "button";
-  exportButton.className = "pi-overlay-btn pi-overlay-btn--ghost";
-  exportButton.textContent = "Export";
+  const clearButton = createButton("Clear all", {
+    danger: true,
+    compact: true,
+    onClick: () => {
+      if (busy || allCheckpoints.length === 0) return;
+      void (async () => {
+        const proceed = await requestConfirmationDialog({
+          title: "Delete all backups for this workbook?",
+          message: `This will delete ${allCheckpoints.length} backup${allCheckpoints.length === 1 ? "" : "s"}.`,
+          confirmLabel: "Delete all",
+          cancelLabel: "Cancel",
+          confirmButtonTone: "danger",
+          restoreFocusOnClose: false,
+        });
+        if (!proceed || busy) return;
+        setBusy(true);
+        statusText.textContent = "Clearing…";
+        try {
+          const removed = await opts.onClear();
+          showToast(`Cleared ${removed} backup${removed === 1 ? "" : "s"}`);
+          await reload();
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : "Unknown error";
+          showToast(`Clear failed: ${message}`);
+          statusText.textContent = "Clear failed";
+        } finally {
+          setBusy(false);
+        }
+      })();
+    },
+  });
 
-  const clearButton = document.createElement("button");
-  clearButton.type = "button";
-  clearButton.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--danger";
-  clearButton.textContent = "Clear all";
-
-  toolbarActions.append(fullBackupButton, refreshButton, exportButton, clearButton);
+  toolbarActions.append(downloadBackupBtn, refreshButton, clearButton);
 
   const statusText = document.createElement("span");
   statusText.className = "pi-overlay-toolbar-status";
 
   toolbar.append(toolbarActions, statusText);
 
-  // -- Retention --
+  // -- Retention (hidden by default, collapsible) --
+
+  const hasRetention = opts.getRetentionConfig !== undefined && opts.setRetentionConfig !== undefined;
+  const retentionDetails = document.createElement("details");
+  retentionDetails.className = "pi-recovery-retention-details";
+  retentionDetails.hidden = !hasRetention;
+
+  const retentionSummary = document.createElement("summary");
+  retentionSummary.className = "pi-recovery-retention-summary";
+  retentionSummary.textContent = "Retention settings";
+  retentionDetails.appendChild(retentionSummary);
 
   const retentionRow = document.createElement("div");
   retentionRow.className = "pi-recovery-retention pi-overlay-inline-row pi-overlay-inline-row--compact";
@@ -236,22 +280,41 @@ export async function showRecoveryDialog(opts: {
   const retentionInput = document.createElement("input");
   retentionInput.type = "number";
   retentionInput.min = "5";
-  retentionInput.max = "120";
+  retentionInput.max = "500";
   retentionInput.className = "pi-recovery-retention__input pi-overlay-inline-control";
 
   const retentionSuffix = document.createElement("span");
   retentionSuffix.className = "pi-recovery-retention__suffix";
   retentionSuffix.textContent = "backups";
 
-  const retentionSave = document.createElement("button");
-  retentionSave.type = "button";
-  retentionSave.className = "pi-overlay-btn pi-overlay-btn--ghost";
-  retentionSave.textContent = "Save";
+  const retentionSave = createButton("Save", {
+    compact: true,
+    onClick: () => {
+      if (busy) return;
+      const setConfig = opts.setRetentionConfig;
+      if (!setConfig) return;
+      const value = parseInt(retentionInput.value, 10);
+      if (!Number.isFinite(value) || value < 5 || value > 500) {
+        showToast("Retention limit must be between 5 and 500");
+        return;
+      }
+      void (async () => {
+        setBusy(true);
+        try {
+          await setConfig({ maxSnapshots: value });
+          showToast(`Retention set to ${value} backups`);
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : "Unknown error";
+          showToast(`Failed to save retention: ${message}`);
+        } finally {
+          setBusy(false);
+        }
+      })();
+    },
+  });
 
   retentionRow.append(retentionLabel, retentionInput, retentionSuffix, retentionSave);
-
-  const hasRetention = opts.getRetentionConfig !== undefined && opts.setRetentionConfig !== undefined;
-  retentionRow.hidden = !hasRetention;
+  retentionDetails.appendChild(retentionRow);
 
   // -- List --
 
@@ -260,10 +323,7 @@ export async function showRecoveryDialog(opts: {
 
   // -- Assemble --
 
-  dialog.card.append(
-    header, workbookTag, saveBoundaryHint,
-    searchRow, toolbar, retentionRow, list,
-  );
+  dialog.card.append(header, warningCallout, searchRow, toolbar, retentionDetails, list);
 
   // -- State --
 
@@ -276,11 +336,18 @@ export async function showRecoveryDialog(opts: {
 
   const shortId = (id: string): string => (id.length > 12 ? id.slice(0, 12) : id);
 
+  /** Show/hide progressive-disclosure controls based on checkpoint count. */
+  const syncVisibility = (): void => {
+    const hasBackups = allCheckpoints.length > 0;
+    searchRow.hidden = !hasBackups;
+    toolbar.hidden = !hasBackups;
+    retentionDetails.hidden = !hasRetention || !hasBackups;
+  };
+
   const setBusy = (next: boolean): void => {
     busy = next;
-    fullBackupButton.disabled = next || opts.onCreateManualFullBackup === undefined;
+    downloadBackupBtn.disabled = next || opts.onCreateManualFullBackup === undefined;
     refreshButton.disabled = next;
-    exportButton.disabled = next || allCheckpoints.length === 0;
     clearButton.disabled = next || allCheckpoints.length === 0;
     searchInput.disabled = next;
     toolFilterSelect.disabled = next;
@@ -308,25 +375,23 @@ export async function showRecoveryDialog(opts: {
 
   const renderList = (): void => {
     const filtered = applyRecoveryFilters(allCheckpoints, filterState);
+    syncVisibility();
     syncFilterControls();
 
     list.replaceChildren();
 
     if (allCheckpoints.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "pi-overlay-empty";
-      empty.textContent = "No backups for this workbook yet.";
+      const empty = createEmptyInline(
+        "📦",
+        "No backups yet\nPi will save snapshots here before making changes to your data.",
+      );
       list.appendChild(empty);
-      statusText.textContent = "No backups";
-      clearButton.disabled = true;
-      exportButton.disabled = true;
+      statusText.textContent = "";
       return;
     }
 
     if (filtered.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "pi-overlay-empty";
-      empty.textContent = "No backups match the current filters.";
+      const empty = createEmptyInline("🔍", "No backups match the current filters.");
       list.appendChild(empty);
       statusText.textContent = `0 of ${allCheckpoints.length} shown`;
       return;
@@ -353,78 +418,66 @@ export async function showRecoveryDialog(opts: {
       meta.className = "pi-recovery-item__meta";
       meta.textContent = `${formatChangedLabel(checkpoint.changedCount)} · #${shortId(checkpoint.id)}`;
 
-      const actions = document.createElement("div");
-      actions.className = "pi-overlay-actions pi-overlay-actions--inline";
-
-      const restoreButton = document.createElement("button");
-      restoreButton.type = "button";
-      restoreButton.className = "pi-overlay-btn pi-overlay-btn--primary";
-      restoreButton.textContent = "Restore";
-
-      const deleteButton = document.createElement("button");
-      deleteButton.type = "button";
-      deleteButton.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--danger";
-      deleteButton.textContent = "Delete";
-
-      restoreButton.addEventListener("click", () => {
-        if (busy) return;
-
-        void (async () => {
-          setBusy(true);
-          statusText.textContent = "Restoring…";
-
-          try {
-            await opts.onRestore(checkpoint.id);
-            allCheckpoints = await opts.loadCheckpoints();
-            renderList();
-          } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : "Unknown error";
-            showToast(`Restore failed: ${message}`);
-            statusText.textContent = "Restore failed";
-          } finally {
-            setBusy(false);
-          }
-        })();
-      });
-
-      deleteButton.addEventListener("click", () => {
-        if (busy) return;
-
-        void (async () => {
-          const proceed = await requestConfirmationDialog({
-            title: "Delete this backup?",
-            message: `Backup: ${checkpoint.address} (#${shortId(checkpoint.id)})`,
-            confirmLabel: "Delete",
-            cancelLabel: "Cancel",
-            confirmButtonTone: "danger",
-            restoreFocusOnClose: false,
-          });
-          if (!proceed || busy) {
-            return;
-          }
-
-          setBusy(true);
-          statusText.textContent = "Deleting…";
-
-          try {
-            const deleted = await opts.onDelete(checkpoint.id);
-            if (!deleted) {
-              showToast("Backup not found");
+      const restoreButton = createButton("Restore", {
+        primary: true,
+        compact: true,
+        onClick: () => {
+          if (busy) return;
+          void (async () => {
+            setBusy(true);
+            statusText.textContent = "Restoring…";
+            try {
+              await opts.onRestore(checkpoint.id);
+              allCheckpoints = await opts.loadCheckpoints();
+              renderList();
+            } catch (error: unknown) {
+              const message = error instanceof Error ? error.message : "Unknown error";
+              showToast(`Restore failed: ${message}`);
+              statusText.textContent = "Restore failed";
+            } finally {
+              setBusy(false);
             }
-
-            allCheckpoints = await opts.loadCheckpoints();
-            renderList();
-          } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : "Unknown error";
-            showToast(`Delete failed: ${message}`);
-            statusText.textContent = "Delete failed";
-          } finally {
-            setBusy(false);
-          }
-        })();
+          })();
+        },
       });
 
-      actions.append(restoreButton, deleteButton);
+      const deleteButton = createButton("Delete", {
+        danger: true,
+        compact: true,
+        onClick: () => {
+          if (busy) return;
+          void (async () => {
+            const proceed = await requestConfirmationDialog({
+              title: "Delete this backup?",
+              message: `Backup: ${checkpoint.address} (#${shortId(checkpoint.id)})`,
+              confirmLabel: "Delete",
+              cancelLabel: "Cancel",
+              confirmButtonTone: "danger",
+              restoreFocusOnClose: false,
+            });
+            if (!proceed || busy) return;
+            setBusy(true);
+            statusText.textContent = "Deleting…";
+            try {
+              const deleted = await opts.onDelete(checkpoint.id);
+              if (!deleted) {
+                showToast("Backup not found");
+              }
+              allCheckpoints = await opts.loadCheckpoints();
+              renderList();
+            } catch (error: unknown) {
+              const message = error instanceof Error ? error.message : "Unknown error";
+              showToast(`Delete failed: ${message}`);
+              statusText.textContent = "Delete failed";
+            } finally {
+              setBusy(false);
+            }
+          })();
+        },
+      });
+
+      const actions = createActionsRow(restoreButton, deleteButton);
+      actions.classList.add("pi-overlay-actions--inline");
       item.append(itemHeader, meta, actions);
 
       if (checkpoint.restoredFromSnapshotId) {
@@ -444,7 +497,6 @@ export async function showRecoveryDialog(opts: {
     }
 
     clearButton.disabled = busy || allCheckpoints.length === 0;
-    exportButton.disabled = busy || allCheckpoints.length === 0;
   };
 
   const reload = async (): Promise<void> => {
@@ -473,113 +525,6 @@ export async function showRecoveryDialog(opts: {
     const next: RecoverySortOrder = filterState.sortOrder === "newest" ? "oldest" : "newest";
     filterState.sortOrder = next;
     renderList();
-  });
-
-  fullBackupButton.addEventListener("click", () => {
-    if (busy) return;
-
-    const createManualFullBackup = opts.onCreateManualFullBackup;
-    if (!createManualFullBackup) return;
-
-    void (async () => {
-      setBusy(true);
-      statusText.textContent = "Capturing full backup…";
-      try {
-        const backup = await createManualFullBackup();
-        showToast(
-          `Full backup downloaded: #${shortId(backup.id)} (${formatBytes(backup.sizeBytes)}). Open it in Excel to restore.`,
-        );
-        renderList();
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "Unknown error";
-        showToast(`Full backup failed: ${message}`);
-        statusText.textContent = "Full backup failed";
-      } finally {
-        setBusy(false);
-      }
-    })();
-  });
-
-  exportButton.addEventListener("click", () => {
-    if (busy || allCheckpoints.length === 0) return;
-    exportCheckpointsAsJson(allCheckpoints, opts.workbookLabel);
-    showToast(`Exported ${allCheckpoints.length} backup${allCheckpoints.length === 1 ? "" : "s"}`);
-  });
-
-  refreshButton.addEventListener("click", () => {
-    if (busy) return;
-
-    void (async () => {
-      setBusy(true);
-      statusText.textContent = "Refreshing…";
-      try {
-        await reload();
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "Unknown error";
-        showToast(`Refresh failed: ${message}`);
-        statusText.textContent = "Refresh failed";
-      } finally {
-        setBusy(false);
-      }
-    })();
-  });
-
-  clearButton.addEventListener("click", () => {
-    if (busy || allCheckpoints.length === 0) return;
-
-    void (async () => {
-      const proceed = await requestConfirmationDialog({
-        title: "Delete all backups for this workbook?",
-        message: `This will delete ${allCheckpoints.length} backup${allCheckpoints.length === 1 ? "" : "s"}.`,
-        confirmLabel: "Delete all",
-        cancelLabel: "Cancel",
-        confirmButtonTone: "danger",
-        restoreFocusOnClose: false,
-      });
-      if (!proceed || busy) {
-        return;
-      }
-
-      setBusy(true);
-      statusText.textContent = "Clearing…";
-      try {
-        const removed = await opts.onClear();
-        showToast(`Cleared ${removed} backup${removed === 1 ? "" : "s"}`);
-        await reload();
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "Unknown error";
-        showToast(`Clear failed: ${message}`);
-        statusText.textContent = "Clear failed";
-      } finally {
-        setBusy(false);
-      }
-    })();
-  });
-
-  retentionSave.addEventListener("click", () => {
-    if (busy) return;
-
-    const setConfig = opts.setRetentionConfig;
-    if (!setConfig) return;
-
-    const value = parseInt(retentionInput.value, 10);
-    if (!Number.isFinite(value) || value < 5 || value > 120) {
-      showToast("Retention limit must be between 5 and 120");
-      return;
-    }
-
-    void (async () => {
-      setBusy(true);
-      try {
-        await setConfig({ maxSnapshots: value });
-        showToast(`Retention set to ${value} backups`);
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "Unknown error";
-        showToast(`Failed to save retention: ${message}`);
-      } finally {
-        setBusy(false);
-      }
-    })();
   });
 
   // -- Cleanup --

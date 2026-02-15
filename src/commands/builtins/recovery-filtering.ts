@@ -37,7 +37,7 @@ export function buildToolFilterOptions(
   }
 
   const options: RecoveryToolFilterOption[] = [
-    { value: "all", label: "All tools", count: checkpoints.length },
+    { value: "all", label: "All actions", count: checkpoints.length },
   ];
 
   for (const [tool, label] of Object.entries(TOOL_FILTER_LABELS)) {
