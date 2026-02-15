@@ -33,27 +33,103 @@ export interface StoredExtensionPermissions {
   downloadFile: boolean;
 }
 
-export const ALL_EXTENSION_CAPABILITIES = [
-  "commands.register",
-  "tools.register",
-  "agent.read",
-  "agent.events.read",
-  "ui.overlay",
-  "ui.widget",
-  "ui.toast",
-  "llm.complete",
-  "http.fetch",
-  "storage.readwrite",
-  "clipboard.write",
-  "agent.context.write",
-  "agent.steer",
-  "agent.followup",
-  "skills.read",
-  "skills.write",
-  "download.file",
-] as const;
+const EXTENSION_CAPABILITY_DESCRIPTORS = [
+  {
+    capability: "commands.register",
+    permissionKey: "commandsRegister",
+    label: "register commands",
+  },
+  {
+    capability: "tools.register",
+    permissionKey: "toolsRegister",
+    label: "register tools",
+  },
+  {
+    capability: "agent.read",
+    permissionKey: "agentRead",
+    label: "read agent state",
+  },
+  {
+    capability: "agent.events.read",
+    permissionKey: "agentEventsRead",
+    label: "read agent events",
+  },
+  {
+    capability: "ui.overlay",
+    permissionKey: "uiOverlay",
+    label: "show overlays",
+  },
+  {
+    capability: "ui.widget",
+    permissionKey: "uiWidget",
+    label: "show widgets",
+  },
+  {
+    capability: "ui.toast",
+    permissionKey: "uiToast",
+    label: "show toasts",
+  },
+  {
+    capability: "llm.complete",
+    permissionKey: "llmComplete",
+    label: "call LLM completions",
+  },
+  {
+    capability: "http.fetch",
+    permissionKey: "httpFetch",
+    label: "fetch external HTTP resources",
+  },
+  {
+    capability: "storage.readwrite",
+    permissionKey: "storageReadWrite",
+    label: "read/write extension storage",
+  },
+  {
+    capability: "clipboard.write",
+    permissionKey: "clipboardWrite",
+    label: "write clipboard text",
+  },
+  {
+    capability: "agent.context.write",
+    permissionKey: "agentContextWrite",
+    label: "inject agent context",
+  },
+  {
+    capability: "agent.steer",
+    permissionKey: "agentSteer",
+    label: "steer active agent runs",
+  },
+  {
+    capability: "agent.followup",
+    permissionKey: "agentFollowUp",
+    label: "queue agent follow-up messages",
+  },
+  {
+    capability: "skills.read",
+    permissionKey: "skillsRead",
+    label: "read skill catalog",
+  },
+  {
+    capability: "skills.write",
+    permissionKey: "skillsWrite",
+    label: "install/uninstall external skills",
+  },
+  {
+    capability: "download.file",
+    permissionKey: "downloadFile",
+    label: "trigger file downloads",
+  },
+] as const satisfies ReadonlyArray<{
+  capability: string;
+  permissionKey: keyof StoredExtensionPermissions;
+  label: string;
+}>;
 
-export type ExtensionCapability = (typeof ALL_EXTENSION_CAPABILITIES)[number];
+export type ExtensionCapability = (typeof EXTENSION_CAPABILITY_DESCRIPTORS)[number]["capability"];
+
+export const ALL_EXTENSION_CAPABILITIES: ExtensionCapability[] = EXTENSION_CAPABILITY_DESCRIPTORS.map((descriptor) => {
+  return descriptor.capability;
+});
 
 const TRUSTED_PERMISSIONS: StoredExtensionPermissions = {
   commandsRegister: true,
@@ -102,45 +178,14 @@ const TRUST_LABELS: Record<StoredExtensionTrust, string> = {
   "remote-url": "remote URL",
 };
 
-const CAPABILITY_LABELS: Record<ExtensionCapability, string> = {
-  "commands.register": "register commands",
-  "tools.register": "register tools",
-  "agent.read": "read agent state",
-  "agent.events.read": "read agent events",
-  "ui.overlay": "show overlays",
-  "ui.widget": "show widgets",
-  "ui.toast": "show toasts",
-  "llm.complete": "call LLM completions",
-  "http.fetch": "fetch external HTTP resources",
-  "storage.readwrite": "read/write extension storage",
-  "clipboard.write": "write clipboard text",
-  "agent.context.write": "inject agent context",
-  "agent.steer": "steer active agent runs",
-  "agent.followup": "queue agent follow-up messages",
-  "skills.read": "read skill catalog",
-  "skills.write": "install/uninstall external skills",
-  "download.file": "trigger file downloads",
-};
+function getCapabilityDescriptor(capability: ExtensionCapability): (typeof EXTENSION_CAPABILITY_DESCRIPTORS)[number] {
+  const descriptor = EXTENSION_CAPABILITY_DESCRIPTORS.find((entry) => entry.capability === capability);
+  if (!descriptor) {
+    throw new Error(`Unknown extension capability: ${capability}`);
+  }
 
-const CAPABILITY_TO_PERMISSION_KEY = {
-  "commands.register": "commandsRegister",
-  "tools.register": "toolsRegister",
-  "agent.read": "agentRead",
-  "agent.events.read": "agentEventsRead",
-  "ui.overlay": "uiOverlay",
-  "ui.widget": "uiWidget",
-  "ui.toast": "uiToast",
-  "llm.complete": "llmComplete",
-  "http.fetch": "httpFetch",
-  "storage.readwrite": "storageReadWrite",
-  "clipboard.write": "clipboardWrite",
-  "agent.context.write": "agentContextWrite",
-  "agent.steer": "agentSteer",
-  "agent.followup": "agentFollowUp",
-  "skills.read": "skillsRead",
-  "skills.write": "skillsWrite",
-  "download.file": "downloadFile",
-} as const satisfies Record<ExtensionCapability, keyof StoredExtensionPermissions>;
+  return descriptor;
+}
 
 function clonePermissions(source: StoredExtensionPermissions): StoredExtensionPermissions {
   return {
@@ -232,8 +277,8 @@ export function isExtensionCapabilityAllowed(
   permissions: StoredExtensionPermissions,
   capability: ExtensionCapability,
 ): boolean {
-  const permissionKey = CAPABILITY_TO_PERMISSION_KEY[capability];
-  return permissions[permissionKey];
+  const descriptor = getCapabilityDescriptor(capability);
+  return permissions[descriptor.permissionKey];
 }
 
 export function setExtensionCapabilityAllowed(
@@ -241,10 +286,10 @@ export function setExtensionCapabilityAllowed(
   capability: ExtensionCapability,
   allowed: boolean,
 ): StoredExtensionPermissions {
-  const permissionKey = CAPABILITY_TO_PERMISSION_KEY[capability];
+  const descriptor = getCapabilityDescriptor(capability);
   return {
     ...permissions,
-    [permissionKey]: allowed,
+    [descriptor.permissionKey]: allowed,
   };
 }
 
@@ -253,7 +298,8 @@ export function describeStoredExtensionTrust(trust: StoredExtensionTrust): strin
 }
 
 export function describeExtensionCapability(capability: ExtensionCapability): string {
-  return CAPABILITY_LABELS[capability];
+  const descriptor = getCapabilityDescriptor(capability);
+  return descriptor.label;
 }
 
 export function listAllExtensionCapabilities(): ExtensionCapability[] {
@@ -263,8 +309,7 @@ export function listAllExtensionCapabilities(): ExtensionCapability[] {
 export function listGrantedExtensionCapabilities(
   permissions: StoredExtensionPermissions,
 ): ExtensionCapability[] {
-  return ALL_EXTENSION_CAPABILITIES.filter((capability) => {
-    const permissionKey = CAPABILITY_TO_PERMISSION_KEY[capability];
-    return permissions[permissionKey];
-  });
+  return EXTENSION_CAPABILITY_DESCRIPTORS
+    .filter((descriptor) => permissions[descriptor.permissionKey])
+    .map((descriptor) => descriptor.capability);
 }
