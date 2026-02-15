@@ -52,19 +52,41 @@ export function bootstrapTaskpane(): void {
 
     let initComplete = false;
 
+    const markInitComplete = () => {
+      if (initComplete) return false;
+      initComplete = true;
+      return true;
+    };
+
     const slowInitTimer = setTimeout(() => {
       if (initComplete) return;
       console.warn("[pi] Taskpane initialization is taking longer than expected (>12s)");
     }, 12_000);
 
+    const hardTimeoutTimer = setTimeout(() => {
+      if (!markInitComplete()) return;
+      loadingRoot.innerHTML = "";
+      showFatalError(
+        errorRoot,
+        "Failed to initialize: Taskpane initialization timed out after 60000ms",
+      );
+      console.error("[pi] Init error: Taskpane initialization timed out after 60000ms");
+    }, 60_000);
+
     void initTaskpane({ appEl, errorRoot })
       .then(() => {
-        initComplete = true;
+        if (!markInitComplete()) return;
         clearTimeout(slowInitTimer);
+        clearTimeout(hardTimeoutTimer);
       })
       .catch((error: unknown) => {
-        initComplete = true;
+        if (!markInitComplete()) {
+          console.error("[pi] Init error after timeout:", error);
+          return;
+        }
+
         clearTimeout(slowInitTimer);
+        clearTimeout(hardTimeoutTimer);
         loadingRoot.innerHTML = "";
         showFatalError(errorRoot, `Failed to initialize: ${getErrorMessage(error)}`);
         console.error("[pi] Init error:", error);
