@@ -15,9 +15,192 @@ import {
   DEFAULT_LOCAL_PROXY_URL,
   PROXY_HELPER_DOCS_URL,
 } from "../auth/proxy-validation.js";
-import { PROVIDER_PROMPT_OVERLAY_ID } from "./overlay-ids.js";
+import { PROVIDER_PROMPT_OVERLAY_ID, PROXY_GATE_OVERLAY_ID } from "./overlay-ids.js";
 import { closeOverlayById, createOverlayDialog } from "./overlay-dialog.js";
 import { getErrorMessage } from "../utils/errors.js";
+
+/**
+ * Quick reachability check against the configured proxy URL.
+ * Returns true if the proxy is enabled and responding.
+ */
+async function isProxyReachable(): Promise<boolean> {
+  try {
+    const storage = getAppStorage();
+    const enabled = await storage.settings.get("proxy.enabled");
+    if (!enabled) return false;
+
+    const raw = await storage.settings.get("proxy.url");
+    const proxyUrl = (typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : DEFAULT_LOCAL_PROXY_URL)
+      .replace(/\/+$/, "");
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1500);
+    try {
+      const resp = await fetch(
+        `${proxyUrl}/?url=${encodeURIComponent("https://example.com")}`,
+        { signal: controller.signal },
+      );
+      return resp.ok;
+    } finally {
+      clearTimeout(timeout);
+    }
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Show a blocking dialog explaining the proxy is needed, with
+ * a copy-able terminal command and retry / cancel buttons.
+ *
+ * Resolves `true` if the user retried and proxy is now reachable.
+ * Resolves `false` if the user cancelled.
+ */
+function showProxyGateDialog(): Promise<boolean> {
+  return new Promise((resolve) => {
+    closeOverlayById(PROXY_GATE_OVERLAY_ID);
+
+    const dialog = createOverlayDialog({
+      overlayId: PROXY_GATE_OVERLAY_ID,
+      cardClassName: "pi-welcome-card pi-prompt-card",
+      restoreFocusOnClose: false,
+    });
+
+    const title = document.createElement("h2");
+    title.className = "pi-prompt-title";
+    title.textContent = "One more step before login";
+
+    const message = document.createElement("p");
+    message.className = "pi-prompt-message";
+    message.style.lineHeight = "1.5";
+    message.textContent =
+      "This login method needs a small helper running on your Mac. " +
+      "Open the Terminal app and paste this command:";
+
+    const codeRow = document.createElement("div");
+    codeRow.style.cssText = "display:flex;align-items:center;gap:8px;margin:12px 0;";
+
+    const codeEl = document.createElement("code");
+    codeEl.style.cssText =
+      "flex:1;padding:8px 10px;border-radius:6px;" +
+      "background:var(--pi-code-bg, #1e1e1e);color:var(--pi-code-fg, #d4d4d4);" +
+      "font-size:13px;font-family:var(--pi-monospace, monospace);user-select:all;";
+    codeEl.textContent = "npx pi-for-excel-proxy";
+
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.textContent = "Copy";
+    copyBtn.style.cssText = "padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer;";
+    copyBtn.addEventListener("click", () => {
+      void navigator.clipboard.writeText("npx pi-for-excel-proxy").then(() => {
+        copyBtn.textContent = "Copied!";
+        setTimeout(() => { copyBtn.textContent = "Copy"; }, 1500);
+      });
+    });
+
+    codeRow.append(codeEl, copyBtn);
+
+    const hint = document.createElement("p");
+    hint.className = "pi-prompt-helper";
+    hint.style.lineHeight = "1.5";
+    hint.innerHTML =
+      "Wait until you see <strong>&ldquo;Proxy listening&rdquo;</strong> in Terminal, then click <strong>Retry</strong>. " +
+      `<a href="${PROXY_HELPER_DOCS_URL}" target="_blank" rel="noopener noreferrer">Step-by-step guide &rarr;</a>`;
+
+    const actions = document.createElement("div");
+    actions.className = "pi-prompt-actions";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "pi-prompt-cancel";
+    cancelBtn.textContent = "Cancel";
+
+    const retryBtn = document.createElement("button");
+    retryBtn.type = "button";
+    retryBtn.className = "pi-prompt-ok";
+    retryBtn.textContent = "Retry";
+
+    actions.append(cancelBtn, retryBtn);
+    dialog.card.append(title, message, codeRow, hint, actions);
+
+    let settled = false;
+
+    const doCancel = (): void => {
+      if (settled) return;
+      settled = true;
+      dialog.close();
+      resolve(false);
+    };
+
+    const doRetry = (): void => {
+      if (settled) return;
+      retryBtn.textContent = "Checking…";
+      retryBtn.style.opacity = "0.7";
+
+      void (async () => {
+        // Auto-enable the proxy setting so the fetch interceptor will route through it.
+        try {
+          const storage = getAppStorage();
+          const url = await storage.settings.get("proxy.url");
+          const proxyUrl = (typeof url === "string" && url.trim().length > 0 ? url.trim() : DEFAULT_LOCAL_PROXY_URL)
+            .replace(/\/+$/, "");
+
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 1500);
+          let ok = false;
+          try {
+            const resp = await fetch(
+              `${proxyUrl}/?url=${encodeURIComponent("https://example.com")}`,
+              { signal: controller.signal },
+            );
+            ok = resp.ok;
+          } finally {
+            clearTimeout(timeout);
+          }
+
+          if (ok) {
+            await storage.settings.set("proxy.enabled", true);
+            settled = true;
+            dialog.close();
+            resolve(true);
+            return;
+          }
+        } catch {
+          // fall through
+        }
+
+        retryBtn.textContent = "Retry";
+        retryBtn.style.opacity = "1";
+        hint.innerHTML =
+          "Helper not detected yet &mdash; make sure it says <strong>&ldquo;Proxy listening&rdquo;</strong> in Terminal, then try again. " +
+          `<a href="${PROXY_HELPER_DOCS_URL}" target="_blank" rel="noopener noreferrer">Step-by-step guide &rarr;</a>`;
+      })();
+    };
+
+    cancelBtn.addEventListener("click", doCancel);
+    retryBtn.addEventListener("click", doRetry);
+
+    dialog.addCleanup(() => {
+      cancelBtn.removeEventListener("click", doCancel);
+      retryBtn.removeEventListener("click", doRetry);
+      if (!settled) { settled = true; resolve(false); }
+    });
+
+    dialog.mount();
+  });
+}
+
+/**
+ * OAuth providers whose token exchange / API calls are CORS-blocked in Office
+ * webviews and therefore require the local proxy.
+ */
+const OAUTH_IDS_NEEDING_PROXY = new Set([
+  "anthropic",
+  "openai-codex",
+  "google-gemini-cli",
+  "google-antigravity",
+  "github-copilot",
+]);
 
 export interface ProviderDef {
   id: string;
@@ -378,6 +561,21 @@ export function buildProviderRow(
             throw new Error(`OAuth provider not supported: ${oauth}`);
           }
 
+          // In production, OAuth providers need the local CORS proxy.
+          // Check reachability before sending the user through the browser login.
+          if (!import.meta.env.DEV && OAUTH_IDS_NEEDING_PROXY.has(id)) {
+            const reachable = await isProxyReachable();
+            if (!reachable) {
+              const userRetried = await showProxyGateDialog();
+              if (!userRetried) {
+                // User cancelled — reset button and bail.
+                oauthBtn.textContent = `Login with ${label}`;
+                oauthBtn.style.opacity = "1";
+                return;
+              }
+            }
+          }
+
           const cred = await oauthProvider.login({
             onAuth: (info) => {
               // Prevent the OAuth page from gaining a handle to the add-in window.
@@ -429,10 +627,12 @@ export function buildProviderRow(
             (typeof msg === "string" && /load failed|failed to fetch|cors|cross-origin|networkerror/i.test(msg));
 
           if (isLikelyCors) {
-            errorEl.textContent =
-              "Login was blocked by browser CORS. Enable /settings → Proxy with " +
-              `${DEFAULT_LOCAL_PROXY_URL} (local HTTPS proxy running), then retry. ` +
-              `Guide: ${PROXY_HELPER_DOCS_URL}`;
+            errorEl.innerHTML =
+              "Login couldn't connect — this provider needs a helper running on your Mac. " +
+              "Open Terminal and run: <code style=\"padding:2px 5px;border-radius:4px;" +
+              "background:var(--pi-code-bg, #1e1e1e);color:var(--pi-code-fg, #d4d4d4)\">" +
+              "npx pi-for-excel-proxy</code>, then try again. " +
+              `<a href="${PROXY_HELPER_DOCS_URL}" target="_blank" rel="noopener noreferrer">Step-by-step guide →</a>`;
           } else {
             errorEl.textContent = msg || "Login failed";
           }
