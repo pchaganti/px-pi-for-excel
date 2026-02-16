@@ -934,10 +934,10 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     const connectState = resolveFilesDialogConnectFolderButtonState(backendStatus);
     connectFolderButton.hidden = connectState.hidden;
     connectFolderButton.disabled = connectState.disabled;
-    if (connectState.label === "Connected ✓") {
+    if (connectState.hidden) {
+      connectFolderButton.title = "";
+    } else if (connectState.label === "Connected ✓") {
       connectFolderButton.title = "Folder already connected";
-    } else if (connectState.label === "Folder unavailable") {
-      connectFolderButton.title = "Native folder picker is not available in this environment";
     } else {
       connectFolderButton.title = "Connect local folder";
     }
