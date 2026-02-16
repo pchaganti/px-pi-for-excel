@@ -34,6 +34,10 @@ TMUX_BRIDGE_MODE=stub npx pi-for-excel-tmux-bridge
 npm run tmux:bridge:https
 ```
 
+Real-mode requirement:
+
+- `tmux` must be installed and discoverable on `PATH`
+
 Then in the add-in:
 
 ```bash

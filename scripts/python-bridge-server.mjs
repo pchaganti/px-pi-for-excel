@@ -425,7 +425,15 @@ function probeBinary(command, args) {
   });
 
   if (probe.error) {
-    console.error(`[pi-for-excel] Failed to probe binary "${command}":`, probe.error);
+    const code = typeof probe.error.code === "string"
+      ? probe.error.code
+      : "unknown_error";
+    const message = probe.error instanceof Error
+      ? probe.error.message
+      : String(probe.error);
+
+    console.warn(`[pi-for-excel] Binary "${command}" not available (${code}): ${message}`);
+
     return {
       available: false,
       error: "probe_failed",
@@ -434,9 +442,14 @@ function probeBinary(command, args) {
   }
 
   if (probe.status !== 0) {
+    const stderr = typeof probe.stderr === "string" ? probe.stderr.trim() : "";
+    const reason = stderr.length > 0
+      ? stderr
+      : `probe_exit_${String(probe.status)}`;
+
     return {
       available: false,
-      error: `probe_exit_${String(probe.status)}`,
+      error: reason,
       command,
     };
   }
@@ -799,6 +812,21 @@ function createStubBackend() {
 function createRealBackend() {
   const pythonInfo = probeBinary(PYTHON_BIN, ["--version"]);
   const libreOfficeInfo = probeLibreOfficeBinary();
+
+  if (!pythonInfo.available) {
+    console.warn(
+      `[pi-for-excel] Python binary "${PYTHON_BIN}" is unavailable. ` +
+      "python_run and python_transform_range will fail until PYTHON_BRIDGE_PYTHON_BIN is set to a valid executable.",
+    );
+  }
+
+  if (!libreOfficeInfo.available) {
+    console.warn(
+      "[pi-for-excel] LibreOffice binary is unavailable. " +
+      "python_run can still work, but libreoffice_convert requires installing LibreOffice (soffice/libreoffice) " +
+      "or setting PYTHON_BRIDGE_LIBREOFFICE_BIN.",
+    );
+  }
 
   return {
     mode: "real",

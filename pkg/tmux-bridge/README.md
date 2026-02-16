@@ -15,6 +15,8 @@ This command:
 3. Starts the bridge at `https://localhost:3341`
 4. Runs in real `tmux` mode by default
 
+Real mode requires `tmux` to be installed and available on `PATH`.
+
 To force safe simulated mode:
 
 ```bash

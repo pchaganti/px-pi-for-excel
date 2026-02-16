@@ -67,17 +67,30 @@ async function ensurePyodide(): Promise<PyodideInterface> {
   if (loadingPromise) return loadingPromise;
 
   loadingPromise = (async () => {
-    // Dynamic import from CDN — works in module workers (no importScripts)
-    const mod = await import(/* @vite-ignore */ `${PYODIDE_CDN_URL}pyodide.mjs`) as {
-      loadPyodide: typeof _loadPyodide;
-    };
+    try {
+      // Dynamic import from CDN — works in module workers (no importScripts)
+      const mod = await import(/* @vite-ignore */ `${PYODIDE_CDN_URL}pyodide.mjs`) as {
+        loadPyodide: typeof _loadPyodide;
+      };
 
-    const instance = await mod.loadPyodide({
-      indexURL: PYODIDE_CDN_URL,
-    });
+      const instance = await mod.loadPyodide({
+        indexURL: PYODIDE_CDN_URL,
+      });
 
-    pyodide = instance;
-    return instance;
+      pyodide = instance;
+      return instance;
+    } catch (error: unknown) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        "Failed to load Pyodide from jsDelivr. " +
+        "Check internet access and Content-Security-Policy allowlists for https://cdn.jsdelivr.net. " +
+        `Original error: ${reason}`,
+      );
+    } finally {
+      if (!pyodide) {
+        loadingPromise = null;
+      }
+    }
   })();
 
   return loadingPromise;

@@ -44,6 +44,11 @@ PYTHON_BRIDGE_MODE=stub npx pi-for-excel-python-bridge
 npm run python:bridge:https
 ```
 
+Real-mode requirements:
+
+- `python3` must be installed and discoverable on `PATH` (or set `PYTHON_BRIDGE_PYTHON_BIN`)
+- LibreOffice (`soffice` / `libreoffice`) is optional for `python_run`, but required for `libreoffice_convert`
+
 Then in the add-in:
 
 ```bash

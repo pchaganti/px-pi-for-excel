@@ -15,6 +15,8 @@ This command:
 3. Starts the bridge at `https://localhost:3340`
 4. Runs in real local execution mode by default
 
+Real mode requires `python3` on `PATH`. LibreOffice (`soffice` / `libreoffice`) is optional for Python execution but required for `libreoffice_convert`.
+
 To force safe simulated mode:
 
 ```bash

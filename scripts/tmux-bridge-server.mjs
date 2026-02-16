@@ -836,7 +836,19 @@ function createRealTmuxBackend() {
   };
 }
 
-const backend = MODE === "tmux" ? createRealTmuxBackend() : createStubBackend();
+const backend = (() => {
+  try {
+    return MODE === "tmux" ? createRealTmuxBackend() : createStubBackend();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[pi-for-excel] Failed to initialize tmux backend: ${message}`);
+    console.error(
+      "[pi-for-excel] Install tmux (for example: brew install tmux), " +
+      "or run TMUX_BRIDGE_MODE=stub for simulated mode.",
+    );
+    process.exit(1);
+  }
+})();
 
 const handler = async (req, res) => {
   try {
