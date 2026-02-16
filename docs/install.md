@@ -104,6 +104,8 @@ Typical symptoms:
 
 1. Run a local HTTPS proxy on the same machine as Excel (defaults to `https://localhost:3003`):
 
+> ⚠️ **You may be asked for your Mac password** during this step. The proxy creates a local security certificate so Excel can talk to it securely. This is a one-time setup. If you are not an admin on this machine, ask your IT team to run this step for you.
+
 If you already have Node.js:
 
 ```bash
@@ -115,8 +117,6 @@ If you do not have Node.js (or are unsure):
 ```bash
 curl -fsSL https://piforexcel.com/proxy | sh
 ```
-
-If the user is non-technical, a teammate/admin can run this step for them on their machine.
 
 2. In Pi, open `/settings` → **Proxy**:
    - enable **Proxy**
