@@ -6,6 +6,22 @@
     {
       "source": "/proxy",
       "destination": "/proxy.sh"
+    },
+    {
+      "source": "/oauth/callback",
+      "destination": "/oauth-callback.html"
+    },
+    {
+      "source": "/auth/callback",
+      "destination": "/oauth-callback.html"
+    },
+    {
+      "source": "/oauth2callback",
+      "destination": "/oauth-callback.html"
+    },
+    {
+      "source": "/oauth-callback",
+      "destination": "/oauth-callback.html"
     }
   ],
   "headers": [

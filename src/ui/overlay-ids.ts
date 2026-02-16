@@ -15,3 +15,4 @@ export const CONFIRM_DIALOG_OVERLAY_ID = "pi-confirm-dialog-overlay";
 export const TEXT_INPUT_DIALOG_OVERLAY_ID = "pi-text-input-dialog-overlay";
 export const TOOL_APPROVAL_OVERLAY_ID = "pi-tool-approval-overlay";
 export const EXTENSION_OVERLAY_ID = "pi-ext-overlay";
+export const PROXY_GATE_OVERLAY_ID = "pi-proxy-gate-overlay";

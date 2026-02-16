@@ -31,8 +31,11 @@ Download this file and save it somewhere you can find it (e.g. your Desktop):
    ```
 3. Copy `manifest.prod.xml` into that folder
 4. Quit Excel completely (Cmd + Q) and reopen it
-5. Go to **Insert → My Add-ins** — you should see **Pi for Excel**
-6. Click it to open
+5. Go to **Insert → My Add-ins** — you should see **Pi for Excel** listed. Click it to register the add-in.
+6. Now look for the **Add-ins** button on the far right of the **Home** ribbon tab (it looks like four orange squares). Click it, then click **Pi for Excel** to open the sidebar.
+
+   <img src="../public/assets/add-ins-button.png" width="200" alt="Add-ins button in the Home ribbon tab" />
+   <img src="../public/assets/add-ins-dropdown.png" width="200" alt="Pi for Excel in the Add-ins dropdown" />
 
 > **Folder doesn't exist?** Create it first — open Terminal and run:
 > ```bash
@@ -58,7 +61,7 @@ For more detail, see [Microsoft's guide for Windows](https://learn.microsoft.com
 
 ## 3) First-run check
 
-1. Open the taskpane (`Open Pi` button)
+1. Open the taskpane (click the **Add-ins** button in the Home ribbon tab, then click **Pi for Excel**)
 2. Connect a provider (see below)
 3. Send a test prompt, e.g.:
    - `What sheet am I currently on?`
@@ -84,7 +87,7 @@ For most users, API keys are the smoothest setup and usually do **not** need the
 1. In `/login`, click **Login with …**
 2. Complete login in the browser window that opens
 3. Return to Excel and complete any prompt shown
-   - For OpenAI + Google OAuth flows, copy the final browser URL (it may be a `localhost` callback URL) and paste it when prompted
+   - For OpenAI + Google OAuth flows, your browser will land on a page that says **"can't be reached"** — that's normal! Copy the full URL from the browser address bar and paste it when prompted in Pi for Excel
    - Some Google workspace tiers may also ask for a Google Cloud project ID during setup
 
 If login fails with a CORS/network error, follow the next section.
@@ -104,6 +107,8 @@ Typical symptoms:
 
 1. Run a local HTTPS proxy on the same machine as Excel (defaults to `https://localhost:3003`):
 
+> ⚠️ **You may be asked for your Mac password** during this step. The proxy creates a local security certificate so Excel can talk to it securely. This is a one-time setup. If you are not an admin on this machine, ask your IT team to run this step for you.
+
 If you already have Node.js:
 
 ```bash
@@ -115,8 +120,6 @@ If you do not have Node.js (or are unsure):
 ```bash
 curl -fsSL https://piforexcel.com/proxy | sh
 ```
-
-If the user is non-technical, a teammate/admin can run this step for them on their machine.
 
 2. In Pi, open `/settings` → **Proxy**:
    - enable **Proxy**

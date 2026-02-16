@@ -12,6 +12,7 @@ import { setActiveProviders } from "../compat/model-selector-patch.js";
 import {
   DEFAULT_LOCAL_PROXY_URL,
   PROXY_HELPER_DOCS_URL,
+  PROXY_REACHABILITY_TARGET_URL,
 } from "../auth/proxy-validation.js";
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
@@ -30,7 +31,7 @@ async function testLocalHttpsProxy(proxyUrl: string): Promise<boolean> {
   const timeout = setTimeout(() => controller.abort(), 1200);
 
   try {
-    const url = `${proxyUrl.replace(/\/+$/, "")}/?url=${encodeURIComponent("https://example.com")}`;
+    const url = `${proxyUrl.replace(/\/+$/, "")}/?url=${encodeURIComponent(PROXY_REACHABILITY_TARGET_URL)}`;
     const resp = await fetch(url, { signal: controller.signal });
     return resp.ok;
   } catch {

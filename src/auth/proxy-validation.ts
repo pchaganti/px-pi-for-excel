@@ -7,6 +7,15 @@
  */
 
 export const DEFAULT_LOCAL_PROXY_URL = "https://localhost:3003";
+
+/**
+ * Target URL used for proxy reachability probes.
+ *
+ * Must stay inside scripts/cors-proxy-server.mjs DEFAULT_ALLOWED_TARGET_HOSTS,
+ * otherwise the helper will return 403 and OAuth preflight checks will fail.
+ */
+export const PROXY_REACHABILITY_TARGET_URL = "https://github.com";
+
 export const PROXY_HELPER_DOCS_URL =
   "https://github.com/tmustier/pi-for-excel/blob/main/docs/install.md#oauth-logins-and-cors-proxy";
 
