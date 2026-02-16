@@ -5,13 +5,21 @@ export interface FilesDialogBadge {
   label: string;
 }
 
+export interface FilesDialogFolderGroup {
+  name: string;
+  files: WorkspaceFileEntry[];
+}
+
 export interface FilesDialogSection {
   key: string;
   label: string;
   files: WorkspaceFileEntry[];
+  folders: FilesDialogFolderGroup[];
 }
 
 const YOUR_FILES_SECTION_KEY = "your-files";
+const NOTES_SECTION_KEY = "notes";
+const SKILLS_SECTION_KEY = "skills";
 const BUILTIN_DOCS_SECTION_KEY = "built-in-docs";
 
 export function normalizeFilesDialogFilterText(value: string): string {
@@ -119,59 +127,188 @@ function connectedFolderSectionKey(backendStatus: WorkspaceBackendStatus | null)
   return `from-${folderName}`;
 }
 
+function isNotesFile(file: WorkspaceFileEntry): boolean {
+  return file.path.toLowerCase().startsWith("notes/");
+}
+
+function isSkillsFile(file: WorkspaceFileEntry): boolean {
+  return file.path.toLowerCase().startsWith("skills/");
+}
+
+/**
+ * Split files into root-level items and first-level subdirectory groups.
+ *
+ * `stripPrefix` is removed from each path before detecting the first `/`.
+ * For example, stripping `"notes/"` from `"notes/index.md"` yields `"index.md"` → root.
+ */
+function groupByFirstDirectory(
+  files: readonly WorkspaceFileEntry[],
+  stripPrefix: string,
+): { rootFiles: WorkspaceFileEntry[]; folders: FilesDialogFolderGroup[] } {
+  const rootFiles: WorkspaceFileEntry[] = [];
+  const folderMap = new Map<string, WorkspaceFileEntry[]>();
+
+  for (const file of files) {
+    const relative = stripPrefix && file.path.startsWith(stripPrefix)
+      ? file.path.slice(stripPrefix.length)
+      : file.path;
+
+    const slash = relative.indexOf("/");
+    if (slash < 0) {
+      rootFiles.push(file);
+    } else {
+      const folderName = relative.slice(0, slash);
+      let bucket = folderMap.get(folderName);
+      if (!bucket) {
+        bucket = [];
+        folderMap.set(folderName, bucket);
+      }
+      bucket.push(file);
+    }
+  }
+
+  const folders = [...folderMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, bucket]) => ({ name, files: sortByModifiedAtDescending(bucket) }));
+
+  return { rootFiles, folders };
+}
+
+/**
+ * Group skill files by skill folder name.
+ *
+ * Handles both `skills/<name>/…` and `skills/external/<name>/…`.
+ */
+function groupSkillFiles(files: readonly WorkspaceFileEntry[]): {
+  rootFiles: WorkspaceFileEntry[];
+  folders: FilesDialogFolderGroup[];
+} {
+  const rootFiles: WorkspaceFileEntry[] = [];
+  const folderMap = new Map<string, WorkspaceFileEntry[]>();
+
+  for (const file of files) {
+    const lower = file.path.toLowerCase();
+    let rest: string;
+
+    if (lower.startsWith("skills/external/")) {
+      rest = file.path.slice("skills/external/".length);
+    } else if (lower.startsWith("skills/")) {
+      rest = file.path.slice("skills/".length);
+    } else {
+      rootFiles.push(file);
+      continue;
+    }
+
+    const slash = rest.indexOf("/");
+    if (slash < 0) {
+      rootFiles.push(file);
+    } else {
+      const name = rest.slice(0, slash);
+      let bucket = folderMap.get(name);
+      if (!bucket) {
+        bucket = [];
+        folderMap.set(name, bucket);
+      }
+      bucket.push(file);
+    }
+  }
+
+  const folders = [...folderMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, bucket]) => ({ name, files: sortByModifiedAtDescending(bucket) }));
+
+  return { rootFiles, folders };
+}
+
+/** Total file count across root files and all folder groups. */
+export function sectionTotalCount(section: FilesDialogSection): number {
+  return section.files.length + section.folders.reduce((sum, f) => sum + f.files.length, 0);
+}
+
 export function buildFilesDialogSections(args: {
   files: readonly WorkspaceFileEntry[];
   filterText: string;
   backendStatus: WorkspaceBackendStatus | null;
 }): FilesDialogSection[] {
-  const filteredFiles = filterFilesDialogEntries({
+  const filtered = filterFilesDialogEntries({
     files: args.files,
     filterText: args.filterText,
   });
 
-  const yourFiles = sortByModifiedAtDescending(filteredFiles.filter((file) => {
+  // ── Classify ──
+  const userFiles: WorkspaceFileEntry[] = [];
+  const notesFiles: WorkspaceFileEntry[] = [];
+  const skillsFiles: WorkspaceFileEntry[] = [];
+  const connectedFiles: WorkspaceFileEntry[] = [];
+  const builtinFiles: WorkspaceFileEntry[] = [];
+
+  for (const file of filtered) {
     if (isFilesDialogBuiltInDoc(file)) {
-      return false;
+      builtinFiles.push(file);
+    } else if (isFilesDialogConnectedFolderFile(file)) {
+      connectedFiles.push(file);
+    } else if (isNotesFile(file)) {
+      notesFiles.push(file);
+    } else if (isSkillsFile(file)) {
+      skillsFiles.push(file);
+    } else {
+      userFiles.push(file);
     }
-
-    return !isFilesDialogConnectedFolderFile(file);
-  }));
-
-  const connectedFolderFiles = sortByModifiedAtDescending(filteredFiles.filter((file) => {
-    if (isFilesDialogBuiltInDoc(file)) {
-      return false;
-    }
-
-    return isFilesDialogConnectedFolderFile(file);
-  }));
-
-  const builtInDocs = [...filteredFiles]
-    .filter((file) => isFilesDialogBuiltInDoc(file))
-    .sort((left, right) => left.path.localeCompare(right.path));
+  }
 
   const sections: FilesDialogSection[] = [];
 
-  if (yourFiles.length > 0) {
+  // ── YOUR FILES ──
+  if (userFiles.length > 0) {
+    const { rootFiles, folders } = groupByFirstDirectory(userFiles, "");
     sections.push({
       key: YOUR_FILES_SECTION_KEY,
       label: "YOUR FILES",
-      files: yourFiles,
+      files: sortByModifiedAtDescending(rootFiles),
+      folders,
     });
   }
 
-  if (connectedFolderFiles.length > 0) {
+  // ── PI'S NOTES ──
+  if (notesFiles.length > 0) {
+    const { rootFiles, folders } = groupByFirstDirectory(notesFiles, "notes/");
+    sections.push({
+      key: NOTES_SECTION_KEY,
+      label: "PI'S NOTES",
+      files: sortByModifiedAtDescending(rootFiles),
+      folders,
+    });
+  }
+
+  // ── SKILLS ──
+  if (skillsFiles.length > 0) {
+    const { rootFiles, folders } = groupSkillFiles(skillsFiles);
+    sections.push({
+      key: SKILLS_SECTION_KEY,
+      label: "SKILLS",
+      files: sortByModifiedAtDescending(rootFiles),
+      folders,
+    });
+  }
+
+  // ── Connected folder ──
+  if (connectedFiles.length > 0) {
+    const { rootFiles, folders } = groupByFirstDirectory(connectedFiles, "");
     sections.push({
       key: connectedFolderSectionKey(args.backendStatus),
       label: connectedFolderSectionLabel(args.backendStatus),
-      files: connectedFolderFiles,
+      files: sortByModifiedAtDescending(rootFiles),
+      folders,
     });
   }
 
-  if (builtInDocs.length > 0) {
+  // ── BUILT-IN DOCS ──
+  if (builtinFiles.length > 0) {
     sections.push({
       key: BUILTIN_DOCS_SECTION_KEY,
       label: "BUILT-IN DOCS",
-      files: builtInDocs,
+      files: [...builtinFiles].sort((a, b) => a.path.localeCompare(b.path)),
+      folders: [],
     });
   }
 

@@ -16,12 +16,14 @@ import { getErrorMessage } from "../utils/errors.js";
 import { requestConfirmationDialog } from "./confirm-dialog.js";
 import {
   buildFilesDialogSections,
+  type FilesDialogFolderGroup,
   isAgentWrittenNotesFilePath,
   isFilesDialogBuiltInDoc,
   normalizeFilesDialogFilterText,
   resolveFilesDialogBadge,
   resolveFilesDialogConnectFolderButtonState,
   resolveFilesDialogSourceLabel,
+  sectionTotalCount,
 } from "./files-dialog-filtering.js";
 import { buildFilesDialogStatusMessage } from "./files-dialog-status.js";
 import {
@@ -39,6 +41,7 @@ import {
   ClipboardList,
   FileSpreadsheet,
   FileText,
+  Folder,
   FolderOpen,
   Image,
   Link,
@@ -809,6 +812,60 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     return row;
   };
 
+  const createFolderGroup = (folder: FilesDialogFolderGroup, collapseKey: string): HTMLDivElement => {
+    const group = document.createElement("div");
+    group.className = "pi-files-folder-group";
+
+    const header = document.createElement("button");
+    header.type = "button";
+    header.className = "pi-files-folder";
+
+    const iconEl = document.createElement("span");
+    iconEl.className = "pi-files-folder__icon";
+    iconEl.appendChild(lucide(Folder));
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "pi-files-folder__name";
+    nameEl.textContent = folder.name;
+
+    const countEl = document.createElement("span");
+    countEl.className = "pi-files-folder__count";
+    const n = folder.files.length;
+    countEl.textContent = `${n}`;
+
+    const chevron = createChevronIcon();
+    chevron.classList.remove("pi-files-section-head__chevron");
+    chevron.classList.add("pi-files-folder__chevron");
+
+    header.append(iconEl, nameEl, countEl, chevron);
+
+    const content = document.createElement("div");
+    content.className = "pi-files-folder__content";
+    folder.files.forEach((file) => {
+      content.appendChild(createFileItem(file));
+    });
+
+    const applyCollapsed = (collapsed: boolean): void => {
+      header.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      content.hidden = collapsed;
+    };
+
+    applyCollapsed(collapsedSections.has(collapseKey));
+
+    header.addEventListener("click", () => {
+      const isCollapsed = collapsedSections.has(collapseKey);
+      if (isCollapsed) {
+        collapsedSections.delete(collapseKey);
+      } else {
+        collapsedSections.add(collapseKey);
+      }
+      applyCollapsed(!isCollapsed);
+    });
+
+    group.append(header, content);
+    return group;
+  };
+
   const renderListView = (): void => {
     const files = allFiles;
 
@@ -892,14 +949,21 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
         const sectionCount = document.createElement("span");
         sectionCount.className = "pi-files-section-head__count";
-        sectionCount.textContent = String(section.files.length);
+        sectionCount.textContent = String(sectionTotalCount(section));
 
         sectionHead.append(sectionLabel, sectionCount, createChevronIcon());
 
         const sectionList = document.createElement("div");
         sectionList.className = "pi-files-section-list";
+
+        // Root-level files
         section.files.forEach((file) => {
           sectionList.appendChild(createFileItem(file));
+        });
+
+        // Folder groups
+        section.folders.forEach((folder) => {
+          sectionList.appendChild(createFolderGroup(folder, `${section.key}:${folder.name}`));
         });
 
         const applyCollapsedState = (collapsed: boolean): void => {

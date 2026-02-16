@@ -127,6 +127,77 @@
   gap: 1px;
 }
 
+/* ── Folder group ────────────────────────────────── */
+.pi-files-folder-group {
+  /* no extra spacing — sits inline with file items */
+}
+
+.pi-files-folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  text-align: left;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast);
+}
+
+.pi-files-folder:hover {
+  background: var(--alpha-4);
+}
+
+.pi-files-folder__icon {
+  flex-shrink: 0;
+  width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+}
+
+.pi-files-folder__icon > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.pi-files-folder__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--foreground);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pi-files-folder__count {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+
+.pi-files-folder__chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+  transition: transform var(--duration-fast);
+}
+
+.pi-files-folder[aria-expanded="false"] .pi-files-folder__chevron {
+  transform: rotate(-90deg);
+}
+
+.pi-files-folder__content {
+  padding-left: 16px;
+}
+
 /* ── File item row ───────────────────────────────── */
 .pi-files-item {
   display: flex;
