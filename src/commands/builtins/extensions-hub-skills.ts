@@ -32,6 +32,7 @@ import {
   createActionsRow,
   createToggle,
 } from "../../ui/extensions-hub-components.js";
+import { lucide, ClipboardList } from "../../ui/lucide-icons.js";
 
 // ── Types ───────────────────────────────────────────
 
@@ -133,7 +134,7 @@ export async function renderSkillsTab(args: {
   }));
 
   if (snapshot.bundled.length === 0) {
-    container.appendChild(createEmptyInline("📋", "No bundled skills in this build."));
+    container.appendChild(createEmptyInline(lucide(ClipboardList), "No bundled skills in this build."));
   } else {
     const list = document.createElement("div");
     list.className = "pi-hub-stack";
@@ -158,7 +159,7 @@ export async function renderSkillsTab(args: {
   }));
 
   if (snapshot.external.length === 0) {
-    container.appendChild(createEmptyInline("📋", "No external skills installed.\nPaste a SKILL.md below to add one."));
+    container.appendChild(createEmptyInline(lucide(ClipboardList), "No external skills installed.\nPaste a SKILL.md below to add one."));
   } else {
     const list = document.createElement("div");
     list.className = "pi-hub-stack";
@@ -269,7 +270,7 @@ function renderBundledSkillCard(args: {
   toggle.input.disabled = args.busy;
 
   const card = createItemCard({
-    icon: "📋",
+    icon: lucide(ClipboardList),
     iconColor: "amber",
     name: args.skill.name,
     description: args.skill.description,
@@ -305,7 +306,7 @@ function renderExternalSkillCard(args: {
   toggle.input.disabled = args.busy || args.shadowed;
 
   const card = createItemCard({
-    icon: "📋",
+    icon: lucide(ClipboardList),
     iconColor: "amber",
     name: args.skill.name,
     description: args.skill.description,

@@ -29,6 +29,7 @@ import {
   createButton,
   createActionsRow,
 } from "../../ui/extensions-hub-components.js";
+import { lucide, AlertTriangle, Package, Search } from "../../ui/lucide-icons.js";
 import {
   MAX_RECOVERY_ENTRIES,
   MIN_RETENTION_LIMIT,
@@ -144,7 +145,7 @@ export async function showRecoveryDialog(opts: {
 
   const warningCallout = createCallout(
     "warn",
-    "⚠",
+    lucide(AlertTriangle),
     "Backups clear when you save this workbook in Excel.",
     { compact: true },
   );
@@ -386,7 +387,7 @@ export async function showRecoveryDialog(opts: {
 
     if (allCheckpoints.length === 0) {
       const empty = createEmptyInline(
-        "📦",
+        lucide(Package),
         "No backups yet\nPi will save snapshots here before making changes to your data.",
       );
       list.appendChild(empty);
@@ -395,7 +396,7 @@ export async function showRecoveryDialog(opts: {
     }
 
     if (filtered.length === 0) {
-      const empty = createEmptyInline("🔍", "No backups match the current filters.");
+      const empty = createEmptyInline(lucide(Search), "No backups match the current filters.");
       list.appendChild(empty);
       statusText.textContent = `0 of ${allCheckpoints.length} shown`;
       return;

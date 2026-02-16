@@ -33,6 +33,7 @@ import {
   createActionsRow,
   createButton,
 } from "../../ui/extensions-hub-components.js";
+import { lucide, AlertTriangle, Puzzle } from "../../ui/lucide-icons.js";
 
 // ── Constants ───────────────────────────────────────
 
@@ -118,7 +119,7 @@ export function renderPluginsTab(args: {
   }));
 
   if (statuses.length === 0) {
-    container.appendChild(createEmptyInline("🧩", "No plugins installed.\nPi can build plugins, or install one from a URL."));
+    container.appendChild(createEmptyInline(lucide(Puzzle), "No plugins installed.\nPi can build plugins, or install one from a URL."));
   } else {
     const list = document.createElement("div");
     list.className = "pi-hub-stack";
@@ -188,7 +189,7 @@ function renderPluginCard(
   });
 
   const card = createItemCard({
-    icon: "🧩",
+    icon: lucide(Puzzle),
     iconColor: "purple",
     name: status.name,
     description: `${status.sourceLabel} · ${status.runtimeLabel}`,
@@ -274,7 +275,7 @@ function renderPluginCard(
 
   // Error callout
   if (status.lastError) {
-    card.body.appendChild(createCallout("warn", "⚠", `Error: ${status.lastError}`, { compact: true }));
+    card.body.appendChild(createCallout("warn", lucide(AlertTriangle), `Error: ${status.lastError}`, { compact: true }));
   }
 
   return card.root;

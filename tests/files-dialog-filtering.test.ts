@@ -79,23 +79,22 @@ void test("filterFilesDialogEntries returns only matching paths", () => {
   assert.deepEqual(result.map((file) => file.path), ["notes/meeting-notes.md"]);
 });
 
-void test("buildFilesDialogSections groups and orders files by source", () => {
+void test("buildFilesDialogSections groups files by category with folder groups", () => {
   const files = [
-    makeFile("uploads/raw.csv", { modifiedAt: 35 }),
+    makeFile("report.xlsx", { modifiedAt: 35 }),
+    makeFile("data/raw.csv", { modifiedAt: 30 }),
     makeFile("notes/summary.md", { modifiedAt: 12 }),
-    makeFile("folder/model-spec.pdf", { modifiedAt: 8, locationKind: "native-directory" }),
-    makeFile("folder/assumptions.md", { modifiedAt: 16, locationKind: "native-directory" }),
+    makeFile("notes/index.md", { modifiedAt: 20 }),
+    makeFile("skills/my-skill/SKILL.md", { modifiedAt: 10 }),
+    makeFile("skills/external/data-clean/SKILL.md", { modifiedAt: 8 }),
+    makeFile("src/main.ts", { modifiedAt: 16, locationKind: "native-directory" }),
+    makeFile("src/utils.ts", { modifiedAt: 14, locationKind: "native-directory" }),
+    makeFile("README.md", { modifiedAt: 18, locationKind: "native-directory" }),
     makeFile("assistant-docs/docs/extensions.md", {
       sourceKind: "builtin-doc",
       locationKind: "builtin-doc",
       readOnly: true,
       modifiedAt: 1,
-    }),
-    makeFile("assistant-docs/docs/README.md", {
-      sourceKind: "builtin-doc",
-      locationKind: "builtin-doc",
-      readOnly: true,
-      modifiedAt: 2,
     }),
   ];
 
@@ -105,26 +104,48 @@ void test("buildFilesDialogSections groups and orders files by source", () => {
     backendStatus: connectedBackendStatus,
   });
 
-  assert.deepEqual(sections.map((section) => section.label), [
+  assert.deepEqual(sections.map((s) => s.label), [
     "YOUR FILES",
+    "PI'S NOTES",
+    "SKILLS",
     "FROM PROJECT DOCS",
     "BUILT-IN DOCS",
   ]);
 
-  assert.deepEqual(sections[0]?.files.map((file) => file.path), [
-    "uploads/raw.csv",
-    "notes/summary.md",
-  ]);
+  // YOUR FILES: root file + folder group "data"
+  const yourFiles = sections[0];
+  assert.ok(yourFiles);
+  assert.deepEqual(yourFiles.files.map((f) => f.path), ["report.xlsx"]);
+  assert.equal(yourFiles.folders.length, 1);
+  assert.equal(yourFiles.folders[0]?.name, "data");
+  assert.deepEqual(yourFiles.folders[0]?.files.map((f) => f.path), ["data/raw.csv"]);
 
-  assert.deepEqual(sections[1]?.files.map((file) => file.path), [
-    "folder/assumptions.md",
-    "folder/model-spec.pdf",
-  ]);
+  // PI'S NOTES: all flat (notes/ prefix stripped)
+  const notes = sections[1];
+  assert.ok(notes);
+  assert.deepEqual(notes.files.map((f) => f.path), ["notes/index.md", "notes/summary.md"]);
+  assert.equal(notes.folders.length, 0);
 
-  assert.deepEqual(sections[2]?.files.map((file) => file.path), [
-    "assistant-docs/docs/extensions.md",
-    "assistant-docs/docs/README.md",
-  ]);
+  // SKILLS: two folder groups (external/ prefix stripped for data-clean)
+  const skills = sections[2];
+  assert.ok(skills);
+  assert.equal(skills.files.length, 0);
+  assert.equal(skills.folders.length, 2);
+  assert.equal(skills.folders[0]?.name, "data-clean");
+  assert.equal(skills.folders[1]?.name, "my-skill");
+
+  // Connected folder: root file + folder group "src"
+  const connected = sections[3];
+  assert.ok(connected);
+  assert.deepEqual(connected.files.map((f) => f.path), ["README.md"]);
+  assert.equal(connected.folders.length, 1);
+  assert.equal(connected.folders[0]?.name, "src");
+  assert.deepEqual(connected.folders[0]?.files.map((f) => f.path), ["src/main.ts", "src/utils.ts"]);
+
+  // BUILT-IN DOCS: always flat
+  const builtin = sections[4];
+  assert.ok(builtin);
+  assert.equal(builtin.folders.length, 0);
 });
 
 void test("resolveFilesDialogBadge follows priority rules", () => {

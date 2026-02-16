@@ -16,12 +16,14 @@ import { getErrorMessage } from "../utils/errors.js";
 import { requestConfirmationDialog } from "./confirm-dialog.js";
 import {
   buildFilesDialogSections,
+  type FilesDialogFolderGroup,
   isAgentWrittenNotesFilePath,
   isFilesDialogBuiltInDoc,
   normalizeFilesDialogFilterText,
   resolveFilesDialogBadge,
   resolveFilesDialogConnectFolderButtonState,
   resolveFilesDialogSourceLabel,
+  sectionTotalCount,
 } from "./files-dialog-filtering.js";
 import { buildFilesDialogStatusMessage } from "./files-dialog-status.js";
 import {
@@ -31,8 +33,23 @@ import {
   createOverlayHeader,
 } from "./overlay-dialog.js";
 import { FILES_WORKSPACE_OVERLAY_ID } from "./overlay-ids.js";
-import { requestTextInputDialog } from "./text-input-dialog.js";
 import { showToast } from "./toast.js";
+import type { IconContent } from "./extensions-hub-components.js";
+import {
+  lucide,
+  AlertTriangle,
+  ClipboardList,
+  FileSpreadsheet,
+  FileText,
+  Folder,
+  FolderOpen,
+  Image,
+  Link,
+  NotebookPen,
+  Paperclip,
+  Search,
+  Upload,
+} from "./lucide-icons.js";
 
 const OVERLAY_ID = FILES_WORKSPACE_OVERLAY_ID;
 const TEXT_PREVIEW_MAX_LINES = 50;
@@ -100,42 +117,24 @@ function hasOneOfExtensions(path: string, extensions: readonly string[]): boolea
   return extensions.some((extension) => lowerPath.endsWith(extension));
 }
 
-function resolveRenameDestinationPath(currentPath: string, inputPath: string): string {
-  const normalizedInput = inputPath.trim().replaceAll("\\", "/");
-  if (normalizedInput.length === 0) {
-    return currentPath;
-  }
-
-  if (normalizedInput.includes("/")) {
-    return normalizedInput;
-  }
-
-  const lastSlash = currentPath.lastIndexOf("/");
-  if (lastSlash < 0) {
-    return normalizedInput;
-  }
-
-  return `${currentPath.slice(0, lastSlash + 1)}${normalizedInput}`;
-}
-
-function resolveFileIcon(file: WorkspaceFileEntry): string {
+function resolveFileIcon(file: WorkspaceFileEntry): SVGElement {
   if (isFilesDialogBuiltInDoc(file)) {
-    return "📋";
+    return lucide(ClipboardList);
   }
 
   if (isImageMimeType(file.mimeType)) {
-    return "🖼";
+    return lucide(Image);
   }
 
   if (hasOneOfExtensions(file.path, [".csv", ".xlsx", ".xls"])) {
-    return "📊";
+    return lucide(FileSpreadsheet);
   }
 
   if (isAgentWrittenNotesFilePath(file.path)) {
-    return "📝";
+    return lucide(NotebookPen);
   }
 
-  return "📄";
+  return lucide(FileText);
 }
 
 function buildFileMetaLine(file: WorkspaceFileEntry): string {
@@ -206,15 +205,19 @@ function createChevronIcon(): SVGSVGElement {
 }
 
 function createInfoCallout(args: {
-  icon: string;
+  icon: IconContent;
   body: Array<HTMLElement | string>;
 }): HTMLDivElement {
   const callout = document.createElement("div");
   callout.className = "pi-callout pi-callout--info";
 
-  const icon = document.createElement("span");
-  icon.className = "pi-callout__icon";
-  icon.textContent = args.icon;
+  const iconEl = document.createElement("span");
+  iconEl.className = "pi-callout__icon";
+  if (typeof args.icon === "string") {
+    iconEl.textContent = args.icon;
+  } else {
+    iconEl.appendChild(args.icon);
+  }
 
   const body = document.createElement("div");
   body.className = "pi-callout__body";
@@ -228,13 +231,13 @@ function createInfoCallout(args: {
     body.appendChild(item);
   }
 
-  callout.append(icon, body);
+  callout.append(iconEl, body);
   return callout;
 }
 
 function createBinaryPreview(args: {
   file: WorkspaceFileEntry;
-  icon: string;
+  icon: IconContent;
   label: string;
 }): HTMLDivElement {
   const preview = document.createElement("div");
@@ -243,9 +246,13 @@ function createBinaryPreview(args: {
   const placeholder = document.createElement("div");
   placeholder.className = "pi-files-detail-preview__placeholder";
 
-  const icon = document.createElement("span");
-  icon.className = "pi-files-detail-preview__placeholder-icon";
-  icon.textContent = args.icon;
+  const iconEl = document.createElement("span");
+  iconEl.className = "pi-files-detail-preview__placeholder-icon";
+  if (typeof args.icon === "string") {
+    iconEl.textContent = args.icon;
+  } else {
+    iconEl.appendChild(args.icon);
+  }
 
   const label = document.createElement("span");
   label.className = "pi-files-detail-preview__placeholder-label";
@@ -255,7 +262,7 @@ function createBinaryPreview(args: {
   size.className = "pi-files-detail-preview__placeholder-size";
   size.textContent = formatBytes(args.file.size);
 
-  placeholder.append(icon, label, size);
+  placeholder.append(iconEl, label, size);
   preview.appendChild(placeholder);
   return preview;
 }
@@ -309,18 +316,22 @@ function createTextPreview(text: string, truncated: boolean): {
 }
 
 function createUploadActionButton(args: {
-  icon: string;
+  icon: IconContent;
   label: string;
 }): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--compact";
 
-  const icon = document.createElement("span");
-  icon.className = "pi-files-actions__icon";
-  icon.textContent = args.icon;
+  const iconEl = document.createElement("span");
+  iconEl.className = "pi-files-actions__icon";
+  if (typeof args.icon === "string") {
+    iconEl.textContent = args.icon;
+  } else {
+    iconEl.appendChild(args.icon);
+  }
 
-  button.append(icon, ` ${args.label}`);
+  button.append(iconEl, ` ${args.label}`);
   return button;
 }
 
@@ -328,9 +339,9 @@ function createEmptyState(onUpload: () => void): HTMLDivElement {
   const empty = document.createElement("div");
   empty.className = "pi-files-empty";
 
-  const icon = document.createElement("div");
-  icon.className = "pi-files-empty__icon";
-  icon.textContent = "📄";
+  const emptyIcon = document.createElement("div");
+  emptyIcon.className = "pi-files-empty__icon";
+  emptyIcon.appendChild(lucide(FileText));
 
   const title = document.createElement("div");
   title.className = "pi-files-empty__title";
@@ -350,7 +361,7 @@ function createEmptyState(onUpload: () => void): HTMLDivElement {
   hint.className = "pi-files-empty__hint";
   hint.textContent = "Files are stored locally in your browser.";
 
-  empty.append(icon, title, description, uploadButton, hint);
+  empty.append(emptyIcon, title, description, uploadButton, hint);
   return empty;
 }
 
@@ -365,7 +376,7 @@ function createWorkbookTagCallout(workbookTag: WorkspaceFileWorkbookTag): HTMLDi
   strong.textContent = workbookTag.workbookLabel;
 
   return createInfoCallout({
-    icon: "🔗",
+    icon: lucide(Link),
     body: ["Tagged to ", strong, " — included when that workbook is open."],
   });
 }
@@ -427,12 +438,12 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
   actionsRow.className = "pi-files-actions";
 
   const uploadButton = createUploadActionButton({
-    icon: "⬆",
+    icon: lucide(Upload),
     label: "Upload",
   });
 
   const connectFolderButton = createUploadActionButton({
-    icon: "📁",
+    icon: lucide(FolderOpen),
     label: "Connect folder",
   });
   connectFolderButton.hidden = true;
@@ -455,7 +466,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
   const filterIcon = document.createElement("span");
   filterIcon.className = "pi-files-filter__icon";
-  filterIcon.textContent = "🔍";
+  filterIcon.appendChild(lucide(Search));
 
   const filterInput = document.createElement("input");
   filterInput.type = "text";
@@ -541,149 +552,18 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     setView("list");
   };
 
-  const openBlobInNewTab = (blob: Blob): void => {
-    const url = URL.createObjectURL(blob);
-    const opened = window.open(url, "_blank");
-
-    if (!opened) {
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.target = "_blank";
-      anchor.rel = "noopener noreferrer";
-      anchor.style.display = "none";
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-    }
-
-    setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 60_000);
-  };
-
-  const openFileInBrowser = async (file: WorkspaceFileEntry): Promise<void> => {
+  const createDetailActions = (file: WorkspaceFileEntry): HTMLDivElement | null => {
     const fileRef = toFileRef(file);
+    const isReadOnly = file.readOnly || isFilesDialogBuiltInDoc(file);
 
-    if (file.kind === "text") {
-      const result = await workspace.readFile(file.path, {
-        mode: "text",
-        maxChars: 16_000_000,
-        audit: DIALOG_AUDIT_CONTEXT,
-        locationKind: fileRef.locationKind,
-      });
-
-      if (result.text === undefined || result.truncated) {
-        throw new Error("File is too large to open in a browser tab.");
-      }
-
-      const blob = new Blob([result.text], {
-        type: file.mimeType || "text/plain",
-      });
-
-      openBlobInNewTab(blob);
-      return;
+    // Open, Download, and Rename are disabled until #316 is resolved.
+    // For now, only expose Delete for writable files.
+    if (isReadOnly) {
+      return null;
     }
 
-    const result = await workspace.readFile(file.path, {
-      mode: "base64",
-      maxChars: 16_000_000,
-      audit: DIALOG_AUDIT_CONTEXT,
-      locationKind: fileRef.locationKind,
-    });
-
-    if (!result.base64 || result.truncated) {
-      throw new Error("File is too large to open in a browser tab.");
-    }
-
-    const bytes = base64ToBytes(result.base64);
-    const blob = new Blob([toArrayBuffer(bytes)], {
-      type: file.mimeType,
-    });
-
-    openBlobInNewTab(blob);
-  };
-
-  const createDetailActions = (file: WorkspaceFileEntry): HTMLDivElement => {
-    const fileRef = toFileRef(file);
     const actions = document.createElement("div");
     actions.className = "pi-files-detail-actions";
-
-    const openButton = document.createElement("button");
-    openButton.type = "button";
-    openButton.className = file.kind === "text"
-      ? "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--compact"
-      : "pi-overlay-btn pi-overlay-btn--primary pi-overlay-btn--compact";
-    openButton.textContent = "Open ↗";
-    openButton.addEventListener("click", () => {
-      void openFileInBrowser(file).catch((error: unknown) => {
-        showToast(`Open failed: ${getErrorMessage(error)}`);
-      });
-    });
-
-    const downloadButton = document.createElement("button");
-    downloadButton.type = "button";
-    downloadButton.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--compact";
-    downloadButton.textContent = "Download";
-    downloadButton.addEventListener("click", () => {
-      void workspace.downloadFile(file.path, {
-        locationKind: fileRef.locationKind,
-      }).catch((error: unknown) => {
-        showToast(`Download failed: ${getErrorMessage(error)}`);
-      });
-    });
-
-    actions.append(openButton, downloadButton);
-
-    const isReadOnly = file.readOnly || isFilesDialogBuiltInDoc(file);
-    if (isReadOnly) {
-      return actions;
-    }
-
-    const renameButton = document.createElement("button");
-    renameButton.type = "button";
-    renameButton.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--compact";
-    renameButton.textContent = "Rename";
-    renameButton.addEventListener("click", () => {
-      void (async () => {
-        const nextPathInput = await requestTextInputDialog({
-          title: "Rename file",
-          message: file.path,
-          initialValue: file.path,
-          placeholder: "folder/file.ext",
-          confirmLabel: "Rename",
-          cancelLabel: "Cancel",
-          restoreFocusOnClose: false,
-        });
-
-        if (nextPathInput === null) {
-          return;
-        }
-
-        const nextPath = resolveRenameDestinationPath(file.path, nextPathInput);
-        if (nextPath === file.path) {
-          return;
-        }
-
-        await workspace.renameFile(file.path, nextPath, {
-          audit: DIALOG_AUDIT_CONTEXT,
-          locationKind: fileRef.locationKind,
-        });
-
-        showToast(`Renamed to ${nextPath}.`);
-
-        await refreshWorkspaceState();
-        renderListView();
-        await showDetailView({
-          path: nextPath,
-          locationKind: fileRef.locationKind,
-        });
-      })().catch((error: unknown) => {
-        showToast(`Rename failed: ${getErrorMessage(error)}`);
-      });
-    });
-
-    const spacer = document.createElement("div");
-    spacer.className = "pi-files-detail-actions__spacer";
 
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
@@ -719,7 +599,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       });
     });
 
-    actions.append(renameButton, spacer, deleteButton);
+    actions.append(deleteButton);
     return actions;
   };
 
@@ -754,7 +634,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
         return {
           element: createBinaryPreview({
             file,
-            icon: "🖼",
+            icon: lucide(Image),
             label: "Image preview unavailable",
           }),
           previewTruncated: false,
@@ -784,7 +664,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       return {
         element: createBinaryPreview({
           file,
-          icon: "📄",
+          icon: lucide(FileText),
           label: "PDF document",
         }),
         previewTruncated: false,
@@ -795,7 +675,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     return {
       element: createBinaryPreview({
         file,
-        icon: "📎",
+        icon: lucide(Paperclip),
         label: "Binary file",
       }),
       previewTruncated: false,
@@ -828,7 +708,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
     if (isFilesDialogBuiltInDoc(file)) {
       nodes.push(createInfoCallout({
-        icon: "📋",
+        icon: lucide(ClipboardList),
         body: ["Built-in documentation — read only. Pi references this automatically."],
       }));
     }
@@ -840,7 +720,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       previewResult = {
         element: createBinaryPreview({
           file,
-          icon: "⚠",
+          icon: lucide(AlertTriangle),
           label: `Preview unavailable: ${getErrorMessage(error)}`,
         }),
         previewTruncated: false,
@@ -871,7 +751,11 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       previewTruncated: previewResult.previewTruncated,
     });
 
-    nodes.push(previewResult.element, createDetailActions(file));
+    nodes.push(previewResult.element);
+    const actionsEl = createDetailActions(file);
+    if (actionsEl) {
+      nodes.push(actionsEl);
+    }
     detailBody.replaceChildren(...nodes);
   };
 
@@ -888,7 +772,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
     const icon = document.createElement("span");
     icon.className = "pi-files-item__icon";
-    icon.textContent = resolveFileIcon(file);
+    icon.appendChild(resolveFileIcon(file));
 
     const info = document.createElement("div");
     info.className = "pi-files-item__info";
@@ -926,6 +810,60 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     });
 
     return row;
+  };
+
+  const createFolderGroup = (folder: FilesDialogFolderGroup, collapseKey: string): HTMLDivElement => {
+    const group = document.createElement("div");
+    group.className = "pi-files-folder-group";
+
+    const header = document.createElement("button");
+    header.type = "button";
+    header.className = "pi-files-folder";
+
+    const iconEl = document.createElement("span");
+    iconEl.className = "pi-files-folder__icon";
+    iconEl.appendChild(lucide(Folder));
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "pi-files-folder__name";
+    nameEl.textContent = folder.name;
+
+    const countEl = document.createElement("span");
+    countEl.className = "pi-files-folder__count";
+    const n = folder.files.length;
+    countEl.textContent = `${n}`;
+
+    const chevron = createChevronIcon();
+    chevron.classList.remove("pi-files-section-head__chevron");
+    chevron.classList.add("pi-files-folder__chevron");
+
+    header.append(iconEl, nameEl, countEl, chevron);
+
+    const content = document.createElement("div");
+    content.className = "pi-files-folder__content";
+    folder.files.forEach((file) => {
+      content.appendChild(createFileItem(file));
+    });
+
+    const applyCollapsed = (collapsed: boolean): void => {
+      header.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      content.hidden = collapsed;
+    };
+
+    applyCollapsed(collapsedSections.has(collapseKey));
+
+    header.addEventListener("click", () => {
+      const isCollapsed = collapsedSections.has(collapseKey);
+      if (isCollapsed) {
+        collapsedSections.delete(collapseKey);
+      } else {
+        collapsedSections.add(collapseKey);
+      }
+      applyCollapsed(!isCollapsed);
+    });
+
+    group.append(header, content);
+    return group;
   };
 
   const renderListView = (): void => {
@@ -1011,14 +949,21 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
 
         const sectionCount = document.createElement("span");
         sectionCount.className = "pi-files-section-head__count";
-        sectionCount.textContent = String(section.files.length);
+        sectionCount.textContent = String(sectionTotalCount(section));
 
         sectionHead.append(sectionLabel, sectionCount, createChevronIcon());
 
         const sectionList = document.createElement("div");
         sectionList.className = "pi-files-section-list";
+
+        // Root-level files
         section.files.forEach((file) => {
           sectionList.appendChild(createFileItem(file));
+        });
+
+        // Folder groups
+        section.folders.forEach((folder) => {
+          sectionList.appendChild(createFolderGroup(folder, `${section.key}:${folder.name}`));
         });
 
         const applyCollapsedState = (collapsed: boolean): void => {

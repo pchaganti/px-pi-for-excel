@@ -249,6 +249,10 @@ class FakeDocument extends EventTarget {
     return new FakeHTMLElement(normalized) as unknown as Element;
   }
 
+  createElementNS(_namespace: string | null, qualifiedName: string): Element {
+    return this.createElement(qualifiedName);
+  }
+
   getElementById(id: string): HTMLElement | null {
     const visit = (node: FakeElement): FakeElement | null => {
       if (node.id === id) {

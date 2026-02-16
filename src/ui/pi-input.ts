@@ -12,7 +12,9 @@
  */
 
 import { html, LitElement } from "lit";
+import { icon } from "@mariozechner/mini-lit";
 import { customElement, property, state, query } from "lit/decorators.js";
+import { FileText } from "lucide";
 
 import { doesOverlayClaimEscape } from "../utils/escape-guard.js";
 
@@ -171,7 +173,7 @@ export class PiInput extends LitElement {
           aria-label="Open Files"
           title="Open Files"
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l9.2-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.19 9.2a1.5 1.5 0 0 1-2.12-2.13l8.49-8.48"/></svg>
+          ${icon(FileText, "sm")}
         </button>
         <textarea
           class="pi-input-textarea"
