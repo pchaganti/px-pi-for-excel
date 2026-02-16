@@ -189,7 +189,7 @@ src/
 ├── audit/             # Workbook change audit log
 ├── messages/          # Message conversion helpers
 ├── debug/             # Debug mode utilities
-├── stubs/             # Browser stubs for Node-only deps (Bedrock, stream, etc.)
+├── stubs/             # Browser stubs for CSP/Node-only deps (Ajv, Bedrock, stream, etc.)
 ├── compat/            # Compatibility patches (Lit, marked, model selector)
 └── utils/             # Shared helpers (HTML escape, type guards, errors)
 

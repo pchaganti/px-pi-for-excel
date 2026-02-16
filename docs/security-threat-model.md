@@ -79,6 +79,7 @@ Hosted taskpane is protected with CSP in `vercel.json` (scripts/styles/fonts/con
 - Capability policy enforcement is opt-in (`extension-permissions` flag) in current rollout.
 - Sandbox runtime intentionally limits API surface (for example, no raw `api.agent` in sandbox).
 - Host-specific CSP behavior still needs smoke testing across Excel macOS/Windows/Web.
+- Tool-argument schema validation is intentionally disabled in Office builds (Ajv uses runtime code generation blocked by Office CSP, so the browser build aliases Ajv to stubs).
 
 ## Operational guidance
 

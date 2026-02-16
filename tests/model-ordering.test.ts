@@ -151,3 +151,48 @@ void test("vite proxy orders Google routes from most specific to least specific"
     "cloudcode route must come before generic google route",
   );
 });
+
+void test("vite aliases Ajv packages to local stubs for CSP-safe Office builds", () => {
+  const viteConfigPath = path.resolve(process.cwd(), "vite.config.ts");
+  const content = readFileSync(viteConfigPath, "utf8");
+
+  assert.notEqual(
+    content.indexOf("function buildBrowserAliasMap()"),
+    -1,
+    "expected centralized browser alias helper",
+  );
+  assert.notEqual(
+    content.indexOf('ajv: resolveFromRoot("src/stubs/ajv.ts")'),
+    -1,
+    "expected Ajv alias to local CSP-safe stub",
+  );
+  assert.notEqual(
+    content.indexOf('"ajv-formats": resolveFromRoot("src/stubs/ajv-formats.ts")'),
+    -1,
+    "expected ajv-formats alias to local no-op stub",
+  );
+  assert.notEqual(
+    content.indexOf("alias: buildBrowserAliasMap()"),
+    -1,
+    "expected resolve.alias to use centralized browser alias helper",
+  );
+});
+
+void test("Ajv stubs keep fallback behavior explicit", () => {
+  const ajvStubPath = path.resolve(process.cwd(), "src/stubs/ajv.ts");
+  const ajvFormatsStubPath = path.resolve(process.cwd(), "src/stubs/ajv-formats.ts");
+
+  const ajvStubContent = readFileSync(ajvStubPath, "utf8");
+  const ajvFormatsStubContent = readFileSync(ajvFormatsStubPath, "utf8");
+
+  assert.notEqual(
+    ajvStubContent.indexOf('throw new Error("Ajv disabled: Office Add-in CSP does not allow unsafe-eval")'),
+    -1,
+    "expected Ajv stub constructor to throw so pi-ai disables schema validation",
+  );
+  assert.notEqual(
+    ajvFormatsStubContent.indexOf("export default function addFormats()"),
+    -1,
+    "expected ajv-formats stub to expose a no-op default export",
+  );
+});
