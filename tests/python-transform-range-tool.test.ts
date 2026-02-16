@@ -45,6 +45,59 @@ void test("python_transform_range returns bridge setup guidance when URL is miss
   assert.equal(result.details?.error, "no_python_runtime");
 });
 
+void test("python_transform_range falls back to Pyodide when default bridge URL is unavailable", async () => {
+  let bridgeCalls = 0;
+  let pyodideCalls = 0;
+
+  const tool = createPythonTransformRangeTool({
+    readInputRange: () => Promise.resolve({
+      sheetName: "Sheet1",
+      address: "A1:B2",
+      values: [[1, 2], [3, 4]],
+    }),
+    getBridgeConfig: () => Promise.resolve({
+      url: "https://localhost:3340",
+      source: "default",
+    }),
+    callBridge: () => {
+      bridgeCalls += 1;
+      return Promise.reject(new Error("fetch failed"));
+    },
+    isPyodideAvailable: () => true,
+    callPyodide: () => {
+      pyodideCalls += 1;
+      return Promise.resolve({
+        ok: true,
+        action: "run_python",
+        exit_code: 0,
+        result_json: "[[10,20],[30,40]]",
+      });
+    },
+    writeOutputValues: (request) => {
+      assert.deepEqual(request.values, [[10, 20], [30, 40]]);
+      return Promise.resolve({
+        blocked: false,
+        outputAddress: "Sheet1!C1:D2",
+        rowsWritten: 2,
+        colsWritten: 2,
+        formulaErrorCount: 0,
+      });
+    },
+  });
+
+  const result = await tool.execute("tc-default-fallback", {
+    range: "Sheet1!A1:B2",
+    code: "result = [[10,20],[30,40]]",
+    output_start_cell: "C1",
+  });
+
+  assert.equal(bridgeCalls, 1);
+  assert.equal(pyodideCalls, 1);
+  assert.equal(result.details?.blocked, false);
+  assert.equal(result.details?.bridgeUrl, undefined);
+  assert.match(firstText(result), /Sheet1!C1:D2/u);
+});
+
 void test("python_transform_range reads source, runs python, and writes transformed output", async () => {
   let capturedBridgeRequest: PythonBridgeRequest | null = null;
   let capturedBridgeConfig: PythonBridgeConfig | null = null;

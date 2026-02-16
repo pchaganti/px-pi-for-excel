@@ -113,6 +113,31 @@ void test("python_run bridge errors are surfaced", async () => {
   assert.equal(result.details?.error, "bridge unavailable");
 });
 
+void test("python_run falls back to Pyodide when default bridge URL is unavailable", async () => {
+  const tool = createPythonRunTool({
+    getBridgeConfig: () => Promise.resolve({
+      url: "https://localhost:3340",
+      source: "default",
+    }),
+    callBridge: () => Promise.reject(new Error("fetch failed")),
+    isPyodideAvailable: () => true,
+    callPyodide: () => Promise.resolve({
+      ok: true,
+      action: "run_python",
+      exit_code: 0,
+      stdout: "pyodide fallback",
+    }),
+  });
+
+  const result = await tool.execute("tc-fallback", {
+    code: "print('x')",
+  });
+
+  assert.match(firstText(result), /pyodide fallback/u);
+  assert.equal(result.details?.ok, true);
+  assert.equal(result.details?.exitCode, 0);
+});
+
 void test("python_run handles explicit bridge-level rejection payloads", async () => {
   const tool = createPythonRunTool({
     getBridgeConfig: () => Promise.resolve({ url: "https://localhost:3340" }),

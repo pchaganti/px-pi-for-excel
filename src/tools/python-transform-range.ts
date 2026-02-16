@@ -29,6 +29,7 @@ import { isRecord } from "../utils/type-guards.js";
 import {
   callDefaultPythonBridge,
   getDefaultPythonBridgeConfig,
+  shouldFallbackToPyodideAfterBridgeError,
   type PythonBridgeConfig,
   type PythonBridgeRequest,
   type PythonBridgeResponse,
@@ -432,11 +433,21 @@ export function createPythonTransformRangeTool(
           timeout_ms: params.timeout_ms,
         };
 
-        let bridgeResponse: PythonBridgeResponse;
+        let bridgeResponse: PythonBridgeResponse | null = null;
+        let bridgeUrlUsed: string | undefined;
 
         if (bridgeConfig) {
-          bridgeResponse = await callBridge(bridgeRequest, bridgeConfig, signal);
-        } else {
+          try {
+            bridgeResponse = await callBridge(bridgeRequest, bridgeConfig, signal);
+            bridgeUrlUsed = bridgeConfig.url;
+          } catch (error: unknown) {
+            if (!shouldFallbackToPyodideAfterBridgeError(error, bridgeConfig)) {
+              throw error;
+            }
+          }
+        }
+
+        if (!bridgeResponse) {
           // Fall back to Pyodide
           let pyodideAvailable: boolean;
           if (checkPyodide) {
@@ -495,7 +506,7 @@ export function createPythonTransformRangeTool(
               blocked: true,
               inputAddress: sourceAddress,
               outputAddress: writeResult.outputAddress,
-              bridgeUrl: bridgeConfig?.url,
+              bridgeUrl: bridgeUrlUsed,
               existingCount: writeResult.existingCount,
             },
           };
@@ -549,7 +560,7 @@ export function createPythonTransformRangeTool(
             blocked: false,
             inputAddress: sourceAddress,
             outputAddress: writeResult.outputAddress,
-            bridgeUrl: bridgeConfig?.url,
+            bridgeUrl: bridgeUrlUsed,
             rowsWritten: writeResult.rowsWritten,
             colsWritten: writeResult.colsWritten,
             formulaErrorCount: writeResult.formulaErrorCount,

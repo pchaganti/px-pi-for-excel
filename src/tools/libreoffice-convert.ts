@@ -2,8 +2,8 @@
  * libreoffice_convert — Experimental local LibreOffice bridge adapter.
  *
  * This tool stays registered for a stable tool list/prompt cache.
- * Execution requires a configured and reachable bridge URL
- * (/experimental python-bridge-url https://localhost:<port>).
+ * Execution requires a reachable bridge URL
+ * (configured override or default https://localhost:3340).
  */
 
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
@@ -348,7 +348,7 @@ function formatBridgeSuccessText(response: LibreOfficeConvertResponse): string {
 function buildMissingBridgeConfigurationMessage(): string {
   return (
     "LibreOffice conversion requires a native Python bridge (cannot run in-browser). " +
-    "Run /experimental python-bridge-url https://localhost:3340 to configure the bridge."
+    "By default Pi probes https://localhost:3340; set /experimental python-bridge-url <url> to override."
   );
 }
 

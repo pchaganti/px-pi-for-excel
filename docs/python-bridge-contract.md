@@ -15,13 +15,13 @@ Bridge-backed tools remain registered (stable tool list / prompt caching).
 
 Native bridge usage requires:
 
-1. `python.bridge.url` is configured (`/experimental python-bridge-url <url>`)
+1. effective bridge URL is resolved (configured override via `/experimental python-bridge-url <url>`, else default `https://localhost:3340`)
 2. bridge `GET /health` succeeds
-3. user confirms the first Python/LibreOffice execution per configured bridge URL
+3. user confirms the first Python/LibreOffice execution per effective bridge URL
 
 Notes:
 - `libreoffice_convert` is bridge-only and blocked when these checks fail.
-- `python_run` / `python_transform_range` can still execute via Pyodide fallback when bridge checks fail.
+- `python_run` / `python_transform_range` can still execute via Pyodide fallback when checks fail (for example, no override is set and the default bridge URL is offline).
 
 Optional bearer auth:
 
@@ -34,25 +34,26 @@ Optional bearer auth:
 ## Local bridge quickstart
 
 ```bash
-# One-command setup (safe stub mode by default)
+# One-command setup (real local execution mode by default)
 npx pi-for-excel-python-bridge
 
-# Real local execution mode
-PYTHON_BRIDGE_MODE=real npx pi-for-excel-python-bridge
+# Force safe simulated mode
+PYTHON_BRIDGE_MODE=stub npx pi-for-excel-python-bridge
 
 # Source checkout alternative
 npm run python:bridge:https
 ```
 
-Then configure in the add-in:
+Then in the add-in:
 
 ```bash
-/experimental python-bridge-url https://localhost:3340
+# optional URL override (default is already https://localhost:3340)
+/experimental python-bridge-url <url>
 # optional
 /experimental python-bridge-token <token>
 ```
 
-Or use the extensions UI: `/extensions` → **Local Python / LibreOffice bridge** → **Save URL**.
+Or use the extensions UI: `/extensions` → **Connections** → **Python bridge**.
 
 Bridge endpoints:
 
