@@ -182,6 +182,7 @@ export interface FilesDialogConnectFolderButtonState {
   hidden: boolean;
   disabled: boolean;
   label: string;
+  title: string;
 }
 
 export function resolveFilesDialogConnectFolderButtonState(
@@ -192,6 +193,7 @@ export function resolveFilesDialogConnectFolderButtonState(
       hidden: true,
       disabled: true,
       label: "Connect folder",
+      title: "",
     };
   }
 
@@ -200,6 +202,7 @@ export function resolveFilesDialogConnectFolderButtonState(
       hidden: false,
       disabled: true,
       label: "Connected ✓",
+      title: "Folder already connected",
     };
   }
 
@@ -207,5 +210,6 @@ export function resolveFilesDialogConnectFolderButtonState(
     hidden: false,
     disabled: false,
     label: "Connect folder",
+    title: "Connect local folder",
   };
 }

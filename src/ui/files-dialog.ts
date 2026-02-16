@@ -934,13 +934,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     const connectState = resolveFilesDialogConnectFolderButtonState(backendStatus);
     connectFolderButton.hidden = connectState.hidden;
     connectFolderButton.disabled = connectState.disabled;
-    if (connectState.hidden) {
-      connectFolderButton.title = "";
-    } else if (connectState.label === "Connected ✓") {
-      connectFolderButton.title = "Folder already connected";
-    } else {
-      connectFolderButton.title = "Connect local folder";
-    }
+    connectFolderButton.title = connectState.title;
     connectFolderButton.setAttribute("aria-label", connectState.label);
 
     if (connectFolderButton.lastChild) {
