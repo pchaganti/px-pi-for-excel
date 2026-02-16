@@ -168,7 +168,21 @@ function isMissingWorkspaceFileError(error: unknown): boolean {
     return true;
   }
 
-  return error.message.toLowerCase().includes("not found");
+  const message = error.message.toLowerCase();
+
+  if (message.includes("not found") || message.includes("not be found")) {
+    return true;
+  }
+
+  if (message.includes("cannot find") || message.includes("can't find") || message.includes("can not find")) {
+    return true;
+  }
+
+  if (message.includes("no such file") || message.includes("does not exist")) {
+    return true;
+  }
+
+  return /\b(can\s?not|cannot|can't)\s+be\s+found\b/u.test(message);
 }
 
 function isWorkspaceBackendKind(value: unknown): value is WorkspaceBackendKind {

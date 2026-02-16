@@ -29,7 +29,7 @@ async function readProxyAllowlistHosts() {
   return new Set(hosts);
 }
 
-async function readTaskpaneConnectSrcTokens() {
+async function readTaskpaneCspDirectiveTokens(directiveName) {
   const raw = await readFile(new URL("../vercel.json", import.meta.url), "utf8");
   const parsed = JSON.parse(raw);
   if (!isRecord(parsed)) {
@@ -56,21 +56,29 @@ async function readTaskpaneConnectSrcTokens() {
     throw new Error("Missing Content-Security-Policy value for /src/taskpane.html");
   }
 
-  const connectSrcDirective = cspEntry.value
+  const directive = cspEntry.value
     .split(";")
-    .map((directive) => directive.trim())
-    .find((directive) => directive.startsWith("connect-src "));
+    .map((entry) => entry.trim())
+    .find((entry) => entry.startsWith(`${directiveName} `));
 
-  if (!connectSrcDirective) {
-    throw new Error("CSP missing connect-src directive");
+  if (!directive) {
+    throw new Error(`CSP missing ${directiveName} directive`);
   }
 
-  const tokens = connectSrcDirective
+  const tokens = directive
     .split(/\s+/)
     .slice(1)
     .filter((token) => token.length > 0);
 
   return new Set(tokens);
+}
+
+async function readTaskpaneConnectSrcTokens() {
+  return readTaskpaneCspDirectiveTokens("connect-src");
+}
+
+async function readTaskpaneScriptSrcTokens() {
+  return readTaskpaneCspDirectiveTokens("script-src");
 }
 
 test("proxy default host allowlist includes all web-search provider hosts", async () => {
@@ -88,4 +96,12 @@ test("taskpane CSP connect-src allows all web-search provider hosts", async () =
     const origin = `https://${host}`;
     assert.ok(connectTokens.has(origin), `Missing ${origin} in /src/taskpane.html CSP connect-src`);
   }
+});
+
+test("taskpane CSP allows Pyodide CDN host in script-src and connect-src", async () => {
+  const connectTokens = await readTaskpaneConnectSrcTokens();
+  const scriptTokens = await readTaskpaneScriptSrcTokens();
+
+  assert.ok(connectTokens.has("https://cdn.jsdelivr.net"), "Missing jsDelivr in CSP connect-src");
+  assert.ok(scriptTokens.has("https://cdn.jsdelivr.net"), "Missing jsDelivr in CSP script-src");
 });

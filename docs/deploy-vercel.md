@@ -18,7 +18,7 @@ This repo includes `vercel.json` with:
 - an `ignoreCommand` deploy policy (`node scripts/vercel-ignore-command.mjs`) for `main`, PR previews, and manual deploys
 - `/proxy` rewrite to `/proxy.sh` (bootstrap script for `npx pi-for-excel-proxy`)
 - a header rule to disable caching for `/src/taskpane.html` to make updates propagate reliably
-- an enforced `Content-Security-Policy` on `/src/taskpane.html` (Office.js + provider/auth endpoints + localhost proxy).
+- an enforced `Content-Security-Policy` on `/src/taskpane.html` (Office.js + provider/auth endpoints + localhost proxy + Pyodide CDN host).
 
 ### `ignoreCommand` policy
 

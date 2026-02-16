@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const PACKAGE_TAG = "pi-for-excel-tmux-bridge";
 const DEFAULT_PORT = "3341";
+const INSTALL_MISSING_FLAG = "--install-missing";
 
 const cliDir = path.dirname(fileURLToPath(import.meta.url));
 const bridgeScriptPath = path.join(cliDir, "scripts", "tmux-bridge-server.mjs");
@@ -22,6 +23,18 @@ const certPath = path.join(certDir, "cert.pem");
 function commandExists(command) {
   const whichCommand = process.platform === "win32" ? "where" : "which";
   const result = spawnSync(whichCommand, [command], { stdio: "ignore" });
+  return result.status === 0;
+}
+
+function canRunTmux() {
+  const result = spawnSync("tmux", ["-V"], {
+    stdio: "ignore",
+  });
+
+  if (result.error || result.signal) {
+    return false;
+  }
+
   return result.status === 0;
 }
 
@@ -154,16 +167,45 @@ function ensureCertificates() {
   }
 }
 
+function installMissingDependencies() {
+  if (canRunTmux()) {
+    return;
+  }
+
+  if (process.platform !== "darwin") {
+    console.warn(`[${PACKAGE_TAG}] ${INSTALL_MISSING_FLAG} currently supports macOS/Homebrew only.`);
+    console.warn(`[${PACKAGE_TAG}] Please install tmux manually and retry.`);
+    return;
+  }
+
+  if (!commandExists("brew")) {
+    console.error(`[${PACKAGE_TAG}] Homebrew is required for ${INSTALL_MISSING_FLAG}.`);
+    console.error(`[${PACKAGE_TAG}] Install Homebrew first: https://brew.sh`);
+    process.exit(1);
+  }
+
+  console.log(`[${PACKAGE_TAG}] Installing missing dependency: tmux`);
+  run("brew", ["install", "tmux"]);
+
+  if (!canRunTmux()) {
+    console.warn(`[${PACKAGE_TAG}] tmux is still unavailable after install attempt.`);
+  }
+}
+
 function resolveBridgeConfig() {
   const userArgs = process.argv.slice(2);
-  const hasExplicitScheme = userArgs.includes("--https") || userArgs.includes("--http");
-  const bridgeArgs = hasExplicitScheme ? userArgs : ["--https", ...userArgs];
+  const installMissing = userArgs.includes(INSTALL_MISSING_FLAG);
+  const bridgeUserArgs = userArgs.filter((arg) => arg !== INSTALL_MISSING_FLAG);
+
+  const hasExplicitScheme = bridgeUserArgs.includes("--https") || bridgeUserArgs.includes("--http");
+  const bridgeArgs = hasExplicitScheme ? bridgeUserArgs : ["--https", ...bridgeUserArgs];
 
   const usesHttpOnly = bridgeArgs.includes("--http") && !bridgeArgs.includes("--https");
 
   return {
     bridgeArgs,
     usesHttps: !usesHttpOnly,
+    installMissing,
   };
 }
 
@@ -238,6 +280,9 @@ if (!fs.existsSync(bridgeScriptPath)) {
 }
 
 const bridgeConfig = resolveBridgeConfig();
+if (bridgeConfig.installMissing) {
+  installMissingDependencies();
+}
 if (bridgeConfig.usesHttps) {
   ensureCertificates();
 }

@@ -142,6 +142,24 @@ Use one-command local bridge helpers:
 
 In Pi, these localhost bridge URLs are used by default. Configure `/experimental ...-bridge-url` only when you want a non-default URL.
 
+Real-mode prerequisites:
+
+- `python3` must be installed for `python_run` / `python_transform_range`
+- LibreOffice (`soffice` or `libreoffice`) is required for `libreoffice_convert`
+- `tmux` is required for the tmux bridge real mode
+
+Optional assisted install (macOS/Homebrew):
+
+- `npx pi-for-excel-python-bridge --install-missing`
+- `npx pi-for-excel-tmux-bridge --install-missing`
+
+Manual macOS install:
+
+```bash
+brew install tmux
+brew install --cask libreoffice
+```
+
 To force safe simulated mode instead:
 
 - `PYTHON_BRIDGE_MODE=stub npx pi-for-excel-python-bridge`
@@ -189,7 +207,7 @@ src/
 ├── audit/             # Workbook change audit log
 ├── messages/          # Message conversion helpers
 ├── debug/             # Debug mode utilities
-├── stubs/             # Browser stubs for Node-only deps (Bedrock, stream, etc.)
+├── stubs/             # Browser stubs for CSP/Node-only deps (Ajv, Bedrock, stream, etc.)
 ├── compat/            # Compatibility patches (Lit, marked, model selector)
 └── utils/             # Shared helpers (HTML escape, type guards, errors)
 

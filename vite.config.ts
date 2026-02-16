@@ -222,6 +222,29 @@ function proxyEntry(target: string, proxyPath: string) {
   };
 }
 
+function buildBrowserAliasMap(): Record<string, string> {
+  const resolveFromRoot = (relativePath: string): string => path.resolve(__dirname, relativePath);
+
+  return {
+    // Stub Node.js built-ins imported by Anthropic SDK's transitive deps (undici, @smithy).
+    // These code paths are never executed in the browser — all API calls use fetch().
+    stream: resolveFromRoot("src/stubs/stream.ts"),
+
+    // Ajv v8 uses `new Function()` to compile JSON schema validators.
+    // The Office Add-in webview enforces a strict CSP without 'unsafe-eval',
+    // so Ajv.compile() always throws. Stubbing the import makes the
+    // constructor throw, which triggers pi-ai's existing fallback path
+    // (skip validation, trust the LLM output).
+    ajv: resolveFromRoot("src/stubs/ajv.ts"),
+    "ajv-formats": resolveFromRoot("src/stubs/ajv-formats.ts"),
+
+    // pi-web-ui only exports "." + "./app.css". We deep-import from its dist
+    // modules to avoid pulling the entire barrel (ChatPanel, artifacts, etc.).
+    // This alias bypasses package.json "exports" restrictions.
+    "@mariozechner/pi-web-ui/dist": resolveFromRoot("node_modules/@mariozechner/pi-web-ui/dist"),
+  };
+}
+
 // ============================================================================
 // Vite config
 // ============================================================================
@@ -285,25 +308,8 @@ export default defineConfig({
   },
   esbuild: { target: "esnext" },
 
-  // Stub Node.js built-ins imported by Anthropic SDK's transitive deps (undici, @smithy).
-  // These code paths are never executed in the browser — all API calls use fetch().
   resolve: {
-    alias: {
-      stream: path.resolve(__dirname, "src/stubs/stream.ts"),
-
-      // Ajv v8 uses `new Function()` to compile JSON schema validators.
-      // The Office Add-in webview enforces a strict CSP without 'unsafe-eval',
-      // so Ajv.compile() always throws. Stubbing the import makes the
-      // constructor throw, which triggers pi-ai's existing fallback path
-      // (skip validation, trust the LLM output).
-      ajv: path.resolve(__dirname, "src/stubs/ajv.ts"),
-      "ajv-formats": path.resolve(__dirname, "src/stubs/ajv-formats.ts"),
-
-      // pi-web-ui only exports "." + "./app.css". We deep-import from its dist
-      // modules to avoid pulling the entire barrel (ChatPanel, artifacts, etc.).
-      // This alias bypasses package.json "exports" restrictions.
-      "@mariozechner/pi-web-ui/dist": path.resolve(__dirname, "node_modules/@mariozechner/pi-web-ui/dist"),
-    },
+    alias: buildBrowserAliasMap(),
   },
 
   build: {
