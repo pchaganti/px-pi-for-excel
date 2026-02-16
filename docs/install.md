@@ -31,8 +31,11 @@ Download this file and save it somewhere you can find it (e.g. your Desktop):
    ```
 3. Copy `manifest.prod.xml` into that folder
 4. Quit Excel completely (Cmd + Q) and reopen it
-5. Go to **Insert → My Add-ins** — you should see **Pi for Excel**
-6. Click it to open
+5. Go to **Insert → My Add-ins** — you should see **Pi for Excel** listed. Click it to register the add-in.
+6. Now look for the **Add-ins** button on the far right of the **Home** ribbon tab (it looks like four orange squares). Click it, then click **Pi for Excel** to open the sidebar.
+
+   <img src="../public/assets/add-ins-button.png" width="200" alt="Add-ins button in the Home ribbon tab" />
+   <img src="../public/assets/add-ins-dropdown.png" width="200" alt="Pi for Excel in the Add-ins dropdown" />
 
 > **Folder doesn't exist?** Create it first — open Terminal and run:
 > ```bash
@@ -58,7 +61,7 @@ For more detail, see [Microsoft's guide for Windows](https://learn.microsoft.com
 
 ## 3) First-run check
 
-1. Open the taskpane (`Open Pi` button)
+1. Open the taskpane (click the **Add-ins** button in the Home ribbon tab, then click **Pi for Excel**)
 2. Connect a provider (see below)
 3. Send a test prompt, e.g.:
    - `What sheet am I currently on?`
