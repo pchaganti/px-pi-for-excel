@@ -31,7 +31,6 @@ import {
   createOverlayHeader,
 } from "./overlay-dialog.js";
 import { FILES_WORKSPACE_OVERLAY_ID } from "./overlay-ids.js";
-import { requestTextInputDialog } from "./text-input-dialog.js";
 import { showToast } from "./toast.js";
 import type { IconContent } from "./extensions-hub-components.js";
 import {
@@ -113,24 +112,6 @@ function isPdfMimeType(mimeType: string): boolean {
 function hasOneOfExtensions(path: string, extensions: readonly string[]): boolean {
   const lowerPath = path.toLowerCase();
   return extensions.some((extension) => lowerPath.endsWith(extension));
-}
-
-function resolveRenameDestinationPath(currentPath: string, inputPath: string): string {
-  const normalizedInput = inputPath.trim().replaceAll("\\", "/");
-  if (normalizedInput.length === 0) {
-    return currentPath;
-  }
-
-  if (normalizedInput.includes("/")) {
-    return normalizedInput;
-  }
-
-  const lastSlash = currentPath.lastIndexOf("/");
-  if (lastSlash < 0) {
-    return normalizedInput;
-  }
-
-  return `${currentPath.slice(0, lastSlash + 1)}${normalizedInput}`;
 }
 
 function resolveFileIcon(file: WorkspaceFileEntry): SVGElement {
@@ -568,149 +549,18 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
     setView("list");
   };
 
-  const openBlobInNewTab = (blob: Blob): void => {
-    const url = URL.createObjectURL(blob);
-    const opened = window.open(url, "_blank");
-
-    if (!opened) {
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.target = "_blank";
-      anchor.rel = "noopener noreferrer";
-      anchor.style.display = "none";
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-    }
-
-    setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 60_000);
-  };
-
-  const openFileInBrowser = async (file: WorkspaceFileEntry): Promise<void> => {
+  const createDetailActions = (file: WorkspaceFileEntry): HTMLDivElement | null => {
     const fileRef = toFileRef(file);
+    const isReadOnly = file.readOnly || isFilesDialogBuiltInDoc(file);
 
-    if (file.kind === "text") {
-      const result = await workspace.readFile(file.path, {
-        mode: "text",
-        maxChars: 16_000_000,
-        audit: DIALOG_AUDIT_CONTEXT,
-        locationKind: fileRef.locationKind,
-      });
-
-      if (result.text === undefined || result.truncated) {
-        throw new Error("File is too large to open in a browser tab.");
-      }
-
-      const blob = new Blob([result.text], {
-        type: file.mimeType || "text/plain",
-      });
-
-      openBlobInNewTab(blob);
-      return;
+    // Open, Download, and Rename are disabled until #316 is resolved.
+    // For now, only expose Delete for writable files.
+    if (isReadOnly) {
+      return null;
     }
 
-    const result = await workspace.readFile(file.path, {
-      mode: "base64",
-      maxChars: 16_000_000,
-      audit: DIALOG_AUDIT_CONTEXT,
-      locationKind: fileRef.locationKind,
-    });
-
-    if (!result.base64 || result.truncated) {
-      throw new Error("File is too large to open in a browser tab.");
-    }
-
-    const bytes = base64ToBytes(result.base64);
-    const blob = new Blob([toArrayBuffer(bytes)], {
-      type: file.mimeType,
-    });
-
-    openBlobInNewTab(blob);
-  };
-
-  const createDetailActions = (file: WorkspaceFileEntry): HTMLDivElement => {
-    const fileRef = toFileRef(file);
     const actions = document.createElement("div");
     actions.className = "pi-files-detail-actions";
-
-    const openButton = document.createElement("button");
-    openButton.type = "button";
-    openButton.className = file.kind === "text"
-      ? "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--compact"
-      : "pi-overlay-btn pi-overlay-btn--primary pi-overlay-btn--compact";
-    openButton.textContent = "Open ↗";
-    openButton.addEventListener("click", () => {
-      void openFileInBrowser(file).catch((error: unknown) => {
-        showToast(`Open failed: ${getErrorMessage(error)}`);
-      });
-    });
-
-    const downloadButton = document.createElement("button");
-    downloadButton.type = "button";
-    downloadButton.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--compact";
-    downloadButton.textContent = "Download";
-    downloadButton.addEventListener("click", () => {
-      void workspace.downloadFile(file.path, {
-        locationKind: fileRef.locationKind,
-      }).catch((error: unknown) => {
-        showToast(`Download failed: ${getErrorMessage(error)}`);
-      });
-    });
-
-    actions.append(openButton, downloadButton);
-
-    const isReadOnly = file.readOnly || isFilesDialogBuiltInDoc(file);
-    if (isReadOnly) {
-      return actions;
-    }
-
-    const renameButton = document.createElement("button");
-    renameButton.type = "button";
-    renameButton.className = "pi-overlay-btn pi-overlay-btn--ghost pi-overlay-btn--compact";
-    renameButton.textContent = "Rename";
-    renameButton.addEventListener("click", () => {
-      void (async () => {
-        const nextPathInput = await requestTextInputDialog({
-          title: "Rename file",
-          message: file.path,
-          initialValue: file.path,
-          placeholder: "folder/file.ext",
-          confirmLabel: "Rename",
-          cancelLabel: "Cancel",
-          restoreFocusOnClose: false,
-        });
-
-        if (nextPathInput === null) {
-          return;
-        }
-
-        const nextPath = resolveRenameDestinationPath(file.path, nextPathInput);
-        if (nextPath === file.path) {
-          return;
-        }
-
-        await workspace.renameFile(file.path, nextPath, {
-          audit: DIALOG_AUDIT_CONTEXT,
-          locationKind: fileRef.locationKind,
-        });
-
-        showToast(`Renamed to ${nextPath}.`);
-
-        await refreshWorkspaceState();
-        renderListView();
-        await showDetailView({
-          path: nextPath,
-          locationKind: fileRef.locationKind,
-        });
-      })().catch((error: unknown) => {
-        showToast(`Rename failed: ${getErrorMessage(error)}`);
-      });
-    });
-
-    const spacer = document.createElement("div");
-    spacer.className = "pi-files-detail-actions__spacer";
 
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
@@ -746,7 +596,7 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       });
     });
 
-    actions.append(renameButton, spacer, deleteButton);
+    actions.append(deleteButton);
     return actions;
   };
 
@@ -898,7 +748,11 @@ export async function showFilesWorkspaceDialog(): Promise<void> {
       previewTruncated: previewResult.previewTruncated,
     });
 
-    nodes.push(previewResult.element, createDetailActions(file));
+    nodes.push(previewResult.element);
+    const actionsEl = createDetailActions(file);
+    if (actionsEl) {
+      nodes.push(actionsEl);
+    }
     detailBody.replaceChildren(...nodes);
   };
 
