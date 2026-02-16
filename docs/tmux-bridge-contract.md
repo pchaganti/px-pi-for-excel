@@ -5,14 +5,18 @@ Status:
 - Local bridge scaffold implemented in `scripts/tmux-bridge-server.mjs`
 
 The bridge supports two modes:
-- `stub` (default): in-memory tmux simulation for development/testing (does not execute shell commands)
 - `tmux`: real tmux subprocess backend with guardrails
+- `stub`: in-memory tmux simulation for development/testing (does not execute shell commands)
+
+Notes:
+- The one-command helper (`npx pi-for-excel-tmux-bridge`) defaults to `tmux` mode.
+- The raw server script keeps `stub` as its default for local development/test usage.
 
 ## Availability and gating
 
 The `tmux` tool remains registered (stable tool list / prompt caching), but execution is blocked unless all gates pass:
 
-1. `tmux.bridge.url` is configured (via `/experimental tmux-bridge-url <url>`)
+1. effective bridge URL is resolved (configured override via `/experimental tmux-bridge-url <url>`, else default `https://localhost:3341`)
 2. bridge `GET /health` returns success
 
 The gate is checked on each tool execution (defense in depth).
@@ -20,11 +24,11 @@ The gate is checked on each tool execution (defense in depth).
 ## Local bridge quickstart
 
 ```bash
-# One-command setup (safe stub mode by default)
+# One-command setup (real tmux mode by default)
 npx pi-for-excel-tmux-bridge
 
-# Real tmux mode
-TMUX_BRIDGE_MODE=tmux npx pi-for-excel-tmux-bridge
+# Force safe simulated mode
+TMUX_BRIDGE_MODE=stub npx pi-for-excel-tmux-bridge
 
 # Source checkout alternative
 npm run tmux:bridge:https
@@ -33,7 +37,8 @@ npm run tmux:bridge:https
 Then in the add-in:
 
 ```bash
-/experimental tmux-bridge-url https://localhost:3341
+# optional URL override (default is already https://localhost:3341)
+/experimental tmux-bridge-url <url>
 /experimental tmux-status
 ```
 

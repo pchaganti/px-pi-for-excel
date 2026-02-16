@@ -15,6 +15,8 @@ import { validateOfficeProxyUrl } from "../../auth/proxy-validation.js";
 import { dispatchExperimentalToolConfigChanged } from "../../experiments/events.js";
 import {
   buildTmuxBridgeGateErrorMessage,
+  DEFAULT_PYTHON_BRIDGE_URL,
+  DEFAULT_TMUX_BRIDGE_URL,
   PYTHON_BRIDGE_URL_SETTING_KEY,
   TMUX_BRIDGE_URL_SETTING_KEY,
   type TmuxBridgeGateReason,
@@ -188,16 +190,24 @@ async function getSettingsStore() {
   return storageModule.getAppStorage().settings;
 }
 
+function defaultBridgeUrlForSetting(settingKey: string): string | undefined {
+  if (settingKey === TMUX_BRIDGE_URL_SETTING_KEY) return DEFAULT_TMUX_BRIDGE_URL;
+  if (settingKey === PYTHON_BRIDGE_URL_SETTING_KEY) return DEFAULT_PYTHON_BRIDGE_URL;
+  return undefined;
+}
+
 async function defaultGetBridgeUrl(settingKey: string): Promise<string | undefined> {
+  const fallbackUrl = defaultBridgeUrlForSetting(settingKey);
+
   try {
     const settings = await getSettingsStore();
     const value = await settings.get<string>(settingKey);
-    if (typeof value !== "string") return undefined;
+    if (typeof value !== "string") return fallbackUrl;
 
     const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
+    return trimmed.length > 0 ? trimmed : fallbackUrl;
   } catch {
-    return undefined;
+    return fallbackUrl;
   }
 }
 
@@ -435,7 +445,14 @@ async function handleBridgeUrlCommand(
   if (valueTokens.length === 1 && URL_CLEAR_ACTIONS.has(firstToken)) {
     await clearValue();
     notifyConfigChanged(configKey);
-    showToast(`${bridgeLabel} URL cleared.`);
+
+    const defaultUrl = defaultBridgeUrlForSetting(configKey);
+    if (defaultUrl) {
+      showToast(`${bridgeLabel} URL override cleared. Using default ${defaultUrl}.`);
+    } else {
+      showToast(`${bridgeLabel} URL cleared.`);
+    }
+
     return;
   }
 

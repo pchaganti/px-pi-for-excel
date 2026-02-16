@@ -13,19 +13,19 @@ This command:
 1. Ensures `mkcert` exists (installs via Homebrew on macOS if missing)
 2. Creates certificates in `~/.pi-for-excel/certs/` when needed
 3. Starts the bridge at `https://localhost:3340`
+4. Runs in real local execution mode by default
 
-Default mode is `stub` (safe simulated responses).
-
-For real local execution mode:
+To force safe simulated mode:
 
 ```bash
-PYTHON_BRIDGE_MODE=real npx pi-for-excel-python-bridge
+PYTHON_BRIDGE_MODE=stub npx pi-for-excel-python-bridge
 ```
 
 Then in Pi for Excel:
 
-1. Run `/experimental python-bridge-url https://localhost:3340`
-2. (Optional) run `/experimental python-bridge-token <token>` if you set `PYTHON_BRIDGE_TOKEN`
+1. The default Python bridge URL is already `https://localhost:3340`
+2. (Optional) set `/experimental python-bridge-url <url>` to use a non-default URL
+3. (Optional) run `/experimental python-bridge-token <token>` if you set `PYTHON_BRIDGE_TOKEN`
 
 ## Publishing (maintainers)
 

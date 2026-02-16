@@ -3,7 +3,7 @@
  *
  * This tool stays registered for a stable tool list/prompt cache,
  * but execution is gated by:
- * - /experimental tmux-bridge-url https://localhost:<port>
+ * - bridge URL override from /experimental tmux-bridge-url (or default https://localhost:3341)
  * - reachable bridge health endpoint
  *
  * The local bridge contract (v1) is a POST JSON request to /v1/tmux.
@@ -21,7 +21,10 @@ import {
   joinBridgeUrl,
   tryParseBridgeJson,
 } from "./bridge-http-utils.js";
-import { TMUX_BRIDGE_URL_SETTING_KEY } from "./experimental-tool-gates.js";
+import {
+  DEFAULT_TMUX_BRIDGE_URL,
+  TMUX_BRIDGE_URL_SETTING_KEY,
+} from "./experimental-tool-gates.js";
 
 const TMUX_BRIDGE_API_PATH = "/v1/tmux";
 const TMUX_BRIDGE_TIMEOUT_MS = 15_000;
@@ -321,21 +324,29 @@ function parseBridgeResponse(value: unknown, fallbackAction: TmuxAction): TmuxBr
 }
 
 async function defaultGetBridgeConfig(): Promise<TmuxBridgeConfig | null> {
+  let rawUrl = DEFAULT_TMUX_BRIDGE_URL;
+  let token: string | undefined;
+
   try {
     const storageModule = await import("@mariozechner/pi-web-ui/dist/storage/app-storage.js");
     const settings = storageModule.getAppStorage().settings;
 
     const urlValue = await settings.get<string>(TMUX_BRIDGE_URL_SETTING_KEY);
-    const rawUrl = typeof urlValue === "string" ? urlValue.trim() : "";
-    if (rawUrl.length === 0) return null;
-
-    const normalizedUrl = validateOfficeProxyUrl(rawUrl);
+    const configuredUrl = typeof urlValue === "string" ? urlValue.trim() : "";
+    if (configuredUrl.length > 0) {
+      rawUrl = configuredUrl;
+    }
 
     const tokenValue = await settings.get<string>(TMUX_BRIDGE_TOKEN_SETTING_KEY);
-    const token = typeof tokenValue === "string" && tokenValue.trim().length > 0
+    token = typeof tokenValue === "string" && tokenValue.trim().length > 0
       ? tokenValue.trim()
       : undefined;
+  } catch {
+    // Fall back to default localhost URL when settings are unavailable.
+  }
 
+  try {
+    const normalizedUrl = validateOfficeProxyUrl(rawUrl);
     return {
       url: normalizedUrl,
       token,
@@ -505,8 +516,8 @@ function buildOutputPreview(output: string | undefined): string | undefined {
 
 function buildMissingBridgeConfigurationMessage(): string {
   return (
-    "Tmux bridge URL is not configured. " +
-    "Run /experimental tmux-bridge-url https://localhost:3341 to configure the bridge."
+    "Tmux bridge URL is unavailable. " +
+    "By default Pi uses https://localhost:3341; set /experimental tmux-bridge-url <url> to override it."
   );
 }
 

@@ -2,7 +2,8 @@
  * python_run — Execute Python via native bridge (preferred) or Pyodide fallback.
  *
  * This tool stays registered for a stable tool list/prompt cache.
- * If no native bridge is configured/reachable, it can run in-browser via Pyodide.
+ * If no native bridge is reachable (configured override or default localhost URL),
+ * it can run in-browser via Pyodide.
  */
 
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
@@ -17,7 +18,10 @@ import {
   joinBridgeUrl,
   tryParseBridgeJson,
 } from "./bridge-http-utils.js";
-import { PYTHON_BRIDGE_URL_SETTING_KEY } from "./experimental-tool-gates.js";
+import {
+  DEFAULT_PYTHON_BRIDGE_URL,
+  PYTHON_BRIDGE_URL_SETTING_KEY,
+} from "./experimental-tool-gates.js";
 
 const PYTHON_BRIDGE_API_PATH = "/v1/python-run";
 const DEFAULT_BRIDGE_TIMEOUT_MS = 20_000;
@@ -50,6 +54,7 @@ type Params = Static<typeof schema>;
 export interface PythonBridgeConfig {
   url: string;
   token?: string;
+  source?: "configured" | "default";
 }
 
 export interface PythonBridgeRequest {
@@ -200,23 +205,34 @@ async function getSettingsStore() {
 }
 
 export async function getDefaultPythonBridgeConfig(): Promise<PythonBridgeConfig | null> {
+  let rawUrl = DEFAULT_PYTHON_BRIDGE_URL;
+  let source: "configured" | "default" = "default";
+  let token: string | undefined;
+
   try {
     const settings = await getSettingsStore();
 
     const urlValue = await settings.get<string>(PYTHON_BRIDGE_URL_SETTING_KEY);
-    const rawUrl = typeof urlValue === "string" ? urlValue.trim() : "";
-    if (rawUrl.length === 0) return null;
-
-    const normalizedUrl = validateOfficeProxyUrl(rawUrl);
+    const configuredUrl = typeof urlValue === "string" ? urlValue.trim() : "";
+    if (configuredUrl.length > 0) {
+      rawUrl = configuredUrl;
+      source = "configured";
+    }
 
     const tokenValue = await settings.get<string>(PYTHON_BRIDGE_TOKEN_SETTING_KEY);
-    const token = typeof tokenValue === "string" && tokenValue.trim().length > 0
+    token = typeof tokenValue === "string" && tokenValue.trim().length > 0
       ? tokenValue.trim()
       : undefined;
+  } catch {
+    // Fall back to default localhost URL when settings are unavailable.
+  }
 
+  try {
+    const normalizedUrl = validateOfficeProxyUrl(rawUrl);
     return {
       url: normalizedUrl,
       token,
+      source,
     };
   } catch {
     return null;
@@ -368,6 +384,29 @@ function buildNoPythonAvailableMessage(): string {
   );
 }
 
+function shouldFallbackToPyodideAfterBridgeError(
+  error: unknown,
+  bridgeConfig: PythonBridgeConfig,
+): boolean {
+  if (bridgeConfig.source !== "default") {
+    return false;
+  }
+
+  const message = getErrorMessage(error).toLowerCase();
+
+  return (
+    message.includes("timed out")
+    || message.includes("failed to fetch")
+    || message.includes("fetch failed")
+    || message.includes("networkerror")
+    || message.includes("network request failed")
+    || message.includes("ecconnrefused")
+    || message.includes("econnrefused")
+    || message.includes("econnreset")
+    || message.includes("enotfound")
+  );
+}
+
 async function getDefaultPyodideAvailable(): Promise<boolean> {
   try {
     const { isPyodideAvailable: check } = await import("../python/pyodide-runtime.js");
@@ -399,7 +438,7 @@ export function createPythonRunTool(
     description:
       "Run Python code in-browser via Pyodide (no setup needed). " +
       "Standard library and pure-Python packages (numpy, pandas, etc.) work automatically. " +
-      "If a native Python bridge is configured, uses local Python instead. " +
+      "If a local Python bridge is configured (or running on default localhost URL), uses local Python instead. " +
       "Pass optional input_json, inspect stdout/stderr, and chain results into write_cells.",
     parameters: schema,
     execute: async (
@@ -416,28 +455,34 @@ export function createPythonRunTool(
         const bridgeConfig = await getBridgeConfig();
         const request = toBridgeRequest(params);
 
-        // Prefer native bridge when configured
+        // Prefer native bridge when configured or available at default localhost URL.
         if (bridgeConfig) {
-          const response = await callBridge(request, bridgeConfig, signal);
+          try {
+            const response = await callBridge(request, bridgeConfig, signal);
 
-          if (!response.ok) {
-            throw new Error(response.error ?? "Python bridge rejected the request.");
+            if (!response.ok) {
+              throw new Error(response.error ?? "Python bridge rejected the request.");
+            }
+
+            return {
+              content: [{ type: "text", text: formatBridgeSuccessText(response) }],
+              details: {
+                kind: "python_bridge",
+                ok: true,
+                action: "run_python",
+                bridgeUrl: bridgeConfig.url,
+                exitCode: response.exit_code,
+                stdoutPreview: buildOutputPreview(response.stdout),
+                stderrPreview: buildOutputPreview(response.stderr),
+                resultPreview: buildOutputPreview(response.result_json),
+                truncated: response.truncated,
+              },
+            };
+          } catch (error: unknown) {
+            if (!shouldFallbackToPyodideAfterBridgeError(error, bridgeConfig)) {
+              throw error;
+            }
           }
-
-          return {
-            content: [{ type: "text", text: formatBridgeSuccessText(response) }],
-            details: {
-              kind: "python_bridge",
-              ok: true,
-              action: "run_python",
-              bridgeUrl: bridgeConfig.url,
-              exitCode: response.exit_code,
-              stdoutPreview: buildOutputPreview(response.stdout),
-              stderrPreview: buildOutputPreview(response.stderr),
-              resultPreview: buildOutputPreview(response.result_json),
-              truncated: response.truncated,
-            },
-          };
         }
 
         // Fall back to in-browser Pyodide

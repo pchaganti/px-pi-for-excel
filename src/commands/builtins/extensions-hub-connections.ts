@@ -37,6 +37,8 @@ import { getEnabledProxyBaseUrl } from "../../tools/external-fetch.js";
 import { validateOfficeProxyUrl } from "../../auth/proxy-validation.js";
 import { dispatchExperimentalToolConfigChanged } from "../../experiments/events.js";
 import {
+  DEFAULT_PYTHON_BRIDGE_URL,
+  DEFAULT_TMUX_BRIDGE_URL,
   PYTHON_BRIDGE_URL_SETTING_KEY,
   TMUX_BRIDGE_URL_SETTING_KEY,
 } from "../../tools/experimental-tool-gates.js";
@@ -196,6 +198,8 @@ export async function renderConnectionsTab(args: {
 
   const pythonUrl = typeof pythonUrlRaw === "string" ? pythonUrlRaw.trim() : "";
   const tmuxUrl = typeof tmuxUrlRaw === "string" ? tmuxUrlRaw.trim() : "";
+  const effectivePythonUrl = pythonUrl.length > 0 ? pythonUrl : DEFAULT_PYTHON_BRIDGE_URL;
+  const effectiveTmuxUrl = tmuxUrl.length > 0 ? tmuxUrl : DEFAULT_TMUX_BRIDGE_URL;
   const selectedProvider = webSearchConfig.provider;
   const providerInfo = WEB_SEARCH_PROVIDER_INFO[selectedProvider];
   const apiKey = getApiKeyForProvider(webSearchConfig);
@@ -483,8 +487,10 @@ export async function renderConnectionsTab(args: {
         description: "Execute Python code in a local environment",
         settingKey: PYTHON_BRIDGE_URL_SETTING_KEY,
         setupCommand: "npx pi-for-excel-python-bridge",
-        placeholder: "https://localhost:3340",
-        currentUrl: pythonUrl,
+        defaultUrl: DEFAULT_PYTHON_BRIDGE_URL,
+        placeholder: DEFAULT_PYTHON_BRIDGE_URL,
+        currentUrl: effectivePythonUrl,
+        hasCustomUrl: pythonUrl.length > 0,
         settings,
         runMutation,
       }));
@@ -497,8 +503,10 @@ export async function renderConnectionsTab(args: {
         description: "Remote shell sessions via tmux",
         settingKey: TMUX_BRIDGE_URL_SETTING_KEY,
         setupCommand: "npx pi-for-excel-tmux-bridge",
-        placeholder: "https://localhost:3341",
-        currentUrl: tmuxUrl,
+        defaultUrl: DEFAULT_TMUX_BRIDGE_URL,
+        placeholder: DEFAULT_TMUX_BRIDGE_URL,
+        currentUrl: effectiveTmuxUrl,
+        hasCustomUrl: tmuxUrl.length > 0,
         settings,
         runMutation,
       }));
@@ -595,22 +603,23 @@ function renderBridgeCard(args: {
   description: string;
   settingKey: string;
   setupCommand: string;
+  defaultUrl: string;
   placeholder: string;
   currentUrl: string;
+  hasCustomUrl: boolean;
   settings: SettingsStore;
   runMutation: (action: () => Promise<void>, reason: "toggle" | "scope" | "external-toggle" | "config", msg?: string) => Promise<void>;
 }): HTMLElement {
-  const connected = args.currentUrl.length > 0;
   const card = createItemCard({
     icon: args.icon,
     iconColor: "amber",
     name: args.name,
     description: args.description,
     expandable: true,
-    expanded: !connected,
-    badges: [connected
+    expanded: !args.hasCustomUrl,
+    badges: [args.hasCustomUrl
       ? { text: "Configured", tone: "ok" as const }
-      : { text: "Not connected", tone: "muted" as const },
+      : { text: "Default URL", tone: "muted" as const },
     ],
   });
 
@@ -626,29 +635,31 @@ function renderBridgeCard(args: {
   card.body.appendChild(createConfigRow("Bridge URL", urlInput));
 
   const saveBridgeUrl = (clear: boolean): void => {
-    const raw = clear ? "" : urlInput.value.trim();
+    const candidateUrl = clear ? "" : urlInput.value.trim();
 
-    if (raw.length > 0) {
+    if (candidateUrl.length > 0) {
       try {
-        validateOfficeProxyUrl(raw);
+        validateOfficeProxyUrl(candidateUrl);
       } catch (err: unknown) {
         showToast(`Invalid URL: ${err instanceof Error ? err.message : String(err)}`);
         return;
       }
     }
 
+    const useDefaultUrl = candidateUrl.length === 0 || candidateUrl === args.defaultUrl;
+
     void args.runMutation(async () => {
-      if (raw.length === 0) {
+      if (useDefaultUrl) {
         if (typeof args.settings.delete === "function") {
           await args.settings.delete(args.settingKey);
         } else {
           await args.settings.set(args.settingKey, "");
         }
       } else {
-        await args.settings.set(args.settingKey, raw);
+        await args.settings.set(args.settingKey, candidateUrl);
       }
       dispatchExperimentalToolConfigChanged({ configKey: args.settingKey });
-    }, "config", raw.length > 0 ? `${args.name} URL saved` : `${args.name} URL cleared`);
+    }, "config", useDefaultUrl ? `${args.name} URL set to default` : `${args.name} URL saved`);
   };
 
   const saveBtn = createButton("Save", { compact: true, onClick: () => saveBridgeUrl(false) });

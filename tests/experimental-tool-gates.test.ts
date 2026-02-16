@@ -33,36 +33,36 @@ function createTestTool(
   };
 }
 
-void test("keeps tmux tool registered but rejects when no URL configured", async () => {
+void test("keeps tmux tool registered but rejects when default URL is unavailable", async () => {
   let probeCalled = false;
 
   const tools = [createTestTool("tmux"), createTestTool("read_range")];
   const gated = await applyExperimentalToolGates(tools, {
     getTmuxBridgeUrl: () => Promise.resolve(undefined),
-    validateBridgeUrl: () => null,
+    validateBridgeUrl: (url) => url,
     probeTmuxBridge: () => {
       probeCalled = true;
-      return Promise.resolve(true);
+      return Promise.resolve(false);
     },
   });
 
   assert.deepEqual(gated.map((tool) => tool.name), ["tmux", "read_range"]);
-  assert.equal(probeCalled, false);
 
   const tmuxTool = gated.find((tool) => tool.name === "tmux");
   assert.ok(tmuxTool);
 
   await assert.rejects(
     () => tmuxTool.execute("call-1", {}),
-    /not configured/i,
+    /default URL|URL override/i,
   );
 
-  assert.equal(probeCalled, false);
+  assert.equal(probeCalled, true);
 });
 
 void test("tmux hard gate re-checks execution on every call", async () => {
-  let bridgeUrl: string | undefined = "https://localhost:3341";
-  let bridgeHealthy = true;
+  let bridgeUrl: string | undefined = "https://localhost:4441";
+  let configuredBridgeHealthy = true;
+  let defaultBridgeHealthy = false;
   let executeCount = 0;
 
   const [gatedTmux] = await applyExperimentalToolGates([createTestTool("tmux", () => {
@@ -70,7 +70,9 @@ void test("tmux hard gate re-checks execution on every call", async () => {
   })], {
     getTmuxBridgeUrl: () => Promise.resolve(bridgeUrl),
     validateBridgeUrl: (url) => url,
-    probeTmuxBridge: () => Promise.resolve(bridgeHealthy),
+    probeTmuxBridge: (url) => Promise.resolve(
+      url === "https://localhost:3341" ? defaultBridgeHealthy : configuredBridgeHealthy,
+    ),
   });
 
   assert.ok(gatedTmux);
@@ -82,12 +84,13 @@ void test("tmux hard gate re-checks execution on every call", async () => {
 
   await assert.rejects(
     () => gatedTmux.execute("call-2", {}),
-    /not configured/i,
+    /default URL|URL override/i,
   );
   assert.equal(executeCount, 1);
 
-  bridgeUrl = "https://localhost:3341";
-  bridgeHealthy = false;
+  bridgeUrl = "https://localhost:4441";
+  configuredBridgeHealthy = false;
+  defaultBridgeHealthy = true;
 
   await assert.rejects(
     () => gatedTmux.execute("call-3", {}),
@@ -99,6 +102,8 @@ void test("tmux hard gate re-checks execution on every call", async () => {
 void test("evaluateTmuxBridgeGate reports explicit reason codes", async () => {
   const missingUrl = await evaluateTmuxBridgeGate({
     getTmuxBridgeUrl: () => Promise.resolve(undefined),
+    validateBridgeUrl: (url) => url,
+    probeTmuxBridge: () => Promise.resolve(false),
   });
 
   assert.equal(missingUrl.allowed, false);
@@ -255,6 +260,8 @@ void test("python fallback tools execute even when bridge gate fails", async () 
 
   const gatedTools = await applyExperimentalToolGates(tools, {
     getPythonBridgeUrl: () => Promise.resolve(undefined),
+    validatePythonBridgeUrl: (url) => url,
+    probePythonBridge: () => Promise.resolve(false),
     requestPythonBridgeApproval: () => {
       approvalCalls += 1;
       return Promise.resolve(true);
@@ -307,6 +314,8 @@ void test("libreoffice_convert still requires configured + reachable bridge", as
     }),
   ], {
     getPythonBridgeUrl: () => Promise.resolve(undefined),
+    validatePythonBridgeUrl: (url) => url,
+    probePythonBridge: () => Promise.resolve(false),
   });
 
   await assert.rejects(
@@ -314,7 +323,7 @@ void test("libreoffice_convert still requires configured + reachable bridge", as
       input_path: "/tmp/source.xlsx",
       target_format: "csv",
     }),
-    /not configured/i,
+    /default URL|URL override|not configured/i,
   );
 
   const [toolWhenUnreachable] = await applyExperimentalToolGates([
@@ -429,6 +438,8 @@ void test("python bridge approval is cached per bridge URL", async () => {
 void test("evaluatePythonBridgeGate reports explicit reason codes", async () => {
   const missingUrl = await evaluatePythonBridgeGate({
     getPythonBridgeUrl: () => Promise.resolve(undefined),
+    validatePythonBridgeUrl: (url) => url,
+    probePythonBridge: () => Promise.resolve(false),
   });
 
   assert.equal(missingUrl.allowed, false);

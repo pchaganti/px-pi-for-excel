@@ -141,11 +141,11 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 
 ## Tmux bridge tool (`tmux`)
 - **Availability:** non-core tool, always registered via `createAllTools()`; execution is gated by `applyExperimentalToolGates()`.
-- **Gate model:** requires a configured `tmux.bridge.url` and successful bridge `/health` probe.
+- **Gate model:** requires a healthy bridge URL (`tmux.bridge.url` override, else default `https://localhost:3341`) and successful `/health` probe.
 - **Execution policy:** classified as `read/none` in workbook coordinator (no workbook lock writes or blueprint invalidation).
 - **Bridge implementation:** local helper script `scripts/tmux-bridge-server.mjs`.
-  - default mode: `stub` (in-memory simulator)
-  - real mode: `TMUX_BRIDGE_MODE=tmux` (subprocess-backed tmux bridge)
+  - one-command helper (`npx pi-for-excel-tmux-bridge`) defaults to real `tmux` mode
+  - raw server script default remains `stub` for local development/tests
 - **Bridge contract:** POST JSON to `https://localhost:<port>/v1/tmux` with actions:
   - `list_sessions`
   - `create_session`
@@ -155,30 +155,31 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
   - `kill_session`
 - **Security posture:** local opt-in only; bridge URL validated via `validateOfficeProxyUrl`; tool execution re-checks gate before every call; bridge enforces loopback+origin checks and optional bearer token (`TMUX_BRIDGE_TOKEN` / setting `tmux.bridge.token`, managed via `/experimental tmux-bridge-token ...`).
 - **Diagnostics UX:** `/experimental tmux-status` reports URL/token config, gate result, and bridge health details for quick troubleshooting.
-- **Rationale:** stable local adapter contract now (issue #3) with safe stub-first rollout and incremental hardening.
+- **Rationale:** stable local adapter contract now (issue #3) with one-command real execution and incremental hardening.
 
 ## Python / LibreOffice execution tools (`python_run`, `libreoffice_convert`, `python_transform_range`)
 - **Availability:** always registered via `createAllTools()`.
 - **Default runtime (Pyodide):** `python_run` and `python_transform_range` run in-browser via Pyodide (WebAssembly) with zero setup. Standard library and pure-Python packages (numpy, pandas, scipy, etc.) auto-install via micropip. ~15MB cold-start on first use, cached by the browser thereafter.
-- **Power-user upgrade (native bridge):** when a bridge URL is configured (Settings → Experimental), Python tools use the local `python3` process instead. This unlocks C extensions, filesystem access, and long-running scripts. `libreoffice_convert` requires the native bridge (no Pyodide equivalent).
-- **Fallback order:** native bridge (if configured) → Pyodide (if WebAssembly + Workers available) → error.
+- **Power-user upgrade (native bridge):** when a bridge URL is configured (Settings → Experimental) — or when a bridge is reachable at the default URL (`https://localhost:3340`) — Python tools use the local `python3` process. This unlocks C extensions, filesystem access, and long-running scripts. `libreoffice_convert` requires the native bridge (no Pyodide equivalent).
+- **Fallback order:** native bridge (configured URL or reachable default URL) → Pyodide (if WebAssembly + Workers available) → error.
 - **System prompt awareness:** the agent knows Python is available by default via Pyodide and only mentions the native bridge when the task requires native-only capabilities.
 - **Gate model:**
   - no `python-bridge` experiment flag.
-  - when native bridge is configured + reachable, first execution requires user confirmation (cached once per bridge URL).
-  - bridge-only tool (`libreoffice_convert`) is blocked if bridge URL is missing/invalid/unreachable.
+  - effective bridge URL = configured override or default `https://localhost:3340`.
+  - first execution requires user confirmation when the effective bridge URL is reachable (cached once per bridge URL).
+  - bridge-only tool (`libreoffice_convert`) is blocked when no reachable bridge URL is available.
 - **Execution policy:**
   - `python_run` + `libreoffice_convert` → `read/none` (no direct workbook mutation)
   - `python_transform_range` → `mutate/content` (writes transformed values into workbook)
 - **Bridge implementation:** local helper script `scripts/python-bridge-server.mjs`.
-  - default mode: `stub` (deterministic simulated responses)
-  - real mode: `PYTHON_BRIDGE_MODE=real` (local subprocess execution)
+  - one-command helper (`npx pi-for-excel-python-bridge`) defaults to real mode
+  - raw server script default remains `stub` for local development/tests
 - **Bridge contract:**
   - `POST /v1/python-run` — execute Python snippet with optional `input_json`, return stdout/stderr/result JSON
   - `POST /v1/libreoffice-convert` — convert files across `csv|pdf|xlsx`
 - **Security posture:** bridge URL validated via `validateOfficeProxyUrl`; approval prompt protects native bridge execution; bridge enforces loopback+origin checks and optional bearer token (`PYTHON_BRIDGE_TOKEN` / setting `python.bridge.token`, managed via `/experimental python-bridge-token ...`).
 - **Overwrite perf guard (`python_transform_range`):** pre-write `values/formulas` reads are skipped for large `allow_overwrite: true` outputs (> `MAX_RECOVERY_CELLS`) since those snapshots would be dropped anyway.
-- **Rationale:** Python works out of the box for most users via Pyodide. The native bridge is a power-user opt-in for full ecosystem access. The system prompt makes the agent aware of both tiers so it can use Python confidently without suggesting unnecessary setup.
+- **Rationale:** Python works out of the box for most users via Pyodide. The native bridge is now plug-and-play when the local helper is running, while Pyodide remains a resilient fallback. The system prompt makes the agent aware of both tiers so it can use Python confidently without suggesting unnecessary setup.
 
 ## External tool integrations (`web_search`, `fetch_page`, `mcp`)
 - **Packaging:** exposed as opt-in **integrations** instead of always-on core tools.

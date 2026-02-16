@@ -249,7 +249,7 @@ void test("/experimental tmux-bridge-url clear removes stored URL and triggers t
   assert.equal(clearCount, 1);
   assert.deepEqual(changedConfigKeys, ["tmux.bridge.url"]);
   assert.equal(toasts.length, 1);
-  assert.equal(toasts[0], "Tmux bridge URL cleared.");
+  assert.equal(toasts[0], "Tmux bridge URL override cleared. Using default https://localhost:3341.");
 });
 
 void test("/experimental tmux-bridge-url invalid URL surfaces validation error", async () => {
@@ -527,7 +527,7 @@ void test("/experimental python-bridge-url clear removes stored URL and triggers
   assert.equal(clearCount, 1);
   assert.deepEqual(changedConfigKeys, ["python.bridge.url"]);
   assert.equal(toasts.length, 1);
-  assert.equal(toasts[0], "Python bridge URL cleared.");
+  assert.equal(toasts[0], "Python bridge URL override cleared. Using default https://localhost:3340.");
 });
 
 void test("/experimental python-bridge-token shows masked configured value", async () => {
