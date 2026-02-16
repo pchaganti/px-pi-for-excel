@@ -14,6 +14,7 @@ import { clearOAuthCredentials, saveOAuthCredentials } from "../auth/oauth-stora
 import {
   DEFAULT_LOCAL_PROXY_URL,
   PROXY_HELPER_DOCS_URL,
+  PROXY_REACHABILITY_TARGET_URL,
 } from "../auth/proxy-validation.js";
 import { PROVIDER_PROMPT_OVERLAY_ID, PROXY_GATE_OVERLAY_ID } from "./overlay-ids.js";
 import { closeOverlayById, createOverlayDialog } from "./overlay-dialog.js";
@@ -37,7 +38,7 @@ async function isProxyReachable(): Promise<boolean> {
     const timeout = setTimeout(() => controller.abort(), 1500);
     try {
       const resp = await fetch(
-        `${proxyUrl}/?url=${encodeURIComponent("https://example.com")}`,
+        `${proxyUrl}/?url=${encodeURIComponent(PROXY_REACHABILITY_TARGET_URL)}`,
         { signal: controller.signal },
       );
       return resp.ok;
@@ -150,7 +151,7 @@ function showProxyGateDialog(): Promise<boolean> {
           let ok = false;
           try {
             const resp = await fetch(
-              `${proxyUrl}/?url=${encodeURIComponent("https://example.com")}`,
+              `${proxyUrl}/?url=${encodeURIComponent(PROXY_REACHABILITY_TARGET_URL)}`,
               { signal: controller.signal },
             );
             ok = resp.ok;
