@@ -12,9 +12,9 @@ import { isCorsError } from "@mariozechner/pi-web-ui/dist/utils/proxy-utils.js";
 import { getOAuthProvider } from "../auth/oauth-provider-registry.js";
 import { clearOAuthCredentials, saveOAuthCredentials } from "../auth/oauth-storage.js";
 import {
-  DEFAULT_LOCAL_PROXY_URL,
   PROXY_HELPER_DOCS_URL,
-  PROXY_REACHABILITY_TARGET_URL,
+  probeProxyReachability,
+  resolveConfiguredProxyUrl,
 } from "../auth/proxy-validation.js";
 import { PROVIDER_PROMPT_OVERLAY_ID, PROXY_GATE_OVERLAY_ID } from "./overlay-ids.js";
 import { closeOverlayById, createOverlayDialog } from "./overlay-dialog.js";
@@ -31,20 +31,8 @@ async function isProxyReachable(): Promise<boolean> {
     if (!enabled) return false;
 
     const raw = await storage.settings.get("proxy.url");
-    const proxyUrl = (typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : DEFAULT_LOCAL_PROXY_URL)
-      .replace(/\/+$/, "");
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 1500);
-    try {
-      const resp = await fetch(
-        `${proxyUrl}/?url=${encodeURIComponent(PROXY_REACHABILITY_TARGET_URL)}`,
-        { signal: controller.signal },
-      );
-      return resp.ok;
-    } finally {
-      clearTimeout(timeout);
-    }
+    const proxyUrl = resolveConfiguredProxyUrl(raw);
+    return probeProxyReachability(proxyUrl, 1500);
   } catch {
     return false;
   }
@@ -143,21 +131,8 @@ function showProxyGateDialog(): Promise<boolean> {
         try {
           const storage = getAppStorage();
           const url = await storage.settings.get("proxy.url");
-          const proxyUrl = (typeof url === "string" && url.trim().length > 0 ? url.trim() : DEFAULT_LOCAL_PROXY_URL)
-            .replace(/\/+$/, "");
-
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 1500);
-          let ok = false;
-          try {
-            const resp = await fetch(
-              `${proxyUrl}/?url=${encodeURIComponent(PROXY_REACHABILITY_TARGET_URL)}`,
-              { signal: controller.signal },
-            );
-            ok = resp.ok;
-          } finally {
-            clearTimeout(timeout);
-          }
+          const proxyUrl = resolveConfiguredProxyUrl(url);
+          const ok = await probeProxyReachability(proxyUrl, 1500);
 
           if (ok) {
             await storage.settings.set("proxy.enabled", true);
