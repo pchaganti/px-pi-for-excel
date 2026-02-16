@@ -197,6 +197,7 @@ void test("resolveFilesDialogConnectFolderButtonState reflects backend status", 
     hidden: true,
     disabled: true,
     label: "Connect folder",
+    title: "",
   });
 
   assert.deepEqual(resolveFilesDialogConnectFolderButtonState({
@@ -208,6 +209,7 @@ void test("resolveFilesDialogConnectFolderButtonState reflects backend status", 
     hidden: true,
     disabled: true,
     label: "Connect folder",
+    title: "",
   });
 
   assert.deepEqual(resolveFilesDialogConnectFolderButtonState({
@@ -219,11 +221,13 @@ void test("resolveFilesDialogConnectFolderButtonState reflects backend status", 
     hidden: false,
     disabled: false,
     label: "Connect folder",
+    title: "Connect local folder",
   });
 
   assert.deepEqual(resolveFilesDialogConnectFolderButtonState(connectedBackendStatus), {
     hidden: false,
     disabled: true,
     label: "Connected ✓",
+    title: "Folder already connected",
   });
 });
