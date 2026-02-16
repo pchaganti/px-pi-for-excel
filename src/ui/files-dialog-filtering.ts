@@ -189,9 +189,9 @@ export function resolveFilesDialogConnectFolderButtonState(
 ): FilesDialogConnectFolderButtonState {
   if (!backendStatus || !backendStatus.nativeSupported) {
     return {
-      hidden: false,
+      hidden: true,
       disabled: true,
-      label: "Folder unavailable",
+      label: "Connect folder",
     };
   }
 

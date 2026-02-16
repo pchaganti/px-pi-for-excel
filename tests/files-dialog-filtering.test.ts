@@ -173,9 +173,9 @@ void test("resolveFilesDialogSourceLabel maps each source", () => {
 
 void test("resolveFilesDialogConnectFolderButtonState reflects backend status", () => {
   assert.deepEqual(resolveFilesDialogConnectFolderButtonState(null), {
-    hidden: false,
+    hidden: true,
     disabled: true,
-    label: "Folder unavailable",
+    label: "Connect folder",
   });
 
   assert.deepEqual(resolveFilesDialogConnectFolderButtonState({
@@ -184,9 +184,9 @@ void test("resolveFilesDialogConnectFolderButtonState reflects backend status", 
     nativeSupported: false,
     nativeConnected: false,
   }), {
-    hidden: false,
+    hidden: true,
     disabled: true,
-    label: "Folder unavailable",
+    label: "Connect folder",
   });
 
   assert.deepEqual(resolveFilesDialogConnectFolderButtonState({
