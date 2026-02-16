@@ -27,6 +27,9 @@ The gate is checked on each tool execution (defense in depth).
 # One-command setup (real tmux mode by default)
 npx pi-for-excel-tmux-bridge
 
+# Optional assisted dependency install (macOS/Homebrew)
+npx pi-for-excel-tmux-bridge --install-missing
+
 # Force safe simulated mode
 TMUX_BRIDGE_MODE=stub npx pi-for-excel-tmux-bridge
 
@@ -37,6 +40,7 @@ npm run tmux:bridge:https
 Real-mode requirement:
 
 - `tmux` must be installed and discoverable on `PATH`
+- `--install-missing` can install `tmux` on macOS/Homebrew
 
 Then in the add-in:
 

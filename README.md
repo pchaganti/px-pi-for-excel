@@ -148,10 +148,16 @@ Real-mode prerequisites:
 - LibreOffice (`soffice` or `libreoffice`) is required for `libreoffice_convert`
 - `tmux` is required for the tmux bridge real mode
 
-Quick macOS install:
+Optional assisted install (macOS/Homebrew):
+
+- `npx pi-for-excel-python-bridge --install-missing`
+- `npx pi-for-excel-tmux-bridge --install-missing`
+
+Manual macOS install:
 
 ```bash
-brew install tmux libreoffice
+brew install tmux
+brew install --cask libreoffice
 ```
 
 To force safe simulated mode instead:

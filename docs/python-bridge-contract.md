@@ -37,6 +37,9 @@ Optional bearer auth:
 # One-command setup (real local execution mode by default)
 npx pi-for-excel-python-bridge
 
+# Optional assisted dependency install (macOS/Homebrew)
+npx pi-for-excel-python-bridge --install-missing
+
 # Force safe simulated mode
 PYTHON_BRIDGE_MODE=stub npx pi-for-excel-python-bridge
 
@@ -48,6 +51,7 @@ Real-mode requirements:
 
 - `python3` must be installed and discoverable on `PATH` (or set `PYTHON_BRIDGE_PYTHON_BIN`)
 - LibreOffice (`soffice` / `libreoffice`) is optional for `python_run`, but required for `libreoffice_convert`
+- `--install-missing` can install missing dependencies on macOS/Homebrew
 
 Then in the add-in:
 

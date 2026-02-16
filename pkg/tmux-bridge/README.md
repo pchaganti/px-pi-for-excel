@@ -17,6 +17,14 @@ This command:
 
 Real mode requires `tmux` to be installed and available on `PATH`.
 
+Optional assisted install (macOS/Homebrew):
+
+```bash
+npx pi-for-excel-tmux-bridge --install-missing
+```
+
+This installs missing `tmux` before starting the bridge.
+
 To force safe simulated mode:
 
 ```bash

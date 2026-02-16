@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const PACKAGE_TAG = "pi-for-excel-python-bridge";
 const DEFAULT_PORT = "3340";
+const INSTALL_MISSING_FLAG = "--install-missing";
 
 const cliDir = path.dirname(fileURLToPath(import.meta.url));
 const bridgeScriptPath = path.join(cliDir, "scripts", "python-bridge-server.mjs");
@@ -22,6 +23,18 @@ const certPath = path.join(certDir, "cert.pem");
 function commandExists(command) {
   const whichCommand = process.platform === "win32" ? "where" : "which";
   const result = spawnSync(whichCommand, [command], { stdio: "ignore" });
+  return result.status === 0;
+}
+
+function canRunBinary(command, args = ["--version"]) {
+  const result = spawnSync(command, args, {
+    stdio: "ignore",
+  });
+
+  if (result.error || result.signal) {
+    return false;
+  }
+
   return result.status === 0;
 }
 
@@ -154,16 +167,127 @@ function ensureCertificates() {
   }
 }
 
+function resolveConfiguredLibreOfficeBinary(env = process.env) {
+  const raw = typeof env.PYTHON_BRIDGE_LIBREOFFICE_BIN === "string"
+    ? env.PYTHON_BRIDGE_LIBREOFFICE_BIN
+    : "";
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function resolveBundledLibreOfficeBinary() {
+  const candidates = [
+    "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+    path.join(homeDir, "Applications", "LibreOffice.app", "Contents", "MacOS", "soffice"),
+  ];
+
+  for (const candidate of candidates) {
+    if (!fs.existsSync(candidate)) {
+      continue;
+    }
+
+    if (canRunBinary(candidate, ["--version"])) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function resolveAvailableLibreOfficeBinary(env = process.env) {
+  const configured = resolveConfiguredLibreOfficeBinary(env);
+  if (configured && canRunBinary(configured, ["--version"])) {
+    return configured;
+  }
+
+  if (canRunBinary("soffice", ["--version"])) {
+    return "soffice";
+  }
+
+  if (canRunBinary("libreoffice", ["--version"])) {
+    return "libreoffice";
+  }
+
+  return resolveBundledLibreOfficeBinary();
+}
+
+function applyLibreOfficeBinaryOverride(env) {
+  if (resolveConfiguredLibreOfficeBinary(env)) {
+    return;
+  }
+
+  const availableBinary = resolveAvailableLibreOfficeBinary(env);
+  if (!availableBinary) {
+    return;
+  }
+
+  if (availableBinary === "soffice" || availableBinary === "libreoffice") {
+    return;
+  }
+
+  env.PYTHON_BRIDGE_LIBREOFFICE_BIN = availableBinary;
+  console.log(`[${PACKAGE_TAG}] Using LibreOffice binary: ${availableBinary}`);
+}
+
+function installMissingDependencies() {
+  const pythonMissing = !canRunBinary("python3", ["--version"]);
+  const libreOfficeMissing = !resolveAvailableLibreOfficeBinary();
+
+  if (!pythonMissing && !libreOfficeMissing) {
+    return;
+  }
+
+  if (process.platform !== "darwin") {
+    console.warn(`[${PACKAGE_TAG}] ${INSTALL_MISSING_FLAG} currently supports macOS/Homebrew only.`);
+    if (pythonMissing) {
+      console.warn(`[${PACKAGE_TAG}] Please install python3 manually and retry.`);
+    }
+    if (libreOfficeMissing) {
+      console.warn(`[${PACKAGE_TAG}] Please install LibreOffice manually and retry.`);
+    }
+    return;
+  }
+
+  if (!commandExists("brew")) {
+    console.error(`[${PACKAGE_TAG}] Homebrew is required for ${INSTALL_MISSING_FLAG}.`);
+    console.error(`[${PACKAGE_TAG}] Install Homebrew first: https://brew.sh`);
+    process.exit(1);
+  }
+
+  if (pythonMissing) {
+    console.log(`[${PACKAGE_TAG}] Installing missing dependency: python3`);
+    run("brew", ["install", "python"]);
+  }
+
+  if (libreOfficeMissing) {
+    console.log(`[${PACKAGE_TAG}] Installing missing dependency: LibreOffice`);
+    run("brew", ["install", "--cask", "libreoffice"]);
+  }
+
+  if (!canRunBinary("python3", ["--version"])) {
+    console.warn(`[${PACKAGE_TAG}] python3 is still unavailable after install attempt.`);
+  }
+
+  if (!resolveAvailableLibreOfficeBinary()) {
+    console.warn(`[${PACKAGE_TAG}] LibreOffice is still unavailable after install attempt.`);
+    console.warn(`[${PACKAGE_TAG}] You can set PYTHON_BRIDGE_LIBREOFFICE_BIN to an absolute soffice path.`);
+  }
+}
+
 function resolveBridgeConfig() {
   const userArgs = process.argv.slice(2);
-  const hasExplicitScheme = userArgs.includes("--https") || userArgs.includes("--http");
-  const bridgeArgs = hasExplicitScheme ? userArgs : ["--https", ...userArgs];
+  const installMissing = userArgs.includes(INSTALL_MISSING_FLAG);
+  const bridgeUserArgs = userArgs.filter((arg) => arg !== INSTALL_MISSING_FLAG);
+
+  const hasExplicitScheme = bridgeUserArgs.includes("--https") || bridgeUserArgs.includes("--http");
+  const bridgeArgs = hasExplicitScheme ? bridgeUserArgs : ["--https", ...bridgeUserArgs];
 
   const usesHttpOnly = bridgeArgs.includes("--http") && !bridgeArgs.includes("--https");
 
   return {
     bridgeArgs,
     usesHttps: !usesHttpOnly,
+    installMissing,
   };
 }
 
@@ -191,6 +315,7 @@ function startBridge(bridgeArgs) {
   const childEnv = { ...process.env };
   applyDefaultPort(childEnv);
   applyDefaultMode(childEnv);
+  applyLibreOfficeBinaryOverride(childEnv);
 
   if (typeof childEnv.PI_FOR_EXCEL_CERT_DIR !== "string" || childEnv.PI_FOR_EXCEL_CERT_DIR.trim().length === 0) {
     childEnv.PI_FOR_EXCEL_CERT_DIR = certDir;
@@ -238,6 +363,9 @@ if (!fs.existsSync(bridgeScriptPath)) {
 }
 
 const bridgeConfig = resolveBridgeConfig();
+if (bridgeConfig.installMissing) {
+  installMissingDependencies();
+}
 if (bridgeConfig.usesHttps) {
   ensureCertificates();
 }
