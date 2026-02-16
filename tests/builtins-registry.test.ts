@@ -213,8 +213,10 @@ void test("sidebar utilities menu includes extensions label", async () => {
   const sidebarSource = await readFile(new URL("../src/ui/pi-sidebar.ts", import.meta.url), "utf8");
 
   assert.match(sidebarSource, /aria-label="Settings and tools"/);
-  assert.match(sidebarSource, /Extensions…/);
-  assert.match(sidebarSource, /Files…/);
+  assert.match(sidebarSource, /\bExtensions\b/);
+  assert.match(sidebarSource, /\bFiles\b/);
+  assert.doesNotMatch(sidebarSource, /Extensions…/);
+  assert.doesNotMatch(sidebarSource, /Files…/);
   assert.doesNotMatch(sidebarSource, /Add-ons…/);
 });
 
