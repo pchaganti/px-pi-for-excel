@@ -12,7 +12,8 @@ import { setActiveProviders } from "../compat/model-selector-patch.js";
 import {
   DEFAULT_LOCAL_PROXY_URL,
   PROXY_HELPER_DOCS_URL,
-  PROXY_REACHABILITY_TARGET_URL,
+  probeProxyReachability,
+  resolveConfiguredProxyUrl,
 } from "../auth/proxy-validation.js";
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
@@ -27,18 +28,7 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 }
 
 async function testLocalHttpsProxy(proxyUrl: string): Promise<boolean> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 1200);
-
-  try {
-    const url = `${proxyUrl.replace(/\/+$/, "")}/?url=${encodeURIComponent(PROXY_REACHABILITY_TARGET_URL)}`;
-    const resp = await fetch(url, { signal: controller.signal });
-    return resp.ok;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timeout);
-  }
+  return probeProxyReachability(proxyUrl, 1200);
 }
 
 export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise<void> {
@@ -50,7 +40,7 @@ export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise
     const enabled = await storage.settings.get("proxy.enabled");
     const url = await storage.settings.get("proxy.url");
 
-    const currentUrl = typeof url === "string" && url.trim().length > 0 ? url.trim() : DEFAULT_LOCAL_PROXY_URL;
+    const currentUrl = resolveConfiguredProxyUrl(url);
 
     if (url === null) {
       await storage.settings.set("proxy.url", currentUrl);
@@ -195,7 +185,7 @@ export async function showWelcomeLogin(providerKeys: ProviderKeysStore): Promise
         const enabled = await storage.settings.get("proxy.enabled");
         const url = await storage.settings.get("proxy.url");
         proxyEnabledEl.checked = Boolean(enabled);
-        proxyUrlEl.value = typeof url === "string" && url.trim().length > 0 ? url.trim() : DEFAULT_LOCAL_PROXY_URL;
+        proxyUrlEl.value = resolveConfiguredProxyUrl(url);
       } catch {
         proxyEnabledEl.checked = false;
         proxyUrlEl.value = DEFAULT_LOCAL_PROXY_URL;

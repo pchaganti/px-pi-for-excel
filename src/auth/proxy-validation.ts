@@ -23,6 +23,37 @@ export function normalizeProxyUrl(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
 
+/**
+ * Resolve a user-configured proxy URL with sane defaults.
+ */
+export function resolveConfiguredProxyUrl(rawUrl: unknown): string {
+  const trimmed = typeof rawUrl === "string" ? rawUrl.trim() : "";
+  const candidate = trimmed.length > 0 ? trimmed : DEFAULT_LOCAL_PROXY_URL;
+  return normalizeProxyUrl(candidate);
+}
+
+/**
+ * Probe whether a proxy URL is reachable and can forward to the allowlisted
+ * reachability target.
+ */
+export async function probeProxyReachability(
+  proxyUrl: string,
+  timeoutMs: number = 1500,
+): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const url = `${normalizeProxyUrl(proxyUrl)}/?url=${encodeURIComponent(PROXY_REACHABILITY_TARGET_URL)}`;
+    const resp = await fetch(url, { signal: controller.signal });
+    return resp.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export function validateOfficeProxyUrl(url: string): string {
   const normalized = normalizeProxyUrl(url);
 
