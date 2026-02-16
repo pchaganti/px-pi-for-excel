@@ -206,14 +206,20 @@ class SourceBackend implements WorkspaceBackend {
   readonly label: string;
 
   private readonly files = new Map<string, { bytes: Uint8Array; modifiedAt: number }>();
+  private readonly missingMessageTemplate: string;
+  private readonly missingErrorName?: string;
 
   constructor(args: {
     kind: WorkspaceBackendKind;
     label: string;
     files: Array<{ path: string; text: string; modifiedAt: number }>;
+    missingMessageTemplate?: string;
+    missingErrorName?: string;
   }) {
     this.kind = args.kind;
     this.label = args.label;
+    this.missingMessageTemplate = args.missingMessageTemplate ?? "File not found: {path}";
+    this.missingErrorName = args.missingErrorName;
 
     for (const file of args.files) {
       const normalizedPath = normalizeWorkspacePath(file.path);
@@ -222,6 +228,17 @@ class SourceBackend implements WorkspaceBackend {
         modifiedAt: file.modifiedAt,
       });
     }
+  }
+
+  private buildMissingError(path: string): Error {
+    const message = this.missingMessageTemplate.replace("{path}", path);
+    const error = new Error(message);
+
+    if (this.missingErrorName) {
+      error.name = this.missingErrorName;
+    }
+
+    return error;
   }
 
   listFiles(): Promise<WorkspaceFileEntry[]> {
@@ -243,7 +260,7 @@ class SourceBackend implements WorkspaceBackend {
     const normalizedPath = normalizeWorkspacePath(path);
     const file = this.files.get(normalizedPath);
     if (!file) {
-      return Promise.reject(new Error(`File not found: ${normalizedPath}`));
+      return Promise.reject(this.buildMissingError(normalizedPath));
     }
 
     const text = new TextDecoder().decode(file.bytes);
@@ -283,7 +300,7 @@ class SourceBackend implements WorkspaceBackend {
     const existing = this.files.get(normalizedOldPath);
 
     if (!existing) {
-      return Promise.reject(new Error(`File not found: ${normalizedOldPath}`));
+      return Promise.reject(this.buildMissingError(normalizedOldPath));
     }
 
     this.files.delete(normalizedOldPath);
@@ -493,6 +510,35 @@ void test("workspace read/rename/delete can target a specific source when paths 
 
   const nativeOriginal = files.find((file) => file.path === "shared.txt" && file.locationKind === "native-directory");
   assert.equal(nativeOriginal, undefined);
+});
+
+void test("workspace read falls back to uploaded files when native missing message uses WebKit wording", async () => {
+  const workspaceBackend = new SourceBackend({
+    kind: "opfs",
+    label: "Sandboxed workspace",
+    files: [
+      { path: "imports/source.csv", text: "company\nAcme", modifiedAt: 10 },
+    ],
+  });
+
+  const nativeBackend = new SourceBackend({
+    kind: "native-directory",
+    label: "Local folder",
+    files: [],
+    missingMessageTemplate: "The object can not be found here.",
+  });
+
+  const workspace = new FilesWorkspace({
+    initialBackend: nativeBackend,
+    initialWorkspaceBackend: workspaceBackend,
+  });
+
+  const read = await workspace.readFile("imports/source.csv", {
+    mode: "text",
+  });
+
+  assert.equal(read.locationKind, "workspace");
+  assert.equal(read.text, "company\nAcme");
 });
 
 void test("path-only mutations follow the file's source when native is connected", async () => {
