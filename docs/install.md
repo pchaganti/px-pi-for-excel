@@ -87,7 +87,7 @@ For most users, API keys are the smoothest setup and usually do **not** need the
 1. In `/login`, click **Login with …**
 2. Complete login in the browser window that opens
 3. Return to Excel and complete any prompt shown
-   - For OpenAI + Google OAuth flows, copy the final browser URL (it may be a `localhost` callback URL) and paste it when prompted
+   - For OpenAI + Google OAuth flows, your browser will land on a page that says **"can't be reached"** — that's normal! Copy the full URL from the browser address bar and paste it when prompted in Pi for Excel
    - Some Google workspace tiers may also ask for a Google Cloud project ID during setup
 
 If login fails with a CORS/network error, follow the next section.

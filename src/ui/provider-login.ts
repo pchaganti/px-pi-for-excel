@@ -584,11 +584,11 @@ export function buildProviderRow(
             },
             onPrompt: async (prompt) => {
               const helperText = id === "anthropic"
-                ? "After completing login, copy the authorization string from the browser. You can paste the full URL, or a CODE#STATE value."
+                ? "After completing login, copy the authorization code shown in the browser. You can paste the code, the full URL, or a CODE#STATE value."
                 : id === "openai-codex"
-                  ? "After completing login, copy the final browser URL (usually localhost) from the address bar, then paste it here."
+                  ? "After login, your browser will show a page that says \"can't be reached\" \u2014 that's normal! Copy the full URL from the browser address bar and paste it here."
                   : id === "google-gemini-cli" || id === "google-antigravity"
-                    ? "After sign-in, copy the final browser URL (localhost callback) from the address bar, then paste it here."
+                    ? "After sign-in, your browser will show a page that says \"can't be reached\" \u2014 that's normal! Copy the full URL from the browser address bar and paste it here."
                     : undefined;
 
               const value = await promptForText({

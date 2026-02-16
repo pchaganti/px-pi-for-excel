@@ -232,7 +232,8 @@ export async function loginOpenAICodexInBrowser(
   callbacks.onAuth({
     url: flow.url,
     instructions:
-      "After login, copy the final URL from the browser address bar and paste it in Pi (it should contain code= and state=).",
+      "After login, your browser will show a page that says \"can't be reached\" \u2014 that's expected! " +
+      "Copy the full URL from the browser address bar and paste it back in Pi for Excel.",
   });
 
   if (callbacks.signal?.aborted) {
