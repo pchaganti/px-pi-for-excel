@@ -97,8 +97,9 @@
   color: var(--foreground);
 }
 
-.pi-input-btn--attach svg,
-.pi-input-btn--attach svg * {
+.pi-input-btn--attach svg {
+  width: 14px;
+  height: 14px;
   pointer-events: none;
 }
 
