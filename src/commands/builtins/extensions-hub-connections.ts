@@ -636,17 +636,18 @@ function renderBridgeCard(args: {
 
   const saveBridgeUrl = (clear: boolean): void => {
     const candidateUrl = clear ? "" : urlInput.value.trim();
+    let normalizedCandidateUrl = "";
 
     if (candidateUrl.length > 0) {
       try {
-        validateOfficeProxyUrl(candidateUrl);
+        normalizedCandidateUrl = validateOfficeProxyUrl(candidateUrl);
       } catch (err: unknown) {
         showToast(`Invalid URL: ${err instanceof Error ? err.message : String(err)}`);
         return;
       }
     }
 
-    const useDefaultUrl = candidateUrl.length === 0 || candidateUrl === args.defaultUrl;
+    const useDefaultUrl = normalizedCandidateUrl.length === 0 || normalizedCandidateUrl === args.defaultUrl;
 
     void args.runMutation(async () => {
       if (useDefaultUrl) {
@@ -656,7 +657,7 @@ function renderBridgeCard(args: {
           await args.settings.set(args.settingKey, "");
         }
       } else {
-        await args.settings.set(args.settingKey, candidateUrl);
+        await args.settings.set(args.settingKey, normalizedCandidateUrl);
       }
       dispatchExperimentalToolConfigChanged({ configKey: args.settingKey });
     }, "config", useDefaultUrl ? `${args.name} URL set to default` : `${args.name} URL saved`);

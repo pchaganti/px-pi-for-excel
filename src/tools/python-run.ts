@@ -384,7 +384,7 @@ function buildNoPythonAvailableMessage(): string {
   );
 }
 
-function shouldFallbackToPyodideAfterBridgeError(
+export function shouldFallbackToPyodideAfterBridgeError(
   error: unknown,
   bridgeConfig: PythonBridgeConfig,
 ): boolean {
