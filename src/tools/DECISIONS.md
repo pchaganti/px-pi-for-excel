@@ -11,7 +11,8 @@ Concise record of recent tool behavior choices to avoid regressions. Update this
 - **Rationale:** Excel column width is font-dependent and Office.js `columnWidth` is in points. A fixed Arial 10 baseline is predictable and simpler than per-sheet calibration.
 
 ## Borders (`format_cells.borders`)
-- **Accepted values:** `thin | medium | thick | none` (weight, not style).
+- **Accepted values:** canonical `thin | medium | thick | none` (weight, not style).
+- **Input normalization:** `borders` / `border_*` values are normalized case-insensitively and accept `Border*`/`Borders*` prefixes (`None`, `BordersNone`, etc.) before applying.
 - **Implementation:**
   - `none` → `border.style = "None"`
   - others → `border.style = "Continuous"` + `border.weight = Thin|Medium|Thick`

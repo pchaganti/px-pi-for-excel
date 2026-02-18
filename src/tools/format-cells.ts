@@ -23,6 +23,12 @@ import { finalizeMutationOperation, finalizeMutationRecoveryStep } from "./mutat
 import { appendMutationResultNote } from "./mutation/result-note.js";
 import type { MutationFinalizeDependencies } from "./mutation/types.js";
 import type { BorderWeight } from "../conventions/index.js";
+import {
+  buildBorderInstructions,
+  normalizeBorderParams,
+  type BorderEdgeIndex,
+  type NormalizedBorderParams,
+} from "./format-cells-borders.js";
 import { getResolvedConventions } from "../conventions/store.js";
 import { getAppStorage } from "@mariozechner/pi-web-ui/dist/storage/app-storage.js";
 
@@ -131,6 +137,7 @@ type Params = Static<typeof schema>;
 
 type HorizontalAlignment = "Left" | "Center" | "Right" | "General";
 type VerticalAlignment = "Top" | "Center" | "Bottom";
+type BorderVisibleWeight = Exclude<BorderWeight, "none">;
 
 function isHorizontalAlignment(value: string): value is HorizontalAlignment {
   return value === "Left" || value === "Center" || value === "Right" || value === "General";
@@ -164,6 +171,7 @@ interface FormatCheckpointPlan {
 
 function buildFormatCheckpointPlan(
   params: Params,
+  borderParams: NormalizedBorderParams,
   props: ResolvedFormatPropertiesForCheckpoint,
   hasNumberFormat: boolean,
 ): FormatCheckpointPlan {
@@ -184,12 +192,12 @@ function buildFormatCheckpointPlan(
     mergedAreas: params.merge !== undefined || undefined,
   };
 
-  const hasShorthand = params.borders !== undefined;
+  const hasShorthand = borderParams.shorthand !== undefined;
   const hasParamEdges =
-    params.border_top !== undefined ||
-    params.border_bottom !== undefined ||
-    params.border_left !== undefined ||
-    params.border_right !== undefined;
+    borderParams.top !== undefined ||
+    borderParams.bottom !== undefined ||
+    borderParams.left !== undefined ||
+    borderParams.right !== undefined;
   const hasStyleEdges =
     props.borderTop !== undefined ||
     props.borderBottom !== undefined ||
@@ -204,10 +212,10 @@ function buildFormatCheckpointPlan(
     selection.borderInsideHorizontal = true;
     selection.borderInsideVertical = true;
   } else {
-    selection.borderTop = params.border_top !== undefined || props.borderTop !== undefined || undefined;
-    selection.borderBottom = params.border_bottom !== undefined || props.borderBottom !== undefined || undefined;
-    selection.borderLeft = params.border_left !== undefined || props.borderLeft !== undefined || undefined;
-    selection.borderRight = params.border_right !== undefined || props.borderRight !== undefined || undefined;
+    selection.borderTop = borderParams.top !== undefined || props.borderTop !== undefined || undefined;
+    selection.borderBottom = borderParams.bottom !== undefined || props.borderBottom !== undefined || undefined;
+    selection.borderLeft = borderParams.left !== undefined || props.borderLeft !== undefined || undefined;
+    selection.borderRight = borderParams.right !== undefined || props.borderRight !== undefined || undefined;
   }
 
   const hasSelectedProperty = Object.values(selection).some((value) => value === true);
@@ -247,6 +255,8 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
         const storage = getAppStorage();
         const conventionConfig = await getResolvedConventions(storage.settings);
 
+        const normalizedBorders = normalizeBorderParams(params);
+
         // ── Resolve styles + overrides into flat properties ──────────
         const styleResult = resolveStyles(params.style, {
           numberFormat: params.number_format,
@@ -262,14 +272,19 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
           horizontalAlignment: params.horizontal_alignment as "Left" | "Center" | "Right" | "General" | undefined,
           verticalAlignment: params.vertical_alignment as "Top" | "Center" | "Bottom" | undefined,
           wrapText: params.wrap_text,
-          borderTop: params.border_top as BorderWeight | undefined,
-          borderBottom: params.border_bottom as BorderWeight | undefined,
-          borderLeft: params.border_left as BorderWeight | undefined,
-          borderRight: params.border_right as BorderWeight | undefined,
+          borderTop: normalizedBorders.top,
+          borderBottom: normalizedBorders.bottom,
+          borderLeft: normalizedBorders.left,
+          borderRight: normalizedBorders.right,
         }, conventionConfig);
         const props = styleResult.properties;
 
-        const checkpointPlan = buildFormatCheckpointPlan(params, props, styleResult.excelNumberFormat !== undefined);
+        const checkpointPlan = buildFormatCheckpointPlan(
+          params,
+          normalizedBorders,
+          props,
+          styleResult.excelNumberFormat !== undefined,
+        );
 
         let checkpointCapture: {
           supported: boolean;
@@ -442,7 +457,7 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
           }
 
           // Borders — resolve from: individual edge params > style edges > `borders` shorthand
-          applyBorders(formatTarget, params, props, applied);
+          applyBorders(formatTarget, normalizedBorders, props, params.border_color, applied);
 
           // Merge
           if (params.merge !== undefined) {
@@ -581,24 +596,29 @@ export function createFormatCellsTool(): AgentTool<typeof schema, FormatCellsDet
 // ── Border application ───────────────────────────────────────────────
 
 /** Map a border weight string to the Office.js enum value. */
-function toBorderWeight(weight: BorderWeight): "Thin" | "Medium" | "Thick" {
-  return weight === "thin" ? "Thin" : weight === "medium" ? "Medium" : "Thick";
+function toBorderWeight(weight: BorderVisibleWeight): "Thin" | "Medium" | "Thick" {
+  if (weight === "thin") return "Thin";
+  if (weight === "medium") return "Medium";
+  return "Thick";
 }
 
 /** Apply a single border edge. */
 function applyEdge(
   formatTarget: Excel.RangeFormat,
-  edge: "EdgeTop" | "EdgeBottom" | "EdgeLeft" | "EdgeRight" | "InsideHorizontal" | "InsideVertical",
+  edge: BorderEdgeIndex,
   weight: BorderWeight,
   color?: string,
 ): void {
   const borderItem = formatTarget.borders.getItem(edge);
   if (weight === "none") {
     borderItem.style = "None";
-  } else {
-    borderItem.style = "Continuous";
-    borderItem.weight = toBorderWeight(weight);
-    if (color) borderItem.color = color;
+    return;
+  }
+
+  borderItem.style = "Continuous";
+  borderItem.weight = toBorderWeight(weight);
+  if (color) {
+    borderItem.color = color;
   }
 }
 
@@ -610,54 +630,21 @@ function applyEdge(
  */
 function applyBorders(
   formatTarget: Excel.RangeFormat,
-  params: Params,
+  borderParams: NormalizedBorderParams,
   props: { borderTop?: BorderWeight; borderBottom?: BorderWeight; borderLeft?: BorderWeight; borderRight?: BorderWeight },
+  color: string | undefined,
   applied: string[],
 ): void {
-  const shorthand = params.borders;
-  const hasShorthand = shorthand !== undefined;
-  const hasEdges = params.border_top !== undefined || params.border_bottom !== undefined ||
-    params.border_left !== undefined || params.border_right !== undefined;
-  const hasStyleEdges = props.borderTop !== undefined || props.borderBottom !== undefined ||
-    props.borderLeft !== undefined || props.borderRight !== undefined;
-
-  if (!hasShorthand && !hasEdges && !hasStyleEdges) return;
-
-  const color = params.border_color;
-
-  if (hasShorthand && !hasEdges && !hasStyleEdges) {
-    // Pure shorthand — apply to all edges including inside (existing behavior)
-    const borderIndexes = [
-      "EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight",
-      "InsideHorizontal", "InsideVertical",
-    ] as const;
-    for (const border of borderIndexes) {
-      applyEdge(formatTarget, border, shorthand, color);
-    }
-    applied.push(`${shorthand} borders${color ? ` (${color})` : ""}`);
+  const instructions = buildBorderInstructions(borderParams, props, color);
+  if (instructions === null) {
     return;
   }
 
-  // Individual edges — style provides base, params override
-  const edges: Array<{ edge: "EdgeTop" | "EdgeBottom" | "EdgeLeft" | "EdgeRight"; param: BorderWeight | undefined; styleProp: BorderWeight | undefined; label: string }> = [
-    { edge: "EdgeTop", param: params.border_top as BorderWeight | undefined, styleProp: props.borderTop, label: "top" },
-    { edge: "EdgeBottom", param: params.border_bottom as BorderWeight | undefined, styleProp: props.borderBottom, label: "bottom" },
-    { edge: "EdgeLeft", param: params.border_left as BorderWeight | undefined, styleProp: props.borderLeft, label: "left" },
-    { edge: "EdgeRight", param: params.border_right as BorderWeight | undefined, styleProp: props.borderRight, label: "right" },
-  ];
-
-  const appliedEdges: string[] = [];
-  for (const { edge, param, styleProp, label } of edges) {
-    const weight = param ?? styleProp;
-    if (weight !== undefined) {
-      applyEdge(formatTarget, edge, weight, color);
-      appliedEdges.push(`${label}:${weight}`);
-    }
+  for (const { edge, weight } of instructions.operations) {
+    applyEdge(formatTarget, edge, weight, color);
   }
 
-  if (appliedEdges.length > 0) {
-    applied.push(`borders ${appliedEdges.join(", ")}${color ? ` (${color})` : ""}`);
-  }
+  applied.push(instructions.appliedText);
 }
 
 function splitRangeList(range: string): string[] {
