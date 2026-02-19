@@ -354,7 +354,6 @@
   z-index: 200;
 }
 .pi-status-bar [data-tooltip]:hover::after {
-  pointer-events: auto;
   visibility: visible;
   opacity: 1;
   transition: opacity var(--duration-fast) ease;
@@ -401,7 +400,6 @@
 .pi-tooltip--left  { left: 0; transform: none; }
 .pi-tooltip--right { left: auto; right: 0; transform: none; }
 .has-tooltip:hover > .pi-tooltip {
-  pointer-events: auto;
   visibility: visible;
   opacity: 1;
   transition: opacity var(--duration-fast) ease;
