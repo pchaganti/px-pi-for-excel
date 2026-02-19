@@ -324,14 +324,14 @@
   color: var(--foreground);
 }
 
-/* Status-bar tooltips */
+/* Status-bar tooltips (anchored to trigger edge to avoid hover-gap flicker) */
 .pi-status-bar [data-tooltip] {
   position: relative;
 }
 .pi-status-bar [data-tooltip]::after {
   content: attr(data-tooltip);
   position: absolute;
-  bottom: calc(100% + 6px);
+  bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
   padding: 5px 9px;
@@ -348,12 +348,15 @@
   box-shadow: 0 2px 8px rgba(0,0,0,0.18);
   border: 1px solid var(--border);
   pointer-events: none;
+  visibility: hidden;
   opacity: 0;
-  transition: opacity var(--duration-fast) ease;
+  transition: opacity var(--duration-fast) ease, visibility 0s linear var(--duration-fast);
   z-index: 200;
 }
 .pi-status-bar [data-tooltip]:hover::after {
+  visibility: visible;
   opacity: 1;
+  transition: opacity var(--duration-fast) ease;
 }
 /* Keep data-tooltips inside the sidebar */
 .pi-status-bar [data-tooltip]:first-child::after {
@@ -372,7 +375,7 @@
 }
 .pi-tooltip {
   position: absolute;
-  bottom: calc(100% + 6px);
+  bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
   padding: 5px 9px;
@@ -389,14 +392,17 @@
   box-shadow: 0 2px 8px rgba(0,0,0,0.18);
   border: 1px solid var(--border);
   pointer-events: none;
+  visibility: hidden;
   opacity: 0;
-  transition: opacity var(--duration-fast) ease;
+  transition: opacity var(--duration-fast) ease, visibility 0s linear var(--duration-fast);
   z-index: 200;
 }
 .pi-tooltip--left  { left: 0; transform: none; }
 .pi-tooltip--right { left: auto; right: 0; transform: none; }
 .has-tooltip:hover > .pi-tooltip {
+  visibility: visible;
   opacity: 1;
+  transition: opacity var(--duration-fast) ease;
 }
 
 /* Colored warning line inside tooltip */
