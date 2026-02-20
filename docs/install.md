@@ -59,6 +59,8 @@ For more detail, see [Microsoft's guide for Windows](https://learn.microsoft.com
 
 ### Excel on the Web (Office Online)
 
+> **Community-contributed — not officially tested.** These steps were provided by a contributor and may not match every Office 365 tenant. If something looks different, see [Microsoft's sideloading guide for Office on the web](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/sideload-office-add-ins-for-testing#manually-sideload-an-add-in-to-office-on-the-web).
+
 1. Open **[Excel (Web)](https://www.office.com/launch/excel)** in your browser  
 2. Select an existing workbook or create a new Excel file  
 3. In the **Home** tab (Start ribbon), click **Add-ins** on the right side  
