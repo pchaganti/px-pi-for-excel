@@ -7,8 +7,9 @@ export const WEB_SEARCH_BRAVE_API_KEY_SETTING_KEY = "web.search.brave.apiKey";
 export const WEB_SEARCH_SERPER_API_KEY_SETTING_KEY = "web.search.serper.apiKey";
 export const WEB_SEARCH_TAVILY_API_KEY_SETTING_KEY = "web.search.tavily.apiKey";
 export const WEB_SEARCH_JINA_API_KEY_SETTING_KEY = "web.search.jina.apiKey";
+export const WEB_SEARCH_FIRECRAWL_API_KEY_SETTING_KEY = "web.search.firecrawl.apiKey";
 
-export const WEB_SEARCH_PROVIDERS = ["jina", "serper", "tavily", "brave"] as const;
+export const WEB_SEARCH_PROVIDERS = ["jina", "firecrawl", "serper", "tavily", "brave"] as const;
 export type WebSearchProvider = (typeof WEB_SEARCH_PROVIDERS)[number];
 
 export const DEFAULT_WEB_SEARCH_PROVIDER: WebSearchProvider = "jina";
@@ -29,12 +30,20 @@ export const WEB_SEARCH_PROVIDER_INFO: Record<WebSearchProvider, WebSearchProvid
   jina: {
     id: "jina",
     title: "Jina Search (default)",
-    shortDescription: "Works out of the box — no signup or API key needed.",
+    shortDescription: "Fast web search API with free tier.",
     signupUrl: "https://jina.ai",
     searchEndpoint: "https://s.jina.ai/",
     apiKeyLabel: "Jina API key",
-    apiKeyHelp: "Optional. Add a key for higher rate limits.",
-    apiKeyOptional: true,
+    apiKeyHelp: "Free tier available at jina.ai.",
+  },
+  firecrawl: {
+    id: "firecrawl",
+    title: "Firecrawl",
+    shortDescription: "Web search with optional page scraping. 500 free credits.",
+    signupUrl: "https://firecrawl.dev",
+    searchEndpoint: "https://api.firecrawl.dev/v2/search",
+    apiKeyLabel: "Firecrawl API key",
+    apiKeyHelp: "Free tier with 500 credits, no credit card required.",
   },
   serper: {
     id: "serper",
@@ -76,6 +85,7 @@ export const WEB_SEARCH_PROVIDER_ENDPOINT_HOSTS: string[] = WEB_SEARCH_PROVIDERS
 
 const WEB_SEARCH_API_KEY_BY_PROVIDER_SETTING_KEY: Record<WebSearchProvider, string> = {
   jina: WEB_SEARCH_JINA_API_KEY_SETTING_KEY,
+  firecrawl: WEB_SEARCH_FIRECRAWL_API_KEY_SETTING_KEY,
   serper: WEB_SEARCH_SERPER_API_KEY_SETTING_KEY,
   tavily: WEB_SEARCH_TAVILY_API_KEY_SETTING_KEY,
   brave: WEB_SEARCH_BRAVE_API_KEY_SETTING_KEY,
@@ -102,7 +112,7 @@ function normalizeOptionalString(value: unknown): string | undefined {
 }
 
 function parseProvider(value: unknown): WebSearchProvider | undefined {
-  if (value === "jina" || value === "serper" || value === "tavily" || value === "brave") {
+  if (value === "jina" || value === "firecrawl" || value === "serper" || value === "tavily" || value === "brave") {
     return value;
   }
   return undefined;
@@ -111,15 +121,17 @@ function parseProvider(value: unknown): WebSearchProvider | undefined {
 export async function loadWebSearchProviderConfig(
   settings: WebSearchConfigReader,
 ): Promise<WebSearchProviderConfig> {
-  const [providerRaw, jinaApiKeyRaw, serperApiKeyRaw, tavilyApiKeyRaw, braveApiKeyRaw] = await Promise.all([
+  const [providerRaw, jinaApiKeyRaw, firecrawlApiKeyRaw, serperApiKeyRaw, tavilyApiKeyRaw, braveApiKeyRaw] = await Promise.all([
     settings.get(WEB_SEARCH_PROVIDER_SETTING_KEY),
     settings.get(WEB_SEARCH_JINA_API_KEY_SETTING_KEY),
+    settings.get(WEB_SEARCH_FIRECRAWL_API_KEY_SETTING_KEY),
     settings.get(WEB_SEARCH_SERPER_API_KEY_SETTING_KEY),
     settings.get(WEB_SEARCH_TAVILY_API_KEY_SETTING_KEY),
     settings.get(WEB_SEARCH_BRAVE_API_KEY_SETTING_KEY),
   ]);
 
   const jinaApiKey = normalizeOptionalString(jinaApiKeyRaw);
+  const firecrawlApiKey = normalizeOptionalString(firecrawlApiKeyRaw);
   const serperApiKey = normalizeOptionalString(serperApiKeyRaw);
   const tavilyApiKey = normalizeOptionalString(tavilyApiKeyRaw);
   const braveApiKey = normalizeOptionalString(braveApiKeyRaw);
@@ -128,12 +140,13 @@ export async function loadWebSearchProviderConfig(
   // has a key, infer that provider so existing users aren't silently switched to
   // the zero-config default after an upgrade.
   const provider = parseProvider(providerRaw)
-    ?? (serperApiKey ? "serper" : braveApiKey ? "brave" : tavilyApiKey ? "tavily" : DEFAULT_WEB_SEARCH_PROVIDER);
+    ?? (firecrawlApiKey ? "firecrawl" : serperApiKey ? "serper" : braveApiKey ? "brave" : tavilyApiKey ? "tavily" : DEFAULT_WEB_SEARCH_PROVIDER);
 
   return {
     provider,
     apiKeys: {
       jina: jinaApiKey,
+      firecrawl: firecrawlApiKey,
       serper: serperApiKey,
       tavily: tavilyApiKey,
       brave: braveApiKey,
@@ -184,6 +197,64 @@ export function getApiKeyForProvider(
 /** Returns true when the provider cannot work without an API key. */
 export function isApiKeyRequired(provider: WebSearchProvider): boolean {
   return WEB_SEARCH_PROVIDER_INFO[provider].apiKeyOptional !== true;
+}
+
+function hasRepeatedLongSegment(value: string): boolean {
+  const minimumSegmentLength = 12;
+  const maxSegmentLength = Math.floor(value.length / 2);
+  if (maxSegmentLength < minimumSegmentLength) return false;
+
+  for (let segmentLength = maxSegmentLength; segmentLength >= minimumSegmentLength; segmentLength -= 1) {
+    for (let start = 0; start + (segmentLength * 2) <= value.length; start += 1) {
+      const segment = value.slice(start, start + segmentLength);
+      const nextSegment = value.slice(start + segmentLength, start + (segmentLength * 2));
+      if (segment === nextSegment) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Quick format check for an API key before saving. Returns `null` when the key
+ * looks plausible, or a human-readable warning string when it looks wrong.
+ *
+ * This is intentionally loose — it catches obvious mistakes (empty, whitespace,
+ * too short, wrong prefix) without risking false rejections if a provider
+ * tweaks their format.
+ */
+export function checkApiKeyFormat(provider: WebSearchProvider, apiKey: string): string | null {
+  const key = apiKey.trim();
+
+  if (key.length === 0) return "API key is empty.";
+
+  if (/\s/.test(key)) {
+    return "API key contains spaces or newlines — check for copy-paste errors.";
+  }
+
+  if (key.length < 10) {
+    return "API key looks too short — check for truncation.";
+  }
+
+  if (hasRepeatedLongSegment(key)) {
+    return "API key contains a repeated long segment — check for accidental double paste.";
+  }
+
+  if (provider === "jina" && !key.startsWith("jina_")) {
+    return "Jina keys usually start with \"jina_\" — double-check the value.";
+  }
+
+  if (provider === "firecrawl" && !key.startsWith("fc-")) {
+    return "Firecrawl keys usually start with \"fc-\" — double-check the value.";
+  }
+
+  if (provider === "tavily" && !key.startsWith("tvly-")) {
+    return "Tavily keys usually start with \"tvly-\" — double-check the value.";
+  }
+
+  return null;
 }
 
 export function maskSecret(secret: string): string {
