@@ -244,6 +244,18 @@
     }
     .narrative p + p { margin-top: 10px; }
 
+    /* ── Section screenshot ── */
+    .section-screenshot {
+      display: block;
+      max-width: 540px;
+      width: 100%;
+      height: auto;
+      border-radius: var(--radius);
+      border: 1px solid var(--card-border);
+      box-shadow: var(--shadow);
+      margin-bottom: 32px;
+    }
+
     /* ── Convention demo ── */
     .convention-demo {
       margin-top: 20px;
