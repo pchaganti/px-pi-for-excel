@@ -3,18 +3,46 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
+import { getModels, type Api, type Model } from "@mariozechner/pi-ai";
+
+import { BROWSER_OAUTH_PROVIDERS, mapToApiProvider } from "../src/auth/provider-map.ts";
+import { rewriteDevProxyUrl } from "../src/auth/dev-rewrites.ts";
+import { installProcessEnvShim } from "../src/compat/process-env-shim.ts";
 import {
   compareModels,
   compareOpenAiModelIds,
+  isOpenAiCodexModelId,
+  isOpenAiGeneralGptModelId,
   modelRecencyScore,
   openAiFamilyPriority,
   parseMajorMinor,
   providerPriority,
   shouldPreferOpenAiGeneralModel,
 } from "../src/models/model-ordering.ts";
-import { BROWSER_OAUTH_PROVIDERS, mapToApiProvider } from "../src/auth/provider-map.ts";
-import { rewriteDevProxyUrl } from "../src/auth/dev-rewrites.ts";
-import { installProcessEnvShim } from "../src/compat/process-env-shim.ts";
+import { pickDefaultModel } from "../src/taskpane/default-model.ts";
+
+type OpenAiProvider = "openai" | "openai-codex";
+
+const OPENAI_PROVIDERS: OpenAiProvider[] = ["openai", "openai-codex"];
+
+function pickExpectedOpenAiDefault(provider: OpenAiProvider): Model<Api> | null {
+  const models = getModels(provider);
+  const bestGeneral = models
+    .filter((model) => isOpenAiGeneralGptModelId(model.id))
+    .sort((a, b) => compareOpenAiModelIds(a.id, b.id))[0];
+  const bestCodex = models
+    .filter((model) => isOpenAiCodexModelId(model.id))
+    .sort((a, b) => compareOpenAiModelIds(a.id, b.id))[0];
+
+  if (bestGeneral && bestCodex) {
+    return shouldPreferOpenAiGeneralModel(bestGeneral.id, bestCodex.id) ? bestGeneral : bestCodex;
+  }
+
+  if (bestGeneral) return bestGeneral;
+  if (bestCodex) return bestCodex;
+
+  return models.slice().sort((a, b) => compareOpenAiModelIds(a.id, b.id))[0] ?? null;
+}
 
 void test("parseMajorMinor packs Claude-style -major-minor as major*10+minor", () => {
   assert.equal(parseMajorMinor("claude-opus-4-5"), 45);
@@ -49,6 +77,24 @@ void test("compareOpenAiModelIds prefers newer versions before family tie-breaks
 void test("shouldPreferOpenAiGeneralModel only prefers GPT when it is as new or newer", () => {
   assert.equal(shouldPreferOpenAiGeneralModel("gpt-5.4", "gpt-5.3-codex"), true);
   assert.equal(shouldPreferOpenAiGeneralModel("gpt-5.4-pro", "gpt-5.5-codex"), false);
+});
+
+void test("current OpenAI providers expose at least one default-model candidate", () => {
+  for (const provider of OPENAI_PROVIDERS) {
+    const expected = pickExpectedOpenAiDefault(provider);
+    assert.ok(expected, `expected at least one OpenAI default candidate for ${provider}`);
+  }
+});
+
+void test("pickDefaultModel matches the current OpenAI default-selection contract", () => {
+  for (const provider of OPENAI_PROVIDERS) {
+    const expected = pickExpectedOpenAiDefault(provider);
+    assert.ok(expected, `expected OpenAI default candidate for ${provider}`);
+
+    const selected = pickDefaultModel([provider]);
+    assert.equal(selected.provider, provider);
+    assert.equal(selected.id, expected.id);
+  }
 });
 
 void test("modelRecencyScore prefers higher version, then later date suffix", () => {
