@@ -20,9 +20,33 @@ export function providerPriority(provider: string): number {
   return PROVIDER_ORDER[provider] ?? 999;
 }
 
-const OPENAI_CODEX_RE = /^gpt-5\.(\d+)-codex(?:-|$)/;
-const OPENAI_PLAIN_GPT_RE = /^gpt-5\.(\d+)$/;
-const OPENAI_GPT_RE = /^gpt-5\./;
+const OPENAI_CODEX_RE = /^gpt-5(?:\.(\d+))?-codex(?:-|$)/;
+const OPENAI_PLAIN_GPT_RE = /^gpt-5(?:\.(\d+))?$/;
+const OPENAI_GPT_RE = /^gpt-5(?:[.-]|$)/;
+
+const MODEL_NAME_BOUNDARY = String.raw`(?:^|[\\/~.:])`;
+const MODEL_VERSION_BOUNDARY = String.raw`(?=$|[-/:])`;
+
+const CLAUDE_VERSION_RE = new RegExp(
+  `${MODEL_NAME_BOUNDARY}claude(?:-[a-z]+)*-(\\d+)[.-](\\d{1,2})${MODEL_VERSION_BOUNDARY}`,
+  "i",
+);
+const CLAUDE_MAJOR_RE = new RegExp(
+  `${MODEL_NAME_BOUNDARY}claude(?:-[a-z]+)*-(\\d+)${MODEL_VERSION_BOUNDARY}`,
+  "i",
+);
+const GPT_DOT_VERSION_RE = new RegExp(`${MODEL_NAME_BOUNDARY}gpt-(\\d+)\\.(\\d{1,2})${MODEL_VERSION_BOUNDARY}`, "i");
+const GPT_MAJOR_RE = new RegExp(`${MODEL_NAME_BOUNDARY}gpt-(\\d+)(?:[a-z]+)?${MODEL_VERSION_BOUNDARY}`, "i");
+const GEMINI_DOT_VERSION_RE = new RegExp(
+  `${MODEL_NAME_BOUNDARY}gemini(?:-[a-z]+)*-(\\d+)\\.(\\d{1,2})${MODEL_VERSION_BOUNDARY}`,
+  "i",
+);
+const GEMINI_MAJOR_RE = new RegExp(
+  `${MODEL_NAME_BOUNDARY}gemini(?:-[a-z]+)*-(\\d+)${MODEL_VERSION_BOUNDARY}`,
+  "i",
+);
+const LETTER_PREFIXED_DOT_VERSION_RE = /(?:^|[\/_.-])[a-z]+(\d{1,2})\.(\d{1,2})(?=$|[-/:._])/i;
+const GENERIC_VERSION_RE = /(?:^|[\w~/-][.-]|[-_/])v?(\d{1,2})(?:[.-](\d{1,2})([a-z]+)?)?(?=$|[-/:._])/gi;
 
 export function isOpenAiCodexModelId(id: string): boolean {
   return OPENAI_CODEX_RE.test(id);
@@ -68,14 +92,21 @@ export function familyPriority(provider: string, id: string): number {
 
 export function parseMajorMinor(id: string): number {
   // Extract a comparable major/minor number from common model ID formats.
-  // Important: don't misinterpret 8-digit date suffixes (e.g. 20250514) as "minor".
+  // Important: only parse the leading version segment, not later date-like suffixes.
   // Examples:
-  // - claude-opus-4-5           -> 45
-  // - claude-opus-4-6           -> 46
-  // - claude-opus-4-20250514    -> 40 (major only; date handled separately)
-  // - gpt-5.3-codex             -> 53
-  // - gemini-2.5-pro            -> 25
-  // - gemini-3-pro-preview      -> 30
+  // - claude-opus-4-6                         -> 46
+  // - claude-opus-4.7                         -> 47
+  // - anthropic.claude-opus-4-1-20250805-v1:0 -> 41 (date handled separately)
+  // - claude-opus-4-20250514                  -> 40 (major only; date handled separately)
+  // - gpt-5.5                                 -> 55
+  // - gpt-4o-2024-11-20                       -> 40 (not 202411)
+  // - gemini-2.5-pro-preview-06-05            -> 25 (not 65)
+  // - google/gemini-3.1-pro-preview           -> 31
+  // - gemini-3-pro-preview                    -> 30
+  // - MiniMax-M2.7                            -> 27 (letter-prefixed fallback)
+  // - Qwen/Qwen3.5                            -> 35 (letter-prefixed fallback)
+  // - gemma-4-31b-it                          -> 40 (generic fallback; ignores size suffix)
+  // - zai.glm-5                               -> 50 (generic fallback)
 
   const pack = (major: number, minor: number | null): number => {
     if (minor === null) return major * 10;
@@ -85,34 +116,82 @@ export function parseMajorMinor(id: string): number {
     return major * 100 + minor;
   };
 
-  // Claude-style: -4-6 (but NOT -4-20250514)
-  const hyphenVer = id.match(/-(\d+)-(\d{1,2})(?:-|$)/);
-  if (hyphenVer) {
-    return pack(parseInt(hyphenVer[1], 10), parseInt(hyphenVer[2], 10));
+  const claudeVer = id.match(CLAUDE_VERSION_RE);
+  if (claudeVer) {
+    return pack(parseInt(claudeVer[1], 10), parseInt(claudeVer[2], 10));
   }
 
-  // OpenAI/Gemini-style: 5.3 / 2.5
-  const dotVer = id.match(/(\d+)\.(\d{1,2})/);
-  if (dotVer) {
-    return pack(parseInt(dotVer[1], 10), parseInt(dotVer[2], 10));
+  const gptDotVer = id.match(GPT_DOT_VERSION_RE);
+  if (gptDotVer) {
+    return pack(parseInt(gptDotVer[1], 10), parseInt(gptDotVer[2], 10));
   }
 
-  // Fallback: first major number after hyphen
-  const majorMatch = id.match(/-(\d+)(?:-|$)/);
-  if (majorMatch) {
-    return pack(parseInt(majorMatch[1], 10), null);
+  const geminiDotVer = id.match(GEMINI_DOT_VERSION_RE);
+  if (geminiDotVer) {
+    return pack(parseInt(geminiDotVer[1], 10), parseInt(geminiDotVer[2], 10));
+  }
+
+  const claudeMajor = id.match(CLAUDE_MAJOR_RE);
+  if (claudeMajor) {
+    return pack(parseInt(claudeMajor[1], 10), null);
+  }
+
+  const gptMajor = id.match(GPT_MAJOR_RE);
+  if (gptMajor) {
+    return pack(parseInt(gptMajor[1], 10), null);
+  }
+
+  const geminiMajor = id.match(GEMINI_MAJOR_RE);
+  if (geminiMajor) {
+    return pack(parseInt(geminiMajor[1], 10), null);
+  }
+
+  const letterPrefixedDotVersion = id.match(LETTER_PREFIXED_DOT_VERSION_RE);
+  if (letterPrefixedDotVersion) {
+    return pack(parseInt(letterPrefixedDotVersion[1], 10), parseInt(letterPrefixedDotVersion[2], 10));
+  }
+
+  for (const genericVersion of id.matchAll(GENERIC_VERSION_RE)) {
+    const matchIndex = genericVersion.index ?? 0;
+    const digitOffset = genericVersion[0].search(/\d/);
+    const digitIndex = matchIndex + Math.max(digitOffset, 0);
+    const surrounding = id.slice(Math.max(0, digitIndex - 5), digitIndex + 8);
+    if (/\d{4}-\d{2}-\d{2}/.test(surrounding)) continue;
+
+    const major = parseInt(genericVersion[1], 10);
+    const minor = genericVersion[2] && !genericVersion[3] ? parseInt(genericVersion[2], 10) : null;
+    return pack(major, minor);
   }
 
   return 0;
 }
 
+function parseDateSuffixScore(id: string): number {
+  let score = 0;
+
+  for (const match of id.matchAll(/(?:^|[-/:])(\d{8})(?=$|[-/:])/g)) {
+    score = Math.max(score, parseInt(match[1], 10));
+  }
+
+  for (const match of id.matchAll(/(?:^|[-/:])(\d{4})-(\d{2})-(\d{2})(?=$|[-/:])/g)) {
+    score = Math.max(score, parseInt(`${match[1]}${match[2]}${match[3]}`, 10));
+  }
+
+  for (const match of id.matchAll(/(?:^|[-/:])(\d{2})-(\d{4})(?=$|[-/:])/g)) {
+    score = Math.max(score, parseInt(`${match[2]}${match[1]}00`, 10));
+  }
+
+  for (const match of id.matchAll(/(?:^|[-/:])(\d{2})-(\d{2})(?=$|[-/:])/g)) {
+    score = Math.max(score, parseInt(`${match[1]}${match[2]}`, 10));
+  }
+
+  return score;
+}
+
 export function modelRecencyScore(id: string): number {
   // Prefer higher major/minor first, then higher date suffix.
   const majorMinor = parseMajorMinor(id);
-
-  let date = 0;
-  const dateMatch = id.match(/(\d{8})/);
-  if (dateMatch) date = parseInt(dateMatch[1], 10);
+  const date = parseDateSuffixScore(id);
 
   // date is at most 8 digits → multiplier must exceed that range
   return majorMinor * 100_000_000 + date;
