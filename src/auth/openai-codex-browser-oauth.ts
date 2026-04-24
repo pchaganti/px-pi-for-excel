@@ -19,12 +19,13 @@ const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 const AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize";
 const TOKEN_URL = "https://auth.openai.com/oauth/token";
 const REDIRECT_URI = "http://localhost:1455/auth/callback";
-const SCOPE = "openid profile email offline_access";
+const SCOPE = "openid profile email offline_access api.connectors.read api.connectors.invoke";
 const JWT_CLAIM_PATH = "https://api.openai.com/auth";
 
 type ParsedAuthorizationInput = { code?: string; state?: string };
 
 type TokenPayload = {
+  idToken?: string;
   accessToken: string;
   refreshToken: string;
   expiresInSeconds: number;
@@ -80,6 +81,7 @@ function parseTokenPayload(payload: unknown): TokenPayload | null {
     return null;
   }
 
+  const idToken = payload.id_token;
   const accessToken = payload.access_token;
   const refreshToken = payload.refresh_token;
   const expiresIn = payload.expires_in;
@@ -93,6 +95,7 @@ function parseTokenPayload(payload: unknown): TokenPayload | null {
   }
 
   return {
+    idToken: typeof idToken === "string" ? idToken : undefined,
     accessToken,
     refreshToken,
     expiresInSeconds: expiresIn,
@@ -214,7 +217,7 @@ async function createAuthorizationFlow(): Promise<{ verifier: string; state: str
   authUrl.searchParams.set("state", state);
   authUrl.searchParams.set("id_token_add_organizations", "true");
   authUrl.searchParams.set("codex_cli_simplified_flow", "true");
-  authUrl.searchParams.set("originator", "pi");
+  authUrl.searchParams.set("originator", "codex_vscode");
 
   return {
     verifier,
@@ -260,7 +263,7 @@ export async function loginOpenAICodexInBrowser(
 
   const accountId = getAccountId(tokens.accessToken);
   if (!accountId) {
-    throw new Error("OpenAI login failed: could not extract ChatGPT account ID");
+    throw new Error("OpenAI login failed: access token is missing ChatGPT account ID");
   }
 
   return {
@@ -282,7 +285,7 @@ export async function refreshOpenAICodexBrowserToken(
   const tokens = await refreshAccessToken(refreshToken);
   const accountId = getAccountId(tokens.accessToken);
   if (!accountId) {
-    throw new Error("OpenAI refresh failed: could not extract ChatGPT account ID");
+    throw new Error("OpenAI refresh failed: access token is missing ChatGPT account ID");
   }
 
   return {

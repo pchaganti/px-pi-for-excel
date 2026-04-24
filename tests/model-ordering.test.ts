@@ -142,10 +142,16 @@ void test("pickDefaultModel matches the current OpenAI default-selection contrac
   }
 });
 
-void test("pickDefaultModel falls back to the latest hardcoded Anthropic default", () => {
+void test("pickDefaultModel falls back to the preferred hardcoded OpenAI default", () => {
   const selected = pickDefaultModel([]);
-  assert.equal(selected.provider, "anthropic");
-  assert.equal(selected.id, "claude-opus-4-7");
+  assert.equal(selected.provider, "openai");
+  assert.equal(selected.id, "gpt-5.5");
+});
+
+void test("pickDefaultModel prefers GPT-5.5 when OpenAI and Anthropic are both available", () => {
+  const selected = pickDefaultModel(["anthropic", "openai"]);
+  assert.equal(selected.provider, "openai");
+  assert.equal(selected.id, "gpt-5.5");
 });
 
 void test("modelRecencyScore prefers higher version, then later date suffix", () => {
@@ -309,6 +315,18 @@ void test("process-env shim adds process.env for browser-like runtimes", () => {
   assert.ok(envValue && typeof envValue === "object" && !Array.isArray(envValue));
 });
 
+void test("dev rewrite routes OAuth hosts to dedicated proxies", () => {
+  assert.equal(
+    rewriteDevProxyUrl("https://platform.claude.com/v1/oauth/token"),
+    "/oauth-proxy/anthropic-platform/v1/oauth/token",
+  );
+
+  assert.equal(
+    rewriteDevProxyUrl("https://console.anthropic.com/v1/oauth/token"),
+    "/oauth-proxy/anthropic/v1/oauth/token",
+  );
+});
+
 void test("dev rewrite routes cloudcode hosts to dedicated proxies", () => {
   assert.equal(
     rewriteDevProxyUrl("https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse"),
@@ -328,18 +346,26 @@ void test("dev rewrite routes cloudcode hosts to dedicated proxies", () => {
   assert.equal(rewriteDevProxyUrl("https://example.com/test"), null);
 });
 
-void test("vite proxy orders Google routes from most specific to least specific", () => {
+void test("vite proxy orders overlapping routes from most specific to least specific", () => {
   const viteConfigPath = path.resolve(process.cwd(), "vite.config.ts");
   const content = readFileSync(viteConfigPath, "utf8");
 
+  const anthropicPlatformIndex = content.indexOf('"/oauth-proxy/anthropic-platform"');
+  const anthropicIndex = content.indexOf('"/oauth-proxy/anthropic"');
   const sandboxIndex = content.indexOf('"/api-proxy/google-cloudcode-sandbox"');
   const cloudcodeIndex = content.indexOf('"/api-proxy/google-cloudcode"');
   const googleIndex = content.indexOf('"/api-proxy/google"');
 
+  assert.notEqual(anthropicPlatformIndex, -1, "expected Anthropic platform OAuth route");
+  assert.notEqual(anthropicIndex, -1, "expected Anthropic OAuth route");
   assert.notEqual(sandboxIndex, -1, "expected sandbox proxy route");
   assert.notEqual(cloudcodeIndex, -1, "expected cloudcode proxy route");
   assert.notEqual(googleIndex, -1, "expected generic google proxy route");
 
+  assert.ok(
+    anthropicPlatformIndex < anthropicIndex,
+    "Anthropic platform route must come before generic Anthropic route",
+  );
   assert.ok(
     sandboxIndex < cloudcodeIndex,
     "sandbox route must come before cloudcode route",

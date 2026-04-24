@@ -274,7 +274,8 @@ export default defineConfig({
       : undefined,
 
     proxy: {
-      // OAuth token endpoints
+      // OAuth token endpoints. Keep longer/more-specific prefixes before shorter ones.
+      "/oauth-proxy/anthropic-platform": proxyEntry("https://platform.claude.com", "/oauth-proxy/anthropic-platform"),
       "/oauth-proxy/anthropic": proxyEntry("https://console.anthropic.com", "/oauth-proxy/anthropic"),
       "/oauth-proxy/github": proxyEntry("https://github.com", "/oauth-proxy/github"),
 
